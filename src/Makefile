@@ -1,4 +1,4 @@
-#    Makefile from methpipe software
+#    Makefile from DNMTools software
 #
 #    Copyright (C) 2010-2014 University of Southern California and
 #                            Andrew D. Smith
@@ -56,7 +56,7 @@ INCLUDEDIRS = $(SMITHLAB_CPP) $(COMMON_DIR)
 INCLUDEARGS = $(addprefix -I,$(INCLUDEDIRS))
 override CPPFLAGS += $(INCLUDEARGS)
 
-PROGS = methpipe
+PROGS = dnmtools
 OBJS = amrfinder/allelicmeth.o amrfinder/amrfinder.o amrfinder/amrtester.o \
 			 analysis/bsrate.o analysis/hmr.o analysis/hmr_rep.o analysis/hypermr.o \
 			 analysis/levels.o analysis/methcounts.o analysis/methentropy.o \
@@ -82,7 +82,7 @@ all: $(PROGS)
 			SRC_ROOT=$(METHPIPE_ROOT); \
 	done;
 
-$(PROGS): methpipe.cpp $(OBJS) $(COMMON_OBJS)
+$(PROGS): dnmtools.cpp $(OBJS) $(COMMON_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $<  $(OBJS) $(COMMON_OBJS) $(LDFLAGS) $(CPPFLAGS) $(LDLIBS)
 
 install:

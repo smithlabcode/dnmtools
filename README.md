@@ -1,29 +1,13 @@
-The MethPipe software package is a computational pipeline for
-analyzing bisulfite sequencing data (WGBS and RRBS). MethPipe provides
+The DNMTools software package is a computational pipeline for
+analyzing bisulfite sequencing data (WGBS and RRBS). DNMTools provides
 tools methylation-specific technical evaluation of sequencing data,
 and for estimating methylation levels at individual cytosines.
-Additionally, MethPipe includes tools for identifying higher-level
+Additionally, DNMTools includes tools for identifying higher-level
 methylation features, such as hypo-methylated regions (HMR), partially
 methylated domains (PMD), hyper-methylated regions (HyperMR), and
 allele-specific methylated regions (AMR).
 
-Release 5.0.1
-===================
-
-This new release no longer supports `mr` files, which means that the
-`to-mr` program has been eliminated and replaced by a program called
-`format_reads`, which merges mates in paired-end SAM files, also
-converting them to a standardized SAM format depending on the mapper
-it originates from.  Additionally, the `htslib` library is now
-required, and instructions to install it in different environments are
-discussed below.
-
-If working with MR files is necessary for your analysis, we refer
-users to methpipe version [5.0.1](https://github.com/smithlabcode/methpipe/releases/tag/v5.0.1),
-which is the last release that contains programs that take MR as
-input.
-
-## Installing release 5.0.1
+## Installing release 1.0.0
 
 ### Required libraries
 
@@ -46,21 +30,21 @@ input.
 
 ### Configuration
 
-1. Download methpipe-5.0.1.tar.gz [here](https://github.com/smithlabcode/methpipe/releases/download/v5.0.1/methpipe-5.0.1.tar.gz).
+1. Download dnmtools-1.0.0.tar.gz [here](https://github.com/smithlabcode/dnmtools/releases/download/v1.0.0/dnmtools-1.0.0.tar.gz).
 2. Unpack the archive:
 ```
-$ tar -zxvf methpipe-5.0.1.tar.gz
+$ tar -zxvf dnmtools-1.0.0.tar.gz
 ```
-3. Move into the methpipe directory and create a build directory:
+3. Move into the `dnmtools-1.0.0` directory and create a build directory:
 ```
-$ cd methpipe-5.0.1
+$ cd dnmtools-1.0.0
 $ mkdir build && cd build
 ```
 4. Run the configuration script:
 ```
 $ ../configure
 ```
-If you do not want to install the methpipe system-wide, or if you do
+If you do not want to install DNMTools system-wide, or if you do
 not have admin privileges, specify a prefix directory:
 ```
 $ ../configure --prefix=/some/reasonable/place
@@ -84,7 +68,7 @@ $ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/htslib/lib
 
 ### Building and installing from source
 
-We strongly recommend using methpipe through the latest stable release
+We strongly recommend using DNMTools through the latest stable release
 under the releases section on GitHub. However, developers who wish to
 work on the latest commits, which are potentially unstable, can
 compile the cloned repository using the `Makefile` available in the
@@ -96,7 +80,7 @@ make
 Usage
 =====
 
-Read methpipe-manual.pdf in the docs directory.
+Read the [documentation](https://dnmtools.readthedocs.io).
 
 Contacts and bug reports
 ========================

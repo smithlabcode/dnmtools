@@ -26,7 +26,7 @@ using std::to_string;
 using std::cerr;
 using std::endl;
 
-#define PROGRAM_NAME "methpipe"
+#define PROGRAM_NAME "dnmtools"
 #define PROGRAM_VERSION " 5.0.1"
 
 int main_methcounts(int argc, const char **argv);
@@ -70,7 +70,7 @@ print_help() {
   cerr << "Commands:\n";
 
   cerr << sep << "methylome construction:\n";
-  cerr << sep+sep << "format:        convert SAM/BAM mapped bs-seq reads to standard methpipe format\n";
+  cerr << sep+sep << "format:        convert SAM/BAM mapped bs-seq reads to standard dnmtools format\n";
   cerr << sep+sep << "uniq:          remove duplicate reads from sorted mapped reads\n";
   cerr << sep+sep << "bsrate:        compute the BS conversion rate from BS-seq reads mapped to a genome\n";
   cerr << sep+sep << "counts:        get methylation levels from mapped WGBS reads\n";

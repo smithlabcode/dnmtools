@@ -108,7 +108,7 @@ print_help() {
   cerr << sep+sep << "guessprotocol  guess whether protocol is ordinary, pbat or random\n";
   cerr << sep+sep << "lc             approximate line counts in a file\n";
   cerr << sep+sep << "merge-bsrate   merge the BS conversion rate from two sets of BS-seq reads mapped to a genome\n";
-  cerr << sep+sep << "merge-counts   merge multiple methcounts files\n";
+  cerr << sep+sep << "merge          merge multiple methcounts files\n";
   cerr << sep+sep << "selectsites    sites inside a set of genomic intervals\n";
 
   cerr << "\n";
@@ -147,7 +147,7 @@ main(int argc, const char **argv) {
   else if (strcmp(argv[1], "lc") == 0) ret = main_lc_approx(argc - 1, argv + 1);
   else if (strcmp(argv[1], "liftfilter") == 0) ret = main_lift_filter(argc - 1, argv + 1);
   else if (strcmp(argv[1], "merge-bsrate") == 0) ret = main_merge_bsrate(argc - 1, argv + 1);
-  else if (strcmp(argv[1], "merge-counts") == 0) ret = main_merge_methcounts(argc - 1, argv + 1);
+  else if (strcmp(argv[1], "merge") == 0) ret = main_merge_methcounts(argc - 1, argv + 1);
   else if (strcmp(argv[1], "selectsites") == 0) ret = main_selectsites(argc - 1, argv + 1);
   else if (strcmp(argv[1], "sym") == 0) ret = main_symmetric_cpgs(argc - 1, argv + 1);
 

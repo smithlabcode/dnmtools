@@ -22,13 +22,13 @@
 METHPIPE_ROOT = $(shell pwd)
 
 all:
-	@make -C src METHPIPE_ROOT=$(METHPIPE_ROOT)
+	@$(MAKE) -C src METHPIPE_ROOT=$(METHPIPE_ROOT)
 
 install:
-	@make -C src METHPIPE_ROOT=$(METHPIPE_ROOT) install
+	@$(MAKE) -C src METHPIPE_ROOT=$(METHPIPE_ROOT) install
 
 clean:
-	@make -C src METHPIPE_ROOT=$(METHPIPE_ROOT) clean
+	@$(MAKE) -C src METHPIPE_ROOT=$(METHPIPE_ROOT) clean
 .PHONY: clean
 
 distclean: clean

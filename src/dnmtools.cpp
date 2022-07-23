@@ -85,7 +85,6 @@ print_help() {
   cerr << sep+sep << "pmd:           identify partially methylated domains\n";
   cerr << sep+sep << "roi:           compute average CpG methylation in each of a set of genomic interval\n";
   cerr << sep+sep << "mlml:          program to estimate hydroxymethylation levels\n";
-  cerr << sep+sep << "diff:          compute probability that site has higher methylation in file A than B\n";
 
   cerr << "\n" << sep << "allele-specific methylation:\n";
   cerr << sep+sep << "states:        convert read sequences in SAM format to methylation states at CpGs covered by those reads\n";
@@ -95,6 +94,7 @@ print_help() {
 
   cerr << "\n" << sep << "differential methylation:\n";
   cerr << sep+sep << "dmr            computes DMRs based on HMRs and probability of differences at individual CpGs\n";
+  cerr << sep+sep << "diff:          compute probability that site has higher methylation in file A than B\n";
   cerr << sep+sep << "radmeth        computes differentially methylated CpGs\n";
   cerr << sep+sep << "radadjust      adjust p-values of radmeth output\n";
   cerr << sep+sep << "radmerge       merge significant CpGs in radmeth output\n";

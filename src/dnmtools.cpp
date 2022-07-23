@@ -93,23 +93,23 @@ print_help() {
   cerr << sep+sep << "amrtester:     resolve epi-alleles\n";
 
   cerr << "\n" << sep << "differential methylation:\n";
-  cerr << sep+sep << "dmr            computes DMRs based on HMRs and probability of differences at individual CpGs\n";
+  cerr << sep+sep << "dmr:           computes DMRs based on HMRs and probability of differences at individual CpGs\n";
   cerr << sep+sep << "diff:          compute probability that site has higher methylation in file A than B\n";
-  cerr << sep+sep << "radmeth        computes differentially methylated CpGs\n";
-  cerr << sep+sep << "radadjust      adjust p-values of radmeth output\n";
-  cerr << sep+sep << "radmerge       merge significant CpGs in radmeth output\n";
+  cerr << sep+sep << "radmeth:       computes differentially methylated CpGs\n";
+  cerr << sep+sep << "radadjust:     adjust p-values of radmeth output\n";
+  cerr << sep+sep << "radmerge:      merge significant CpGs in radmeth output\n";
 
   cerr << "\n" << sep << "methylation visualization:\n";
-  cerr << sep+sep << "fastlift       liftover methylation levels between species\n";
-  cerr << sep+sep << "liftfilter     filter CpG regions that do not exist in resulting genome\n";
+  cerr << sep+sep << "fastlift:      liftover methylation levels between species\n";
+  cerr << sep+sep << "liftfilter:    filter CpG regions that do not exist in resulting genome\n";
 
   cerr << "\n" << sep << "general-purpose tools:\n";
-  cerr << sep+sep << "cleanhp        fix and stat invdup/hairping reads\n";
-  cerr << sep+sep << "guessprotocol  guess whether protocol is ordinary, pbat or random\n";
-  cerr << sep+sep << "lc             approximate line counts in a file\n";
-  cerr << sep+sep << "merge-bsrate   merge the BS conversion rate from two sets of BS-seq reads mapped to a genome\n";
-  cerr << sep+sep << "merge          merge multiple methcounts files\n";
-  cerr << sep+sep << "selectsites    sites inside a set of genomic intervals\n";
+  cerr << sep+sep << "cleanhp:       fix and stat invdup/hairping reads\n";
+  cerr << sep+sep << "guessprotocol: guess whether protocol is ordinary, pbat or random\n";
+  cerr << sep+sep << "lc:            approximate line counts in a file\n";
+  cerr << sep+sep << "merge-bsrate:  merge the BS conversion rate from two sets of BS-seq reads mapped to a genome\n";
+  cerr << sep+sep << "merge:         merge multiple methcounts files\n";
+  cerr << sep+sep << "selectsites:   sites inside a set of genomic intervals\n";
 
   cerr << "\n";
 }

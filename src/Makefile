@@ -75,8 +75,8 @@ Smoothing.o ThreeStateHMM.o TwoStateHMM.o TwoStateHMM_PMD.o)
 
 all: $(PROGS)
 
-$(PROGS): dnmtools.cpp # $(OBJS) $(COMMON_OBJS)
-	@$(MAKE) -C $(SMITHLAB_CPP) HAVE_HTSLIB=1 
+$(PROGS): dnmtools.cpp  $(OBJS) $(COMMON_OBJS)
+	@$(MAKE) -C $(SMITHLAB_CPP) HAVE_HTSLIB=1
 	@for i in $(app_subdirs); do \
 		$(MAKE) -C $${i} \
 			SMITHLAB_CPP=$(SMITHLAB_CPP) \

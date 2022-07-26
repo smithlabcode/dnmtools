@@ -1,3 +1,6 @@
 [submodule "src/smithlab_cpp"]
 	path = src/smithlab_cpp
 	url = ../smithlab_cpp.git
+[submodule "src/abismal"]
+	path = src/abismal
+	url = https://github.com/smithlabcode/abismal.git

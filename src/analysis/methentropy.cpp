@@ -131,13 +131,6 @@ operator>>(std::istream &in, epiread &er) {
   return in;
 }
 
-
-
-static std::ostream&
-operator<<(std::ostream &out, const epiread &er) {
-  return out << er.chr << '\t' << er.pos << '\t' << er.seq;
-}
-
 static bool
 check_sorted(const vector<epiread> &epireads){
   for (size_t i = 1; i < epireads.size(); ++i)

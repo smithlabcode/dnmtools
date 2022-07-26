@@ -31,7 +31,7 @@ SRC_ROOT=..
 endif
 
 CXX = g++
-CXXFLAGS = -Wall -std=c++11
+CXXFLAGS = -Wall -std=c++11 -fopenmp
 OPTFLAGS = -O3
 DEBUGFLAGS = -g
 
@@ -41,9 +41,9 @@ else
 CXXFLAGS += $(OPTFLAGS)
 endif
 
-all_subdirs=common utils analysis amrfinder mlml radmeth
+all_subdirs=common utils analysis amrfinder mlml radmeth abismal
 lib_subdirs=common
-app_subdirs=analysis utils amrfinder mlml radmeth
+app_subdirs=analysis utils amrfinder mlml radmeth abismal
 
 all_subdirs += $(SMITHLAB_CPP)
 lib_subdirs += $(SMITHLAB_CPP)
@@ -65,7 +65,8 @@ radmeth/radmeth-adjust.o radmeth/radmeth-merge.o radmeth/radmeth.o \
 utils/clean-hairpins.o utils/duplicate-remover.o utils/fast-liftover.o \
 utils/format_reads.o utils/guessprotocol.o utils/lc_approx.o \
 utils/lift-filter.o utils/merge-bsrate.o utils/merge-methcounts.o \
-utils/symmetric-cpgs.o utils/selectsites.o
+utils/symmetric-cpgs.o utils/selectsites.o abismal/src/abismal.o \
+abismal/src/abismalidx.o abismal/src/simreads.o abismal/src/AbismalIndex.o
 
 COMMON_OBJS = $(addprefix $(COMMON_DIR)/, \
 BetaBin.o bsutils.o Distro.o EmissionDistribution.o Epiread.o \
@@ -80,7 +81,8 @@ $(PROGS): dnmtools.cpp  $(OBJS) $(COMMON_OBJS)
 	@for i in $(app_subdirs); do \
 		$(MAKE) -C $${i} \
 			SMITHLAB_CPP=$(SMITHLAB_CPP) \
-			SRC_ROOT=$(METHPIPE_ROOT); \
+			SRC_ROOT=$(METHPIPE_ROOT) \
+			NO_MAIN=1; \
 	done;
 	$(CXX) $(CXXFLAGS) -o $@ $< $(OBJS) $(COMMON_OBJS) \
 	$(LDFLAGS) $(CPPFLAGS) $(LDLIBS)

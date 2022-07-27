@@ -3,4 +3,4 @@
 	url = ../smithlab_cpp.git
 [submodule "src/abismal"]
 	path = src/abismal
-	url = https://github.com/smithlabcode/abismal.git
+	url = ../abismal.git

@@ -1,4 +1,4 @@
-d/*
+/*
  * Copyright (C) 2012 University of Southern California
  *                    Andrew D Smith and Qiang Song
  * Author: Qiang Song

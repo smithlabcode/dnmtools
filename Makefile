@@ -1,6 +1,6 @@
-#    This file is part of the methpipe system
+#    This file is part of dnmtools
 #
-#    Copyright (C) 2010-2014 University of Southern California and
+#    Copyright (C) 2010-2022 University of Southern California and
 #                            Andrew D. Smith
 #
 #    Authors: Andrew D. Smith
@@ -19,18 +19,18 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-METHPIPE_ROOT = $(shell pwd)
+DNMTOOLS_ROOT = $(shell pwd)
 
 all:
-	@$(MAKE) -C src METHPIPE_ROOT=$(METHPIPE_ROOT)
+	@$(MAKE) -C src DNMTOOLS_ROOT=$(DNMTOOLS_ROOT)
 
 install:
-	@$(MAKE) -C src METHPIPE_ROOT=$(METHPIPE_ROOT) install
+	@$(MAKE) -C src DNMTOOLS_ROOT=$(DNMTOOLS_ROOT) install
 
 clean:
-	@$(MAKE) -C src METHPIPE_ROOT=$(METHPIPE_ROOT) clean
+	@$(MAKE) -C src DNMTOOLS_ROOT=$(DNMTOOLS_ROOT) clean
 .PHONY: clean
 
 distclean: clean
-	@rm -rf $(METHPIPE_ROOT)/bin
+	@rm -rf $(DNMTOOLS_ROOT)/bin
 .PHONY: distclean

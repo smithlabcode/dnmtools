@@ -83,7 +83,7 @@ $(PROGS): dnmtools.cpp  $(OBJS) $(COMMON_OBJS)
 	@for i in $(app_subdirs); do \
 		$(MAKE) -C $${i} \
 			SMITHLAB_CPP=$(SMITHLAB_CPP) \
-			SRC_ROOT=$(METHPIPE_ROOT) \
+			SRC_ROOT=$(DNMTOOLS_ROOT) \
 			NO_MAIN=1; \
 	done;
 	$(CXX) $(CXXFLAGS) -o $@ $< $(OBJS) $(COMMON_OBJS) \
@@ -100,6 +100,6 @@ clean:
 	@for i in $(all_subdirs); do \
 		$(MAKE) -C $${i} \
 			SMITHLAB_CPP=$(SMITHLAB_CPP) \
-			SRC_ROOT=$(METHPIPE_ROOT) clean; \
+			SRC_ROOT=$(DNMTOOLS_ROOT) clean; \
 	done;
 	@-rm -f $(PROGS) *.o *.so *.a *~

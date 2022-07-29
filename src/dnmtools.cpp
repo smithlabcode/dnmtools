@@ -87,7 +87,7 @@ print_help() {
 
   cerr << "\n" << sep << "methylome analysis:\n";
   cerr << sep+sep << "hmr:           identify hypomethylated regions.\n";
-  cerr << sep+sep << "hmr_rep:       identify hypomethylated regions in a set of replicate methylomes\n";
+  cerr << sep+sep << "hmr-rep:       identify hypomethylated regions in a set of replicate methylomes\n";
   cerr << sep+sep << "entropy:       compute methylation entropy in sliding window\n";
   cerr << sep+sep << "multistat:     summarize methylation from to genomic intervals in a BED file.\n";
   cerr << sep+sep << "pmd:           identify partially methylated domains\n";

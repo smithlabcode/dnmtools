@@ -1,6 +1,6 @@
 # This file is part of dnmtools
 #
-# Copyright (C) 2010-2019: Andrew D. Smith
+# Copyright (C) 2022 Andrew D. Smith
 #
 # Authors: Andrew D. Smith
 #
@@ -57,56 +57,42 @@ libdnmtools_a_SOURCES += \
 
 LDADD = libdnmtools.a src/smithlab_cpp/libsmithlab_cpp.a
 
-### ANALYSIS SUBDIR
-bin_PROGRAMS = pmd methcounts bsrate hmr hypermr levels roimethstat \
-        methstates methentropy hmr_rep multimethstat
+bin_PROGRAMS = dnmtools
 
-pmd_SOURCES = src/analysis/pmd.cpp
-methstates_SOURCES =  src/analysis/methstates.cpp
-bsrate_SOURCES = src/analysis/bsrate.cpp
-methentropy_SOURCES = src/analysis/methentropy.cpp
-methcounts_SOURCES = src/analysis/methcounts.cpp
-roimethstat_SOURCES = src/analysis/roimethstat.cpp
-multimethstat_SOURCES = src/analysis/multimethstat.cpp
-hmr_SOURCES = src/analysis/hmr.cpp
-hmr_rep_SOURCES = src/analysis/hmr_rep.cpp
-levels_SOURCES = src/analysis/levels.cpp
-hypermr_SOURCES = src/analysis/hypermr.cpp
+dnmtools_SOURCES = src/dnmtools.cpp
 
-### UTILS SUBDIR
-bin_PROGRAMS += lc_approx fast-liftover lift-filter merge-bsrate \
-        merge-methcounts duplicate-remover symmetric-cpgs \
-        clean-hairpins selectsites guessprotocol format_reads
+dnmtools_SOURCES += src/analysis/pmd.cpp
+dnmtools_SOURCES += src/analysis/methstates.cpp
+dnmtools_SOURCES += src/analysis/bsrate.cpp
+dnmtools_SOURCES += src/analysis/methentropy.cpp
+dnmtools_SOURCES += src/analysis/methcounts.cpp
+dnmtools_SOURCES += src/analysis/roimethstat.cpp
+dnmtools_SOURCES += src/analysis/multimethstat.cpp
+dnmtools_SOURCES += src/analysis/hmr.cpp
+dnmtools_SOURCES += src/analysis/hmr_rep.cpp
+dnmtools_SOURCES += src/analysis/levels.cpp
+dnmtools_SOURCES += src/analysis/hypermr.cpp
 
-clean_hairpins_SOURCES = src/utils/clean-hairpins.cpp
-guessprotocol_SOURCES = src/utils/guessprotocol.cpp
-duplicate_remover_SOURCES = src/utils/duplicate-remover.cpp
-merge_bsrate_SOURCES = src/utils/merge-bsrate.cpp
-format_reads_SOURCES = src/utils/format_reads.cpp
-lc_approx_SOURCES = src/utils/lc_approx.cpp
-selectsites_SOURCES = src/utils/selectsites.cpp
-symmetric_cpgs_SOURCES = src/utils/symmetric-cpgs.cpp
-merge_methcounts_SOURCES = src/utils/merge-methcounts.cpp
-lift_filter_SOURCES = src/utils/lift-filter.cpp
-fast_liftover_SOURCES = src/utils/fast-liftover.cpp
+dnmtools_SOURCES += src/utils/clean-hairpins.cpp
+dnmtools_SOURCES += src/utils/guessprotocol.cpp
+dnmtools_SOURCES += src/utils/duplicate-remover.cpp
+dnmtools_SOURCES += src/utils/merge-bsrate.cpp
+dnmtools_SOURCES += src/utils/format_reads.cpp
+dnmtools_SOURCES += src/utils/lc_approx.cpp
+dnmtools_SOURCES += src/utils/selectsites.cpp
+dnmtools_SOURCES += src/utils/symmetric-cpgs.cpp
+dnmtools_SOURCES += src/utils/merge-methcounts.cpp
+dnmtools_SOURCES += src/utils/lift-filter.cpp
+dnmtools_SOURCES += src/utils/fast-liftover.cpp
 
-### AMRFINDER SUBDIR
-bin_PROGRAMS += allelicmeth amrfinder amrtester
+dnmtools_SOURCES += src/amrfinder/allelicmeth.cpp
+dnmtools_SOURCES += src/amrfinder/amrfinder.cpp
+dnmtools_SOURCES += src/amrfinder/amrtester.cpp
 
-allelicmeth_SOURCES = src/amrfinder/allelicmeth.cpp
-amrfinder_SOURCES = src/amrfinder/amrfinder.cpp
-amrtester_SOURCES = src/amrfinder/amrtester.cpp
+dnmtools_SOURCES += src/radmeth/dmr.cpp
+dnmtools_SOURCES += src/radmeth/methdiff.cpp
+dnmtools_SOURCES += src/radmeth/radmeth.cpp
+dnmtools_SOURCES += src/radmeth/radmeth-adjust.cpp
+dnmtools_SOURCES += src/radmeth/radmeth-merge.cpp
 
-### RADMETH SUBDIR
-bin_PROGRAMS += radmeth radmeth-adjust radmeth-merge methdiff dmr
-
-dmr_SOURCES = src/radmeth/dmr.cpp
-methdiff_SOURCES = src/radmeth/methdiff.cpp
-radmeth_SOURCES = src/radmeth/radmeth.cpp
-radmeth_adjust_SOURCES = src/radmeth/radmeth-adjust.cpp
-radmeth_merge_SOURCES = src/radmeth/radmeth-merge.cpp
-
-### MLML SUBDIR
-bin_PROGRAMS += mlml
-
-mlml_SOURCES = src/mlml/mlml.cpp
+dnmtools_SOURCES += src/mlml/mlml.cpp

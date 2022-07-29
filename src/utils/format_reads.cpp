@@ -1,5 +1,5 @@
 /* format_reads: a program to ensure SAM and BAM format reads
- * are conforming to expectations of methpipe software
+ * are conforming to expectations of dnmtools software
  *
  * Copyright (C) 2020 University of Southern California and
  *                    Andrew D. Smith
@@ -320,7 +320,7 @@ main_format_reads(int argc, const char **argv) {
     bool VERBOSE = false;
 
     const string description = "convert SAM/BAM mapped bs-seq reads "
-      "to standard methpipe format";
+      "to standard dnmtools format";
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description,
@@ -375,7 +375,7 @@ main_format_reads(int argc, const char **argv) {
 
     out << sam_reader.get_header(); // includes newline
     // GS TODO: the empty argument below is the program version, it
-    // should be an extern string to the methpipe version when we
+    // should be an extern string to the dnmtools version when we
     // set prefix command calls
     write_pg_line(argc, argv, "FORMAT_READS", "", out);
 

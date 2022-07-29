@@ -94,19 +94,20 @@ decato@usc.edu
 Meng Zhou
 mengzhou@usc.edu
 
-MethPipe and MethBase Users' Mailinglist
-methpipe@googlegroups.com
-http://groups.google.com/group/methpipe
+dnmtools and MethBase Users' Mailinglist
+dnmtools@googlegroups.com
+http://groups.google.com/group/dnmtools
 
 Copyright and License Information
 =================================
 
-Copyright (C) 2018-2021
+Copyright (C) 2022
 University of Southern California,
 Andrew D. Smith
 
-Current Authors: Andrew D. Smith, Ben Decato, Meng Zhou, Liz Ji,
-Terence Li, Guilherme de Sena Brandine
+Authors: Andrew D. Smith and Guilherme de Sena Brandine
+
+Past Authors: Jenny Qu, Ben Decato, Meng Zhou, Liz Ji, Terence Li
 
 This is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free

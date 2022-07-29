@@ -1,4 +1,4 @@
-# This file is part of methpipe
+# This file is part of dnmtools
 #
 # Copyright (C) 2010-2019: Andrew D. Smith
 #
@@ -23,43 +23,43 @@ AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp
 
 CXXFLAGS = -O3 # default has optimization on
 
-noinst_LIBRARIES = libmethpipe.a
-libmethpipe_a_SOURCES = \
-	src/common/BetaBin.cpp \
-	src/common/Distro.cpp \
-	src/common/EmissionDistribution.cpp \
-	src/common/Epiread.cpp \
-	src/common/EpireadStats.cpp \
-	src/common/LevelsCounter.cpp \
-	src/common/MethpipeSite.cpp \
-	src/common/Smoothing.cpp \
-	src/common/ThreeStateHMM.cpp \
-	src/common/TwoStateHMM.cpp \
-	src/common/TwoStateHMM_PMD.cpp \
-	src/common/bsutils.cpp \
-	src/common/numerical_utils.cpp
+noinst_LIBRARIES = libdnmtools.a
+libdnmtools_a_SOURCES = \
+        src/common/BetaBin.cpp \
+        src/common/Distro.cpp \
+        src/common/EmissionDistribution.cpp \
+        src/common/Epiread.cpp \
+        src/common/EpireadStats.cpp \
+        src/common/LevelsCounter.cpp \
+        src/common/MethpipeSite.cpp \
+        src/common/Smoothing.cpp \
+        src/common/ThreeStateHMM.cpp \
+        src/common/TwoStateHMM.cpp \
+        src/common/TwoStateHMM_PMD.cpp \
+        src/common/bsutils.cpp \
+        src/common/numerical_utils.cpp
 
-libmethpipe_a_SOURCES += \
-	src/common/BetaBin.hpp \
-	src/common/Distro.hpp \
-	src/common/EmissionDistribution.hpp \
-	src/common/Epiread.hpp \
-	src/common/EpireadStats.hpp \
-	src/common/LevelsCounter.hpp \
-	src/common/MethpipeFiles.hpp \
-	src/common/MethpipeSite.hpp \
-	src/common/Smoothing.hpp \
-	src/common/ThreeStateHMM.hpp \
-	src/common/TwoStateHMM.hpp \
-	src/common/TwoStateHMM_PMD.hpp \
-	src/common/bsutils.hpp \
-	src/common/numerical_utils.hpp
+libdnmtools_a_SOURCES += \
+        src/common/BetaBin.hpp \
+        src/common/Distro.hpp \
+        src/common/EmissionDistribution.hpp \
+        src/common/Epiread.hpp \
+        src/common/EpireadStats.hpp \
+        src/common/LevelsCounter.hpp \
+        src/common/MethpipeFiles.hpp \
+        src/common/MethpipeSite.hpp \
+        src/common/Smoothing.hpp \
+        src/common/ThreeStateHMM.hpp \
+        src/common/TwoStateHMM.hpp \
+        src/common/TwoStateHMM_PMD.hpp \
+        src/common/bsutils.hpp \
+        src/common/numerical_utils.hpp
 
-LDADD = libmethpipe.a src/smithlab_cpp/libsmithlab_cpp.a
+LDADD = libdnmtools.a src/smithlab_cpp/libsmithlab_cpp.a
 
 ### ANALYSIS SUBDIR
 bin_PROGRAMS = pmd methcounts bsrate hmr hypermr levels roimethstat \
-	methstates methentropy hmr_rep multimethstat
+        methstates methentropy hmr_rep multimethstat
 
 pmd_SOURCES = src/analysis/pmd.cpp
 methstates_SOURCES =  src/analysis/methstates.cpp
@@ -75,8 +75,8 @@ hypermr_SOURCES = src/analysis/hypermr.cpp
 
 ### UTILS SUBDIR
 bin_PROGRAMS += lc_approx fast-liftover lift-filter merge-bsrate \
-	merge-methcounts duplicate-remover symmetric-cpgs \
-	clean-hairpins selectsites guessprotocol format_reads
+        merge-methcounts duplicate-remover symmetric-cpgs \
+        clean-hairpins selectsites guessprotocol format_reads
 
 clean_hairpins_SOURCES = src/utils/clean-hairpins.cpp
 guessprotocol_SOURCES = src/utils/guessprotocol.cpp

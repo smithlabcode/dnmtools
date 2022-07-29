@@ -1,5 +1,7 @@
 /*
-  Copyright (C) 2015 University of Southern California
+  Copyright (C) 2015-2022 University of Southern California
+                          Andrew D Smith
+
   Authors: Andrew D. Smith
 
   This program is free software; you can redistribute it and/or modify

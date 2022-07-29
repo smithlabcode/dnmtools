@@ -37,10 +37,10 @@ MSite::MSite(const string &line) {
   std::istringstream iss(line);
   string strand_tmp;
   if (!(iss >> chrom >> pos >> strand_tmp >> context >> meth >> n_reads))
-    throw std::runtime_error("bad methpipe site line: \"" + line + "\"");
+    throw std::runtime_error("bad line: \"" + line + "\"");
   strand = strand_tmp[0];
   if (strand != '-' && strand != '+')
-    throw std::runtime_error("bad methpipe site line: \"" + line + "\"");
+    throw std::runtime_error("bad line: \"" + line + "\"");
 }
 
 

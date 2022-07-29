@@ -1,6 +1,7 @@
 /* duplicate-remover: remove duplicate reads from a file of mapped
- * reads, based on identical mapping location and possibly also using
- * the read sequence.
+ * reads in the dnmtools format (as output from format_reads), based
+ * on identical mapping location and possibly also using the read
+ * sequence if requested.
  *
  * Copyright (C) 2013-2021 University of Southern California and
  *                         Andrew D. Smith
@@ -374,7 +375,7 @@ main_duplicate_remover(int argc, const char **argv) {
       throw runtime_error("failed to open output file: " + outfile);
 
     // GS TODO: the empty argument below is the program version, it
-    // should be an extern string to the methpipe version when we
+    // should be an extern string to the dnmtools version when we
     // set prefix command calls
     std::ostringstream oss;
     write_pg_line(argc, argv, "DUPLICATE_REMOVER", "", oss);

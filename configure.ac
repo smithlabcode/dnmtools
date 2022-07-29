@@ -1,6 +1,6 @@
-dnl This file is part of methpipe
+dnl This file is part of dnmtools
 dnl
-dnl Copyright (C) 2019: Andrew D. Smith
+dnl Copyright (C) 2022: Andrew D. Smith
 dnl
 dnl Authors: Andrew D. Smith
 dnl
@@ -15,8 +15,8 @@ dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 dnl General Public License for more details.
 
 AC_CONFIG_SUBDIRS([src/smithlab_cpp])
-AC_INIT([methpipe], [5.0.1], [andrewds@usc.edu],
-        [methpipe], [https://github.com/smithlabcode/methpipe])
+AC_INIT([dnmtools], [1.0.0], [andrewds@usc.edu],
+        [dnmtools], [https://github.com/smithlabcode/dnmtools])
 dnl the config.h is not currently #included in the source, and only
 dnl used to keep command lines short.
 AC_CONFIG_HEADERS([config.h])

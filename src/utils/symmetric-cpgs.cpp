@@ -29,10 +29,7 @@
 #include "smithlab_os.hpp"
 #include "zlib_wrapper.hpp"
 
-// from methpipe/common
 #include "MethpipeSite.hpp"
-
-#include "zlib_wrapper.hpp"
 
 using std::string;
 using std::cout;

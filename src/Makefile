@@ -50,7 +50,7 @@ endif
 LDLIBS = -lgsl -lgslcblas -lz -lhts
 SMITHLAB_CPP_LIB = $(addprefix $(SMITHLAB_CPP)/, libsmithlab_cpp.a)
 ABISMAL_LIB = $(addprefix $(ABISMAL)/, libabismal.a)
-LDFLAGS = $(SMITHLAB_CPP_LIB) $(ABISMAL_LIB)
+LDFLAGS = $(ABISMAL_LIB) $(SMITHLAB_CPP_LIB)
 
 COMMON_DIR = common
 INCLUDEDIRS = $(SMITHLAB_CPP) $(COMMON_DIR)

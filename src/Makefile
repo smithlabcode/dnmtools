@@ -49,7 +49,7 @@ endif
 
 LDLIBS = -lgsl -lgslcblas -lz -lhts
 SMITHLAB_CPP_LIB = $(addprefix $(SMITHLAB_CPP)/, libsmithlab_cpp.a)
-ABISMAL_LIB = $(addprefix $(ABISMAL)/src/, libabismal.a)
+ABISMAL_LIB = $(addprefix $(ABISMAL)/, libabismal.a)
 LDFLAGS = $(SMITHLAB_CPP_LIB) $(ABISMAL_LIB)
 
 COMMON_DIR = common
@@ -67,8 +67,7 @@ radmeth/radmeth-adjust.o radmeth/radmeth-merge.o radmeth/radmeth.o \
 utils/clean-hairpins.o utils/duplicate-remover.o utils/fast-liftover.o \
 utils/format-reads.o utils/guessprotocol.o utils/lc-approx.o \
 utils/lift-filter.o utils/merge-bsrate.o utils/merge-methcounts.o \
-utils/symmetric-cpgs.o utils/selectsites.o abismal/src/abismal.o \
-abismal/src/abismalidx.o abismal/src/simreads.o abismal/src/AbismalIndex.o
+utils/symmetric-cpgs.o utils/selectsites.o
 
 COMMON_OBJS = $(addprefix $(COMMON_DIR)/, \
 BetaBin.o bsutils.o Distro.o EmissionDistribution.o Epiread.o \

@@ -15,6 +15,7 @@ dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 dnl General Public License for more details.
 
 AC_CONFIG_SUBDIRS([src/smithlab_cpp])
+AC_CONFIG_SUBDIRS([src/abismal])
 AC_INIT([dnmtools], [1.0.0], [andrewds@usc.edu],
         [dnmtools], [https://github.com/smithlabcode/dnmtools])
 dnl the config.h is not currently #included in the source, and only
@@ -28,9 +29,11 @@ AC_LANG(C++)
 AC_PROG_CXX
 AX_CXX_COMPILE_STDCXX_11([noext], [mandatory])
 AC_PROG_RANLIB
+AC_OPENMP([C++]) dnl make sure we have openmp for multi-core in abismal
 
 dnl recursively configure smithlab_cpp
 AX_SUBDIRS_CONFIGURE([src/smithlab_cpp], [--enable-hts])
+AX_SUBDIRS_CONFIGURE([src/abismal])
 
 dnl check for HTSLib if requested
 hts_fail_msg="

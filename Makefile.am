@@ -17,11 +17,11 @@
 EXTRA_DIST = README.md
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS := src/smithlab_cpp
+SUBDIRS := src/smithlab_cpp src/abismal
 install installdirs: SUBDIRS := $(filter-out src/smithlab_cpp, $(SUBDIRS))
 AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp
 
-CXXFLAGS = -O3 # default has optimization on
+CXXFLAGS = -O3 $(OPENMP_CXXFLAGS) # default has optimization on
 
 noinst_LIBRARIES = libdnmtools.a
 libdnmtools_a_SOURCES = \
@@ -55,7 +55,7 @@ libdnmtools_a_SOURCES += \
         src/common/bsutils.hpp \
         src/common/numerical_utils.hpp
 
-LDADD = libdnmtools.a src/smithlab_cpp/libsmithlab_cpp.a
+LDADD = libdnmtools.a src/smithlab_cpp/libsmithlab_cpp.a src/abismal/libabismal.a
 
 bin_PROGRAMS = dnmtools
 

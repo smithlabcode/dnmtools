@@ -29,9 +29,9 @@ using std::endl;
 #define PROGRAM_NAME "dnmtools"
 #define PROGRAM_VERSION " 5.0.1"
 
-int main_abismal(int argc, const char **argv);
-int main_abismalidx(int argc, const char **argv);
-int main_simreads(int argc, const char **argv);
+int abismal(int argc, const char **argv);
+int abismalidx(int argc, const char **argv);
+int simreads(int argc, const char **argv);
 int main_methcounts(int argc, const char **argv);
 int main_allelicmeth(int argc, const char **argv);
 int main_amrfinder(int argc, const char **argv);
@@ -127,9 +127,9 @@ main(int argc, const char **argv) {
   int ret = 0;
   if (argc < 2) { print_help(); return ret; }
 
-  if (strcmp(argv[1], "abismal") == 0) ret = main_abismal(argc - 1, argv + 1);
-  else if (strcmp(argv[1], "abismalidx") == 0) ret = main_abismalidx(argc - 1, argv + 1);
-  else if (strcmp(argv[1], "simreads") == 0) ret = main_simreads(argc - 1, argv + 1);
+  if (strcmp(argv[1], "abismal") == 0) ret = abismal(argc - 1, argv + 1);
+  else if (strcmp(argv[1], "abismalidx") == 0) ret = abismalidx(argc - 1, argv + 1);
+  else if (strcmp(argv[1], "simreads") == 0) ret = simreads(argc - 1, argv + 1);
   else if (strcmp(argv[1], "counts") == 0) ret = main_methcounts(argc - 1, argv + 1);
   else if (strcmp(argv[1], "allelic") == 0) ret = main_allelicmeth(argc - 1, argv + 1);
   else if (strcmp(argv[1], "amrfinder") == 0) ret = main_amrfinder(argc - 1, argv + 1);

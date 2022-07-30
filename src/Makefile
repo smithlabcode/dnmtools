@@ -20,9 +20,15 @@
 
 # check if recursive clone was done
 SMITHLAB_CPP=$(abspath $(dir $(MAKEFILE_LIST)))/smithlab_cpp
+ABISMAL=$(abspath $(dir $(MAKEFILE_LIST)))/abismal
 
 ifeq (,$(wildcard $(SMITHLAB_CPP)/Makefile))
 $(error src/smithlab_cpp does not have a Makefile. \
+Did you use --recursive when running git clone?)
+endif
+
+ifeq (,$(wildcard $(ABISMAL)/Makefile))
+$(error src/abismal does not have a Makefile. \
 Did you use --recursive when running git clone?)
 endif
 
@@ -41,14 +47,16 @@ else
 CXXFLAGS += $(OPTFLAGS)
 endif
 
-all_subdirs=common utils analysis amrfinder mlml radmeth abismal
-lib_subdirs=common
-app_subdirs=analysis utils amrfinder mlml radmeth abismal
+all_subdirs = common utils analysis amrfinder mlml radmeth
+lib_subdirs = common
+app_subdirs = analysis utils amrfinder mlml radmeth
 
 all_subdirs += $(SMITHLAB_CPP)
 lib_subdirs += $(SMITHLAB_CPP)
 LDLIBS = -lgsl -lgslcblas -lz -lhts
-LDFLAGS = $(addprefix $(SMITHLAB_CPP)/, libsmithlab_cpp.a)
+SMITHLAB_CPP_LIB = $(addprefix $(SMITHLAB_CPP)/, libsmithlab_cpp.a)
+ABISMAL_LIB = $(addprefix $(ABISMAL)/src/, libabismal.a)
+LDFLAGS = $(SMITHLAB_CPP_LIB) $(ABISMAL_LIB)
 
 COMMON_DIR = common
 INCLUDEDIRS = $(SMITHLAB_CPP) $(COMMON_DIR)
@@ -73,30 +81,32 @@ BetaBin.o bsutils.o Distro.o EmissionDistribution.o Epiread.o \
 EpireadStats.o LevelsCounter.o MethpipeSite.o numerical_utils.o \
 Smoothing.o ThreeStateHMM.o TwoStateHMM.o TwoStateHMM_PMD.o)
 
-
 all: $(PROGS)
 
 %.o : %.cpp %.hpp
 
-$(PROGS): dnmtools.cpp  $(OBJS) $(COMMON_OBJS)
+$(SMITHLAB_CPP_LIB):
 	@$(MAKE) -C $(SMITHLAB_CPP) HAVE_HTSLIB=1
+
+$(ABISMAL_LIB):
+	@$(MAKE) -C $(ABISMAL) HAVE_HTSLIB=1
+
+$(PROGS): dnmtools.cpp $(LDFLAGS) $(OBJS) $(COMMON_OBJS)
 	@for i in $(app_subdirs); do \
 		$(MAKE) -C $${i} \
 			SMITHLAB_CPP=$(SMITHLAB_CPP) \
-			SRC_ROOT=$(DNMTOOLS_ROOT) \
-			NO_MAIN=1; \
+			SRC_ROOT=$(DNMTOOLS_ROOT); \
 	done;
 	$(CXX) $(CXXFLAGS) -o $@ $< $(OBJS) $(COMMON_OBJS) \
 	$(LDFLAGS) $(CPPFLAGS) $(LDLIBS)
-
 
 install:
 	@mkdir -p $(SRC_ROOT)/bin
 	@install -m 755 $(PROGS) $(SRC_ROOT)/bin
 
-
 clean:
 	$(MAKE) -C $(SMITHLAB_CPP) clean
+	$(MAKE) -C $(ABISMAL) clean
 	@for i in $(all_subdirs); do \
 		$(MAKE) -C $${i} \
 			SMITHLAB_CPP=$(SMITHLAB_CPP) \

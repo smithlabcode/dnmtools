@@ -47,12 +47,6 @@ else
 CXXFLAGS += $(OPTFLAGS)
 endif
 
-all_subdirs = common utils analysis amrfinder mlml radmeth
-lib_subdirs = common
-app_subdirs = analysis utils amrfinder mlml radmeth
-
-all_subdirs += $(SMITHLAB_CPP)
-lib_subdirs += $(SMITHLAB_CPP)
 LDLIBS = -lgsl -lgslcblas -lz -lhts
 SMITHLAB_CPP_LIB = $(addprefix $(SMITHLAB_CPP)/, libsmithlab_cpp.a)
 ABISMAL_LIB = $(addprefix $(ABISMAL)/src/, libabismal.a)
@@ -92,11 +86,6 @@ $(ABISMAL_LIB):
 	@$(MAKE) -C $(ABISMAL) HAVE_HTSLIB=1
 
 $(PROGS): dnmtools.cpp $(LDFLAGS) $(OBJS) $(COMMON_OBJS)
-	@for i in $(app_subdirs); do \
-		$(MAKE) -C $${i} \
-			SMITHLAB_CPP=$(SMITHLAB_CPP) \
-			SRC_ROOT=$(DNMTOOLS_ROOT); \
-	done;
 	$(CXX) $(CXXFLAGS) -o $@ $< $(OBJS) $(COMMON_OBJS) \
 	$(LDFLAGS) $(CPPFLAGS) $(LDLIBS)
 
@@ -107,9 +96,4 @@ install:
 clean:
 	$(MAKE) -C $(SMITHLAB_CPP) clean
 	$(MAKE) -C $(ABISMAL) clean
-	@for i in $(all_subdirs); do \
-		$(MAKE) -C $${i} \
-			SMITHLAB_CPP=$(SMITHLAB_CPP) \
-			SRC_ROOT=$(DNMTOOLS_ROOT) clean; \
-	done;
-	@-rm -f $(PROGS) *.o *.so *.a *~
+	@-rm -f $(PROGS) */*.o *.o *.so */*.a *.a *~

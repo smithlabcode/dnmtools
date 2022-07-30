@@ -82,7 +82,7 @@ $(SMITHLAB_CPP_LIB):
 	@$(MAKE) -C $(SMITHLAB_CPP) HAVE_HTSLIB=1
 
 $(ABISMAL_LIB):
-	@$(MAKE) -C $(ABISMAL) HAVE_HTSLIB=1
+	@$(MAKE) -C $(ABISMAL) libabismal.a
 
 $(PROGS): dnmtools.cpp $(LDFLAGS) $(OBJS) $(COMMON_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(OBJS) $(COMMON_OBJS) \

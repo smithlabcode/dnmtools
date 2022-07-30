@@ -33,7 +33,7 @@ AC_OPENMP([C++]) dnl make sure we have openmp for multi-core in abismal
 
 dnl recursively configure smithlab_cpp
 AX_SUBDIRS_CONFIGURE([src/smithlab_cpp], [--enable-hts])
-AX_SUBDIRS_CONFIGURE([src/abismal])
+AX_SUBDIRS_CONFIGURE([src/abismal], [--enable-library])
 
 dnl check for HTSLib if requested
 hts_fail_msg="

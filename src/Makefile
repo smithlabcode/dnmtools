@@ -57,13 +57,13 @@ override CPPFLAGS += $(INCLUDEARGS)
 
 PROGS = dnmtools
 OBJS = amrfinder/allelicmeth.o amrfinder/amrfinder.o amrfinder/amrtester.o \
-analysis/bsrate.o analysis/hmr.o analysis/hmr_rep.o analysis/hypermr.o \
+analysis/bsrate.o analysis/hmr.o analysis/hmr-rep.o analysis/hypermr.o \
 analysis/levels.o analysis/methcounts.o analysis/methentropy.o \
 analysis/methstates.o analysis/multimethstat.o analysis/pmd.o \
 analysis/roimethstat.o mlml/mlml.o radmeth/dmr.o radmeth/methdiff.o \
 radmeth/radmeth-adjust.o radmeth/radmeth-merge.o radmeth/radmeth.o \
 utils/clean-hairpins.o utils/duplicate-remover.o utils/fast-liftover.o \
-utils/format_reads.o utils/guessprotocol.o utils/lc_approx.o \
+utils/format-reads.o utils/guessprotocol.o utils/lc-approx.o \
 utils/lift-filter.o utils/merge-bsrate.o utils/merge-methcounts.o \
 utils/symmetric-cpgs.o utils/selectsites.o abismal/src/abismal.o \
 abismal/src/abismalidx.o abismal/src/simreads.o abismal/src/AbismalIndex.o

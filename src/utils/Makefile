@@ -32,10 +32,10 @@ ifndef SMITHLAB_CPP
 $(error SMITHLAB_CPP variable undefined)
 endif
 
-PROGS = lc_approx.o fast-liftover.o lift-filter.o \
+PROGS = lc-approx.o fast-liftover.o lift-filter.o \
 	merge-bsrate.o merge-methcounts.o \
 	symmetric-cpgs.o clean-hairpins.o selectsites.o guessprotocol.o \
-	format_reads.o duplicate-remover.o
+	format-reads.o duplicate-remover.o
 
 COMMON_DIR = ../common
 INCLUDEDIRS = $(SMITHLAB_CPP) $(COMMON_DIR)

@@ -19,7 +19,7 @@
 #  02110-1301 USA
 
 PROGS = pmd.o methcounts.o bsrate.o hmr.o hypermr.o levels.o roimethstat.o \
-	methstates.o methentropy.o hmr_rep.o multimethstat.o
+	methstates.o methentropy.o hmr-rep.o multimethstat.o
 
 CXX = g++
 CXXFLAGS = -Wall -std=c++11

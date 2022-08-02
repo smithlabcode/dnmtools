@@ -34,7 +34,7 @@
 #include "GenomicRegion.hpp"
 #include "zlib_wrapper.hpp"
 
-#include "MethpipeSite.hpp"
+#include "MSite.hpp"
 
 #include "bsutils.hpp"
 

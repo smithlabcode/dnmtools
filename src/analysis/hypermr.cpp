@@ -30,7 +30,7 @@
 #include "zlib_wrapper.hpp"
 
 #include "ThreeStateHMM.hpp"
-#include "MethpipeSite.hpp"
+#include "MSite.hpp"
 
 using std::string;
 using std::vector;

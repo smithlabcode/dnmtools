@@ -36,7 +36,7 @@
 #include "bsutils.hpp"
 
 #include "TwoStateHMM_PMD.hpp"
-#include "MethpipeSite.hpp"
+#include "MSite.hpp"
 
 using std::string;
 using std::vector;

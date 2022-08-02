@@ -37,7 +37,7 @@
 #include "smithlab_os.hpp"
 #include "OptionParser.hpp"
 #include "GenomicRegion.hpp"
-#include "MethpipeSite.hpp"
+#include "MSite.hpp"
 
 using std::string;
 using std::ios_base;

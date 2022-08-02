@@ -71,7 +71,7 @@ utils/symmetric-cpgs.o utils/selectsites.o
 
 COMMON_OBJS = $(addprefix $(COMMON_DIR)/, \
 BetaBin.o bsutils.o Distro.o EmissionDistribution.o Epiread.o \
-EpireadStats.o LevelsCounter.o MethpipeSite.o numerical_utils.o \
+EpireadStats.o LevelsCounter.o MSite.o numerical_utils.o \
 Smoothing.o ThreeStateHMM.o TwoStateHMM.o TwoStateHMM_PMD.o)
 
 all: $(PROGS)

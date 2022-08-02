@@ -32,7 +32,7 @@
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
-#include "MethpipeSite.hpp"
+#include "MSite.hpp"
 #include "zlib_wrapper.hpp"
 
 using std::string;

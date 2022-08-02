@@ -25,7 +25,7 @@
 
 #include "OptionParser.hpp"
 #include "smithlab_os.hpp"
-#include "MethpipeSite.hpp"
+#include "MSite.hpp"
 
 #include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_cdf.h>

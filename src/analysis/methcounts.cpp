@@ -35,7 +35,7 @@
 #include "smithlab_os.hpp"
 #include "GenomicRegion.hpp"
 #include "MappedRead.hpp"
-#include "MethpipeSite.hpp"
+#include "MSite.hpp"
 #include "zlib_wrapper.hpp"
 #include "bsutils.hpp"
 

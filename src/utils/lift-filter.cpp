@@ -26,7 +26,7 @@
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 #include "OptionParser.hpp"
-#include "MethpipeSite.hpp"
+#include "MSite.hpp"
 
 using std::string;
 using std::vector;

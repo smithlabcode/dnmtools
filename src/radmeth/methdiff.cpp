@@ -28,7 +28,7 @@
 #include "OptionParser.hpp"
 #include "zlib_wrapper.hpp"
 
-#include "MethpipeSite.hpp"
+#include "MSite.hpp"
 
 #include <gsl/gsl_sf_gamma.h>
 

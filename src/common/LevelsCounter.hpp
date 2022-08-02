@@ -16,7 +16,7 @@
 #ifndef LEVELS_COUNTER_HPP
 #define LEVELS_COUNTER_HPP
 
-#include "MethpipeSite.hpp"
+#include "MSite.hpp"
 
 #include <iostream>
 #include <string>

@@ -34,7 +34,7 @@
 #include "zlib_wrapper.hpp"
 
 #include "TwoStateHMM.hpp"
-#include "MethpipeSite.hpp"
+#include "MSite.hpp"
 
 using std::string;
 using std::vector;

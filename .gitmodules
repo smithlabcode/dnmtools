@@ -1,6 +1,8 @@
 [submodule "src/smithlab_cpp"]
 	path = src/smithlab_cpp
 	url = ../smithlab_cpp.git
+	ignore = dirty
 [submodule "src/abismal"]
 	path = src/abismal
 	url = ../abismal.git
+	ignore = dirty

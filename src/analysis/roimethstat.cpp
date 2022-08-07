@@ -49,6 +49,7 @@ using std::ios_base;
 using std::runtime_error;
 using std::ifstream;
 using std::isfinite;
+using std::is_sorted;
 
 static pair<bool, bool>
 meth_unmeth_calls(const size_t n_meth, const size_t n_unmeth) {
@@ -131,6 +132,7 @@ format_output_line(const bool PRINT_ADDITIONAL_LEVELS,
 
 static void
 process_with_cpgs_loaded(const bool VERBOSE,
+                         const bool sort_data_if_needed,
                          const bool PRINT_NUMERIC_ONLY,
                          const bool PRINT_ADDITIONAL_LEVELS,
                          const string &cpgs_file,
@@ -145,6 +147,13 @@ process_with_cpgs_loaded(const bool VERBOSE,
   MSite the_cpg;
   while (in >> the_cpg)
     cpgs.push_back(the_cpg);
+
+  if (!is_sorted(begin(cpgs), end(cpgs))) {
+    if (sort_data_if_needed)
+      sort(begin(cpgs), end(cpgs));
+    else
+      throw runtime_error("data not sorted: " + cpgs_file);
+  }
 
   if (VERBOSE)
     cerr << "[n_cpgs=" << cpgs.size() << "]" << endl;
@@ -334,6 +343,7 @@ main_roimethstat(int argc, const char **argv) {
     bool PRINT_NUMERIC_ONLY = false;
     bool LOAD_ENTIRE_FILE = false;
     bool PRINT_ADDITIONAL_LEVELS = false;
+    bool sort_data_if_needed = false;
 
     string outfile;
 
@@ -345,8 +355,10 @@ main_roimethstat(int argc, const char **argv) {
                       false, outfile);
     opt_parse.add_opt("numeric", 'N', "print numeric values only (not NAs)",
                       false, PRINT_NUMERIC_ONLY);
-    opt_parse.add_opt("preload", 'L', "load all CpG sites",
+    opt_parse.add_opt("preload", 'L', "Load all CpG sites",
                       false, LOAD_ENTIRE_FILE);
+    opt_parse.add_opt("sort", 's', "sort data if needed",
+                      false, sort_data_if_needed);
     opt_parse.add_opt("more-levels", 'M', "print more meth level information",
                       false, PRINT_ADDITIONAL_LEVELS);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
@@ -369,6 +381,10 @@ main_roimethstat(int argc, const char **argv) {
       cerr << opt_parse.help_message() << endl;
       return EXIT_SUCCESS;
     }
+    if (sort_data_if_needed && !LOAD_ENTIRE_FILE) {
+      cerr << "cannot sort data unless full data is loaded" << endl;
+      return EXIT_SUCCESS;
+    }
     const string regions_file = leftover_args.front();
     const string cpgs_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
@@ -379,8 +395,12 @@ main_roimethstat(int argc, const char **argv) {
 
     vector<GenomicRegion> regions;
     ReadBEDFile(regions_file, regions);
-    if (!check_sorted(regions))
-      throw runtime_error("regions not sorted in file: " + regions_file);
+    if (!is_sorted(begin(regions), end(regions))) {
+      if (sort_data_if_needed)
+        sort(begin(regions), end(regions));
+      else
+        throw runtime_error("regions not sorted in file: " + regions_file);
+    }
 
     if (VERBOSE)
       cerr << "[n_regions=" << regions.size() << "]" << endl;
@@ -390,7 +410,8 @@ main_roimethstat(int argc, const char **argv) {
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
     if (LOAD_ENTIRE_FILE)
-      process_with_cpgs_loaded(VERBOSE, PRINT_NUMERIC_ONLY,
+      process_with_cpgs_loaded(VERBOSE, sort_data_if_needed,
+                               PRINT_NUMERIC_ONLY,
                                PRINT_ADDITIONAL_LEVELS,
                                cpgs_file, regions, out);
     else

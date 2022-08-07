@@ -48,6 +48,7 @@ using std::make_pair;
 using std::ios_base;
 using std::runtime_error;
 using std::ifstream;
+using std::isfinite;
 
 static pair<bool, bool>
 meth_unmeth_calls(const size_t n_meth, const size_t n_unmeth) {
@@ -76,9 +77,61 @@ region_bounds(const vector<MSite> &sites, const GenomicRegion &region) {
 }
 
 
+/*
+   This function is used to make sure the output is done the same way
+   in the different places it might be generated. One issue is that
+   there is a lot of string and stream manipulation here, which might
+   not be desirable if there are lots of regions, as when the genome
+   is binned.
+*/
+static string
+format_output_line(const bool PRINT_ADDITIONAL_LEVELS,
+                   GenomicRegion &r,
+                   const size_t total_cpgs, const size_t cpgs_with_reads,
+                   const size_t total_meth, const size_t total_reads,
+                   const size_t called_meth, const size_t called_total,
+                   const double mean_meth) {
+
+  const string name = r.get_name() +
+    ":" + toa(total_cpgs) +
+    ":" + toa(cpgs_with_reads) +
+    ":" + toa(total_meth) +
+    ":" + toa(total_reads);
+  r.set_name(name);
+
+  r.set_score(static_cast<double>(total_meth)/total_reads);
+
+  std::ostringstream oss;
+
+  oss << r.get_chrom() << '\t'
+      << r.get_start() << '\t'
+      << r.get_end() << '\t'
+      << r.get_name() << '\t';
+
+  if (isfinite(r.get_score())) oss << r.get_score();
+  else oss << "NA";
+
+  oss << '\t' << r.get_strand();
+
+  if (PRINT_ADDITIONAL_LEVELS) {
+
+    const double called = static_cast<double>(called_meth)/called_total;
+    oss << '\t';
+    if (isfinite(called)) oss << called;
+    else oss << "NA";
+
+    const double unweighted = mean_meth/cpgs_with_reads;
+    oss << '\t';
+    if (isfinite(unweighted)) oss << unweighted;
+    else oss << "NA";
+  }
+  return oss.str();
+}
+
+
 static void
 process_with_cpgs_loaded(const bool VERBOSE,
-                         const bool PRINT_NAN,
+                         const bool PRINT_NUMERIC_ONLY,
                          const bool PRINT_ADDITIONAL_LEVELS,
                          const string &cpgs_file,
                          vector<GenomicRegion> &regions,
@@ -118,23 +171,14 @@ process_with_cpgs_loaded(const bool VERBOSE,
         mean_meth += cpgs[j].meth;
       }
     }
+    const size_t total_cpgs = bounds.second - bounds.first;
 
-    const string name = regions[i].get_name() +
-      ":" + toa(bounds.second - bounds.first) +
-      ":" + toa(cpgs_with_reads) +
-      ":" + toa(total_meth) +
-      ":" + toa(total_reads);
-    regions[i].set_name(name);
-
-    regions[i].set_score(static_cast<double>(total_meth)/total_reads);
-    if (PRINT_NAN || std::isfinite(regions[i].get_score())) {
-      out << regions[i];
-      if (PRINT_ADDITIONAL_LEVELS)
-        out << '\t'
-            << static_cast<double>(called_meth)/called_total << '\t'
-            << mean_meth/cpgs_with_reads;
-      out << endl;
-    }
+    if (!PRINT_NUMERIC_ONLY ||
+        isfinite(static_cast<double>(total_meth)/total_reads))
+      out << format_output_line(PRINT_ADDITIONAL_LEVELS, regions[i], total_cpgs,
+                                cpgs_with_reads, total_meth, total_reads,
+                                called_meth, called_total, mean_meth)
+          << endl;
   }
 }
 
@@ -249,7 +293,7 @@ get_cpg_stats(ifstream &cpg_in, const GenomicRegion region,
 
 
 static void
-process_with_cpgs_on_disk(const bool PRINT_NAN,
+process_with_cpgs_on_disk(const bool PRINT_NUMERIC_ONLY,
                           const bool PRINT_ADDITIONAL_LEVELS,
                           const string &cpgs_file,
                           vector<GenomicRegion> &regions,
@@ -258,31 +302,24 @@ process_with_cpgs_on_disk(const bool PRINT_NAN,
   ifstream in(cpgs_file);
   for (size_t i = 0; i < regions.size() && in; ++i) {
 
-    size_t meth = 0, read = 0;
+    size_t total_meth = 0, total_reads = 0;
     size_t cpgs_with_reads = 0;
     size_t called_total = 0, called_meth = 0;
     size_t total_cpgs = 0;
     double mean_meth = 0.0;
 
-    get_cpg_stats(in, regions[i], meth, read, total_cpgs, cpgs_with_reads,
+    get_cpg_stats(in, regions[i], total_meth, total_reads, total_cpgs, cpgs_with_reads,
                   called_total, called_meth, mean_meth);
 
-    const string name = regions[i].get_name() + ":" +
-      toa(total_cpgs) + ":" + toa(cpgs_with_reads) + ":" +
-      toa(meth) + ":" + toa(read);
-    regions[i].set_name(name);
-    regions[i].set_score(static_cast<double>(meth)/read);
-
-    if (PRINT_NAN || std::isfinite(regions[i].get_score())) {
-      out << regions[i];
-      if (PRINT_ADDITIONAL_LEVELS)
-        out << '\t'
-            << static_cast<double>(called_meth)/called_total << '\t'
-            << mean_meth/cpgs_with_reads;
-      out << endl;
-    }
+    if (!PRINT_NUMERIC_ONLY ||
+        isfinite(static_cast<double>(total_meth)/total_reads))
+      out << format_output_line(PRINT_ADDITIONAL_LEVELS, regions[i], total_cpgs,
+                                cpgs_with_reads, total_meth, total_reads,
+                                called_meth, called_total, mean_meth)
+          << endl;
   }
 }
+
 ///
 ///  END OF CODE FOR SEARCHING ON DISK
 ///
@@ -294,7 +331,7 @@ main_roimethstat(int argc, const char **argv) {
   try {
 
     bool VERBOSE = false;
-    bool PRINT_NAN = false;
+    bool PRINT_NUMERIC_ONLY = false;
     bool LOAD_ENTIRE_FILE = false;
     bool PRINT_ADDITIONAL_LEVELS = false;
 
@@ -306,8 +343,8 @@ main_roimethstat(int argc, const char **argv) {
                            "<intervals-bed> <cpgs-bed>");
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
                       false, outfile);
-    opt_parse.add_opt("print-nan", 'P', "print all records (even if NaN score)",
-                      false, PRINT_NAN);
+    opt_parse.add_opt("numeric", 'N', "print numeric values only (not NAs)",
+                      false, PRINT_NUMERIC_ONLY);
     opt_parse.add_opt("preload", 'L', "load all CpG sites",
                       false, LOAD_ENTIRE_FILE);
     opt_parse.add_opt("more-levels", 'M', "print more meth level information",
@@ -353,10 +390,12 @@ main_roimethstat(int argc, const char **argv) {
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
     if (LOAD_ENTIRE_FILE)
-      process_with_cpgs_loaded(VERBOSE, PRINT_NAN, PRINT_ADDITIONAL_LEVELS,
+      process_with_cpgs_loaded(VERBOSE, PRINT_NUMERIC_ONLY,
+                               PRINT_ADDITIONAL_LEVELS,
                                cpgs_file, regions, out);
     else
-      process_with_cpgs_on_disk(PRINT_NAN, PRINT_ADDITIONAL_LEVELS,
+      process_with_cpgs_on_disk(PRINT_NUMERIC_ONLY,
+                                PRINT_ADDITIONAL_LEVELS,
                                 cpgs_file, regions, out);
   }
   catch (const runtime_error &e) {

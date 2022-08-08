@@ -15,8 +15,8 @@
   GNU General Public License for more details.
 */
 
-#ifndef METHPIPE_SITE_HPP
-#define METHPIPE_SITE_HPP
+#ifndef MSITE_HPP
+#define MSITE_HPP
 
 #include <string>
 #include <cmath>

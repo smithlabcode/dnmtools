@@ -396,6 +396,7 @@ main_roimethstat(int argc, const char **argv) {
     OptionParser opt_parse(strip_path(argv[0]), "Compute average CpG "
                            "methylation in each of a set of genomic intervals",
                            "<intervals-bed> <methylation-file>");
+    opt_parse.set_show_defaults();
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
                       false, outfile);
     opt_parse.add_opt("numeric", 'N', "print numeric values only (not NAs)",

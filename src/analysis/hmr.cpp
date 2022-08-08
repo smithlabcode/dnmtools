@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2019 University of Southern California
+/* Copyright (C) 2009-2022 University of Southern California
  *                         Andrew D Smith
  *
  * Author: Andrew D. Smith, Song Qiang
@@ -12,11 +12,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this software; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
  */
 
 #include <numeric>

@@ -1,7 +1,7 @@
-/*    dmr2: computes DMRs based on HMRs and probability of differences
+/*    dmr: computes DMRs based on HMRs and probability of differences
  *    at individual CpGs
  *
- *    Copyright (C) 2012 University of Southern California and
+ *    Copyright (C) 2012-2022 University of Southern California and
  *                       Andrew D. Smith
  *
  *    Authors: Andrew D. Smith
@@ -15,9 +15,6 @@
  *    but WITHOUT ANY WARRANTY; without even the implied warranty of
  *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *    GNU General Public License for more details.
- *
- *    You should have received a copy of the GNU General Public License
- *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <string>

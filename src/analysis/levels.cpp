@@ -12,7 +12,7 @@
  *    sites, and only use these subset of sites to calculate methylation
  *    level.
  *
- *    Copyright (C) 2014-2015 University of Southern California and
+ *    Copyright (C) 2014-2022 University of Southern California and
  *                            Andrew D. Smith and Benjamin E Decato
  *
  *    Authors: Andrew D. Smith and Benjamin E Decato

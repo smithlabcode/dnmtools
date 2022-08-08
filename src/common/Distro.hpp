@@ -1,22 +1,18 @@
 /*
-  Copyright (C) 2008 Cold Spring Harbor Laboratory
+  Copyright (C) 2008-2022 Cold Spring Harbor Laboratory
   Authors: Andrew D. Smith
 
-  This file is part of rmap.
+  This file is part of dnmtools.
 
-  rmap is free software; you can redistribute it and/or modify
+  dnmtools is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation; either version 2 of the License, or
   (at your option) any later version.
 
-  rmap is distributed in the hope that it will be useful,
+  dnmtools is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
-
-  You should have received a copy of the GNU General Public License
-  along with rmap; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #ifndef DISTRO_HPP
@@ -33,13 +29,13 @@ using std::vector;
 
 class Distro_ {
 public:
-  
+
   Distro_();
   Distro_(const std::vector<double> p);
   Distro_(const Distro_ &);
   Distro_& operator=(const Distro_ &);
   virtual ~Distro_();
-  
+
   void seed(int s);
 
   virtual size_t required_params() const = 0;
@@ -59,7 +55,7 @@ public:
                           const std::vector<double> &scales) const;
   double log_likelihood(std::vector<double>::const_iterator a,
 			std::vector<double>::const_iterator b) const;
-  
+
   std::string tostring() const;
 
   std::vector<double> get_params() const {return params;}
@@ -68,9 +64,9 @@ public:
 
   static double
   log_sum_log_vec(const std::vector<double> &vals, size_t limit);
-  
+
 protected:
-  
+
   std::vector<double> params;
   std::vector<double> workspace_vals;
   std::vector<double> workspace_probs;
@@ -86,7 +82,7 @@ distro_factory(std::string name);
 
 class Distro {
 public:
-  
+
   Distro() : d(0) {}
   Distro(const std::string &name, const std::string &params);
   Distro(const std::string &name, const std::vector<double> &params);
@@ -94,9 +90,9 @@ public:
   Distro(const Distro &);
   Distro& operator=(const Distro &);
   ~Distro();
-  
+
   void seed(int s) {d->seed(s);}
-  
+
   double operator()() const {return d->sample();}
   double operator()(double val) const;
   double operator()(const std::vector<double> &) const;
@@ -118,8 +114,8 @@ public:
 
   void set_params(const std::vector<double> &p) {d->set_params(p);}
   double sample() const {return d->sample();}
-  
-  static double 
+
+  static double
   log_sum_log_vec(const std::vector<double> &vals, size_t limit);
   static bool has_params(const std::string &name);
 
@@ -259,7 +255,7 @@ public:
 
   double log_likelihood(double val) const;
     double log_likelihood(const double &val, const double &scale) const;
-  
+
 private:
 
   static const double max_allowed_alpha;
@@ -340,7 +336,7 @@ public:
   EmpiricalDistro(const EmpiricalDistro &rhs);
   EmpiricalDistro& operator=(const EmpiricalDistro &rhs);
   ~EmpiricalDistro() {}
-  
+
   void set_params(const std::vector<double> &p) {params = p;}
   double sample() const;
   size_t required_params() const {return 2;}
@@ -374,7 +370,7 @@ private:
 			double max_val,
 			std::vector<double> &breaks,
 			std::vector<double> &hist);
-  
+
   static void make_weighted_hist(const std::vector<double> &data,
 				 const std::vector<double> &weights,
 				 size_t n_vals,
@@ -387,22 +383,22 @@ private:
   estimate_bandwidth(const std::vector<double> &vals);
   static double
   estimate_number_of_classes(const std::vector<double> &vals);
-  
+
   static double
   estimate_bandwidth(const std::vector<double> &vals,
 		     const std::vector<double> &probs);
   static double
   estimate_number_of_classes(const std::vector<double> &vals,
 			     const std::vector<double> &probs);
-  
+
   static void make_cumulative(std::vector<double> &vals);
-  
+
   static size_t find_bin(const std::vector<double> &bins,
 			 const double val);
 
   static const size_t max_classes = 10000;
   static const double MIN_PROB;
-  
+
   std::vector<double> breaks;
   std::vector<double> log_hist;
   std::vector<double> hist;
@@ -415,7 +411,7 @@ private:
 
 class DiscEmpDistro : public Distro_ {
 public:
-  
+
   DiscEmpDistro() : Distro_(std::vector<double>(2, 0)) {}
   DiscEmpDistro(std::vector<double> p) : Distro_(p) {}
   DiscEmpDistro(const DiscEmpDistro &rhs);
@@ -436,18 +432,18 @@ public:
 private:
 
   static size_t find_bin(const std::vector<double> &bins, const double val);
-  static void make_hist(const std::vector<double> &data, size_t n_vals, 
+  static void make_hist(const std::vector<double> &data, size_t n_vals,
 			size_t n_classes, double max_val, std::vector<double> &hist);
-  
+
   static void make_weighted_hist(const std::vector<double> &data,
 				 const std::vector<double> &weights, size_t n_vals,
-				 size_t n_classes, double max_val, 
+				 size_t n_classes, double max_val,
 				 std::vector<double> &hist);
-  
+
   static void make_cumulative(std::vector<double> &vals);
-  
+
   static const double MIN_PROB;
-  
+
   size_t n_classes;
   double max_val;
   std::vector<double> log_hist;

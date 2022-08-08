@@ -1,6 +1,6 @@
 /* roimethstat: average methylation in each of a set of regions
  *
- * Copyright (C) 2014 Andrew D. Smith
+ * Copyright (C) 2014-2022 Andrew D. Smith
  *
  * Authors: Andrew D. Smith
  *

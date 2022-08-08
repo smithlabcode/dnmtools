@@ -1,6 +1,6 @@
 /* fast-liftover: lift over sites using index file
  *
- * Copyright (C) 2014 University of Southern California and
+ * Copyright (C) 2014-2022 University of Southern California and
  *                    Andrew D. Smith
  *
  * Authors: Jenny Qu, Qiang Song

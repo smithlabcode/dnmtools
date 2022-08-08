@@ -46,7 +46,7 @@ libdnmtools_a_SOURCES += \
         src/common/Epiread.hpp \
         src/common/EpireadStats.hpp \
         src/common/LevelsCounter.hpp \
-        src/common/MethpipeSite.hpp \
+        src/common/MSite.hpp \
         src/common/Smoothing.hpp \
         src/common/ThreeStateHMM.hpp \
         src/common/TwoStateHMM.hpp \

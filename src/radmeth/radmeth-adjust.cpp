@@ -1,8 +1,8 @@
-/*    Copyright (C) 2013 University of Southern California and
+/*    Copyright (C) 2013-2022 University of Southern California and
  *                       Egor Dolzhenko
  *                       Andrew D Smith
  *
- *    Authors: Andrew D. Smith and Egor Dolzhenko
+ *    Authors: Andrew D. Smith and Egor Dolzhenko and Guilherme Sena
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by

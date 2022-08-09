@@ -9,7 +9,7 @@
  * data. It should be modified for the transpose and also for the
  * format accepted by RADMeth.
  *
- * Copyright (C) 2019 Andrew D. Smith
+ * Copyright (C) 2019-2022 Andrew D. Smith
  *
  * Authors: Andrew D. Smith
  *

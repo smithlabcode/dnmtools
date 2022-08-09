@@ -2,7 +2,7 @@
  *           methylation in file A than in file B, where files A and B
  *           are specified on the command line.
  *
- * Copyright (C) 2011-2019 Andrew D Smith
+ * Copyright (C) 2011-2022 Andrew D Smith
  *
  * Author: Andrew D. Smith
  *

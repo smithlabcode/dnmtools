@@ -1,7 +1,7 @@
 /* clean-hairpins: a program for identifying and removing hairping
  * reads from paired-end WGBS or RRBS reads.
  *
- * Copyright (C) 2018 Andrew D. Smith, Liz Ji and Jenny Qu
+ * Copyright (C) 2018-2022 Andrew D. Smith, Liz Ji and Jenny Qu
  *
  * Authors: Liz Ji and Andrew D. Smith
  *

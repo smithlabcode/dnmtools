@@ -6,7 +6,7 @@
  * Copyright (C) 2013-2021 University of Southern California and
  *                         Andrew D. Smith
  *
- * Authors: Andrew D. Smith, Ben Decato, Song Qiang
+ * Authors: Andrew D. Smith, Ben Decato, Song Qiang, Guilherme Sena
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as

@@ -1,21 +1,18 @@
-/*    roimethstat: average methylation in each of a set of regions
+/* roimethstat: average methylation in each of a set of regions
  *
- *    Copyright (C) 2014 Andrew D. Smith
+ * Copyright (C) 2014-2022 Andrew D. Smith
  *
- *    Authors: Andrew D. Smith
+ * Authors: Andrew D. Smith
  *
- *    This program is free software: you can redistribute it and/or modify
- *    it under the terms of the GNU General Public License as published by
- *    the Free Software Foundation, either version 3 of the License, or
- *    (at your option) any later version.
+ * This program is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
  *
- *    This program is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU General Public License for more details.
- *
- *    You should have received a copy of the GNU General Public License
- *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
  */
 
 #include <string>
@@ -86,45 +83,42 @@ region_bounds(const vector<MSite> &sites, const GenomicRegion &region) {
    is binned.
 */
 static string
-format_output_line(const bool PRINT_ADDITIONAL_LEVELS,
-                   GenomicRegion &r,
+format_output_line(const bool report_more_information,
+                   const GenomicRegion &r, const double score,
+                   const double weighted_mean_meth, const double mean_meth,
+                   const double fractional_meth,
                    const size_t total_cpgs, const size_t cpgs_with_reads,
-                   const size_t total_meth, const size_t total_reads,
-                   const size_t called_meth, const size_t called_total,
-                   const double mean_meth) {
-
-  const string name = r.get_name() +
-    ":" + toa(total_cpgs) +
-    ":" + toa(cpgs_with_reads) +
-    ":" + toa(total_meth) +
-    ":" + toa(total_reads);
-  r.set_name(name);
-
-  r.set_score(static_cast<double>(total_meth)/total_reads);
+                   const size_t total_meth, const size_t total_reads) {
 
   std::ostringstream oss;
-
   oss << r.get_chrom() << '\t'
       << r.get_start() << '\t'
       << r.get_end() << '\t'
       << r.get_name() << '\t';
 
-  if (isfinite(r.get_score())) oss << r.get_score();
+  if (isfinite(score)) oss << score;
   else oss << "NA";
 
   oss << '\t' << r.get_strand();
 
-  if (PRINT_ADDITIONAL_LEVELS) {
+  if (report_more_information) {
 
-    const double called = static_cast<double>(called_meth)/called_total;
     oss << '\t';
-    if (isfinite(called)) oss << called;
+    if (isfinite(weighted_mean_meth)) oss << weighted_mean_meth;
     else oss << "NA";
 
-    const double unweighted = mean_meth/cpgs_with_reads;
     oss << '\t';
-    if (isfinite(unweighted)) oss << unweighted;
+    if (isfinite(mean_meth)) oss << mean_meth;
     else oss << "NA";
+
+    oss << '\t';
+    if (isfinite(fractional_meth)) oss << fractional_meth;
+    else oss << "NA";
+
+    oss << '\t' << total_cpgs
+        << '\t' << cpgs_with_reads
+        << '\t' << total_meth
+        << '\t' << total_reads;
   }
   return oss.str();
 }
@@ -134,7 +128,8 @@ static void
 process_with_cpgs_loaded(const bool VERBOSE,
                          const bool sort_data_if_needed,
                          const bool PRINT_NUMERIC_ONLY,
-                         const bool PRINT_ADDITIONAL_LEVELS,
+                         const bool report_more_information,
+                         const char level_code,
                          const string &cpgs_file,
                          vector<GenomicRegion> &regions,
                          std::ostream &out) {
@@ -180,13 +175,24 @@ process_with_cpgs_loaded(const bool VERBOSE,
         mean_meth += cpgs[j].meth;
       }
     }
-    const size_t total_cpgs = bounds.second - bounds.first;
 
-    if (!PRINT_NUMERIC_ONLY ||
-        isfinite(static_cast<double>(total_meth)/total_reads))
-      out << format_output_line(PRINT_ADDITIONAL_LEVELS, regions[i], total_cpgs,
-                                cpgs_with_reads, total_meth, total_reads,
-                                called_meth, called_total, mean_meth)
+    const size_t total_cpgs = bounds.second - bounds.first;
+    const double fractional_meth =
+      static_cast<double>(called_meth)/called_total;
+    const double weighted_mean_meth =
+      static_cast<double>(total_meth)/total_reads;
+    const double unweighted_mean_meth = mean_meth/cpgs_with_reads;
+
+    const double score = (level_code == 'w' ? weighted_mean_meth :
+                          (level_code == 'u' ? unweighted_mean_meth :
+                           fractional_meth));
+
+    if (!PRINT_NUMERIC_ONLY || isfinite(score))
+      out << format_output_line(report_more_information, regions[i], score,
+                                weighted_mean_meth, unweighted_mean_meth,
+                                fractional_meth,
+                                total_cpgs, cpgs_with_reads,
+                                total_meth, total_reads)
           << endl;
   }
 }
@@ -241,6 +247,8 @@ find_start_line(const string &chr, const size_t idx, ifstream &cpg_in) {
   while (step_size > 0) {
     string mid_chr;
     size_t mid_idx = 0;
+    // ADS: possible here to check that the chroms are in the right
+    // order, at least the ones we have seen.
     cpg_in >> mid_chr >> mid_idx;
     step_size /= 2;
     if (chr < mid_chr || (chr == mid_chr && idx <= mid_idx)) {
@@ -303,7 +311,8 @@ get_cpg_stats(ifstream &cpg_in, const GenomicRegion region,
 
 static void
 process_with_cpgs_on_disk(const bool PRINT_NUMERIC_ONLY,
-                          const bool PRINT_ADDITIONAL_LEVELS,
+                          const bool report_more_information,
+                          const char level_code,
                           const string &cpgs_file,
                           vector<GenomicRegion> &regions,
                           std::ostream &out) {
@@ -320,11 +329,22 @@ process_with_cpgs_on_disk(const bool PRINT_NUMERIC_ONLY,
     get_cpg_stats(in, regions[i], total_meth, total_reads, total_cpgs, cpgs_with_reads,
                   called_total, called_meth, mean_meth);
 
-    if (!PRINT_NUMERIC_ONLY ||
-        isfinite(static_cast<double>(total_meth)/total_reads))
-      out << format_output_line(PRINT_ADDITIONAL_LEVELS, regions[i], total_cpgs,
-                                cpgs_with_reads, total_meth, total_reads,
-                                called_meth, called_total, mean_meth)
+    const double fractional_meth =
+      static_cast<double>(called_meth)/called_total;
+    const double weighted_mean_meth =
+      static_cast<double>(total_meth)/total_reads;
+    const double unweighted_mean_meth = mean_meth/cpgs_with_reads;
+
+    const double score = (level_code == 'w' ? weighted_mean_meth :
+                          (level_code == 'u' ? unweighted_mean_meth :
+                           fractional_meth));
+
+    if (!PRINT_NUMERIC_ONLY || isfinite(score))
+      out << format_output_line(report_more_information, regions[i], score,
+                                weighted_mean_meth, unweighted_mean_meth,
+                                fractional_meth,
+                                total_cpgs, cpgs_with_reads,
+                                total_meth, total_reads)
           << endl;
   }
 }
@@ -334,16 +354,41 @@ process_with_cpgs_on_disk(const bool PRINT_NUMERIC_ONLY,
 ///
 ////////////////////////////////////////////////////////////////////////
 
+
+static size_t
+check_bed_format(const string &regions_file) {
+
+  ifstream in(regions_file);
+  if (!in)
+    throw runtime_error("cannot open file: " + regions_file);
+
+  string line;
+  getline(in, line);
+
+  std::istringstream iss(line);
+  string token;
+  size_t n_columns = 0;
+  while (iss >> token)
+    ++n_columns;
+
+  return n_columns;
+}
+
+
 int
 main_roimethstat(int argc, const char **argv) {
 
   try {
 
+    static const string default_name_prefix = "X";
+
     bool VERBOSE = false;
     bool PRINT_NUMERIC_ONLY = false;
-    bool LOAD_ENTIRE_FILE = false;
-    bool PRINT_ADDITIONAL_LEVELS = false;
+    bool load_entire_file = false;
+    bool report_more_information = false;
     bool sort_data_if_needed = false;
+
+    string level_code = "w";
 
     string outfile;
 
@@ -351,16 +396,19 @@ main_roimethstat(int argc, const char **argv) {
     OptionParser opt_parse(strip_path(argv[0]), "Compute average CpG "
                            "methylation in each of a set of genomic intervals",
                            "<intervals-bed> <methylation-file>");
+    opt_parse.set_show_defaults();
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
                       false, outfile);
     opt_parse.add_opt("numeric", 'N', "print numeric values only (not NAs)",
                       false, PRINT_NUMERIC_ONLY);
     opt_parse.add_opt("preload", 'L', "Load all CpG sites",
-                      false, LOAD_ENTIRE_FILE);
+                      false, load_entire_file);
     opt_parse.add_opt("sort", 's', "sort data if needed",
                       false, sort_data_if_needed);
-    opt_parse.add_opt("more-levels", 'M', "print more meth level information",
-                      false, PRINT_ADDITIONAL_LEVELS);
+    opt_parse.add_opt("level", 'l', "the level to report as score column "
+                      "in bed format output (w, u or f)", false, level_code);
+    opt_parse.add_opt("more-levels", 'M', "report more methylation information",
+                      false, report_more_information);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -381,8 +429,12 @@ main_roimethstat(int argc, const char **argv) {
       cerr << opt_parse.help_message() << endl;
       return EXIT_SUCCESS;
     }
-    if (sort_data_if_needed && !LOAD_ENTIRE_FILE) {
-      cerr << "cannot sort data unless full data is loaded" << endl;
+    if (sort_data_if_needed && !load_entire_file) {
+      cerr << "cannot sort data unless all data is loaded" << endl;
+      return EXIT_SUCCESS;
+    }
+    if (level_code != "w" && level_code != "u" && level_code != "f") {
+      cerr << "selected level must be in {w, u, f}" << endl;
       return EXIT_SUCCESS;
     }
     const string regions_file = leftover_args.front();
@@ -390,17 +442,28 @@ main_roimethstat(int argc, const char **argv) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (VERBOSE)
-      cerr << "FORMAT = NAME : CPGS : CPGS_WITH_READS : "
-        "METH_READS : TOTAL_READS" << endl;
+      cerr << "loading regions" << endl;
+
+    const size_t n_columns = check_bed_format(regions_file);
+    // MAGIC: this allows for exactly 3 or at least 6 columns in the
+    // bed format
+    if (n_columns != 3 && n_columns < 6)
+      throw runtime_error("format must be 3 or 6+ column bed: " + regions_file);
 
     vector<GenomicRegion> regions;
     ReadBEDFile(regions_file, regions);
     if (!is_sorted(begin(regions), end(regions))) {
-      if (sort_data_if_needed)
+      if (sort_data_if_needed) {
+        if (VERBOSE)
+          cerr << "sorting regions" << endl;
         sort(begin(regions), end(regions));
-      else
-        throw runtime_error("regions not sorted in file: " + regions_file);
+      }
+      else throw runtime_error("regions not sorted in file: " + regions_file);
     }
+
+    if (n_columns == 3) // then we should name the regions
+      for (size_t i = 0; i < regions.size(); ++i)
+        regions[i].set_name(default_name_prefix + std::to_string(i));
 
     if (VERBOSE)
       cerr << "[n_regions=" << regions.size() << "]" << endl;
@@ -409,14 +472,16 @@ main_roimethstat(int argc, const char **argv) {
     if (!outfile.empty()) of.open(outfile);
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
-    if (LOAD_ENTIRE_FILE)
+    if (load_entire_file)
       process_with_cpgs_loaded(VERBOSE, sort_data_if_needed,
                                PRINT_NUMERIC_ONLY,
-                               PRINT_ADDITIONAL_LEVELS,
+                               report_more_information,
+                               level_code[0],
                                cpgs_file, regions, out);
     else
       process_with_cpgs_on_disk(PRINT_NUMERIC_ONLY,
-                                PRINT_ADDITIONAL_LEVELS,
+                                report_more_information,
+                                level_code[0],
                                 cpgs_file, regions, out);
   }
   catch (const runtime_error &e) {

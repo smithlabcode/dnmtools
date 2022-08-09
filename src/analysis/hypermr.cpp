@@ -1,4 +1,4 @@
-/* Copyright (C) 2009 University of Southern California
+/* Copyright (C) 2009-2022 University of Southern California
  *                    Andrew D Smith
  * Author: Song Qiang, Andrew D. Smith
  *

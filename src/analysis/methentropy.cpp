@@ -1,4 +1,4 @@
-/* Copyright (C) 2013 University of Southern California
+/* Copyright (C) 2013-2022 University of Southern California
  *                    Andrew D Smith and Jenny Qu
  *
  * Author: Jenny Qu and Andrew D. Smith

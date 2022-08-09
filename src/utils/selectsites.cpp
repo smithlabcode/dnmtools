@@ -189,6 +189,10 @@ process_with_sites_on_disk(const string &sites_file,
 ///  END OF CODE FOR SEARCHING ON DISK
 ////////////////////////////////////////////////////////////////////////
 
+inline bool
+file_exists(const string &filename) {
+  return (access(filename.c_str(), F_OK) == 0);
+}
 
 int
 main_selectsites(int argc, const char **argv) {
@@ -237,6 +241,9 @@ main_selectsites(int argc, const char **argv) {
     const string regions_file = leftover_args.front();
     const string sites_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
+
+    if (isdir(sites_file.c_str()) || !file_exists(sites_file))
+      throw runtime_error("bad input sites file: " + sites_file);
 
     vector<GenomicRegion> regions;
     ReadBEDFile(regions_file, regions);

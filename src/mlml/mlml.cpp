@@ -1,4 +1,4 @@
-/*   Copyright (C) 2014 University of Southern California and
+/*   Copyright (C) 2014-2022 University of Southern California and
  *                      Meng Zhou, Jenny Qu and Andrew D. Smith
  *
  *   Authors: Meng Zhou, Jenny Qu and Andrew D. Smith

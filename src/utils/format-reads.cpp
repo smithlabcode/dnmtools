@@ -1,10 +1,10 @@
 /* format_reads: a program to ensure SAM and BAM format reads
  * are conforming to expectations of dnmtools software
  *
- * Copyright (C) 2020 University of Southern California and
+ * Copyright (C) 2020-2022 University of Southern California and
  *                    Andrew D. Smith
  *
- * Authors: Andrew Smith
+ * Authors: Andrew Smith and Guilherme Sena
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as

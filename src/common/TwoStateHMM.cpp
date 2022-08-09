@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2019 Andrew D. Smith
+  Copyright (C) 2019-2022 Andrew D. Smith
   Author: Andrew D. Smith
 
   This is free software; you can redistribute it and/or modify it

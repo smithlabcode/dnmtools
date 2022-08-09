@@ -1,7 +1,7 @@
 /* guessprotocol: a program for guessing whether a wgbs protocol is
  * original, pbat or random pbat
  *
- * Copyright (C) 2019
+ * Copyright (C) 2019-2022
  *
  * Authors: Andrew D. Smith
  *

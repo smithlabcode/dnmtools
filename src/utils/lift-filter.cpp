@@ -1,6 +1,6 @@
 /* lift-filter: process lift results
  *
- * Copyright (C) 2014 University of Southern California and
+ * Copyright (C) 2014-2022 University of Southern California and
  *                    Andrew D. Smith
  *
  * Authors: Jenny Qu

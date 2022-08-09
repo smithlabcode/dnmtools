@@ -3,11 +3,11 @@
 \usepackage{times, fullpage, graphicx, amsmath, subfigure, cite, bibentry}
 \usepackage[pdfborder={0 0 0}]{hyperref}
 
-\title{The Smithlab DNA Methylation Data Analysis Pipeline (MethPipe)}
+\title{The Smithlab DNA Methylation Data Analysis Pipeline (DNMTools)}
 \author{Qiang Song \and Benjamin Decato \and Michael Kessler \and Fang Fang
 \and Jenny Qu \and Tyler Garvin \and Meng Zhou \and Andrew Smith}
 
-\newcommand{\meth}{\texttt{methpipe}}
+\newcommand{\meth}{\texttt{dnmtools}}
 
 %%%%
 %%%% NOTE: use the following appropriately so that we can change the
@@ -66,13 +66,13 @@ pipeline.
 
 If you find our programs helpful, please cite us. The majority of the
 tools described in this manual were introduced as part of the main
-methpipe manuscript, listed first below. However, several improvements and
+dnmtools manuscript, listed first below. However, several improvements and
 additions have been made over the years. Below is the main citation
 along with the papers describing those improvements or additions.
 
 \begin{itemize}
 
-\item{\textbf{methpipe:}} \bibentry{song2013reference}
+\item{\textbf{dnmtools:}} \bibentry{song2013reference}
 
 \item{\textbf{amrfinder:}} \bibentry{fang2012genomic}
 
@@ -949,7 +949,7 @@ and is best paired with matching WGBS data.
 
 This section explains how to calculate regions of differential methylation
 between a pair of methylomes or two groups of methylomes. Correspondingly,
-MethPipe provides two methods for differential methylation (DM) analysis.
+DNMTools provides two methods for differential methylation (DM) analysis.
 The first method is designed for computing DM regions between a pair or two
 small groups of methylomes; it is implemented in the programs \prog{methdiff}
 and \prog{dmr}. The second method is based on the beta-binomial
@@ -1067,7 +1067,7 @@ number of sites analyzed, and the number of methylomes in the dataset.
 
 \paragraph{Generating proportion tables:} The first step in the differential
 methylation analysis is to assemble a proportion table containing read
-proportions for all target methylomes. MethPipe includes a program
+proportions for all target methylomes. DNMTools includes a program
 \prog{merge\_methcounts} to generate a proportion table from the given collection of
 methylomes. Suppose that we want to compare methylomes named
 {\tt control\_a.meth}, {\tt control\_b.meth}, {\tt control\_c.meth}
@@ -1240,7 +1240,7 @@ chr1    274339  275254  dmr     18      -0.520114
 Allele-specific methylation (ASM) occurs when the same cytosine is
 differentially methylated on the two alleles of a diploid organism.
 ASM is a major mechanism of genomic imprinting, and aberrations can
-lead to disease. Included in \prog{methpipe} are three tools to
+lead to disease. Included in \prog{dnmtools} are three tools to
 analyze ASM: \prog{allelicmeth}, \prog{amrfinder}, and \prog{amrtester}.
 All of these programs calculate the probability of ASM in a site or
 region by counting methylation on reads and analyzing the dependency
@@ -1670,9 +1670,9 @@ OS environment. After these required files are ready, user may follow the
 following steps to create a \texttt{methcounts} file.
 
 \begin{enumerate}
-\item Find the script located in \texttt{METHPIPE\_ROOT/src/utils} with the
+\item Find the script located in \texttt{DNMTOOLS_ROOT/src/utils} with the
 name \texttt{bigWig\_to\_methcounts.py}. Here we use
-\texttt{METHPIPE\_ROOT} to represent the path to the installation location
+\texttt{DNMTOOLS\_ROOT} to represent the path to the installation location
 of \meth.
 \item Locate \texttt{bigWigToBedGraph}. Type the following command:
 \begin{verbatim}
@@ -1812,6 +1812,6 @@ the option \op{-u} to keep the first record of duplicated sites.
 \newpage
 
 \bibliographystyle{plain}
-\bibliography{methpipe-manual}
+\bibliography{dnmtools-manual}
 
 \end{document}

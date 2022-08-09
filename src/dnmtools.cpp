@@ -1,7 +1,7 @@
 /*    Copyright (C) 2022 University of Southern California and
  *                            Andrew D. Smith
  *
- *    Authors: Andrew D. Smith and Song Qiang
+ *    Authors: Andrew D. Smith and Song Qiang and Guilherme Sena
  *
  *    This program is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
@@ -12,9 +12,6 @@
  *    but WITHOUT ANY WARRANTY; without even the implied warranty of
  *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *    GNU General Public License for more details.
- *
- *    You should have received a copy of the GNU General Public License
- *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <iostream>
@@ -24,10 +21,11 @@
 using std::string;
 using std::to_string;
 using std::cerr;
+using std::cout;
 using std::endl;
 
 #define PROGRAM_NAME "dnmtools"
-#define PROGRAM_VERSION " 5.0.1"
+#define PROGRAM_VERSION " 1.0.0"
 
 int abismal(int argc, const char **argv);
 int abismalidx(int argc, const char **argv);
@@ -67,59 +65,59 @@ int main_symmetric_cpgs(int argc, const char **argv);
 void
 print_help() {
   static const string sep = "  ";
-  cerr << "Program: " << PROGRAM_NAME << "\n";
-  cerr << "Version: " << PROGRAM_VERSION << "\n";
-  cerr << "Usage: " << PROGRAM_NAME << " <command> [options]\n";
-  cerr << "Commands:";
+  cout <<  "Program: " << PROGRAM_NAME << "\n";
+  cout <<  "Version: " << PROGRAM_VERSION << "\n";
+  cout <<  "Usage: " << PROGRAM_NAME << " <command> [options]\n";
+  cout <<  "Commands:";
 
-  cerr << "\n" << sep << "read mapping:\n";
-  cerr << sep+sep << "abismal:       map FASTQ reads to a FASTA reference genome or an index\n";
-  cerr << sep+sep << "abismalidx:    convert a FASTA reference genome to an abismal index\n";
-  cerr << sep+sep << "simreads:      simulate reads in a FASTA reference genome\n";
+  cout <<  "\n" << sep << "read mapping:\n";
+  cout <<  sep+sep << "abismal:       map FASTQ reads to a FASTA reference genome or an index\n";
+  cout <<  sep+sep << "abismalidx:    convert a FASTA reference genome to an abismal index\n";
+  cout <<  sep+sep << "simreads:      simulate reads in a FASTA reference genome\n";
 
-  cerr << "\n" << sep << "methylome construction:\n";
-  cerr << sep+sep << "format:        convert SAM/BAM mapped bs-seq reads to standard dnmtools format\n";
-  cerr << sep+sep << "uniq:          remove duplicate reads from sorted mapped reads\n";
-  cerr << sep+sep << "bsrate:        compute the BS conversion rate from BS-seq reads mapped to a genome\n";
-  cerr << sep+sep << "counts:        get methylation levels from mapped WGBS reads\n";
-  cerr << sep+sep << "sym:           get CpG sites and make methylation levels symmetric.\n";
-  cerr << sep+sep << "levels:        compute methylation summary statistics from a counts file\n";
+  cout <<  "\n" << sep << "methylome construction:\n";
+  cout <<  sep+sep << "format:        convert SAM/BAM mapped bs-seq reads to standard dnmtools format\n";
+  cout <<  sep+sep << "uniq:          remove duplicate reads from sorted mapped reads\n";
+  cout <<  sep+sep << "bsrate:        compute the BS conversion rate from BS-seq reads mapped to a genome\n";
+  cout <<  sep+sep << "counts:        get methylation levels from mapped WGBS reads\n";
+  cout <<  sep+sep << "sym:           get CpG sites and make methylation levels symmetric.\n";
+  cout <<  sep+sep << "levels:        compute methylation summary statistics from a counts file\n";
 
-  cerr << "\n" << sep << "methylome analysis:\n";
-  cerr << sep+sep << "hmr:           identify hypomethylated regions.\n";
-  cerr << sep+sep << "hmr-rep:       identify hypomethylated regions in a set of replicate methylomes\n";
-  cerr << sep+sep << "entropy:       compute methylation entropy in sliding window\n";
-  cerr << sep+sep << "multistat:     summarize methylation from to genomic intervals in a BED file.\n";
-  cerr << sep+sep << "pmd:           identify partially methylated domains\n";
-  cerr << sep+sep << "roi:           compute average CpG methylation in each of a set of genomic interval\n";
-  cerr << sep+sep << "mlml:          program to estimate hydroxymethylation levels\n";
+  cout <<  "\n" << sep << "methylome analysis:\n";
+  cout <<  sep+sep << "hmr:           identify hypomethylated regions.\n";
+  cout <<  sep+sep << "hmr-rep:       identify hypomethylated regions in a set of replicate methylomes\n";
+  cout <<  sep+sep << "entropy:       compute methylation entropy in sliding window\n";
+  cout <<  sep+sep << "multistat:     summarize methylation from to genomic intervals in a BED file.\n";
+  cout <<  sep+sep << "pmd:           identify partially methylated domains\n";
+  cout <<  sep+sep << "roi:           compute average CpG methylation in each of a set of genomic interval\n";
+  cout <<  sep+sep << "mlml:          program to estimate hydroxymethylation levels\n";
 
-  cerr << "\n" << sep << "allele-specific methylation:\n";
-  cerr << sep+sep << "states:        convert read sequences in SAM format to methylation states at CpGs covered by those reads\n";
-  cerr << sep+sep << "allelic:       computes probability of allele-specific methylation at each tuple of CpGs\n";
-  cerr << sep+sep << "amrfinder:     identify regions of allele-specific methylation\n";
-  cerr << sep+sep << "amrtester:     resolve epi-alleles\n";
+  cout <<  "\n" << sep << "allele-specific methylation:\n";
+  cout <<  sep+sep << "states:        convert read sequences in SAM format to methylation states at CpGs covered by those reads\n";
+  cout <<  sep+sep << "allelic:       computes probability of allele-specific methylation at each tuple of CpGs\n";
+  cout <<  sep+sep << "amrfinder:     identify regions of allele-specific methylation\n";
+  cout <<  sep+sep << "amrtester:     resolve epi-alleles\n";
 
-  cerr << "\n" << sep << "differential methylation:\n";
-  cerr << sep+sep << "dmr:           computes DMRs based on HMRs and probability of differences at individual CpGs\n";
-  cerr << sep+sep << "diff:          compute probability that site has higher methylation in file A than B\n";
-  cerr << sep+sep << "radmeth:       computes differentially methylated CpGs\n";
-  cerr << sep+sep << "radadjust:     adjust p-values of radmeth output\n";
-  cerr << sep+sep << "radmerge:      merge significant CpGs in radmeth output\n";
+  cout <<  "\n" << sep << "differential methylation:\n";
+  cout <<  sep+sep << "dmr:           computes DMRs based on HMRs and probability of differences at individual CpGs\n";
+  cout <<  sep+sep << "diff:          compute probability that site has higher methylation in file A than B\n";
+  cout <<  sep+sep << "radmeth:       computes differentially methylated CpGs\n";
+  cout <<  sep+sep << "radadjust:     adjust p-values of radmeth output\n";
+  cout <<  sep+sep << "radmerge:      merge significant CpGs in radmeth output\n";
 
-  cerr << "\n" << sep << "methylation visualization:\n";
-  cerr << sep+sep << "fastlift:      liftover methylation levels between species\n";
-  cerr << sep+sep << "liftfilter:    filter CpG regions that do not exist in resulting genome\n";
+  cout <<  "\n" << sep << "methylation visualization:\n";
+  cout <<  sep+sep << "fastlift:      liftover methylation levels between species\n";
+  cout <<  sep+sep << "liftfilter:    filter CpG regions that do not exist in resulting genome\n";
 
-  cerr << "\n" << sep << "general-purpose tools:\n";
-  cerr << sep+sep << "cleanhp:       fix and stat invdup/hairping reads\n";
-  cerr << sep+sep << "guessprotocol: guess whether protocol is ordinary, pbat or random\n";
-  cerr << sep+sep << "lc:            approximate line counts in a file\n";
-  cerr << sep+sep << "merge-bsrate:  merge the BS conversion rate from two sets of BS-seq reads mapped to a genome\n";
-  cerr << sep+sep << "merge:         merge multiple methcounts files\n";
-  cerr << sep+sep << "selectsites:   sites inside a set of genomic intervals\n";
+  cout <<  "\n" << sep << "general-purpose tools:\n";
+  cout <<  sep+sep << "cleanhp:       fix and stat invdup/hairping reads\n";
+  cout <<  sep+sep << "guessprotocol: guess whether protocol is ordinary, pbat or random\n";
+  cout <<  sep+sep << "lc:            approximate line counts in a file\n";
+  cout <<  sep+sep << "merge-bsrate:  merge the BS conversion rate from two sets of BS-seq reads mapped to a genome\n";
+  cout <<  sep+sep << "merge:         merge multiple methcounts files\n";
+  cout <<  sep+sep << "selectsites:   sites inside a set of genomic intervals\n";
 
-  cerr << "\n";
+  cout <<  "\n";
 }
 
 int

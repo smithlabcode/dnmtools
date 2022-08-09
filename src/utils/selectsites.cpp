@@ -242,7 +242,7 @@ main_selectsites(int argc, const char **argv) {
     const string sites_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (!file_exists(sites_file))
+    if (isdir(sites_file.c_str()) || !file_exists(sites_file))
       throw runtime_error("bad input sites file: " + sites_file);
 
     vector<GenomicRegion> regions;

@@ -452,6 +452,28 @@ main_amrfinder(int argc, const char **argv) {
     const size_t windows_accepted = amrs.size();
     if (!amrs.empty()) {
 
+      /*
+        ADS: there are several "steps" below that are done
+        independently, but for which the order matters. It is not
+        clear to me that this is the right order, after observing the
+        behavior of the program on some newer much larger data
+        sets. The steps:
+
+        (1) Get the p-values
+        (2) Get the fdr cutoff
+        (3) Apply the correction if needed
+        (4) collapse the AMRs that overlap in CpG sites
+        (5) convert the AMRs back to base pairs
+        (6) merge the AMRs based on a "gap limit"
+        (7) remove the AMRs based on a score (p-value or fdr)
+        (8) eliminate what remains by size using half the "gap limit"
+
+        The score in the above is taken as the extreme from step (4),
+        which interacts poorly with subsequent steps. Also, the "half
+        gap limit" for eliminating AMRs at the end is not justified
+        anywhere.
+       */
+
       // get all the pvals... (but they might be BIC scores)
       vector<double> pvals;
       for (size_t i = 0; i < amrs.size(); ++i)

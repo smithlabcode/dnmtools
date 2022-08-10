@@ -145,8 +145,8 @@ main(int argc, const char **argv) {
   else if (strcmp(argv[1], "mlml") == 0) ret = main_mlml(argc - 1, argv + 1);
   else if (strcmp(argv[1], "dmr") == 0) ret = main_dmr(argc - 1, argv + 1);
   else if (strcmp(argv[1], "diff") == 0) ret = main_methdiff(argc - 1, argv + 1);
-  else if (strcmp(argv[1], "radmeth") == 0) ret = main_radmeth_adjust(argc - 1, argv + 1);
-  else if (strcmp(argv[1], "radadjust") == 0) ret = main_radmeth(argc - 1, argv + 1);
+  else if (strcmp(argv[1], "radmeth") == 0) ret = main_radmeth(argc - 1, argv + 1);
+  else if (strcmp(argv[1], "radadjust") == 0) ret = main_radmeth_adjust(argc - 1, argv + 1);
   else if (strcmp(argv[1], "radmerge") == 0) ret = main_radmeth_merge(argc - 1, argv + 1);
   else if (strcmp(argv[1], "cleanhp") == 0) ret = main_clean_hairpins(argc - 1, argv + 1);
   else if (strcmp(argv[1], "uniq") == 0) ret = main_duplicate_remover(argc - 1, argv + 1);

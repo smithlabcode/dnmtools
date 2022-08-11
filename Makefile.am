@@ -54,7 +54,7 @@ EXTRA_DIST = \
              documentation/docs/uniq.md \
              pipeline/config.yaml \
              pipeline/runconfig.yaml \
-             pipeline/Snakefile \
+             pipeline/Snakefile
 
 ACLOCAL_AMFLAGS = -I m4
 

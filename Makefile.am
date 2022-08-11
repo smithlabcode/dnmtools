@@ -14,7 +14,45 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
 
-EXTRA_DIST = README.md
+EXTRA_DIST = \
+             README.md \
+             documentation/README.md \
+             documentation/mkdocs.yml \
+             documentation/docs/abismal.md \
+             documentation/docs/allelic.md \
+             documentation/docs/amrfinder.md \
+             documentation/docs/amrtester.md \
+             documentation/docs/bsrate.md \
+             documentation/docs/cleanhp.md \
+             documentation/docs/counts.md \
+             documentation/docs/diff.md \
+             documentation/docs/dmr.md \
+             documentation/docs/entropy.md \
+             documentation/docs/fastlift.md \
+             documentation/docs/format.md \
+             documentation/docs/guessprotocol.md \
+             documentation/docs/hmr.md \
+             documentation/docs/hmr-rep.md \
+             documentation/docs/hypermr.md \
+             documentation/docs/index.md \
+             documentation/docs/lc.md \
+             documentation/docs/levels.md \
+             documentation/docs/liftfilter.md \
+             documentation/docs/merge-bsrate.md \
+             documentation/docs/merge.md \
+             documentation/docs/mlml.md \
+             documentation/docs/multistat.md \
+             documentation/docs/pmd.md \
+             documentation/docs/quickstart.md \
+             documentation/docs/radadjust.md \
+             documentation/docs/radmerge.md \
+             documentation/docs/radmeth.md \
+             documentation/docs/roi.md \
+             documentation/docs/selectsites.md \
+             documentation/docs/states.md \
+             documentation/docs/sym.md \
+             documentation/docs/uniq.md
+
 ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS := src/smithlab_cpp src/abismal

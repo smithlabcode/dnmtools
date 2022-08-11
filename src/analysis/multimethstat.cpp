@@ -182,7 +182,8 @@ process_with_cpgs_loaded(const bool VERBOSE,
 
   auto end_uniq = std::unique(begin(col_names), end(col_names));
   // make sure all columns come in pairs of counts
-  if (2*distance(begin(col_names), end_uniq) != col_names.size())
+  if (2*static_cast<size_t>(distance(begin(col_names), end_uniq))
+      != col_names.size())
     throw runtime_error("wrong header format:\n" + header);
 
   col_names.resize(distance(begin(col_names), end_uniq));
@@ -442,7 +443,8 @@ process_with_cpgs_on_disk(const bool PRINT_NUMERIC_ONLY,
 
   auto end_uniq = std::unique(begin(col_names), end(col_names));
   // make sure all columns come in pairs of counts
-  if (2*distance(begin(col_names), end_uniq) != col_names.size())
+  if (2*static_cast<size_t>(distance(begin(col_names), end_uniq))
+      != col_names.size())
     throw runtime_error("wrong header format:\n" + header);
 
   col_names.resize(distance(begin(col_names), end_uniq));

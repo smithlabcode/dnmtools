@@ -27,7 +27,7 @@ cytosines and CpGs in the sample, but similar statistics are provided
 for symmetric CpGs and cytosines within the CHH, CCG, and CXG
 contexts.
 
-```
+```txt
 cytosines:
   total_sites: 1200559022
   sites_covered: 797100353
@@ -64,23 +64,24 @@ cpg:
 ```
 
 To run the levels program, execute
-```
+
+```bash
 $ dnmtools levels -o output.levels input.meth
 ```
 
 ## Options
 
-```
+```bash
  -o, -output
 ```
 output file in YAML format. (default: stdout)
 
-```
+```bash
  -a, -alpha
 ```
 alpha for confidence interval  (default: 0.95)
 
-```
+```bash
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.

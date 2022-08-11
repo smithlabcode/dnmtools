@@ -37,7 +37,7 @@ this way. Assuming method (3) from the above paragraph of measuring
 conversion rate at non-CpG cytosines in a mammalian methylome, the
 following command will estimate the conversion rate.
 
-```
+```bash
 $ dnmtools bsrate -c /path/to/genome.fa -o output.bsrate input-sorted.sam
 ```
 
@@ -49,7 +49,7 @@ within the file and the input should have duplicate reads already
 removed. The first several lines of the output might look like the
 following:
 
-```
+```txt
 OVERALL CONVERSION RATE = 0.994141
 POS CONVERSION RATE = 0.994166  832349
 NEG CONVERSION RATE = 0.994116  825919
@@ -98,7 +98,7 @@ has been shown to be entirely unmethylated in most human tissues. To
 use the mitochondria, you can extract mitochondrial reads from a SAM
 file using `awk`:
 
-```
+```bash
 $ awk '$1 /~/ ^@ || $3 == "chrM"' input.sam >input-chrM-only.sam
 ```
 
@@ -111,20 +111,20 @@ continuing your analysis. The output from two different runs of
 
 ## Options
 
-```
+```txt
  -o, -output
 ```
 
 The name of the output file (default: STDOUT).
 
-```
+```txt
  -c, -chrom
 ```
 
 File or directory of chromosome sequences (FASTA format; .fa suffix)
 [required]
 
-```
+```txt
  -N, -all
 ```
 
@@ -132,13 +132,13 @@ Count all Cs (including CpGs) when estimating bisulfite
 conversion. This will only work if the estimate is made from sequences
 known to be unmethylated, like with a spike-in.
 
-```
+```txt
  -seq
 ```
 
 Use only reads that map to this chromosome (e.g. chrM).
 
-```
+```txt
  -v, -verbose
 ```
 

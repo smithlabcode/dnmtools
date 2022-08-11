@@ -22,59 +22,59 @@ The `uniq` command can take reads sorted by (chrom, start, end,
 strand). If the reads in the input file are not sorted, run the
 following sort command using [samtools](https://samtools.github.io):
 
-```
+```bash
 $ samtools sort -O sam -o input-sorted.sam input.sam
 ```
 
 Next, execute the following command to remove duplicate reads:
 
-```
+```bash
 $ dnmtools uniq -S duplicate-removal-stats.txt input-sorted.sam out-sorted.sam
 ```
 
 ## Options
 
-```
+```txt
  -S, -stats
 ```
 
 Save statistics output file on duplication rates to a specific text
 file.
 
-```
+```txt
  -hist
 ```
 
 histogram output file for library complexity analysis.
 
-```
+```txt
  -s, -seq
 ```
 
 Use the sequences of the reads to distinguish duplicates. This is not
 often recommended.
 
-```
+```txt
  -A, -all-cytosines
 ```
 
 Use all cytosines when comparing reads based on sequence (default: CpG).
 
-```
+```txt
  -D, -disable
 ```
 
 Disable testing if reads are sorted by chromosome and position. This
 can be faster and is fine if you know your reads are sorted.
 
-```
+```txt
  -s, -seed
 ```
 
 Random seed to choose which duplicated read to keep (default:
 408). Used for testing and reproducible results.
 
-```
+```txt
  -v, -verbose
 ```
 

@@ -51,7 +51,10 @@ EXTRA_DIST = \
              documentation/docs/selectsites.md \
              documentation/docs/states.md \
              documentation/docs/sym.md \
-             documentation/docs/uniq.md
+             documentation/docs/uniq.md \
+             pipeline/config.yaml \
+             pipeline/runconfig.yaml \
+             pipeline/Snakefile \
 
 ACLOCAL_AMFLAGS = -I m4
 

@@ -5,12 +5,12 @@ build:
     python: "3.9"
 
 mkdocs:
-  configuration: mkdocs.yml
+  configuration: documentation/mkdocs.yml
   fail_on_warning: false
 
 python:
   install:
-    - requirements: docs/requirements.txt
+    - requirements: documentation/docs/requirements.txt
 
 formats:
   - pdf

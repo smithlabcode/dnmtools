@@ -487,6 +487,7 @@ main_radmeth(int argc, const char **argv) {
     string outfile;
     string test_factor_name;
     bool VERBOSE = false;
+    bool more_na_info = false;
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description,
@@ -495,6 +496,10 @@ main_radmeth(int argc, const char **argv) {
     opt_parse.add_opt("out", 'o', "output file (default: stdout)",
                       false, outfile);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
+    opt_parse.add_opt("na-info", 'n',
+        "if a p-value is not calculated, print NAs in more detail: "
+        "low count (NA_LOW_COV) extreme values (NA_EXTREME) or"
+        " numerical errors in likelihood ratios (NA)", false, VERBOSE);
     opt_parse.add_opt("factor", 'f', "a factor to test", true, test_factor_name);
 
     vector<string> leftover_args;

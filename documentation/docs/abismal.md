@@ -1,7 +1,7 @@
 # abismal - another bisulfite mapping algorithm
 
 ## Synopsis
-```
+```shell
 $ dnmtools abismal [OPTIONS] input.fq [input-r2.fq]
 ```
 

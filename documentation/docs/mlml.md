@@ -1,7 +1,7 @@
 # mlml - estimation of hydroxymethylation and methylation levels
 
 ## Synopsis
-```
+```shell
 $ dnmtools mlml [OPTIONS] -u <input-bs.meth> -m <input-oxbs.meth> -h <input-tab.meth>
 ```
 

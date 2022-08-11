@@ -1,7 +1,7 @@
 # sym - Merge counts of symmetric CpGs
 
 ## Synopsis
-```
+```shell
 $ dnmtools sym [OPTIONS] <input.meth>
 ```
 

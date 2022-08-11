@@ -28,27 +28,27 @@ Installation
 1. Download [dnmtools-1.0.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.0.0/dnmtools-1.0.0.tar.gz).
 2. Unpack the archive:
 
-```
+```shell
 $ tar -zxvf dnmtools-1.0.0.tar.gz
 ```
 3. Move into the dnmtools directory and create a build directory:
-```
+```shell
 $ cd dnmtools-1.0.0
 $ mkdir build && cd build
 ```
 4. Run the configuration script:
-```
+```shell
 $ ../configure
 ```
 
 If you do not want to install `dnmtools` system-wide, or if you do
 not have admin privileges, specify a prefix directory:
-```
+```shell
 $ ../configure --prefix=/some/reasonable/place
 ```
 If you installed HTSlib yourself in some non-standard directory,
 you must specify the location like this:
-```
+```shell
 $ ../configure CPPFLAGS='-I /path/to/htslib/headers' \
                LDFLAGS='-L/path/to/htslib/lib'
 ```
@@ -58,7 +58,7 @@ $ ../configure CPPFLAGS='-I /path/to/htslib/headers' \
 If you are still in the `build` directory, run `make` to compile the
 tools, and then `make install` to install them:
 
-```
+```shell
 $ make
 $ make install
 ```
@@ -66,7 +66,7 @@ $ make install
 If your HTSlib (or some other library) is not installed system-wide,
 then you might need to udpate your library path:
 
-```
+```shell
 $ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/htslib/lib
 ```
 
@@ -74,7 +74,7 @@ $ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/htslib/lib
 
 To test if everything was successful, simply run `dnmtools` without
 any arguments and you should see the list of available commands
-```
+```shell
 $ dnmtools
 ```
 
@@ -89,6 +89,6 @@ compile the source using the `Makefile` available in the root of the
 source tree. If HTSLib and other libraries are available system-wide,
 compile by running:
 
-```
+```shell
 $ make
 ```

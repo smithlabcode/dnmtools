@@ -1,7 +1,7 @@
 ## radmeth - Differential CpG methylation
 
 ## Synopsis
-```
+```shell
 $ dnmtools radmeth -factor case design_matrix.txt proportion_table.txt >output.bed
 ```
 
@@ -30,7 +30,7 @@ compare methylomes named `control-a.meth`, `control-b.meth`, `control-
 c.meth` to the methylomes `case-a.meth, `case-b.meth, `case-c.meth.
 The proportion table can be created with the following command:
 
-```
+```shell
 $ dnmtools merge -t control-a.meth control-b.meth control-c.meth \
 
 case-a.meth case-b.meth case-c.meth > proportion-table.txt
@@ -38,7 +38,7 @@ case-a.meth case-b.meth case-c.meth > proportion-table.txt
 
 This is what `proportion-table.txt` looks like:
 
-```
+```txt
 	control_a	control_b	control_c	case_a	case_b	case_c
 chr1:108:+:CpG	9	6	10	8	1	1	2	2	2	1	14	1
 chr1:114:+:CpG	17	7	10	0	14	3	5	1	9	1	7	1
@@ -62,7 +62,7 @@ The next step is to specify the design matrix, which describes the
 structure of the experiment. For our running example, the design
 matrix looks like this:
 
-```
+```txt
 base	case
 control_a	1	0
 control_b	1	0
@@ -92,7 +92,7 @@ adjustment steps.
 Suppose that the `proportion-table.txt` and `design-matrix.txt` are as
 described above. The regression step is run with the command
 
-```
+```shell
 $ dnmtools radmeth -factor case design-matrix.txt proportion-table.txt > output.bed
 ```
 
@@ -121,24 +121,24 @@ p-values of neighboring CpGs using [radadjust](../radadjust).
 
 ## Options
 
-```
+```txt
  -o, -out
 ```
 output file (default: STDOUT)
 
-```
+```txt
  -n -na-info
 ```
 if a p-value is not calculated, print NAs in more
 detail: low count (`NA_LOW_COV`) extreme values (`NA_EXTREME`)
 or numerical errors in likelihood ratios (`NA`).
 
-```
+```txt
  -v, -verbose
 ```
 print more run info to STDERR as the program runs.
 
-```
+```txt
  -f, -factor
 ```
 a factor to test, one of the columns in file `design-matrix.txt` [required]

@@ -1,7 +1,7 @@
 # roi - average methylation level in each region of interest
 
 ## Synopsis
-```
+```shell
 $ dnmtools roi [OPTIONS] <intervals.bed> <input.meth>
 ```
 
@@ -155,7 +155,9 @@ sort data if needed
 ```txt
 -l, -level
 ```
-the level to report as score column in bed format output (w, u or f) [w]
+the level to report as score column in bed format output (w, u or f),
+corresponding to weighted, unweighted or fractional methylation (default: w)
+
 ```txt
 -M, -more-levels
 ```

@@ -1,7 +1,7 @@
 # entropy - Computing methylation entropy
 
 ## Synopsis
-```
+```shell
 $ dnmtools entropy [OPTIONS] <genome.fa> <input.epiread>
 ```
 ## Description

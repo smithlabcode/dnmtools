@@ -1,7 +1,7 @@
 # diff - Compute methylation difference probabilities
 
 ## Synopsis
-```
+```shell
 $ dnmtools diff [OPTIONS] <input-a.meth> <input-b.meth>
 ```
 
@@ -11,13 +11,13 @@ Suppose that we want to compare two methylomes: `input-a.meth` and
 `input-b.meth`. We start out by calculating the differential
 methylation score of each CpG site using the methdiff program:
 
-```
+```shell
 $ dnmtools diff -o output.methdiff input-a.meth input-b.meth
 ```
 
 Here are the first few lines of the output:
 
-```
+```txt
 chr1    3000826 +       CpG     0.609908        16       7      21      11
 chr1    3001006 +       CpG     0.874119        21      18      15      22
 chr1    3001017 +       CpG     0.888384        20      19      15      25
@@ -40,22 +40,22 @@ The methdiff output is used as input for the [dmr](../dmr) program.
 
 ## Options
 
-```
+```txt
  -p, -pseudo
 ```
 Add a pseudocount to inputs (default: 1)
 
-```
+```txt
  -A, -nonzero-only
 ```
 process only sites with coveage in both samples
 
-```
+```txt
  -o, -out
 ```
 output file (default: STDOUT)
 
-```
+```txt
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.

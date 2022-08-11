@@ -2,7 +2,7 @@
 
 ## Synopsis
 
-```
+```shell
 $ dnmtools format [OPTIONS] -f <mapper>  <input.sam>
 ```
 

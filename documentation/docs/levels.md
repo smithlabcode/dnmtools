@@ -2,7 +2,7 @@
 
 ## Synopsis
 
-```
+```shell
 $ dnmtools levels [OPTIONS] <input.meth>
 ```
 

@@ -1,7 +1,7 @@
 # hmr - hypomethylated regions
 
 ## Synopsis
-```
+```shell
 $ dnmtools hmr [OPTIONS] <input.meth>
 ```
 
@@ -129,46 +129,46 @@ $ bedToBigBed input.tobigbed hg19.chrom.sizes output.bb
 
 ## Options
 
-```
+```txt
  -o, -out
 ```
 output file (default: STDOUT)
-```
+```txt
  -d, -desert
 ```
 maximum distance between covered CpGs in HMR (default: 1000)
 
-```
+```txt
  -i, -itr
 ```
 max number of iterations (default: 100)
-```
+```txt
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.
-```
+```txt
  -partial
 ```
 identify PMRs instead of HMRs
-```
+```txt
  -post-hypo
 ```
 output file for single-CpG posterior hypomethylation probability (default: none)
 
-```
+```txt
  -post-meth
 ```
 output file for single-CpG posteiror methylation probability (default: none)
 
-```
+```txt
  -P, -params-in
 ```
 HMM parameter file (override training step)
-```
+```txt
  -p, -params-out
 ```
 write HMM parameters to this file (default: none)
-```
+```txt
  -s, -seed
 ```
 specify random seed (default: 408)

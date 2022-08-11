@@ -1,7 +1,7 @@
 # pmd - Partially methylated domains
 
 ## Synopsis
-```
+```shell
 $ dnmtools pmd [OPTIONS] <input.meth>
 ```
 

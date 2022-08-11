@@ -1,7 +1,7 @@
 # uniq - ensure reads are not duplicates
 
 ## Synopsis
-```
+```shell
 $ dnmtools uniq [OPTIONS] <input-sorted.sam> [out-sorted.sam]
 ```
 

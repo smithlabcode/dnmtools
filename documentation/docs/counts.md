@@ -1,7 +1,7 @@
 # counts - compute single-site methylation
 
 ## Synopsis
-```
+```shell
 $ dnmtools counts [OPTIONS] -c <chroms> <input.sam>
 ```
 
@@ -114,12 +114,12 @@ follow these steps:
 ```
 * (4) To create a `bigWig` track from the bed format methcounts
   output, modify and use the following command:
-```
+```shell
  $ cut -f 1-3,5 human_esc.meth.bed | wigToBigWig /dev/stdin hg19.chrom.sizes human_esc.meth.bw
 ```
 * (5) To create a `bigWig` track for coverage at single CpG sites, modify
   and use the following command:
-```
+```shell
 $ tr ':' '[Ctrl+v Tab]' < human_esc.meth.bed | cut -f 1-3,5 | wigToBigWig /dev/stdin hg19.chrom.sizes human_esc.reads.bw
 ```
 

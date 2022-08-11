@@ -1,7 +1,7 @@
 # merge-bsrate - Combine bisulfite conversion rate statistics files
 
 ## Synopsis
-```
+```shell
 $ dnmtools merge-bsrate [OPTIONS] <file-1.bsrate> <file-2.bsrate> ...
 ```
 
@@ -15,12 +15,12 @@ one would like to combine the summaries of separate runs.
 
 ## Options
 
-```
+```txt
  -o -output
 ```
 output file (default : STDOUT)
 
-```
+```txt
  -v -verbose
 ```
 print more run info to STDERR as the program runs.

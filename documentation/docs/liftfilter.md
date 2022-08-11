@@ -1,7 +1,7 @@
 # liftfilter - merge lifted entries to the same position
 
 ## Synopsis
-```
+```shell
 $ dnmtools liftfilter [OPTIONS] -o <output.meth> <input.meth>
 ```
 
@@ -13,7 +13,7 @@ either collapse read counts at those mm9 sites, or keep the data for
 only one mm9 site. We can use the lift-filter program to achieve these
 two options. Use
 
-```
+```shell
 $ dnmtools liftfilter -o output-filtered.meth input.meth
 ```
 
@@ -22,15 +22,15 @@ option `-u` to keep the first record of duplicated sites.
 
 ## Options
 
-```
+```txt
  -o, -output
 ```
 Output processed methcount [required]
-```
+```txt
  -u, -unique
 ```
  keep unique sites
-```
+```txt
  -v, -verbose
 ```
 print more information to STDERR as the program runs.

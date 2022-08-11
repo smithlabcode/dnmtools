@@ -1,7 +1,7 @@
 # amrfinder - Compute allelically methylated regions (AMRs)
 
 ## Synopsis
-```
+```shell
 $ dnmtools amrfinder [OPTIONS] <input.epiread>
 ```
 
@@ -18,7 +18,7 @@ following command shows an example to run the program amrfinder and
 takes as input an epireads file generated from
 [stats](../states).
 
-```
+```shell
 $ dnmtools amrfinder -c /path/to/genome.fa -o output.amr input.epiread
 ```
 
@@ -70,51 +70,51 @@ to select AMRs.
 
 ## Options
 
-```
+```txt
  -o, -output
 ```
 output file name (default: STDOUT)
-```
+```txt
  -c, -chrom
 ```
 FASTA file or directory of chromosomes containing FASTA files [required]
-```
+```txt
  -i, -itr
 ```
 max iterations
-```
+```txt
  -w, -window
 ```
 size of sliding window (default: 10)
-```
+```txt
  -m, -min-cov
 ```
 min coverage per CpG to test windows (default: 4)
-```
+```txt
  -g, -gap
 ```
 min allowed gap, in bp, between AMRs (default: 1000)
-```
+```txt
  -C, -crit
 ```
 critical p-value cutoff (default: 0.01)
-```
+```txt
  -f, -nofdr
 ```
 omits FDR multiple testing correction
-```
+```txt
  -h, -pvals
 ```
  adjusts p-values using Hochberg step-up
-```
+```txt
  -b, -bic
 ```
 use Bayesian Information Criterion (BIC) to compare models
-```
+```txt
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.
-```
+```txt
  -P, -progress
 ```
 print progress info

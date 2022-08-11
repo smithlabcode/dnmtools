@@ -1,7 +1,7 @@
 # hypermr - Detecting hypermethylated regions
 
 ## Synopsis
-```
+```shell
 $ dnmtools hypermr [OPTIONS] <input.meth>
 ```
 

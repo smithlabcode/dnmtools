@@ -1,7 +1,7 @@
 # multistat
 
 ## Synopsis
-```
+```shell
 $ dnmtools multistat [OPTIONS] <intervals.bed> <input-tabular.tsv>
 ```
 

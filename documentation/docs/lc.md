@@ -1,7 +1,7 @@
 # lc - Count number of lines in a big file
 
 ## Synopsis
-```
+```shell
 $ dnmtools lc <input-human-readable-file>
 ```
 
@@ -14,7 +14,7 @@ designed to approximate the number of lines in a very large file by
 counting the number of lines in a small, randomly chosen chunk from
 the big file and scaling the estimate by file size. For example, in
 order to estimate the number of reads in a FASTQ file `input.fq`, run
-```
+```shell
 $ dnmtools lc input.fq
 ```
 It will return the approximate number of lines in this file and by
@@ -24,15 +24,15 @@ the unix tool` wc -l`.
 
 ## Options
 
-```
+```txt
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.
-```
+```txt
  -n, -samples
 ```
 number of samples
-```
+```txt
  -z, -size
 ```
 sample size (bytes)

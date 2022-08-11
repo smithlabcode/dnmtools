@@ -1,7 +1,7 @@
 # selectsites - Subsetting cytosines in methcounts files
 
 ## Synopsis
-```
+```shell
  $ dnmtools selectsites [OPTIONS] <regions.bed> <input.meth>
 ```
 
@@ -22,23 +22,23 @@ methcounts file included in the BED regions. We can select entries in
 input.meth contained in any inverval in `regions.bed` using the
 following command.
 
-```
+```shell
 $ dnmtools selectsites -o output.meth regions.bed input.meth
 ```
 
 ## Options
 
-```
+```txt
  -o, -output
 ```
 Name of output file (default: STDOUT)
 
-```
+```txt
  -p, -preload
 ```
 preload sites (use for large target intervals)
 
-```
+```txt
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.

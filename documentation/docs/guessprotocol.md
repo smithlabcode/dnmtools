@@ -1,7 +1,7 @@
 # guessprotocol - Identify bisulfite sequencing protocol
 
 ## Synopsis
-```
+```shell
 $ dnmtools guessprotocol [OPTIONS] <file-1.fastq> [<file-2.fastq>]
 ```
 
@@ -41,13 +41,13 @@ the program to ignore a certain suffix size (like size 2 in this
 example) when matching read names using the `-i` flag.
 
 ## Options
-```
+```txt
  -n -nreads
 ```
 number of reads in initial check. The program stops after collecting
 statistics for the first `n` reads (default: 1,000,000)
 
-```
+```txt
  -i -ignore
 ```
 length of the read name suffix to ignore when matching

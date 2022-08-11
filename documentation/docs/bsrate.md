@@ -1,7 +1,7 @@
 # bsrate - estimate bisulfite conversion rate
 
 ## Synopsis
-```
+```shell
 $ dnmtools bsrate [OPTIONS] -c <chroms> <input.sam>
 ```
 

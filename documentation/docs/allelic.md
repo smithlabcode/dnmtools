@@ -1,7 +1,7 @@
 # allelic - Single-site ASM scoring
 
 ## Synopsis
-```
+```shell
 $ dnmtools allelic [OPTIONS] <input.epiread>
 ```
 
@@ -20,22 +20,22 @@ of the CpG pair: methylated methylated (mm), methylated unmethylated
 The following command will calculate allele specific methylation
 scores using the allelicmeth component of dnmtools:
 
-```
+```shell
 $ dnmtools allelic -c /path/to/genome.fa -o output.allelic input.epiread
 ```
 
 ## Options
 
-```
+```txt
  -o, -output
 ```
 output file name (default: STDOUT)
-```
+```txt
  -c, -chrom
 ```
 FASTA file or directory of chromosomes containing FASTA files [required]
 
-```
+```txt
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.

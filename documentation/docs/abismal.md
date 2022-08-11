@@ -199,12 +199,12 @@ a subset of reads simultaneously, and finally combine their output.
 mapping reads using the shared index.
 
 If each node can only access its local storage, dividing the set of
-reads to into $k$ equal sized smaller reads files, and mapping these
-all simultaneously on multiple nodes, will make the mapping finish
-about $k$ times faster.  The UNIX `split` command is good for dividing
-the reads into smaller parts. The following BASH commands will take a
-directory named `reads` containing Illumina sequenced reads files, and
-split them into files containing at most 3M reads:
+reads to into k equal sized smaller reads files, and mapping these all
+simultaneously on multiple nodes, will make the mapping finish about k
+times faster.  The UNIX `split` command is good for dividing the reads
+into smaller parts. The following BASH commands will take a directory
+named `reads` containing Illumina sequenced reads files, and split
+them into files containing at most 3M reads:
 
 ```shell
 $ mkdir reads_split

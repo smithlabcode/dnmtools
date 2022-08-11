@@ -64,8 +64,8 @@ following ways:
 Finally, to create a file `data-frame.tsv` with methylation levels (which can be
 [weighted, unweighted or fractional](../levels) methylation), run
 
-```
- $ multimethstat -o data-frame.tsv regions.bed input-tabular.tsv
+```shell
+ $ dnmtools multistat -o data-frame.tsv regions.bed input-tabular.tsv
 ```
 
 ## Options

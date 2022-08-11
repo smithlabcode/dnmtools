@@ -47,6 +47,7 @@ using std::ifstream;
 using std::ofstream;
 using std::runtime_error;
 using std::min;
+using std::isnan;
 
 /***************** COMBINE P-VALUES *****************/
 
@@ -133,13 +134,26 @@ stouffer_liptak(const vector<vector<double> > &corr_mat, vector<double> &pvals) 
   return 1.0 - gsl_cdf_gaussian_P(test_stat, 1.0);
 }
 
-void
+static bool
+is_number(const string& str) {
+  for (const char &c : str)
+    if (c != '.' && !std::isdigit(c)) return false;
+  return true;
+}
+
+static double
+fix_pval_nan(const double x) {
+  return isnan(x) ? 1.0 : x;
+}
+
+static void
 update_pval_loci(std::istream &input_encoding,
                  const vector<PvalLocus> &pval_loci,
                  std::ostream &output_encoding) {
 
   string record, chrom, name, sign;
   size_t position, coverage_factor, meth_factor, coverage_rest, meth_rest;
+  string pval_str;
   double pval;
 
   vector<PvalLocus>::const_iterator cur_locus_iter = pval_loci.begin();
@@ -150,8 +164,10 @@ update_pval_loci(std::istream &input_encoding,
     try {
       std::istringstream iss(record);
       iss.exceptions(std::ios::failbit);
-      iss >> chrom >> position >> sign >> name >> pval
+      iss >> chrom >> position >> sign >> name >> pval_str
           >> coverage_factor >> meth_factor >> coverage_rest >> meth_rest;
+
+      pval = (is_number(pval_str) ? atof(pval_str.c_str()) : 1.0);
     }
     catch (std::exception const & err) {
       cerr << err.what() << endl << "could not parse line:\n"
@@ -162,12 +178,12 @@ update_pval_loci(std::istream &input_encoding,
     output_encoding << chrom << "\t" << position << "\t" << sign << "\t"
                     << name << "\t" << pval << "\t";
 
-    if (0.0 <= pval && pval <= 1.0) {
-      output_encoding << cur_locus_iter->combined_pval << "\t"
-                      << cur_locus_iter->corrected_pval << "\t";
-      cur_locus_iter++;
+    if (0.0 <= pval && pval < 1.0) {
+      output_encoding << fix_pval_nan(cur_locus_iter->combined_pval) << "\t"
+                      << fix_pval_nan(cur_locus_iter->corrected_pval) << "\t";
+      ++cur_locus_iter;
     }
-    else output_encoding << -1 << "\t" << -1 << pval << "\t"; // MAGIC??
+    else output_encoding << 1.0 << "\t" << 1.0 <<  "\t"; // MAGIC??
 
     output_encoding << coverage_factor << "\t" << meth_factor << "\t"
                     << coverage_rest << "\t" << meth_rest << endl;
@@ -471,11 +487,13 @@ main_radmeth_adjust(int argc, const char **argv) {
       string chrom, sign, name;
       size_t position;
       double pval;
-      if (!(iss >> chrom >> position >> sign >> name >> pval))
+      string pval_str;
+      if (!(iss >> chrom >> position >> sign >> name >> pval_str))
         throw runtime_error("failed to parse line: " + input_line);
 
+      pval = ((is_number(pval_str)) ? atof(pval_str.c_str()) : 1.0);
       // Skip loci that do not correspond to valid p-values.
-      if (0 <= pval && pval <= 1) {
+      if (0 <= pval && pval < 1) {
         // locus is on new chrom.
         if (!prev_chrom.empty() && prev_chrom != chrom)
           chrom_offset += pvals.back().pos;

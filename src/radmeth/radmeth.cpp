@@ -596,10 +596,10 @@ main_radmeth(int argc, const char **argv) {
       // all control samples. Also do not test if the site is completely
       // methylated or completely unmethylated across all samples.
       if (has_low_coverage(full_regression, test_factor)) {
-        out << -1;
+        out << "NA_LOW_COV";
       }
       else if (has_extreme_counts(full_regression)) {
-        out << -1;
+        out << "NA_EXTREME_CNT";
       }
       else {
         fit(full_regression);
@@ -609,7 +609,8 @@ main_radmeth(int argc, const char **argv) {
                                              full_regression.max_loglik);
 
         // If error occured in fitting (p-val = nan or -nan).
-        out << ((pval != pval) ? -1 : pval);
+        if (pval != pval) out << "NA";
+        else out << pval;
       }
       out << "\t" << coverage_factor << "\t" << meth_factor
           << "\t" << coverage_rest << "\t" << meth_rest << endl;

@@ -66,7 +66,7 @@ trained parameters are written, and the argument `-P` indicates a file
 containing parameters (as produced with the `-p` option on a previous
 run) to use:
 
-```
+```bash
 $ dnmtools hmr -p params.txt -o output.hmr input.meth
 ```
 
@@ -90,6 +90,10 @@ levels at nearby sites.  Regions with ASM are almost always among the
 PMRs, but most PMRs are not regions of ASM. The hmr program is run
 with the same input but a different optional argument to find PMRs:
 
+```bash
+$ dnmtools hmr -partial -o human_esc.pmr human_esc.meth
+```
+
 ## Converting HMR files to UCSC genome browser tracks
 
 You might want to create bigBed browser tracks for HMRs.  The same
@@ -108,25 +112,19 @@ steps:
   `bedToBigBed` will output an error. Also,  HMR file `input.bed` may have
    non-integer score in their 5th column.  The following script rounds
    the 5th column and prints 1000 if the score is bigger than 1000:
-```
+```bash
 $ awk -v OFS="\t" '{if ($5>1000) print $1,$2,$3,$4,"1000"; else print $1,$2,$3,$4,int($5) }' input.bed > input.tobigbed
 ```
 In the above command, since the HMRs are not stranded, we do not print
 the 6th column. Keeping the 6th column would make all the HMRs appear
 as though they have a direction – but it would all be the + strand. To
 maintain the 6th column, just slightly modify the above awk command:
-```
+```abash
 $ awk -v OFS="\t" '{if($5>1000) print $1,$2,$3,$4,"1000",$6; else print $1,$2,$3,$4,int($5),$6 }' human_esc.hmr > human_esc.hmr.tobigbed
 ```
  * (4) Generate the .bb track using the command below:
-```
- $ bedToBigBed input.tobigbed hg19.chrom.sizes output.bb
-```
-
-
-
-```
-$ dnmtools hmr -partial -o human_esc.pmr human_esc.meth
+```bash
+$ bedToBigBed input.tobigbed hg19.chrom.sizes output.bb
 ```
 
 ## Options

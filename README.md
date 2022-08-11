@@ -1,11 +1,7 @@
-The DNMTools software package is a computational pipeline for
-analyzing bisulfite sequencing data (WGBS and RRBS). DNMTools provides
-tools methylation-specific technical evaluation of sequencing data,
-and for estimating methylation levels at individual cytosines.
-Additionally, DNMTools includes tools for identifying higher-level
-methylation features, such as hypo-methylated regions (HMR), partially
-methylated domains (PMD), hyper-methylated regions (HyperMR), and
-allele-specific methylated regions (AMR).
+The DNMTools software is a set of tools for analyzing bisulfite
+sequencing data (WGBS and RRBS). DNMTools supersedes the MethPipe
+tools and pipeline, with the aim of running more easily across a
+broader set of computing environments.
 
 ## Installing release 1.0.0
 
@@ -21,16 +17,17 @@ allele-specific methylated regions (AMR).
   installed using `apt` on Linux, using `brew` on macOS, or from
   source available [here](http://www.gnu.org/software/gsl).
 * The Zlib compression library. Most likely you already have this
-  installed on your system. If not, it can be installed using `apt`
-  on Linux through the package `zlib1g-dev`. On macOS, Zlib can be
+  installed on your system. If not, it can be installed using `apt` on
+  Linux through the package `zlib1g-dev`. On macOS, Zlib can be
   installed with `brew`.
-* The HTSlib library, which can be installed through `brew`
-  on macOS, through `apt` on Linux, or from source downloadable
+* The HTSlib library, which can be installed through `brew` on macOS,
+  through `apt` on Linux, or from source downloadable
   [here](https://github.com/samtools/htslib).
 
 ### Configuration
 
-1. Download dnmtools-1.0.0.tar.gz [here](https://github.com/smithlabcode/dnmtools/releases/download/v1.0.0/dnmtools-1.0.0.tar.gz).
+1. Download dnmtools-1.0.0.tar.gz
+   [here](https://github.com/smithlabcode/dnmtools/releases/download/v1.0.0/dnmtools-1.0.0.tar.gz).
 2. Unpack the archive:
 ```
 $ tar -zxvf dnmtools-1.0.0.tar.gz
@@ -80,7 +77,8 @@ make
 Usage
 =====
 
-Read the [documentation](https://dnmtools.readthedocs.io).
+Read the [documentation](https://dnmtools.readthedocs.io) for usage of
+individual tools within DNMTools.
 
 Contacts and bug reports
 ========================
@@ -88,26 +86,19 @@ Contacts and bug reports
 Andrew D. Smith
 andrewds@usc.edu
 
-Ben Decato
-decato@usc.edu
-
-Meng Zhou
-mengzhou@usc.edu
-
-dnmtools and MethBase Users' Mailinglist
-dnmtools@googlegroups.com
-http://groups.google.com/group/dnmtools
+Guilherme de Sena Brandine
+desenabr@usc.edu
 
 Copyright and License Information
 =================================
 
 Copyright (C) 2022
-University of Southern California,
-Andrew D. Smith
+Andrew D. Smith and Guilherme de Sena Brandine
 
-Authors: Andrew D. Smith and Guilherme de Sena Brandine
+Authors of DNMTools: Andrew D. Smith and Guilherme de Sena Brandine
 
-Past Authors: Jenny Qu, Ben Decato, Meng Zhou, Liz Ji, Terence Li
+Essential contributors: Ben Decato, Meng Zhou, Liz Ji, Terence Li,
+Jenny Qu and Fang Fang
 
 This is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free

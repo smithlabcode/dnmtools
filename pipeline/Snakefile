@@ -1,0 +1,334 @@
+# Copyright (C) 2022 Andrew D. Smith and Guilherme Sena
+#
+# Authors: Andrew D. Smith and Guilherme Sena
+#
+# This file is part of dnmtools-docs.
+#
+# dnmtools-docs is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# dnmtools-docs is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+
+from os import path, system
+from subprocess import check_output
+
+configfile : 'config.yaml'
+configfile : 'runconfig.yaml'
+
+########################################################
+##### PIPELINE CONFIGURATION
+########################################################
+
+################## VALIDATE CONFIG ########################
+
+def print_warning(msg):
+    sys.stderr.write("[pipeline message] "  + msg + '\n')
+
+def get_or_default(config, the_var, default_value):
+    if the_var in config:
+        return config[the_var]
+
+    print_warning('variable ' + the_var + ' not set. Using default value of ' + str(default_value))
+    return default_value
+
+def check_mandatory(config, variable):
+    if not(variable in config):
+        raise Exception('[pipeline error] mandatory variable not found: ' + variable)
+
+# check mandatory config inputs
+check_mandatory(config, 'outfiles')
+check_mandatory(config, 'genome_fasta_file')
+
+# set default values for optional params in config
+config['threads'] = get_or_default(config, 'threads', 1)
+
+# set default values for optional params in config
+config['outdir'] = get_or_default(config, 'outdir', os.getcwd())
+config['paired'] = get_or_default(config, 'paired', False)
+config['cpg_only'] = get_or_default(config, 'cpg_only', False)
+
+#########################################################
+##### PIPELINE FUNCTIONS
+#########################################################
+
+# uses the specified dir from config, falls back to binary
+# in users PATH if not found
+def get_cmd_dir(the_command, the_dir = 'dnmtools_dir', fallback_to_which = True):
+    if the_dir in config:
+        ret = os.path.join(config[the_dir], the_command)
+        if path.exists(ret):
+            return ret
+        elif not(fallback_to_which):
+            raise Exception('binary file not found in ' + ': ' + ret)
+
+    # return the path from the user's OS, if it exists
+    ret = check_output(['which', the_command])
+    return ret.strip().decode("utf-8")
+
+# uses the specified scratch dir, falls back to current working
+# directory if not provided
+def get_scratch_dir(fallback_to_wd = True):
+    if 'scratch_dir' in config:
+        ret = os.path.abspath(config['scratch_dir'])
+        if path.exists(ret):
+            return ret
+        elif not(fallback_to_wd):
+            raise Exception('provided scratch directory does not exist: ' + ret)
+    return os.getcwd()
+
+#########################################################
+##### PIPELINE RULES
+#########################################################
+
+rule all:
+    """
+    The last thing done in this analysis pipeline is to generate the
+    web pages summarizing each sample in the project.
+    """
+    input : expand("{out}", out = config["outfiles"])
+
+# adds --paired to trim_galore if dataset is paired
+trim_galore_paired_flag = "--paired" if config['paired'] == True else ""
+
+# expected suffix for paired-end data (see documentation)
+file_suffix = ['_R1', '_R2'] if config['paired'] == True else ['']
+
+# we have no choice in naming matters in trim_galore
+trim_galore_suffix = ['R1_val_1', 'R2_val_2'] if config['paired'] == True else ['trimmed']
+
+rule trim_galore:
+    """
+    trims adapters from a FASTQ input. Adapters are automatically recognized
+    by the program, so only the reads file is necessary
+    """
+    input:
+        fastq_files = expand('{{name}}{suffix}.fq.gz', suffix = file_suffix),
+        cmd = ancient(get_cmd_dir('trim_galore', the_dir = 'trim_galore_dir'))
+    params:
+        paired_flags = trim_galore_paired_flag,
+        threads = config['threads'],
+        default_flags = '-q 0 --trim-N',
+        stdout_quiet_params = '1>/dev/null'
+    output:
+        expand('{{name}}_{suffix}.fq.gz', suffix = trim_galore_suffix)
+    threads: config['threads']
+    shell:
+        '{input.cmd} {params.paired_flags} -j {params.threads} {params.default_flags} {input.fastq_files}'
+
+# decides whether to index the genome or use user-defined abismal
+# index
+index_params = '-g ' + config['genome_fasta_file']
+if 'abismal_index' in config:
+    index_params = '-i ' + config['abismal_index']
+else:
+    # for snakemake to check if the input exists and fail otherwise
+    config['abismal_index'] = config['genome_fasta_file']
+
+rule abismal:
+    """
+    maps a single FASTQ file to a reference genome. This rule can be
+    used as both single or paired-end
+    """
+    input:
+        fastq_files = expand('{{name}}_{suffix}.fq.gz', suffix = trim_galore_suffix),
+        abismal_index = config['abismal_index'],
+        binary = ancient(get_cmd_dir('dnmtools')),
+    output:
+        sam = temp(os.path.join(get_scratch_dir(), '{name}.sam')),
+        stats = '{name}.stats'
+    params:
+        cmd = 'abismal',
+        threads = config['threads'],
+        index = index_params
+    threads: config['threads']
+    shell:
+        '{input.binary} {params.cmd} -t {params.threads} {params.index} -o {output.sam} -s {output.stats} {input.fastq_files}'
+
+rule format_reads:
+    """
+    Generate the formatted SAM file of mapped reads, typically from output of abismal.
+    """
+    input:
+        binary = ancient(get_cmd_dir('dnmtools')),
+        sam_orig = os.path.join(get_scratch_dir(), '{name}.sam'),
+    output:
+        sam_fmt = temp(os.path.join(get_scratch_dir(), '{name}.samf'))
+    params:
+        cmd = 'format'
+    shell:
+        '{input.binary} {params.cmd} -o {output.sam_fmt} {input.sam_orig}'
+
+rule samtools_sort:
+    """
+    sorts reads by chromosome, position and strand (in that order of
+    priority)
+    """
+    input:
+        binary = ancient(get_cmd_dir('samtools')),
+        filename = os.path.join(get_scratch_dir(), '{name}.samf')
+    output:
+        temp(os.path.join(get_scratch_dir(), '{name}.sams'))
+    params:
+        cmd = 'sort'
+    shell:
+        '{input.binary} {params.cmd} -O sam -o {output} {input.filename}'
+
+rule remove_duplicates:
+    """
+    Uses the duplicate-remover tool to remove duplicate reads in a
+    mapped read file and produce statistics on duplication level.
+    """
+    input:
+        binary = ancient(get_cmd_dir('dnmtools')),
+        filename = os.path.join(get_scratch_dir(), '{name}.sams')
+    output:
+        sam_uniq = '{name}.samd',
+        stats='{name}.dupstats'
+    params:
+        cmd = 'uniq'
+    shell:
+        '{input.binary} {params.cmd} -S {output.stats} {input.filename} {output.sam_uniq}'
+
+rule bsrate:
+    """
+    computes summary statistics on bisulfite converson and error rate of mapped reads
+    """
+    input:
+        binary = ancient(get_cmd_dir('dnmtools')),
+        reads_file = '{name}.samd',
+        ref_genome = config['genome_fasta_file'],
+    output:
+        '{name}.bsrate'
+    params:
+        cmd = 'bsrate',
+    shell:
+        '{input.binary} {params.cmd} -c {input.ref_genome} -o {output} {input.reads_file}'
+
+# makes methcounts slightly faster if we are only interested in CpGs
+cpg_only_params = '-n' if config['cpg_only'] == True else ''
+rule methcounts:
+    """
+    generates methcounts file for mapped reads
+    """
+    input:
+        binary = ancient(get_cmd_dir('dnmtools')),
+        reads_file = "{name}.samd",
+        ref_genome = config["genome_fasta_file"],
+    output:
+        "{name}.meth"
+    params:
+        cmd = 'counts',
+        cpg_params = cpg_only_params
+    shell:
+        '{input.binary} {params.cmd} {params.cpg_params} -c {input.ref_genome} -o {output} {input.reads_file}'
+
+rule levels:
+    """
+    Compute summary statistics about methylation levels globally. This
+    rule may be applied for any methylation file (library, sample,
+    etc.).
+    """
+    input:
+        binary = ancient(get_cmd_dir('dnmtools')),
+        meth ='{name}.meth'
+    output:
+        levels='{name}.levels'
+    params:
+        cmd = 'levels'
+    shell:
+        '{input.binary} {params.cmd} -o {output.levels} {input.meth}'
+
+rule symmetric_cpgs:
+    """
+    Generate the symmetric CpGs methylation file (named with suffix
+    cpg.meth), which parses a methylation file for all sites and
+    combines the counts on both strands for each CpG site.
+    """
+    input:
+        binary = ancient(get_cmd_dir('dnmtools')),
+        meth = '{name}.meth',
+    output:
+        '{name}.cpgmeth'
+    params:
+        cmd = 'sym'
+    shell:
+        '{input.binary} {params.cmd} -o {output} {input.meth}'
+
+rule hmr:
+    """
+    Get HMRs from a given symmetric cpg methylation file.
+    """
+    input:
+        binary = ancient(get_cmd_dir('dnmtools')),
+        meth = '{name}.cpgmeth'
+    output:
+        hmr = '{name}.hmr'
+    params:
+        cmd = 'hmr'
+    shell:
+        '{input.binary} {params.cmd} -o {output.hmr} {input.meth}'
+
+rule hypermr:
+    """
+    Get HyperMRs from a given symmetric cpg methylation file.
+    """
+    input:
+        binary = ancient(get_cmd_dir('dnmtools')),
+        meth = '{name}.cpgmeth'
+    output:
+        hypermr = '{name}.hypermr'
+    params:
+        cmd = 'hypermr'
+    shell:
+        '{input.binary} {params.cmd} -o {output.hypermr} {input.meth}'
+
+rule pmd:
+    """
+    Get PMDs from a given meth file, which should be a symmetric cpgs
+    file. This is ensured by the filename: this rule requires a
+    methcounts output file with the extension ".cpgmeth"
+    """
+    input:
+        binary = ancient(get_cmd_dir('dnmtools')),
+        meth='{name}.cpgmeth'
+    output:
+        pmd='{name}.pmd'
+    params:
+        cmd = 'pmd'
+    shell:
+        '{input.binary} {params.cmd} -o {output.pmd} {input.meth}'
+
+rule methstates:
+    """
+    converts reads to epiread format
+    """
+    input:
+        binary = ancient(get_cmd_dir('dnmtools')),
+        reads_file = "{name}.samd",
+        ref_genome = config["genome_fasta_file"],
+    output:
+        '{name}.epireads'
+    params:
+        cmd = 'states'
+    shell:
+        '{input.binary} {params.cmd} -c {input.ref_genome} -o {output} {input.reads_file}'
+
+rule amr:
+    """
+    computes allele-specific methylated regions
+    """
+    input:
+        binary = ancient(get_cmd_dir('dnmtools')),
+        epireads_file = "{name}.epireads",
+        ref_genome = config["genome_fasta_file"],
+    output:
+        '{name}.amr'
+    params:
+        cmd = 'amrfinder'
+    shell:
+        '{input.binary} {params.cmd} -c {input.ref_genome} -o {output} {input.epireads_file}'

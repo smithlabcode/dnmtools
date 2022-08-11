@@ -1,0 +1,5 @@
+methpipe_dir: '/home/sena/code/dnmtools/bin'
+trim_galore_dir: '/usr/bin'
+samtools_dir: '/usr/bin'
+scratch_dir: '/tmp'
+threads: 6

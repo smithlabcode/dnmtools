@@ -1,0 +1,46 @@
+site_name: dnmtools
+strict: true
+
+theme: readthedocs
+nav:
+   - Home: 'index.md'
+   - 'Installation': 'quickstart.md'
+   - 'dnmtools on GitHub' : https://github.com/smithlabcode/dnmtools
+   - Methylome construction:
+     - 'abismal': 'abismal.md'
+     - 'format': 'format.md'
+     - 'uniq': 'uniq.md'
+     - 'bsrate' : 'bsrate.md'
+     - 'counts' : 'counts.md'
+     - 'sym': 'sym.md'
+     - 'levels' : 'levels.md'
+   - Methylome analysis:
+     - 'hmr' : 'hmr.md'
+     - 'hmr-rep' : 'hmr-rep.md'
+     - 'hypermr' : 'hypermr.md'
+     - 'entropy' : 'entropy.md'
+     - 'multistat' : 'multistat.md'
+     - 'pmd' : 'pmd.md'
+     - 'roi' : 'roi.md'
+     - 'mlml' : 'mlml.md'
+   - Allele-specific methylation:
+     - 'states' : 'states.md'
+     - 'allelic' : 'allelic.md'
+     - 'amrfinder' : 'amrfinder.md'
+     - 'amrtester' : 'amrtester.md'
+   - Differential methylation:
+     - 'diff' : 'diff.md'
+     - 'dmr' : 'dmr.md'
+     - 'radmeth' : 'radmeth.md'
+     - 'radadjust' : 'radadjust.md'
+     - 'radmerge' : 'radmerge.md'
+   - Methylation visualisation:
+     - 'fastlift': 'fastlift.md'
+     - 'liftfilter': 'liftfilter.md'
+   - General-purpose tools:
+     - 'cleanhp': 'cleanhp.md'
+     - 'guessprotocol': 'guessprotocol.md'
+     - 'lc': 'lc.md'
+     - 'merge-bsrate': 'merge-bsrate.md'
+     - 'merge': 'merge.md'
+     - 'selectsites': 'selectsites.md'

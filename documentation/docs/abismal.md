@@ -29,7 +29,7 @@ corresponding sections).  The default behavior of `abismal` is to
 assume that reads are T-rich and map accordingly, but different
 sequencing protocols that generate A-rich and T-rich reads in
 different combinations are equally accepted. `abismal` is
-available on (github)[http://github.com/smithlabcode/abismal).
+available [here](http://github.com/smithlabcode/abismal).
 
 ### Input and output file formats
 
@@ -38,13 +38,14 @@ typically as produced by Illumina sequencing. These are FASTQ format
 files, and can be quite large. After the reads are mapped, these files
 are not used by our pipeline. The reference genome should be a single
 FASTA file that was previously indexed using the `abismalidx`
-tool. The `abismal` program requires an indexed FASTA reference
-genome and the input FASTQ files(s), after which it generates a
-Sequence Alignment/Map(SAM) output indicating the coordinates of
-mapped reads.  Details of the SAM file format can be found at the
-[SAM file format documentation](http://samtools.github.io/hts-specs/SAMv1.pdf). These SAM files will be the input files for the
-postprocessing quality control and analysis programs to follow,
-including [bsrate](../bsrate) and [counts](../counts).
+tool. The `abismal` program requires an indexed FASTA reference genome
+and the input FASTQ files(s), after which it generates a Sequence
+Alignment/Map(SAM) output indicating the coordinates of mapped reads.
+Details of the SAM file format can be found at the SAM file format
+[documentation](http://samtools.github.io/hts-specs/SAMv1.pdf). These
+SAM files will be the input files for the postprocessing quality
+control and analysis programs to follow, including [bsrate](../bsrate)
+and [counts](../counts).
 
 `abismal` operates by preprocessing the reference genome into a large
 index, where k-mers of set length are used as keys to a list of
@@ -126,7 +127,7 @@ $ abismal -i <genome index> -o <output SAM> [options] <input fastq>
 
 To save files in BAM format, which significantly reduce disk space,
 simply redirect the `abismal` output to the [samtools
-view](https://github.com/samtools/samtools) program using the \op{-b}
+view](https://github.com/samtools/samtools) program using the `-b`
 flag to compress to BAM and the `-S` flag to indicate that input is in
 SAM format.
 

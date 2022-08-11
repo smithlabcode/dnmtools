@@ -9,7 +9,7 @@ $ dnmtools allelic [OPTIONS] <input.epiread>
 
 The program `allelicmeth`  calculates allele specific methylation scores
 for each CpG site. Input files should be the epiread files (.epiread
-suffix) produced using [states](../../analysis/states). In the output file, each row
+suffix) produced using [states](../states). In the output file, each row
 represents a CpG pair made by any CpG and its previous CpG, the first
 three columns indicate the positions of the CpG site, the fourth
 column is the name including the number of reads covering the CpG

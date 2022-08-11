@@ -9,7 +9,7 @@ $ dnmtools levels [OPTIONS] <input.meth>
 ## Description
 
 The `levels` program computes statistics for the output of
-[counts](../../analysis/counts).  Sample output is below. It
+[counts](../counts).  Sample output is below. It
 computes the total fraction of cytosines covered, the fraction of
 cytosines that have mutated away from the reference, and coverage
 statistics for both CpGs and all cytosines.

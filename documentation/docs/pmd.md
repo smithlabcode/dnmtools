@@ -89,7 +89,7 @@ can obscure the sites we are trying to identify by providing an
 alternative foreground methylation state to the focused, very low
 methylation typically at promoter regions. A good workaround for this
 is to call PMDs first, and then call HMRs separately inside and
-outside of PMDs (e.g. using [selectsites](../../utils/selectsites) and
+outside of PMDs (e.g. using [selectsites](../selectsites) and
 using the output of PMDs as BED input). This ensures that the
 foreground methylation state learned by the HMM in both types of
 background is the focused hypomethylation at CpG islands and promoter

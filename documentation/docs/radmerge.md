@@ -7,8 +7,8 @@ $ dnmtools radmerge [OPTIONS] <radmeth-input.bed>
 
 ## Description
 
-After running [radmeth](../../dmr/radmeth) followed by
-[radadjust](../../dmr/radadjust), it is possible to further join
+After running [radmeth](../radmeth) followed by
+[radadjust](../radadjust), it is possible to further join
 individually differentially methylated CpGs into differentially
 methylated regions. This can be achieved with the command
 

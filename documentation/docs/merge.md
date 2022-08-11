@@ -29,7 +29,7 @@ empty ones, that can have different numbers of lines.
 ```
  -o, -output
 ```
-output file as [counts](../../analysis/counts) format (default: stdout)
+output file as [counts](../counts) format (default: stdout)
 
 ```
  -h, -header

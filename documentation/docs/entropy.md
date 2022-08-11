@@ -15,7 +15,7 @@ are required.
    chromosome files files
 
  * (2) an epiread file as produced by
-   [states](../../analysis/states) program. The input epiread file
+   [states](../states) program. The input epiread file
    needs to be sorted, first by chromosome, then by position. It can
     be done with the following command.
 ```
@@ -33,7 +33,7 @@ program, type command:
 $ dnmtools entropy -w 5 -v -o output.meth /path/to/genome.fa input-sorted.epiread
 ```
 
-The output format is the same as [counts](../../analysis/counts)
+The output format is the same as [counts](../counts)
 output. The first 3 columns indicate the genomic location of the
 center CpG in each sliding window, the 5th column contains the entropy
 values, and the 6th column shows the number of reads used for each

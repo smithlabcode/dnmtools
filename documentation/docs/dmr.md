@@ -7,10 +7,9 @@ $ dnmtools dmr [OPTIONS] <input.methdiff> <input-a.hmr> <input-b.hmr> <output-a-
 
 ## Description
 
-With [differential methylation scores](../../analysis/diff) and
-[HMRs](../../analysis/hmr) for both methylomes available, DM regions (DMRs)
-can be calculated with the dmr program. This program uses HMR
-fragments to compute DMRs.
+With [differential methylation scores](../diff) and [HMRs](../hmr) for
+both methylomes available, DM regions (DMRs) can be calculated with
+the dmr program. This program uses HMR fragments to compute DMRs.
 
 ```
 $ dnmtools dmr input.methdiff input-a.hmr input-b.hmr output-a-lt-b.bed output-b-lt-a.bed

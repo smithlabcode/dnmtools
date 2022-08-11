@@ -16,7 +16,7 @@ for the two alleles.  Comparing the likelihood of the two models, the
 interrogated genomic interval may be classified as an AMR.  The
 following command shows an example to run the program amrfinder and
 takes as input an epireads file generated from
-[stats](../../analysis/states).
+[stats](../states).
 
 ```
 $ dnmtools amrfinder -c /path/to/genome.fa -o output.amr input.epiread

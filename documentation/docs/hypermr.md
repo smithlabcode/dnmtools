@@ -19,7 +19,7 @@ therefore it makes sense to identify hyper-hydroxymethylated regions.
 
 The first kind of HyperMR analysis involves finding continuous blocks
 of hyper-methylated CpGs with the hmr program. Since the
-[hmr](../../analysis/hmr) program is designed to find hypo-methylated
+[hmr](../hmr) program is designed to find hypo-methylated
 regions, one can use it to identify HyperMRs by inverting the
 methylation levels in the methcounts output file as follows:
 
@@ -43,7 +43,7 @@ preference when compared to those CpGs in the majority of unmethylated
 genome. The blocks of hyper-methylated CpGs and gap CpGs together form
 composite HyperMRs. The hypermr program, which implements a
 three-state HMM, is used to identify such HyperMRs. Suppose the
-[counts](../../analysis/counts) output file is Col0 Meth.bed, to
+[counts](../counts) output file is Col0 Meth.bed, to
 find HyperMRs from this dataset, run
 
 ```

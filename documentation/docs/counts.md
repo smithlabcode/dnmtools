@@ -22,7 +22,7 @@ status.
 
 The input file (`input.sam`) is in SAM/BAM format. The reads should be
 sorted so those mapping to the same chromosome are consecutive in the
-file and [duplicate reads should be removed](../../utils/uniq).
+file and [duplicate reads should be removed](../uniq).
 
 The methylation level for every cytosine site at single base
 resolution is estimated as the ratio of methylated to total bases in

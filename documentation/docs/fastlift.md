@@ -28,7 +28,7 @@ We would like to lift it over to the human genome hg19, and generate
 an index file `mm9-hg19.index` to facilitate later lift-over
 operations from mm9 to hg19, and keep a record of unlifted mm9
 cytosine positions in the file `mm9-hg19.unlifted`. First, convert the
-[counts](../../analysis/counts) file `mm9.meth` to the
+[counts](../counts) file `mm9.meth` to the
 BED file `mm9-cpg.bed` file for liftOver using the following command.
 
 ```

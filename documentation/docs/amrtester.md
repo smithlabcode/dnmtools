@@ -5,7 +5,7 @@
 $ dnmtools amrtester [OPTIONS] <input.bed> <input.epiread>
 ```
 
-In addition to [amrfinder](../../amr/amrfinder), which uses a sliding
+In addition to [amrfinder](../amrfinder), which uses a sliding
 window, the `amrtester` program tests for allele-specific methylation
 in a given set of genomic intervals. The program can be run like this:
 

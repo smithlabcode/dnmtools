@@ -13,7 +13,7 @@ bisulfite sequencing (oxBS-seq) and BS-seq data available, you can use
 `mlml`  to perform consistent and simultaneous estimation.
 
 The input file format could be the default
-[counts](/analysis/counts) output format,
+[counts](../counts) output format,
 or BED format file with 6 columns as the example below:
 
 ```

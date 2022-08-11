@@ -7,12 +7,12 @@ $ dnmtools hmr-rep [OPTIONS] <input-1.meth> <input-2.meth> ...
 
 ## Description
 
-This program is similar to [hmr](../../analysis/hmr), but it identifies
+This program is similar to [hmr](../hmr), but it identifies
 HMRs in a set of replicate methylomes. Methylation must be provided in
-the [counts](../../analysis/counts) format. This program assumes
+the [counts](../counts) format. This program assumes
 only data at CpG sites and that strands are collapsed so only the
 positive site appears in the file (e.g. using
-[sym](../../utils/sym)).
+[sym](../sym)).
 
 ## Options
 

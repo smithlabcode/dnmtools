@@ -16,7 +16,7 @@ methylated in each interval. More details on these quantities can be
 found in the documentation for the `levels` command.
 
 The `roi` command requires two input files. The first is a
-sorted [methcounts output file](/analysis/methcounts),
+sorted [counts output file](../counts),
 i.e. `input.meth` in the example above. This file provides data for
 every site, either a cytosine or CpG, that is of interest. The second
 input file (`intervals.bed`) specifies the genomic intervals in which

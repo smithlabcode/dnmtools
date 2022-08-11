@@ -30,7 +30,7 @@ HMRs.
 We typically like to have about 10x coverage to feel very confident in
 the HMRs called in mammalian genomes, but the method will work with
 lower coverage. Coverage can be calculated using the
-[levels](../../analysis/levels) program, and is summarized in the
+[levels](../levels) program, and is summarized in the
 `mean_depth_covered` statistic under `cpg_symmetric` group.
 
 If reads have low coverage, the boundaries of HMRs will be less
@@ -42,11 +42,11 @@ analysis methods based on smoothing or using fixed-width windows.
 ## Typical mammalian methylomes
 
 Running `hmr` requires a file of methylation levels formatted like the
-output of the [counts](../../analysis/counts). For calling HMRs in
+output of the [counts](../counts). For calling HMRs in
 mammalian methylomes, we suggest only considering the methylation
 level at CpG sites, as the level of non-CpG methylation is not usually
 more than a few percent. The required information can be extracted and
-processed by using [sym](../../utils/sym).
+processed by using [sym](../sym).
 
 ## Output
 
@@ -82,7 +82,7 @@ methylome.
 
 The `hmr` program also has the option of directly identifying partially
 methylated regions (PMRs), not to be confused with [partially
-methylated domains](../../analysis/pmd).  These are contiguous intervals
+methylated domains](../pmd).  These are contiguous intervals
 where the methylation level at individual sites is close to 0.5.  This
 should also not be confused with regions that have allele-specific
 methylation (ASM) or regions with alternating high and low methylation
@@ -93,8 +93,8 @@ with the same input but a different optional argument to find PMRs:
 ## Converting HMR files to UCSC genome browser tracks
 
 You might want to create bigBed browser tracks for HMRs.  The same
-procedure also works for [AMRs](../../amr/amrfinder),
-[PMDs](../../analysis/pmd), or [DMRs](../../dmr/dmr). To do so, follow these
+procedure also works for [AMRs](../amrfinder),
+[PMDs](../pmd), or [DMRs](../dmr). To do so, follow these
 steps:
 
  * (1) Download the bedToBigBed program from the UCSC Genome Browser

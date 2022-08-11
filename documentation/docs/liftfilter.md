@@ -7,7 +7,7 @@ $ dnmtools liftfilter [OPTIONS] -o <output.meth> <input.meth>
 
 ## Description
 
-The [fastlift](../../utils/fastlift) program may report multiple mm9
+The [fastlift](../fastlift) program may report multiple mm9
 sites mapped to a same position in hg19.  In this situation, we may
 either collapse read counts at those mm9 sites, or keep the data for
 only one mm9 site. We can use the lift-filter program to achieve these

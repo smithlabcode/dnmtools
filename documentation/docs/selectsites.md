@@ -16,7 +16,7 @@ methcounts file to BED format, intersect it with a BED file of the
 regions of interest (using
 [bedtools](https://bedtools.readthedocs.io)), then convert it back to
 methcounts. The program selectsites simplifies these operations. It
-takes a [counts](../../analysis/counts) file and a set of intervals
+takes a [counts](../counts) file and a set of intervals
 represented as a BED file and produces a subset of the entries in the
 methcounts file included in the BED regions. We can select entries in
 input.meth contained in any inverval in `regions.bed` using the

@@ -36,7 +36,7 @@ in `input-a.meth`, number of unmethylated reads in `input-a.meth`,
 number of methylated reads in `input-b.meth`, and number of
 unmethylated reads in `input-b.meth`, respectively.
 
-The methdiff output is used as input for the [dmr](../../dmr/dmr) program.
+The methdiff output is used as input for the [dmr](../dmr) program.
 
 ## Options
 

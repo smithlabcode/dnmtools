@@ -24,7 +24,7 @@ in the dataset.
 The first step in the differential methylation analysis is to assemble
 a proportion table containing read proportions for all target
 methylomes. Dnmtools includes a program
-[merge](../../utils/merge) to generate a proportion
+[merge](../merge) to generate a proportion
 table from the given collection of methylomes. Suppose that we want to
 compare methylomes named `control-a.meth`, `control-b.meth`, `control-
 c.meth` to the methylomes `case-a.meth, `case-b.meth, `case-c.meth.
@@ -117,7 +117,7 @@ informations by not using the `-n` flag.
 We do not recommend using the individual p-values of CpGs from
 radmeth, as they often do not contain sufficient coverage for
 significant biological interpretations. Instead, we recommend merging
-p-values of neighboring CpGs using [radadjust](../../dmr/radadjust).
+p-values of neighboring CpGs using [radadjust](../radadjust).
 
 ## Options
 

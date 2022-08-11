@@ -41,7 +41,7 @@ following command will estimate the conversion rate.
 $ dnmtools bsrate -c /path/to/genome.fa -o output.bsrate input-sorted.sam
 ```
 
-Note that we often use the output of [uniq](../../utils/uniq) to
+Note that we often use the output of [uniq](../uniq) to
 reduce any bias introduced by differential PCR amplification as a
 function of conversion. The `bsrate` command requires that the input
 be sorted so that reads mapping to the same chromosome are consecutive

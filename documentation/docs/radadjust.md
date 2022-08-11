@@ -8,7 +8,7 @@ $ dnmtools radadjust [OPTIONS] <regression-output.bed>
 ## Description
 
 This program adjusts the p-value of individual CpGs in the output of
-[radmeth](../../dmr/radmeth). A typical application
+[radmeth](../radmeth). A typical application
 that takes the regression output as input and combines the p-values of
 200 neighboring CpGs is done as follows.
 ```

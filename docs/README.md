@@ -2,6 +2,10 @@
 
 This is the documentation for DNMTools that uses
 [mkdocs](https://mkdocs.readthedocs.io) to generate readthedocs pages.
+The public web verison of this documentation is available at
+[dnmtools.readthedocs.io](https://dnmtools.readthedocs.io), but for
+uses who wish to see the documentation on a web browser offline, you
+can build the documentation locally as described below.
 
 ### Dependencies
 
@@ -25,3 +29,5 @@ Create a local host for the HTML documentation by running
 ```
 mkdocs serve
 ```
+
+This will create the documentation, usually at http://localhost:8000 .

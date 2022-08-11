@@ -213,7 +213,7 @@ $ for i in reads/*.txt; do split -a 3 -d -l 12000000 ${i} reads_split/$(basename
 
 Notice that the number of lines per split file is 12M, since we want
 3M reads, and there are 4 lines per read. If you split the reads like
-this, you will need to ``unsplit'' them after the mapping is done. This
+this, you will need to "unsplit" them after the mapping is done. This
 can be done using the `samtools merge` command.
 
 Abismal also exists as a standalon program, and more details on

@@ -498,7 +498,7 @@ main_radmeth(int argc, const char **argv) {
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     opt_parse.add_opt("na-info", 'n',
         "if a p-value is not calculated, print NAs in more detail: "
-        "low count (NA_LOW_COV) extreme values (NA_EXTREME) or"
+        "low count (NA_LOW_COV) extreme values (NA_EXTREME_CNT) or"
         " numerical errors in likelihood ratios (NA)", false, VERBOSE);
     opt_parse.add_opt("factor", 'f', "a factor to test", true, test_factor_name);
 
@@ -601,10 +601,10 @@ main_radmeth(int argc, const char **argv) {
       // all control samples. Also do not test if the site is completely
       // methylated or completely unmethylated across all samples.
       if (has_low_coverage(full_regression, test_factor)) {
-        out << "NA_LOW_COV";
+        out << ((more_na_info) ? "NA_LOW_COV" : "NA");
       }
       else if (has_extreme_counts(full_regression)) {
-        out << "NA_EXTREME_CNT";
+        out << ((more_na_info) ? "NA_EXTREME_CNT" : "NA");
       }
       else {
         fit(full_regression);

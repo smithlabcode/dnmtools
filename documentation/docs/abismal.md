@@ -120,7 +120,7 @@ will have T-rich reads only. `abismal` expects T-rich reads as a
 default. Execute the following command to map all of your single-end
 reads with `abismal`:
 
-```
+```shell
 $ abismal -i <genome index> -o <output SAM> [options] <input fastq>
 ```
 
@@ -130,7 +130,7 @@ view](https://github.com/samtools/samtools) program using the \op{-b}
 flag to compress to BAM and the `-S` flag to indicate that input is in
 SAM format.
 
-```
+```shell
 $ abismal -i <genome index> -s <output STATS> [options] <input fastq> | samtools view -bS > <output BAM>
 ```
 
@@ -148,7 +148,7 @@ convention throughout the manual and strongly suggest that you do the
 same. Run the following command to map two
 reads files from a paired-end sequencing experiment:
 
-```
+```shell
 $ abismal -i <index> -o <output SAM> [options] <input fastq 1> <input fastq 2>
 ```
 
@@ -205,7 +205,7 @@ the reads into smaller parts. The following BASH commands will take a
 directory named `reads` containing Illumina sequenced reads files, and
 split them into files containing at most 3M reads:
 
-```
+```shell
 $ mkdir reads_split
 $ for i in reads/*.txt; do split -a 3 -d -l 12000000 ${i} reads_split/$(basename $i); done
 ```

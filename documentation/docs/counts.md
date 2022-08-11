@@ -31,7 +31,7 @@ are symmetric, methylation levels are produced for both strands and
 can be analyzed separately. To compute methylation levels at each
 cytosine site along the genome you can use the following command:
 
-```bash
+```shell
 $ dnmtools counts -c /path/to/genome.fa -o output.meth input.sam
 ```
 
@@ -85,7 +85,7 @@ context, one may use the `awk` command (or `grep`) to filter those
 lines based on the fourth column. For example, in order to pull out
 all cytosines within the CHG context, run the following:
 
-```bash
+```shell
 $ awk '$4 == CHG' human_esc.meth > human_esc_chg.meth
 ```
 
@@ -109,7 +109,7 @@ follow these steps:
   referred to as `hg19.chrom.sizes` in step 3.
 * (3) To create a `bigWig` track for methylation level at single CpG sites,
   convert the meth file to bed format using:
-```bash
+```shell
  $ awk -v OFS="\t" '{print $1, $2, $2+1, $4":"$6, $5, $3}' human_esc.meth > human_esc.meth.bed
 ```
 * (4) To create a `bigWig` track from the bed format methcounts
@@ -126,7 +126,7 @@ $ tr ':' '[Ctrl+v Tab]' < human_esc.meth.bed | cut -f 1-3,5 | wigToBigWig /dev/s
 Note that if the `wigToBigWig` or `fetchChromSizes` programs are not
 executable when downloaded, do the following:
 
-```bash
+```shell
 $ chmod +x wigToBigWig
 $ chmod +x fetchChromSizes
 ```

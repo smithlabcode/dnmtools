@@ -16,7 +16,7 @@ hypermethylation at specific sites. PMDs are large domains with sizes
 ranging from 10kb to over 1Mb. Hidden Markov Models can also identify
 these larger domains. The program `pmd`  is provided for their
 identification, and can be run as follows:
-```
+```shell
 $ dnmtools pmd -i 1000 -o output.bed input.meth
 ```
 
@@ -46,7 +46,7 @@ merging distance.
 
 The output of the program is a BED file formatted as follows:
 
-```
+```txt
 chr1  4083054   4756012   PMD0:3.455556:278:4.584455:260  673  +
 chr1  4846663   5430747   PMD1:3.842801:276:5.246181:166  580  +
 chr1  5463102   5912049   PMD2:3.839765:217:4.191114:282  448  +
@@ -121,52 +121,52 @@ is best paired with matching WGBS data.
 
 ## Options
 
-```
+```txt
  -o, -out
 ```
 output file (default: stdout)
-```
+```txt
  -d, -desert
 ```
 maximum distance between bins with data in PMD
-```
+```txt
  -f, -fixedbin
 ```
 Value of the fixed bin size
-```
+```txt
  -b, -bin
 ```
 Starting bin size
-```
+```txt
  -a, -arraymode
 ```
 Input is microarray data (e.g. from MethylationEPIC)
-```
+```txt
  -i, -itr
 ```
  max number of iterations
 
-```
+```txt
  -v, -verbose
 ```
 print more run info to STDERR while the program is running
-```
+```txt
  -D, -debug
 ```
 print debug info to STDERR while the program is runningo
-```
+```txt
  -P, -params-in
 ```
 HMM parameter files for individual methylomes (separated with comma)
-```
+```txt
  -r, -posteriors-out
 ```
 write out posterior probabilities in methcounts format
-```
+```txt
  -p, -params-out
 ```
 write HMM parameters to this file
-```
+```txt
  -s, -seed
 ```
 specify random seed value

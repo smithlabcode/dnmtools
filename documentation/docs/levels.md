@@ -65,23 +65,23 @@ cpg:
 
 To run the levels program, execute
 
-```bash
+```shell
 $ dnmtools levels -o output.levels input.meth
 ```
 
 ## Options
 
-```bash
+```shell
  -o, -output
 ```
 output file in YAML format. (default: stdout)
 
-```bash
+```shell
  -a, -alpha
 ```
 alpha for confidence interval  (default: 0.95)
 
-```bash
+```shell
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.

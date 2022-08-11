@@ -37,7 +37,7 @@ this way. Assuming method (3) from the above paragraph of measuring
 conversion rate at non-CpG cytosines in a mammalian methylome, the
 following command will estimate the conversion rate.
 
-```bash
+```shell
 $ dnmtools bsrate -c /path/to/genome.fa -o output.bsrate input-sorted.sam
 ```
 
@@ -98,7 +98,7 @@ has been shown to be entirely unmethylated in most human tissues. To
 use the mitochondria, you can extract mitochondrial reads from a SAM
 file using `awk`:
 
-```bash
+```shell
 $ awk '$1 /~/ ^@ || $3 == "chrM"' input.sam >input-chrM-only.sam
 ```
 

@@ -23,7 +23,7 @@ of hyper-methylated CpGs with the hmr program. Since the
 regions, one can use it to identify HyperMRs by inverting the
 methylation levels in the methcounts output file as follows:
 
-```
+```shell
 $ awk '{$5=1-$5; print $0}' input.meth > input_inverted.meth
 ```
 
@@ -31,7 +31,7 @@ Next one may use the hmr program to find "valleys" in the inverted
 Arabidopsis methylome, which are the hyper-methylated regions in the
 original methylome. The command is invoked as below
 
-```
+```shell
 $ dnmtools hmr -o output.hmr input_inverted.meth
 ```
 
@@ -46,7 +46,7 @@ three-state HMM, is used to identify such HyperMRs. Suppose the
 [counts](../counts) output file is Col0 Meth.bed, to
 find HyperMRs from this dataset, run
 
-```
+```shell
 $ dnmtools hypermr -o output.hypermr input.meth
 ```
 
@@ -67,49 +67,49 @@ grep) and calling HyperMRs separately for each context.
 
 ## Options
 
-```
+```txt
  -o, -out
 ```
 output BED file (default: STDOUT)
 
-```
+```txt
  -s, -scores
 ```
 output file for posterior scores
 
-```
+```txt
  -t, -tolerance
 ```
 tolerance (default: 0)
 
-```
+```txt
  -d, -desert
 ```
 maximum distance between covered CpGs in HyperMR (default: 1000)
 
-```
+```txt
  -i, -itr
 ```
 max number of iterations (default: 100)
 
-```
+```txt
  -V, -viterbi
 ```
 Use Viterbi decoding
 
-```
+```txt
  -M, -min-meth
 ```
 min cumulative methylation level in HypeMR (default: 4)
-```
+```txt
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.
-```
+```txt
  -P, -params-in
 ```
 HMM parameters input file
-```
+```txt
  -p, -params-out
 ```
 HMM parameters output file

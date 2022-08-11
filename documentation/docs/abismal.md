@@ -51,7 +51,7 @@ index, where k-mers of set length are used as keys to a list of
 potential mapping locations for reads that begin with their sequence.
 To produce this index run the following command:
 
-```bash
+```shell
 $ abismalidx  <genome folder or file> <index file>
 ```
 
@@ -71,14 +71,14 @@ same time using `fastq-dump` , which is a program included in the
 package, available for most unix systems.  Below is an example of using
 `fastq-dump` to decompress and separate FASTQ data by end:
 
-```bash
+```shell
 $ fastq-dump --split-3 human_esc.sra
 ```
 
 If you have a FASTQ file not compressed in SRA format, you can split
 paired ends into two separate files by running the following commands:
 
-```bash
+```shell
 $ sed -ne '1~8{N;N;N;p}' *.fastq > *_1.fastq
 $ sed -ne '4~8{N;N;N;p}' *.fastq > *_2.fastq
 ```
@@ -98,13 +98,13 @@ sequencing adapters, leaving all other bases unaltered. This can be
 attained by running it with the following command for single-end
 mapping
 
-```bash
+```shell
 $ trim_galore -q 0 --length 0 human_esc.fastq
 ```
 
 and the following command for paired-end
 
-```bash
+```shell
 $ trim_galore --paired -q 0 --length 0 human_esc_1.fastq human_esc_2.fastq
 ```
 

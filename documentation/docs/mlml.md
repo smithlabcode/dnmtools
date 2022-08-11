@@ -16,7 +16,7 @@ The input file format could be the default
 [counts](../counts) output format,
 or BED format file with 6 columns as the example below:
 
-```
+```txt
 chr1  3001345  3001346  CpG:9  0.777777777778  +
 ```
 
@@ -27,21 +27,21 @@ input files must be sorted. Assume you have three input files ready:
 `input-bs-seq.meth`, `input-oxbs-seq.meth` and `input-tab-seq.meth`.
 The following command will take all the inputs:
 
-```
+```shell
 $ dnmtools mlml -v -u input-bs-seq.meth -m input-oxbs-seq.meth -h input-tab-seq.meth -o result.txt
 ```
 
 If only two types of input are available, e.g. `input-bs-seq.meth and
 `input-oxbs-seq.meth`, then use the following command:
 
-```
+```shell
 $ dnmtools mlml -u input-bs-seq.meth -m input-oxbs-seq-seq.meth -o result.txt
 ```
 
 In some cases, you might want to specify the convergence tolerance for
 EM algorithm. This can be done through `-t` option.  For example:
 
-```
+```shell
 $ dnmtools mlml -u input-bs-seq.meth -m input-oxbs-seq.meth -o result.txt -t 1e-2
 ```
 
@@ -52,7 +52,7 @@ format can be scientific notation, e.g. 1e-5, or float number, e.g.
 
 The output of `mlml` is tab-delimited format. Here is an example:
 
-```
+```txt
 chr11   15      16      0.166667        0.19697 0.636364        0
 chr12   11      12      0.222222        0       0.777778        2
 ```
@@ -70,40 +70,40 @@ reliable.
 
 ## Options
 
-```
+```txt
  -o, -output
 ```
 output file (default: STDOUT)
 
-```
+```txt
  -u, -bsseq
 ```
 input BS-seq methcounts file
-```
+```txt
  -h, -tabseq
 ```
 input TAB-seq methcounts file
-```
+```txt
  -m, -oxbsseq
 ```
 input oxBS-seq methcounts file
-```
+```txt
  -t, -tolerance
 ```
 EM convergence threshold (default: 0.000000)
-```
+```txt
  -a, -alpha
 ```
 significance level of binomial test for each site (default: 0.050000)
-```
+```txt
  -H, -outh
 ```
 hmC pseudo methcount output file (default: null)
-```
+```txt
  -M, -outm
 ```
 mC pseudo methcount output file (default: null)
-```
+```txt
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.

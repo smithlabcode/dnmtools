@@ -22,13 +22,13 @@ The `uniq` command can take reads sorted by (chrom, start, end,
 strand). If the reads in the input file are not sorted, run the
 following sort command using [samtools](https://samtools.github.io):
 
-```bash
+```shell
 $ samtools sort -O sam -o input-sorted.sam input.sam
 ```
 
 Next, execute the following command to remove duplicate reads:
 
-```bash
+```shell
 $ dnmtools uniq -S duplicate-removal-stats.txt input-sorted.sam out-sorted.sam
 ```
 

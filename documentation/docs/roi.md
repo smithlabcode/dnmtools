@@ -23,7 +23,7 @@ input file (`intervals.bed`) specifies the genomic intervals in which
 methylation statistics should be summarized. If either file is not
 sorted by (chrom,end,start,strand) it can be sorted using the
 following command:
-```
+```shell
 $ LC_ALL=C sort -k 1,1 -k 3,3n -k 2,2n -k 6,6 -o input-sorted.meth input.meth
 ```
 
@@ -36,7 +36,7 @@ but requires the first 6 columns to match the specification, or (2)
 3-column BED format.
 
 From there, the `roi` command can be run as follows:
-```
+```shell
 $ dnmtools roi -o output.bed regions.bed input-sorted.meth
 ```
 
@@ -55,7 +55,7 @@ calculated the same way as explained for the `levels` command.  Users
 may specify two other values (the unweighted mean and the "fractional"
 methylation) with a command line argument. If the input regions are
 as follows:
-```
+```txt
 chr1  3011124  3015902
 chr1  3015904  3016852
 chr1  3017204  3017572
@@ -63,7 +63,7 @@ chr1  3021791  3025633
 chr1  3026050  3027589
 ```
 Then the output might appear like:
-```
+```txt
 chr1    3011124 3015902 X0  0.458647    +
 chr1    3015904 3016852 X1  0.866667    +
 chr1    3017204 3017572 X2  0.946429    +
@@ -71,7 +71,7 @@ chr1    3021791 3025633 X3  0.938038    +
 chr1    3026050 3027589 X4  0.927007    +
 ```
 If the input were given as 6-column BED format:
-```
+```txt
 chr1    3011124 3015902 REGION_A    0   +
 chr1    3015904 3016852 REGION_B    0   +
 chr1    3017204 3017572 REGION_C    0   -
@@ -79,7 +79,7 @@ chr1    3021791 3025633 REGION_D    0   -
 chr1    3026050 3027589 REGION_E    0   -
 ```
 Then the output might be as follows:
-```
+```txt
 chr1    3011124 3015902 REGION_A    0.458647    +
 chr1    3015904 3016852 REGION_B    0.866667    +
 chr1    3017204 3017572 REGION_C    0.946429    -
@@ -104,7 +104,7 @@ columns of the 6-column BED format:
 
 The weighted mean methylation level is then (12) divided by (13)
 above. Example output might look like this:
-```
+```txt
 chr1    3011124 3015902 REGION_A    0.458647    +   0.458647    0.448519    0.459302    172 172 915 1995
 chr1    3015904 3016852 REGION_B    0.866667    +   0.866667    0.863492    1   6   6   39  45
 chr1    3017204 3017572 REGION_C    0.946429    -   0.946429    0.954545    1   11  11  106 112
@@ -136,31 +136,31 @@ the methcounts file into memory, which saves time at the expense of an
 increased memory requirement.
 
 ## Options
-```
+```txt
 -o, -output
 ```
 Name of output file (default: stdout)
-```
+```txt
 -N, -numeric
 ```
 print numeric values only (not NAs)
-```
+```txt
 -L, -preload
 ```
 Load all CpG sites
-```
+```txt
 -s, -sort
 ```
 sort data if needed
-```
+```txt
 -l, -level
 ```
 the level to report as score column in bed format output (w, u or f) [w]
-```
+```txt
 -M, -more-levels
 ```
 report more methylation information
-```
+```txt
 -v, -verbose
 ```
 print more run info

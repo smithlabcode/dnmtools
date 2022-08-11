@@ -42,7 +42,7 @@ Note that the output of `merge` with `-t` flag may contain suffixes `_R` and
 "Reads" and "Methylated" columns). You can remove these to make the input proper
 by running
 
-```bash
+```shell
  $ sed -i '1s/_[MR]//g' input-tabular.tsv
 ```
 
@@ -53,11 +53,11 @@ running the program. Note that for very large BED files, this may take a long
 time. Given an input file `regions.bed`, you can sort it in one of the two
 following ways:
 
-```
+```shell
  $ LC_ALL=C sort -k1,1 -k2,2n -k3,3n -k6,6 -o regions.bed regions.bed
 ```
 
-```
+```shell
  $ bedtools sort -i regions.bed
 ```
 
@@ -109,7 +109,7 @@ corresponding to weighted, unweighted or fractional methylation (default: w)
 
 report more methylation information
 
-```
+```txt
  -v, -verbose
 ```
 

@@ -76,13 +76,13 @@ trained parameters are written, and the argument `-P` indicates a file
 containing parameters (as produced with the `-p` option on a previous
 run) to use:
 ```console
-$ dnmtools hmr -p params.txt -o output_esc.hmr input_esc.meth
+$ dnmtools hmr -p params.txt -o output.hmr input.meth
 ```
 Above the output file has the extension `.hmr` but this doesn't
 matter. The format of the output is 6-column BED.
 
 In the above example the trained parameters are stored in the file
-human `params.txt` but are also used to find HMRs in the input
+`params.txt` but are also used to find HMRs in the input
 methylome. Storing these parameters can be useful if a particular
 methylome seems to have very strange methylation levels through much
 of the genome, and the HMRs would be more comparable with those from
@@ -101,7 +101,7 @@ levels at nearby sites.  Regions with ASM are almost always among the
 PMRs, but most PMRs are not regions of ASM. The hmr program is run
 with the same input but a different optional argument to find PMRs:
 ```console
-$ dnmtools hmr -partial -o human_esc.pmr human_esc.meth
+$ dnmtools hmr -partial -o output.pmr input.meth
 ```
 
 ## Converting HMR files to UCSC genome browser tracks
@@ -114,27 +114,31 @@ steps:
  * (1) Download the bedToBigBed program from the UCSC Genome Browser
    [directory of binary utilities](http://hgdownload.cse.ucsc.edu/admin/exe/).
  * (2) Use the fetchChromSizes script from the same directory to
-   create the \*.chrom.sizes file for the UCSC database you are working
-   with (e.g. hg19). Note that this is the file that is referred to as
-   `hg19.chrom.sizes` in step 3.
+   create the `.chrom.sizes` file for the reference assembly you are
+   working with (e.g. hg19). Note that this is the file that is
+   referred to as `hg19.chrom.sizes` in step 3.
  * (3) Modify and use the following commands: PMDs, HMRs and AMRs may
    have a score greater than 1000 in the 5th column, in which case
-  `bedToBigBed` will output an error. Also,  HMR file `input.bed` may have
-   non-integer score in their 5th column.  The following script rounds
-   the 5th column and prints 1000 if the score is bigger than 1000:
+   `bedToBigBed` will output an error. Also, HMR file `sample.bed` may
+   have non-integer score in their 5th column.  The following script
+   rounds the 5th column and prints 1000 if the score is bigger than
+   1000:
 ```console
-$ awk -v OFS="\t" '{if ($5>1000) print $1,$2,$3,$4,"1000"; else print $1,$2,$3,$4,int($5) }' input.bed > input.tobigbed
+$ awk -v OFS="\t" '{if ($5>1000) print $1,$2,$3,$4,"1000"; \
+                    else print $1,$2,$3,$4,int($5)}' sample.bed > sample.tobigbed
 ```
 In the above command, since the HMRs are not stranded, we do not print
 the 6th column. Keeping the 6th column would make all the HMRs appear
-as though they have a direction – but it would all be the + strand. To
+as though they have a direction -- but it would all show the +
+strand. This would be visually misleading (and somewhat annoying). To
 maintain the 6th column, just slightly modify the above awk command:
 ```console
-$ awk -v OFS="\t" '{if($5>1000) print $1,$2,$3,$4,"1000",$6; else print $1,$2,$3,$4,int($5),$6 }' human_esc.hmr > human_esc.hmr.tobigbed
+$ awk -v OFS="\t" '{if ($5>1000) print $1,$2,$3,$4,"1000",$6; \
+                    else print $1,$2,$3,$4,int($5),$6 }' sample.hmr > sample.hmr.tobigbed
 ```
  * (4) Generate the .bb track using the command below:
 ```console
-$ bedToBigBed input.tobigbed hg19.chrom.sizes output.bb
+$ bedToBigBed sample.tobigbed hg19.chrom.sizes output.bb
 ```
 
 ## Options

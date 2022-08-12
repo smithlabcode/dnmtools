@@ -8,24 +8,47 @@ $ dnmtools levels [OPTIONS] <input.meth>
 
 ## Description
 
-The `levels` program computes global summary statistics for the output
-of [counts](../counts). Example output is below. It computes the total
-fraction of cytosines covered, the fraction of cytosines that have
-mutated away from the reference, and many other coverage statistics
-for cytosines and broken down by sequence context.
+The `levels` command computes global summary statistics for the output
+of [counts](../counts). Example output is below. It computes multiple
+summary statistics related to the quantity of data (e.g., coverage of
+sites) and methylation (e.g., global average methylation). These
+summary statistics are also provided by context. The contexts are not
+exclusive categories, and include:
 
-For CpG sites, coverage number reflects taking advantage of their
-symmetric nature and merging the coverage on both strands. For CpG
-coverage minus mutations, we remove the reads from CpG sites deemed to
-be mutated away from the reference. It also computes average
-methylation in three different ways, described in Schultz et al.
-(2012). This program should provide flexibility to compare methylation
-data with publications that calculate averages different ways and
-illustrate the variability of the statistic depending on how it is
-calculated. The sample output below only shows the results for
-cytosines and CpGs in the sample, but similar statistics are provided
-for symmetric CpGs and cytosines within the CHH, CCG, and CXG
-contexts.
+* cytosines, all of them, on either strand
+* cpg sites, on either strand
+* symmetric cpg sites (strands combined)
+* the CHH context
+* the CCG context
+* the CXG context (we "invented" this one)
+
+The summary statistics computed include:
+
+* `total_sites` the total number of sites counted for this context
+* `sites_covered` among the total above, those with at least one read
+* `total_c` among the observations in reads, how many are C
+* `total_t` among the observations in reads, how many are T
+* `max_depth` the most coverage of any site for this context
+* `mutations` number of sites for this context marked as mutated
+* `called_meth` number of sites "called" methylated
+* `called_unmeth` number of sites "called" unmethylated
+* `mean_agg` meaningless...
+* `coverage` total data informing on sites for this context
+* `sites_covered_fraction` fraction of sites covered
+* `mean_depth` among all sites, the mean coverage by reads
+* `mean_depth_covered` among all covered sites, the mean coverage
+* `mean_meth` the mean of the methylation levels for covered sites
+* `mean_meth_weighted` the mean weighted by coverage
+* `fractional_meth` the fraction of "called" sites "called" methylated
+
+(If you want more information on these, please ask.)
+
+The final three values are the "levels" and are described in Schultz
+et al. (2012). This command should provide flexibility to compare
+methylation data with publications that calculate averages different
+ways. The sample output below only shows the results for cytosines and
+CpGs in the sample, but similar output is generated for symmetric CpGs
+and cytosines in the CHH, CCG, and CXG contexts.
 
 ```yaml
 cytosines:

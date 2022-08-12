@@ -1,7 +1,7 @@
 # abismal - another bisulfite mapping algorithm
 
 ## Synopsis
-```shell
+```console
 $ dnmtools abismal [OPTIONS] input.fq [input-r2.fq]
 ```
 
@@ -52,7 +52,7 @@ index, where k-mers of set length are used as keys to a list of
 potential mapping locations for reads that begin with their sequence.
 To produce this index run the following command:
 
-```shell
+```console
 $ abismalidx  <genome folder or file> <index file>
 ```
 
@@ -72,14 +72,14 @@ same time using `fastq-dump` , which is a program included in the
 package, available for most unix systems.  Below is an example of using
 `fastq-dump` to decompress and separate FASTQ data by end:
 
-```shell
+```console
 $ fastq-dump --split-3 human_esc.sra
 ```
 
 If you have a FASTQ file not compressed in SRA format, you can split
 paired ends into two separate files by running the following commands:
 
-```shell
+```console
 $ sed -ne '1~8{N;N;N;p}' *.fastq > *_1.fastq
 $ sed -ne '4~8{N;N;N;p}' *.fastq > *_2.fastq
 ```
@@ -99,13 +99,13 @@ sequencing adapters, leaving all other bases unaltered. This can be
 attained by running it with the following command for single-end
 mapping
 
-```shell
+```console
 $ trim_galore -q 0 --length 0 human_esc.fastq
 ```
 
 and the following command for paired-end
 
-```shell
+```console
 $ trim_galore --paired -q 0 --length 0 human_esc_1.fastq human_esc_2.fastq
 ```
 
@@ -121,7 +121,7 @@ will have T-rich reads only. `abismal` expects T-rich reads as a
 default. Execute the following command to map all of your single-end
 reads with `abismal`:
 
-```shell
+```console
 $ abismal -i <genome index> -o <output SAM> [options] <input fastq>
 ```
 
@@ -131,7 +131,7 @@ view](https://github.com/samtools/samtools) program using the `-b`
 flag to compress to BAM and the `-S` flag to indicate that input is in
 SAM format.
 
-```shell
+```console
 $ abismal -i <genome index> -s <output STATS> [options] <input fastq> | samtools view -bS > <output BAM>
 ```
 
@@ -149,7 +149,7 @@ convention throughout the manual and strongly suggest that you do the
 same. Run the following command to map two
 reads files from a paired-end sequencing experiment:
 
-```shell
+```console
 $ abismal -i <index> -o <output SAM> [options] <input fastq 1> <input fastq 2>
 ```
 
@@ -206,7 +206,7 @@ into smaller parts. The following BASH commands will take a directory
 named `reads` containing Illumina sequenced reads files, and split
 them into files containing at most 3M reads:
 
-```shell
+```console
 $ mkdir reads_split
 $ for i in reads/*.txt; do split -a 3 -d -l 12000000 ${i} reads_split/$(basename $i); done
 ```

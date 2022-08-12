@@ -1,6 +1,10 @@
 Installation
 ============
 
+## Installation via Conda
+
+(Coming soon!)
+
 ## Building dnmtools from source release
 
 ### Required libraries
@@ -25,59 +29,55 @@ Installation
 
 ### Configuration
 
-1. Download [dnmtools-1.0.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.0.0/dnmtools-1.0.0.tar.gz).
-2. Unpack the archive:
-
-```shell
+* Download [dnmtools-1.0.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.0.0/dnmtools-1.0.0.tar.gz).
+* Unpack the archive:
+```console
 $ tar -zxvf dnmtools-1.0.0.tar.gz
 ```
-3. Move into the dnmtools directory and create a build directory:
-```shell
+* Move into the dnmtools directory and create a build directory:
+```console
 $ cd dnmtools-1.0.0
 $ mkdir build && cd build
 ```
-4. Run the configuration script:
-```shell
+* Run the configuration script:
+```console
 $ ../configure
 ```
-
-If you do not want to install `dnmtools` system-wide, or if you do
+If you do not want to install dnmtools system-wide, or if you do
 not have admin privileges, specify a prefix directory:
-```shell
+```console
 $ ../configure --prefix=/some/reasonable/place
 ```
 If you installed HTSlib yourself in some non-standard directory,
 you must specify the location like this:
-```shell
+```console
 $ ../configure CPPFLAGS='-I /path/to/htslib/headers' \
                LDFLAGS='-L/path/to/htslib/lib'
 ```
+Depending on how you obtained HTSlib, the headers may not be
+in a directory at the same depth as the library file.
 
 ### Building and installing the tools
 
 If you are still in the `build` directory, run `make` to compile the
 tools, and then `make install` to install them:
-
-```shell
+```console
 $ make
 $ make install
 ```
-
 If your HTSlib (or some other library) is not installed system-wide,
 then you might need to udpate your library path:
-
-```shell
+```console
 $ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/htslib/lib
 ```
 
 ### Testing the program
 
 To test if everything was successful, simply run `dnmtools` without
-any arguments and you should see the list of available commands
-```shell
+any arguments and you should see the list of available commands:
+```console
 $ dnmtools
 ```
-
 
 ## Using a clone of the repo
 
@@ -88,7 +88,6 @@ who wish to work on the latest commits, which are unstable, can
 compile the source using the `Makefile` available in the root of the
 source tree. If HTSLib and other libraries are available system-wide,
 compile by running:
-
-```shell
+```console
 $ make
 ```

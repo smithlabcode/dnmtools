@@ -1,9 +1,17 @@
-The DNMTools software is a set of tools for analyzing bisulfite
-sequencing data (WGBS and RRBS). DNMTools supersedes the MethPipe
-tools and pipeline, with the aim of running more easily across a
-broader set of computing environments.
+Dnmtools is a set of tools for analyzing DNA methylation data from
+high-throughput sequencing experiments, especially whole genome
+bisulfite sequencing (WGBS), but also reduced representation bisulfite
+sequencing (RRBS). These tools focus on overcoming the computing
+challenges imposed by the scale of genome-wide DNA methylation data,
+which is usually the early parts of data analysis.
 
 ## Installing release 1.0.0
+
+The documentation for dnmtools can be found
+[here](https://dnmtools.readthedocs.io). But if you want to install
+from source and you are reading this on GitHub or in a source tree you
+unpacked, then keep reading. And if you are in a terminal, sorry for
+all the formatting.
 
 ### Required libraries
 
@@ -14,74 +22,88 @@ broader set of computing environments.
   problems with building this software, that might be the first thing
   to check.
 * The GNU Scientific Library: this has always been required. It can be
-  installed using `apt` on Linux, using `brew` on macOS, or from
-  source available [here](http://www.gnu.org/software/gsl).
+  installed using `apt` on Linux (Ubuntu, Debian), using `brew` on
+  macOS, or from source available
+  [here](http://www.gnu.org/software/gsl).
 * The Zlib compression library. Most likely you already have this
   installed on your system. If not, it can be installed using `apt` on
-  Linux through the package `zlib1g-dev`. On macOS, Zlib can be
-  installed with `brew`.
+  Linux (Ubuntu, Debian) through the package `zlib1g-dev`. On macOS,
+  Zlib can be installed with `brew`.
 * The HTSlib library, which can be installed through `brew` on macOS,
-  through `apt` on Linux, or from source downloadable
+  through `apt` on Linux (Ubuntu, Debian), or from source downloadable
   [here](https://github.com/samtools/htslib).
 
 ### Configuration
 
-1. Download dnmtools-1.0.0.tar.gz
-   [here](https://github.com/smithlabcode/dnmtools/releases/download/v1.0.0/dnmtools-1.0.0.tar.gz).
-2. Unpack the archive:
-```
+* Download [dnmtools-1.0.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.0.0/dnmtools-1.0.0.tar.gz).
+* Unpack the archive:
+```console
 $ tar -zxvf dnmtools-1.0.0.tar.gz
 ```
-3. Move into the `dnmtools-1.0.0` directory and create a build directory:
-```
+* Move into the dnmtools directory and create a build directory:
+```console
 $ cd dnmtools-1.0.0
 $ mkdir build && cd build
 ```
-4. Run the configuration script:
-```
+* Run the configuration script:
+```console
 $ ../configure
 ```
-If you do not want to install DNMTools system-wide, or if you do
+If you do not want to install dnmtools system-wide, or if you do
 not have admin privileges, specify a prefix directory:
-```
+```console
 $ ../configure --prefix=/some/reasonable/place
 ```
 If you installed HTSlib yourself in some non-standard directory,
 you must specify the location like this:
-```
+```console
 $ ../configure CPPFLAGS='-I /path/to/htslib/headers' \
                LDFLAGS='-L/path/to/htslib/lib'
 ```
+Depending on how you obtained HTSlib, the headers may not be
+in a directory at the same depth as the library file.
 
 ### Building and installing the tools
 
 If you are still in the `build` directory, run `make` to compile the
-tools, and then `make install` to install them. If your HTSlib is not
-installed system-wide, then you might need to udpate your library
-path:
+tools, and then `make install` to install them:
+```console
+$ make
+$ make install
 ```
+If your HTSlib (or some other library) is not installed system-wide,
+then you might need to udpate your library path:
+```console
 $ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/htslib/lib
 ```
 
-### Building and installing from source
+### Testing the program
 
-We strongly recommend using DNMTools through the latest stable release
-under the releases section on GitHub. However, developers who wish to
-work on the latest commits, which are potentially unstable, can
-compile the cloned repository using the `Makefile` available in the
-repository. If HTSLib is available system-wide, compile by running
-```
-make
+To test if everything was successful, simply run `dnmtools` without
+any arguments and you should see the list of available commands:
+```console
+$ dnmtools
 ```
 
-Usage
-=====
+### Using a clone of the repo
+
+Not recommended, but if you want to do it this way, we assume you know
+what you are doing. We strongly recommend using dnmtools through the
+latest stable release under the releases section on GitHub. Developers
+who wish to work on the latest commits, which are unstable, can
+compile the source using a `Makefile` left in the root of the source
+tree. If HTSLib and other libraries are available system-wide,
+compile by running:
+```console
+$ make
+```
+
+## Usage
 
 Read the [documentation](https://dnmtools.readthedocs.io) for usage of
 individual tools within DNMTools.
 
-Contacts and bug reports
-========================
+## Contacts and bug reports
 
 Andrew D. Smith
 andrewds@usc.edu
@@ -89,8 +111,7 @@ andrewds@usc.edu
 Guilherme de Sena Brandine
 desenabr@usc.edu
 
-Copyright and License Information
-=================================
+## Copyright and License Information
 
 Copyright (C) 2022
 Andrew D. Smith and Guilherme de Sena Brandine

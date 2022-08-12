@@ -76,12 +76,14 @@ trained parameters are written, and the argument `-P` indicates a file
 containing parameters (as produced with the `-p` option on a previous
 run) to use:
 ```console
-$ dnmtools hmr -p params.txt -o output.hmr input.meth
+$ dnmtools hmr -p params.txt -o output_esc.hmr input_esc.meth
 ```
+Above the output file has the extension `.hmr` but this doesn't
+matter. The format of the output is 6-column BED.
 
-In the above example, the parameters were trained on the ESC
-methylome, stored in the file human `params.txt` and then used to
-find HMRs in the input methylome. This is useful if a particular
+In the above example the trained parameters are stored in the file
+human `params.txt` but are also used to find HMRs in the input
+methylome. Storing these parameters can be useful if a particular
 methylome seems to have very strange methylation levels through much
 of the genome, and the HMRs would be more comparable with those from
 some other methylome if the model were not trained on that strange

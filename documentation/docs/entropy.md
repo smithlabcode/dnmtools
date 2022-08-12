@@ -11,6 +11,7 @@ several consecutive CpG sites (Xie et al, 2011). The `methentropy`
 program processes epireads and calculates the methylation entropy
 value in sliding windows of specified number of CpGs. Two input files
 are required.
+
  * (1) either a genome in FASTA format or a directory containing FASTA
    chromosome files files
 
@@ -18,6 +19,7 @@ are required.
    [states](../states) program. The input epiread file
    needs to be sorted, first by chromosome, then by position. It can
     be done with the following command.
+
 ```shell
 $ LC_ALL=C sort -k1,1 -k2,2g input.epiread -o input-sorted.epiread
 ```

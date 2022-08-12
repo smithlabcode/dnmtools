@@ -50,11 +50,22 @@ the number of covered sites. Why keep those raw statistics? Because
 it's essential if two different `levels` output files are combined.
 
 The final three values are the "levels" and are described in Schultz
-et al. (2012). This command should provide flexibility to compare
-methylation data with publications that calculate averages different
-ways. The sample output below only shows the results for cytosines and
-CpGs in the sample, but similar output is generated for symmetric CpGs
-and cytosines in the CHH, CCG, and CXG contexts.
+et al. (2012):
+```txt
+"Leveling" the playing field for analyses of single-base resolution DNA methylomes
+Schultz, Schmitz & Ecker (TIG 2012)
+```
+
+Note: the `fractional_meth` level we calculate is inspired but
+different from the paper. What we are do is use a binomial test to
+determine significantly hyper/hypomethylated sites, and only use the
+subset of significant sites to calculate `fractional_meth` level.
+
+This command should provide flexibility to compare methylation data
+with publications that calculate averages different ways. The sample
+output below only shows the results for cytosines and CpGs in the
+sample, but similar output is generated for symmetric CpGs and
+cytosines in the CHH, CCG, and CXG contexts.
 
 ```yaml
 cytosines:

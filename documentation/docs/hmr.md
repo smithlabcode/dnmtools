@@ -48,7 +48,7 @@ by using the [sym](../sym) command after having used the
 We typically like to have about 10x coverage to feel very confident in
 the HMRs called in mammalian genomes, but the method will work with
 lower coverage. Coverage can be calculated using the
-[levels](../levels) program, and is summarized in the
+[levels](../levels) command, and is summarized in the
 `mean_depth_covered` statistic under `cpg_symmetric` group.
 
 If reads have low coverage, the boundaries of HMRs will be less
@@ -89,16 +89,16 @@ of the genome, and the HMRs would be more comparable with those from
 some other methylome if the model were not trained on that strange
 methylome.
 
-### Partially methylated regions (PMRs)
+**Partially methylated regions (PMRs)**
 
-The `hmr` program also has the option of directly identifying partially
+The `hmr` command also has the option of directly identifying partially
 methylated regions (PMRs), not to be confused with [partially
 methylated domains](../pmd).  These are contiguous intervals
 where the methylation level at individual sites is close to 0.5.  This
 should also not be confused with regions that have allele-specific
 methylation (ASM) or regions with alternating high and low methylation
 levels at nearby sites.  Regions with ASM are almost always among the
-PMRs, but most PMRs are not regions of ASM. The hmr program is run
+PMRs, but most PMRs are not regions of ASM. The hmr command is run
 with the same input but a different optional argument to find PMRs:
 ```console
 $ dnmtools hmr -partial -o output.pmr input.meth
@@ -107,22 +107,21 @@ $ dnmtools hmr -partial -o output.pmr input.meth
 ## Converting HMR files to UCSC genome browser tracks
 
 You might want to create bigBed browser tracks for HMRs.  The same
-procedure also works for [AMRs](../amrfinder),
-[PMDs](../pmd), or [DMRs](../dmr). To do so, follow these
-steps:
+procedure also works for [AMRs](../amrfinder), [PMDs](../pmd), or
+[DMRs](../dmr). To do so, follow these steps:
 
- * (1) Download the bedToBigBed program from the UCSC Genome Browser
-   [directory of binary utilities](http://hgdownload.cse.ucsc.edu/admin/exe/).
- * (2) Use the fetchChromSizes script from the same directory to
-   create the `.chrom.sizes` file for the reference assembly you are
-   working with (e.g. hg19). Note that this is the file that is
-   referred to as `hg19.chrom.sizes` in step 3.
- * (3) Modify and use the following commands: PMDs, HMRs and AMRs may
-   have a score greater than 1000 in the 5th column, in which case
-   `bedToBigBed` will output an error. Also, HMR file `sample.bed` may
-   have non-integer score in their 5th column.  The following script
-   rounds the 5th column and prints 1000 if the score is bigger than
-   1000:
+* (1) Download the bedToBigBed program from the UCSC Genome Browser
+  [directory of binary utilities](http://hgdownload.cse.ucsc.edu/admin/exe/).
+* (2) Use the fetchChromSizes script from the same directory to create
+  the `.chrom.sizes` file for the reference assembly you are working
+  with (e.g. hg19). Note that this is the file that is referred to as
+  `hg19.chrom.sizes` in step 3.
+* (3) Modify and use the following commands: PMDs, HMRs and AMRs may
+  have a score greater than 1000 in the 5th column, in which case
+  `bedToBigBed` will output an error. Also, HMR file `sample.bed` may
+  have non-integer score in their 5th column.  The following script
+  rounds the 5th column and prints 1000 if the score is bigger than
+  1000:
 ```console
 $ awk -v OFS="\t" '{if ($5>1000) print $1,$2,$3,$4,"1000"; \
                     else print $1,$2,$3,$4,int($5)}' sample.bed > sample.tobigbed

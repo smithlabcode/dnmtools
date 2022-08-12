@@ -32,7 +32,7 @@ The summary statistics computed include:
 * `mutations` number of sites for this context marked as mutated
 * `called_meth` number of sites "called" methylated
 * `called_unmeth` number of sites "called" unmethylated
-* `mean_agg` meaningless...
+* `mean_agg` the sum of methylation levels for all sites
 * `coverage` total data informing on sites for this context
 * `sites_covered_fraction` fraction of sites covered
 * `mean_depth` among all sites, the mean coverage by reads
@@ -42,6 +42,12 @@ The summary statistics computed include:
 * `fractional_meth` the fraction of "called" sites "called" methylated
 
 (If you want more information on these, please ask.)
+
+Among the above, many are included because they are needed for
+calculating the the "derived" statistics. For example, the `mean_agg`
+is used in the denominator for `mean_meth`, where the denominator is
+the number of covered sites. Why keep those raw statistics? Because
+it's essential if two different `levels` output files are combined.
 
 The final three values are the "levels" and are described in Schultz
 et al. (2012). This command should provide flexibility to compare

@@ -1,7 +1,7 @@
 # bsrate - estimate bisulfite conversion rate
 
 ## Synopsis
-```shell
+```console
 $ dnmtools bsrate [OPTIONS] -c <chroms> <input.sam>
 ```
 
@@ -34,20 +34,18 @@ there is no bisulfite treatment, then this ratio should be close to 0.
 
 The `bsrate` command will estimate the bisulfite conversion rate in
 this way. Assuming method (3) from the above paragraph of measuring
-conversion rate at non-CpG cytosines in a mammalian methylome, the
-following command will estimate the conversion rate.
-
-```shell
+conversion rate at non-CpG cytosines in a mammalian methylome. The
+following command will estimate the conversion rate:
+```console
 $ dnmtools bsrate -c /path/to/genome.fa -o output.bsrate input-sorted.sam
 ```
 
-Note that we often use the output of [uniq](../uniq) to
-reduce any bias introduced by differential PCR amplification as a
-function of conversion. The `bsrate` command requires that the input
-be sorted so that reads mapping to the same chromosome are consecutive
-within the file and the input should have duplicate reads already
-removed. The first several lines of the output might look like the
-following:
+Note that we often use the output of [uniq](../uniq) to reduce any
+bias introduced by differential PCR amplification as a function of
+conversion. The `bsrate` command requires that the input be sorted so
+that reads mapping to the same chromosome are consecutive within the
+file and the input should have duplicate reads already removed. The
+first several lines of the output might look like the following:
 
 ```txt
 OVERALL CONVERSION RATE = 0.994141
@@ -97,8 +95,7 @@ use an unmethylated spike-in or reads mapping to mitochondria, which
 has been shown to be entirely unmethylated in most human tissues. To
 use the mitochondria, you can extract mitochondrial reads from a SAM
 file using `awk`:
-
-```shell
+```console
 $ awk '$1 /~/ ^@ || $3 == "chrM"' input.sam >input-chrM-only.sam
 ```
 
@@ -112,34 +109,33 @@ continuing your analysis. The output from two different runs of
 ## Options
 
 ```txt
- -o, -output
+-o, -output
 ```
-
-The name of the output file (default: STDOUT).
+The name of the output file (default: stdout).
 
 ```txt
- -c, -chrom
+-c, -chrom
 ```
-
-File or directory of chromosome sequences (FASTA format; .fa suffix)
-[required]
+File or directory of files containing the chromosome sequences (FASTA
+format; `.fa` suffix assumed). If the input is a directory, it should
+contain several FASTA files, each one of which contains a chromosome
+sequence. These should be the exact same as used for mapping the
+reads. [required]
 
 ```txt
- -N, -all
+-N, -all
 ```
-
-Count all Cs (including CpGs) when estimating bisulfite
-conversion. This will only work if the estimate is made from sequences
-known to be unmethylated, like with a spike-in.
+Use all Cs (including CpGs) when estimating bisulfite conversion. This
+will only be useful if the estimate is made from sequences known to be
+unmethylated, like with a spike-in.
 
 ```txt
- -seq
+-seq
 ```
-
-Use only reads that map to this chromosome (e.g. chrM).
+Use only reads that map to this chromosome (e.g. chrM). This simply
+avoids having to extract reads separately from the mapped reads file.
 
 ```txt
- -v, -verbose
+-v, -verbose
 ```
-
 Print more information while the program is running.

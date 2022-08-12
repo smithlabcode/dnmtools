@@ -1,23 +1,23 @@
-# levels - Methylation summary statistics
+# levels - global methylation summary statistics
 
 ## Synopsis
 
-```shell
+```console
 $ dnmtools levels [OPTIONS] <input.meth>
 ```
 
 ## Description
 
-The `levels` program computes statistics for the output of
-[counts](../counts).  Sample output is below. It
-computes the total fraction of cytosines covered, the fraction of
-cytosines that have mutated away from the reference, and coverage
-statistics for both CpGs and all cytosines.
+The `levels` program computes global summary statistics for the output
+of [counts](../counts). Example output is below. It computes the total
+fraction of cytosines covered, the fraction of cytosines that have
+mutated away from the reference, and many other coverage statistics
+for cytosines and broken down by sequence context.
 
 For CpG sites, coverage number reflects taking advantage of their
 symmetric nature and merging the coverage on both strands. For CpG
-coverage minus mutations, we remove the reads from CpG sites deemed
-to be mutated away from the reference. It also computes average
+coverage minus mutations, we remove the reads from CpG sites deemed to
+be mutated away from the reference. It also computes average
 methylation in three different ways, described in Schultz et al.
 (2012). This program should provide flexibility to compare methylation
 data with publications that calculate averages different ways and
@@ -27,7 +27,7 @@ cytosines and CpGs in the sample, but similar statistics are provided
 for symmetric CpGs and cytosines within the CHH, CCG, and CXG
 contexts.
 
-```txt
+```yaml
 cytosines:
   total_sites: 1200559022
   sites_covered: 797100353
@@ -63,25 +63,24 @@ cpg:
   mean_meth_weighted: 0.756208
 ```
 
-To run the levels program, execute
-
-```shell
+You can run the `levels` command as follows:
+```console
 $ dnmtools levels -o output.levels input.meth
 ```
 
 ## Options
 
-```shell
- -o, -output
+```console
+-o, -output
 ```
-output file in YAML format. (default: stdout)
+Output file in YAML format (default: stdout).
 
-```shell
- -a, -alpha
+```console
+-a, -alpha
 ```
-alpha for confidence interval  (default: 0.95)
+Alpha for confidence interval (default: 0.95).
 
-```shell
- -v, -verbose
+```console
+-v, -verbose
 ```
-print more run info to STDERR while the program is running.
+Report more information while the program is running.

@@ -112,7 +112,7 @@ Andrew D. Smith and Guilherme de Sena Brandine
 Authors of DNMTools: Andrew D. Smith and Guilherme de Sena Brandine
 
 Essential contributors: Ben Decato, Meng Zhou, Liz Ji, Terence Li,
-Jenny Qu and Fang Fang
+Jenny Qu, Qiang Song and Fang Fang
 
 This is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free

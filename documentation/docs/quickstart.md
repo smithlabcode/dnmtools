@@ -8,7 +8,7 @@ conda then dnmtools is available among the bioconda recipes. You can
 install it as follows if you have a conda environment activated:
 
 ```console
-$ conda install dnmtools
+$ conda install -c bioconda dnmtools
 ```
 
 The instructions for installing conda are

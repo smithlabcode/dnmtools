@@ -1,3 +1,8 @@
+[![GitHub Downloads](https://img.shields.io/github/downloads/smithlabcode/dnmtools/v1.0.0/total?style=social)](https://github.com/smithlabcode/dnmtools/releases/v1.0.0)
+[![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/installer/conda.svg)](https://anaconda.org/bioconda/dnmtools)
+[![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/platforms.svg)](https://anaconda.org/bioconda/dnmtools)
+[![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/downloads.svg)](https://anaconda.org/bioconda/dnmtools)
+
 Dnmtools is a set of tools for analyzing DNA methylation data from
 high-throughput sequencing experiments, especially whole genome
 bisulfite sequencing (WGBS), but also reduced representation bisulfite

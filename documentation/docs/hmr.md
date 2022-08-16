@@ -158,7 +158,7 @@ part of distinct HMRs, regardless of their methylation status.
  -i, -itr
 ```
 The maximum number of iterations for learning parameters (default:
-100).
+10).
 
 ```txt
  -v, -verbose

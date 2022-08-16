@@ -1,9 +1,18 @@
 Installation
 ============
 
-## Installation via Conda
+## Installation via conda
 
-(Coming soon!)
+Right now this is probably the easiest way. If you know how to use
+conda then dnmtools is available among the bioconda recipes. You can
+install it as follows if you have a conda environment activated:
+
+```console
+$ conda install dnmtools
+```
+
+The instructions for installing conda are
+[here](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html).
 
 ## Building dnmtools from source release
 
@@ -16,15 +25,14 @@ Installation
   problems with building this software, that might be the first thing
   to check.
 * The GNU Scientific Library: this has always been required. It can be
-  installed using `apt` on Linux (Ubuntu, Debian), using `brew` on
-  macOS, or from source available
-  [here](http://www.gnu.org/software/gsl).
-* The Zlib compression library. Most likely you already have this
-  installed on your system. If not, it can be installed using `apt` on
+  installed using apt on Linux (Ubuntu, Debian), using brew on macOS,
+  or from source available [here](http://www.gnu.org/software/gsl).
+* The Zlib compression library: Most likely you already have this
+  installed on your system. If not, it can be installed using apt on
   Linux (Ubuntu, Debian) through the package `zlib1g-dev`. On macOS,
-  Zlib can be installed with `brew`.
-* The HTSlib library, which can be installed through `brew` on macOS,
-  through `apt` on Linux (Ubuntu, Debian), or from source downloadable
+  Zlib can be installed with brew.
+* The HTSlib library, which can be installed through brew on macOS,
+  through apt on Linux (Ubuntu, Debian), or from source downloadable
   [here](https://github.com/samtools/htslib).
 
 ### Configuration

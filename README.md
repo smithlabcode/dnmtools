@@ -3,7 +3,7 @@
 [![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/platforms.svg)](https://anaconda.org/bioconda/dnmtools)
 [![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/downloads.svg)](https://anaconda.org/bioconda/dnmtools)
 
-Dnmtools is a set of tools for analyzing DNA methylation data from
+DNMTools is a set of tools for analyzing DNA methylation data from
 high-throughput sequencing experiments, especially whole genome
 bisulfite sequencing (WGBS), but also reduced representation bisulfite
 sequencing (RRBS). These tools focus on overcoming the computing
@@ -12,7 +12,7 @@ which is usually the early parts of data analysis.
 
 ## Installing release 1.0.0
 
-The documentation for dnmtools can be found
+The documentation for DNMTools can be found
 [here](https://dnmtools.readthedocs.io). But if you want to install
 from source and you are reading this on GitHub or in a source tree you
 unpacked, then keep reading. And if you are in a terminal, sorry for
@@ -54,7 +54,7 @@ $ mkdir build && cd build
 ```console
 $ ../configure
 ```
-If you do not want to install dnmtools system-wide, or if you do
+If you do not want to install DNMTools system-wide, or if you do
 not have admin privileges, specify a prefix directory:
 ```console
 $ ../configure --prefix=/some/reasonable/place
@@ -93,7 +93,7 @@ $ dnmtools
 ### Using a clone of the repo
 
 Not recommended, but if you want to do it this way, we assume you know
-what you are doing. We strongly recommend using dnmtools through the
+what you are doing. We strongly recommend using DNMTools through the
 latest stable release under the releases section on GitHub. Developers
 who wish to work on the latest commits, which are unstable, can
 compile the source using a `Makefile` left in the root of the source

@@ -40,8 +40,8 @@ experiments, especially the bisulfite conversion reaction, and how
 this affects what we observe in the sequenced reads.
 
 Users are assumed to be somewhat familar with a command line.
-Installing dnmtools might require working with some environment
-variables. The data that dnmtools is designed for is really big, so
+Installing DNMTools might require working with some environment
+variables. The data that DNMTools is designed for is really big, so
 understanding your computer is important. We also assume users know
 what standard output and standard error are.
 

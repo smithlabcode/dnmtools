@@ -7,7 +7,7 @@ sequencing experiments, especially whole genome bisulfite sequencing
 imposed by the scale of genome-wide DNA methylation data, which is
 usually the early parts of data analysis.
 
-Dnmtools supersedes our MethPipe software, but includes all the same
+DNMTools supersedes our MethPipe software, but includes all the same
 functionality (or soon will). The design of dnmtools differs, but most
 commands within dnmtools are in one-to-one correspondence with some
 tool in MethPipe.

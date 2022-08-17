@@ -1,7 +1,7 @@
 ## radmeth - Differential CpG methylation
 
 ## Synopsis
-```shell
+```console
 $ dnmtools radmeth -factor case design_matrix.txt proportion_table.txt >output.bed
 ```
 
@@ -23,27 +23,26 @@ in the dataset.
 
 The first step in the differential methylation analysis is to assemble
 a proportion table containing read proportions for all target
-methylomes. Dnmtools includes a program
-[merge](../merge) to generate a proportion
-table from the given collection of methylomes. Suppose that we want to
-compare methylomes named `control-a.meth`, `control-b.meth`, `control-
-c.meth` to the methylomes `case-a.meth, `case-b.meth, `case-c.meth.
-The proportion table can be created with the following command:
+methylomes. Dnmtools includes a program [merge](../merge) to generate
+a proportion table from the given collection of methylomes. Suppose
+that we want to compare methylomes named `control-a.meth`,
+`control-b.meth`, `control- c.meth` to the methylomes `case-a.meth,
+`case-b.meth, `case-c.meth.  The proportion table can be created with
+the following command:
 
-```shell
+```console
 $ dnmtools merge -t control-a.meth control-b.meth control-c.meth \
-
-case-a.meth case-b.meth case-c.meth > proportion-table.txt
+     case-a.meth case-b.meth case-c.meth > proportion-table.txt
 ```
 
 This is what `proportion-table.txt` looks like:
 
 ```txt
-	control_a	control_b	control_c	case_a	case_b	case_c
-chr1:108:+:CpG	9	6	10	8	1	1	2	2	2	1	14	1
-chr1:114:+:CpG	17	7	10	0	14	3	5	1	9	1	7	1
-chr1:160:+:CpG	12	8	10	5	17	4	15	14	13	6	4	4
-chr1:309:+:CpG	1	1	1	0	17	12	12	8	2	1	19	8
+       control_a       control_b       control_c       case_a  case_b  case_c
+chr1:108:+:CpG 9       6       10      8       1       1       2       2       2       1       14      1
+chr1:114:+:CpG 17      7       10      0       14      3       5       1       9       1       7       1
+chr1:160:+:CpG 12      8       10      5       17      4       15      14      13      6       4       4
+chr1:309:+:CpG 1       1       1       0       17      12      12      8       2       1       19      8
 ```
 
 As indicated in the header, this proportion table contains information
@@ -63,13 +62,13 @@ structure of the experiment. For our running example, the design
 matrix looks like this:
 
 ```txt
-base	case
-control_a	1	0
-control_b	1	0
-control_c	1	0
-case_a	1	1
-case_b	1	1
-case_c	1	1
+base   case
+control_a      1       0
+control_b      1       0
+control_c      1       0
+case_a 1       1
+case_b 1       1
+case_c 1       1
 ```
 
 The design matrix shows that samples in this dataset are associated
@@ -142,5 +141,3 @@ print more run info to STDERR as the program runs.
  -f, -factor
 ```
 a factor to test, one of the columns in file `design-matrix.txt` [required]
-
-

@@ -1,4 +1,4 @@
-site_name: dnmtools
+site_name: DNMTools
 strict: true
 
 theme: readthedocs

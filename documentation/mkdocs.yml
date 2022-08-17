@@ -5,7 +5,7 @@ theme: readthedocs
 nav:
    - Home: 'index.md'
    - 'Installation': 'quickstart.md'
-   - 'dnmtools on GitHub' : https://github.com/smithlabcode/dnmtools
+   - 'DNMTools on GitHub' : https://github.com/smithlabcode/dnmtools
    - Methylome construction:
      - 'abismal': 'abismal.md'
      - 'format': 'format.md'

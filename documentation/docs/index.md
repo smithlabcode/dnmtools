@@ -8,18 +8,18 @@ imposed by the scale of genome-wide DNA methylation data, which is
 usually the early parts of data analysis.
 
 DNMTools supersedes our MethPipe software, but includes all the same
-functionality (or soon will). The design of dnmtools differs, but most
-commands within dnmtools are in one-to-one correspondence with some
+functionality (or soon will). The design of DNMTools differs, but most
+commands within DNMTools are in one-to-one correspondence with some
 tool in MethPipe.
 
-At present, as we make the first release of dnmtools, the
+At present, as we make the first release of DNMTools, the
 documentation is structured very differently from that of MethPipe. We
 are rebuilding that documentation here, but it might take a few
 iterations to stabilize. Most of the old documentation still applies
 for tasks that do not directly involve our tools (e.g., how to
 manipulate the files with basic terminal commands). If you are already
 a user of our tools, please check the documentation here in case
-individual commands within dnmtools have changes to command line
+individual commands within DNMTools have changes to command line
 arguments or file formats.
 
 # Assumptions
@@ -48,11 +48,11 @@ what standard output and standard error are.
 # Citation information
 
 If you find our tools helpful, please cite us. Many of the commands
-within dnmtools were introduced in their own publications. However,
+within DNMTools were introduced in their own publications. However,
 several improvements and additions have been made over the years.
 Below are the relevant citations.
 
-**dnmtools**
+**DNMTools**
 
 Qiang Song, Benjamin Decato, Elizabeth E Hong, Meng Zhou, Fang Fang,
 Jianghan Qu, Tyler Garvin, Michael Kessler, Jun Zhou, and Andrew D

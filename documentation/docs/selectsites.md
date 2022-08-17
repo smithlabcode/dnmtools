@@ -5,6 +5,8 @@
  $ dnmtools selectsites [OPTIONS] <regions.bed> <input.meth>
 ```
 
+## Description
+
 In many cases, we may be interested in analyzing only a subset of
 cytosines or CpGs in a sample. Some instances of these cases including
 calculating average methylation levels in (1) annotated regions, such

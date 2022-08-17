@@ -5,6 +5,8 @@
 $ dnmtools fastlift -i <input.index> -f <input.from> -t <output.to>
 ```
 
+## Description
+
 Mapping methylomes between species builds on the
 [liftOver tool](http://genome.ucsc.edu/cgi-bin/hgLiftOver) provided by
 [UCSC Genome Browser](https://genome.ucsc.edu). However it is time

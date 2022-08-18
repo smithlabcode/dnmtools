@@ -335,6 +335,7 @@ main_merge_methcounts(int argc, const char **argv) {
     bool VERBOSE;
     bool write_tabular_format = false;
     bool write_fractional = false;
+    bool radmeth_format = false;
     bool ignore_chroms_order = false;
 
     string header_info;
@@ -352,6 +353,9 @@ main_merge_methcounts(int argc, const char **argv) {
                       false, header_info);
     opt_parse.add_opt("tabular", 't', "output as table",
                       false, write_tabular_format);
+    opt_parse.add_opt("radmeth", '\0', "Format header for radmeth "
+                      "(assumes -tabular and not -fractional)",
+                      false, radmeth_format);
     opt_parse.add_opt("remove", '\0', "Suffix to remove from filenames when "
                       "making column names for tabular format. If not "
                       "specified, suffix including from final dot is removed.",
@@ -439,7 +443,7 @@ main_merge_methcounts(int argc, const char **argv) {
         i = suffix_to_remove.empty() ?
           remove_extension(i) : remove_suffix(suffix_to_remove, i);
 
-      if (!write_fractional) {
+      if (!write_fractional && !radmeth_format) {
         vector<string> tmp;
         for (auto &&i : colnames) {
           tmp.push_back(i + "_" + column_name_suffix[0]);

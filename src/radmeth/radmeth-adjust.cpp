@@ -47,7 +47,6 @@ using std::ifstream;
 using std::ofstream;
 using std::runtime_error;
 using std::min;
-using std::isnan;
 
 /***************** COMBINE P-VALUES *****************/
 

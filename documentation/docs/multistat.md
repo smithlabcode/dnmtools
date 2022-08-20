@@ -7,11 +7,13 @@ $ dnmtools multistat [OPTIONS] <intervals.bed> <input-tabular.tsv>
 
 ## Description
 
-The `multistat` program is similar to [roi](../roi), but instead of creating a
-BED file with averge methylation levels from a single counts file, it takes as
-an input the output of [merge](../merge) with tabular format (i.e. using the
-`-t` flag to make a data frame). In other words, `multistat` takes a data frame
-as input and produces a data frame as output.
+The `multistat` program is similar to [roi](../roi), but instead of
+creating a BED file with averge methylation levels from a single
+counts file, it takes as an input the output of [merge](../merge) with
+tabular format (i.e. using the `-tabular` flag to make a data frame)
+and using the `-radmeth` flag to remove suffixes that are not used in
+this program.  In other words, `multistat` takes a data frame as input
+and produces a data frame as output.
 
 The input of `multistat` starts with a line with `2n` column names, with each
 column name appearing sequentially twice. The file is then followed by a set of
@@ -37,9 +39,10 @@ chr1:10570:+:CpG        2       0       3       0       6       0       4       
 chr1:10576:+:CpG        2       0       3       0       6       0       4       0
 ```
 
-Note that the output of `merge` with `-t` flag may contain suffixes `_R` and
-`_M` on the column names (e.g. `D083a_R` and `D083a_M` corresponding to the
-"Reads" and "Methylated" columns). You can remove these to make the input proper
+Note that, if you do not add the `-radmeth` flag when running `merge`,
+the tabular output may contain suffixes `_R` and `_M` on the column
+names (e.g. `D083a_R` and `D083a_M` corresponding to the "Reads" and
+"Methylated" columns). You can remove these to make the input proper
 by running
 
 ```shell

@@ -31,7 +31,8 @@ that we want to compare methylomes named `control-a.meth`,
 the following command:
 
 ```console
-$ dnmtools merge -t control-a.meth control-b.meth control-c.meth \
+$ dnmtools merge -t -radmeth \
+     control-a.meth control-b.meth control-c.meth \
      case-a.meth case-b.meth case-c.meth > proportion-table.txt
 ```
 

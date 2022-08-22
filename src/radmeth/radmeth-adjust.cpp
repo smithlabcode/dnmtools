@@ -140,6 +140,11 @@ is_number(const string& str) {
   return true;
 }
 
+template<class T> inline bool
+isnan(const T x) {
+  return !(x == x);
+}
+
 static double
 fix_pval_nan(const double x) {
   return isnan(x) ? 1.0 : x;

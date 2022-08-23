@@ -1,4 +1,4 @@
-methpipe_dir: '/home/sena/code/dnmtools/bin'
+dnmtools_dir: '/home/username/bin'
 trim_galore_dir: '/usr/bin'
 samtools_dir: '/usr/bin'
 scratch_dir: '/tmp'

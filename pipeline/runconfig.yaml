@@ -6,7 +6,6 @@ outfiles:
   - 'test.pmd'
   - 'test.amr'
 
-genome_fasta_file: '/home/sena/code/methpipe/abismal/genome.fa'
+genome_fasta_file: '/home/username/data/genome.fa'
 paired: True
 cpg_only: True
-

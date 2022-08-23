@@ -104,7 +104,7 @@ remove any control reads not naturally occurring in the sample (lambda
 virus, mitochondrial DNA from another organism, etc.) before
 continuing your analysis. The output from two different runs of
 `bsrate` can be merged using the command
-[merge-bsrate](utils/merge-bsrate).
+[merge-bsrate](../merge-bsrate).
 
 ## Options
 

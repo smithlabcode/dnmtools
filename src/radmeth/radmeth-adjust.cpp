@@ -47,7 +47,6 @@ using std::ifstream;
 using std::ofstream;
 using std::runtime_error;
 using std::min;
-using std::isnan;
 
 /***************** COMBINE P-VALUES *****************/
 
@@ -139,6 +138,11 @@ is_number(const string& str) {
   for (const char &c : str)
     if (c != '.' && !std::isdigit(c)) return false;
   return true;
+}
+
+template<class T> inline bool
+isnan(const T x) {
+  return !(x == x);
 }
 
 static double

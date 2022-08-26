@@ -14,15 +14,12 @@ dnl but WITHOUT ANY WARRANTY; without even the implied warranty of
 dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 dnl General Public License for more details.
 
-AC_CONFIG_SUBDIRS([src/smithlab_cpp])
-AC_CONFIG_SUBDIRS([src/abismal])
-AC_INIT([dnmtools], [1.0.0], [andrewds@usc.edu],
+AC_INIT([dnmtools], [1.2.0], [andrewds@usc.edu],
         [dnmtools], [https://github.com/smithlabcode/dnmtools])
 dnl the config.h is not currently #included in the source, and only
 dnl used to keep command lines short.
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([subdir-objects foreign])
-
 
 AC_CONFIG_MACRO_DIR([m4])
 AC_LANG(C++)
@@ -31,9 +28,9 @@ AX_CXX_COMPILE_STDCXX_11([noext], [mandatory])
 AC_PROG_RANLIB
 AC_OPENMP([C++]) dnl make sure we have openmp for multi-core in abismal
 
-dnl recursively configure smithlab_cpp
+dnl recursively configure abismal and smithlab_cpp
+AC_CONFIG_SUBDIRS([src/abismal])
 AX_SUBDIRS_CONFIGURE([src/smithlab_cpp], [--enable-hts])
-AX_SUBDIRS_CONFIGURE([src/abismal], [--enable-library])
 
 dnl check for HTSLib if requested
 hts_fail_msg="
@@ -43,15 +40,15 @@ and headers can be found.
 "
 
 gsl_fail_msg="
-Failed to locate the GNU Scientific Library (GSL) on your system. Please use
-the LDFLAGS and CPPFLAGS variables to specify the directories where the GSL
-library and headers can be found.
+Failed to locate the GNU Scientific Library (GSL) on your
+system. Please use the LDFLAGS and CPPFLAGS variables to specify the
+directories where the GSL library and headers can be found.
 "
 
 zlib_fail_msg="
-Failed to locate the ZLib on your system. Please use the LDFLAGS and CPPFLAGS
-variables to specify the directories where the ZLib library and headers can be
-found.
+Failed to locate the ZLib on your system. Please use the LDFLAGS and
+CPPFLAGS variables to specify the directories where the ZLib library
+and headers can be found.
 "
 
 dnl check for required libraries

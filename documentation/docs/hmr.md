@@ -104,42 +104,6 @@ with the same input but a different optional argument to find PMRs:
 $ dnmtools hmr -partial -o output.pmr input.meth
 ```
 
-## Converting HMR files to UCSC genome browser tracks
-
-You might want to create bigBed browser tracks for HMRs.  The same
-procedure also works for [AMRs](../amrfinder), [PMDs](../pmd), or
-[DMRs](../dmr). To do so, follow these steps:
-
-* (1) Download the bedToBigBed program from the UCSC Genome Browser
-  [directory of binary utilities](http://hgdownload.cse.ucsc.edu/admin/exe/).
-* (2) Use the fetchChromSizes script from the same directory to create
-  the `.chrom.sizes` file for the reference assembly you are working
-  with (e.g. hg19). Note that this is the file that is referred to as
-  `hg19.chrom.sizes` in step 3.
-* (3) Modify and use the following commands: PMDs, HMRs and AMRs may
-  have a score greater than 1000 in the 5th column, in which case
-  `bedToBigBed` will output an error. Also, HMR file `sample.bed` may
-  have non-integer score in their 5th column.  The following script
-  rounds the 5th column and prints 1000 if the score is bigger than
-  1000:
-```console
-$ awk -v OFS="\t" '{if ($5>1000) print $1,$2,$3,$4,"1000"; \
-                    else print $1,$2,$3,$4,int($5)}' sample.bed > sample.tobigbed
-```
-In the above command, since the HMRs are not stranded, we do not print
-the 6th column. Keeping the 6th column would make all the HMRs appear
-as though they have a direction -- but it would all show the +
-strand. This would be visually misleading (and somewhat annoying). To
-maintain the 6th column, just slightly modify the above awk command:
-```console
-$ awk -v OFS="\t" '{if ($5>1000) print $1,$2,$3,$4,"1000",$6; \
-                    else print $1,$2,$3,$4,int($5),$6 }' sample.hmr > sample.hmr.tobigbed
-```
- * (4) Generate the .bb track using the command below:
-```console
-$ bedToBigBed sample.tobigbed hg19.chrom.sizes output.bb
-```
-
 ## Options
 
 ```txt

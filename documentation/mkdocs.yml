@@ -44,3 +44,5 @@ nav:
      - 'merge-bsrate': 'merge-bsrate.md'
      - 'merge': 'merge.md'
      - 'selectsites': 'selectsites.md'
+   - Visualization:
+     - 'Visualization' : 'visualization.md'

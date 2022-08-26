@@ -52,17 +52,16 @@ $ awk -F "[:\t]" '$5 >= 10 && $6 >= 5' output.bed >output-filtered.bed
 To compare two small groups of methylomes, one should combine the
 methylomes in each group and then compute DMRs for the resulting pair
 of methylomes as described above. The methylomes can be combined using
-the program [merge](../../utils/merge).
+the program [merge](../merge).
 
 ## Options
 
 ```txt
  -v, -verbose
 ```
-print more run info to STDERR while the program is running.
+Print more information while the command is running.
 
 ```txt
  -c -cutoff
 ```
-Significance cutoff (default: 0.05)
-
+Cutoff on p-values to define significant differences (default: 0.05).

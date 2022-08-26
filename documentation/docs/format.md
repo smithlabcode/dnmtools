@@ -54,7 +54,7 @@ same chromosome but map more than "max-frag" bases apart.
 ```txt
 -B, -buf-size
 ```
-Maximum buffer size (default: 1000). This is the maximum
+Maximum buffer size (default: 10000). This is the maximum
 number of reads retained before mates are no longer seeked for
 reads. If more than "buf-size" reads are not a proper mate of a given
 read, the read is printed as-is and reported as single-end. This value

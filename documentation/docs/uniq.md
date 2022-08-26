@@ -37,45 +37,42 @@ $ dnmtools uniq -S duplicate-removal-stats.txt input-sorted.sam out-sorted.sam
 ```txt
  -S, -stats
 ```
-
-Save statistics output file on duplication rates to a specific text
-file.
+Save statistics on duplication rates to this file. The statistics are not
+reported unless a file is specified here.
 
 ```txt
  -hist
 ```
-
-histogram output file for library complexity analysis.
+Output a histogram of duplication frequencies into the specified file
+for library complexity analysis.
 
 ```txt
  -s, -seq
 ```
-
 Use the sequences of the reads to distinguish duplicates. This is not
 often recommended.
 
 ```txt
  -A, -all-cytosines
 ```
-
-Use all cytosines when comparing reads based on sequence (default: CpG).
+Use all cytosines when comparing reads based on sequence (default:
+only use CpG sites). Only applies if `-s` (above) is used.
 
 ```txt
  -D, -disable
 ```
-
-Disable testing if reads are sorted by chromosome and position. This
-can be faster and is fine if you know your reads are sorted.
+Disable testing if the reads are sorted by chromosome and
+position. This can be faster and is fine if you know your reads are
+sorted.
 
 ```txt
  -s, -seed
 ```
-
-Random seed to choose which duplicated read to keep (default:
-408). Used for testing and reproducible results.
+Random number seed. Which read to keep, among duplicates, is chosen
+randomly (default: 408). This option is typically only used for
+testing.
 
 ```txt
  -v, -verbose
 ```
-
 Report more information while the program is running.

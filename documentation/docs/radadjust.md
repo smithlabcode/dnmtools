@@ -1,7 +1,7 @@
 # radadjust - Correct p-values of individual CpGs
 
 ## Synopsis
-```shell
+```console
 $ dnmtools radadjust [OPTIONS] <regression-output.bed>
 ```
 
@@ -11,7 +11,7 @@ This program adjusts the p-value of individual CpGs in the output of
 [radmeth](../radmeth). A typical application
 that takes the regression output as input and combines the p-values of
 200 neighboring CpGs is done as follows.
-```shell
+```console
 $ dnmtools radadjust -bins 1:200:1 input.bed >output-adjusted.bed
 ```
 
@@ -45,7 +45,7 @@ After completing the previous steps, individual differentially methy-
 lated sites can be obtained with 'awk'. To get all CpGs with
 FDR-corrected p-value below 0.01, run
 
-```shell
+```console
 $ awk '$7 <= 0.01' output-adjusted.bed >output-significant.bed
 ```
 
@@ -54,15 +54,14 @@ $ awk '$7 <= 0.01' output-adjusted.bed >output-significant.bed
 ```txt
  -o, -out
 ```
-output file (default: STDOUT)
+Name of the output file (default: stdout).
 
 ```txt
  -b, -bins
 ```
-correlation bin specs
+Correlation bin specification string (default is 1:200:1).
 
 ```txt
  -v, -verbose
 ```
-print more run info to STDERR while the program is running.
-
+Print more information while the command is running.

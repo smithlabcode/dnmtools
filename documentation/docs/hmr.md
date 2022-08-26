@@ -109,14 +109,15 @@ $ dnmtools hmr -partial -o output.pmr input.meth
 ```txt
  -o, -out
 ```
-Name of the output file (default: stdout). This will be in BED format.
+Name of the output file (default: stdout). This output will be in BED
+format.
 
 ```txt
  -d, -desert
 ```
-The maximum distance between covered CpGs in HMR (default:
-1000). Beyond this distance, adjacent CpG sites will be considered
-part of distinct HMRs, regardless of their methylation status.
+The maximum distance between covered CpGs in HMR (default: 1000
+bp). Beyond this distance, adjacent CpG sites will be considered part
+of distinct HMRs, regardless of their methylation status.
 
 ```txt
  -i, -itr
@@ -151,8 +152,9 @@ reported if a file is specified here.
 ```txt
  -P, -params-in
 ```
-File containing existing parameters to use in the model (override
-training step).
+File containing existing parameters to use in the model (skip the
+training step). This should be a file produced previously by the
+hmr command using the `-p` parameter.
 
 ```txt
  -p, -params-out
@@ -162,4 +164,6 @@ File in which to write parameters learned during the current run.
 ```txt
  -s, -seed
 ```
-A random number seem to ensure reproducibility (default: 408).
+A random number seed. Randomization is used in a shuffling step prior
+to filering candidate HMRs. This parameter is typically only used for
+testing (default: 408).

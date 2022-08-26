@@ -21,7 +21,7 @@ differentially methylated sites with p-value below 0.01 (set by the -p
 parameter). The output format is
 
 ```txt
- chrom	start	end	dmr	num-sites	meth-diff
+ chrom  start   end dmr num-sites   meth-diff
 ```
 
 where `num-sites` and `meth-diff` are the number of significantly
@@ -41,14 +41,9 @@ chr1    274339  275254  dmr     18      -0.520114
 ```txt
  -o, -output
 ```
-output file (default: STDOUT)
+The name of the output file (default: stdout).
+
 ```txt
  -p, -cutoff
 ```
-P-value cutoff (default: 0.01)
-
-
-
-
-
-
+P-value cutoff that defines statistical significance (default: 0.01)

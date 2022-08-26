@@ -73,48 +73,61 @@ to select AMRs.
 ```txt
  -o, -output
 ```
-output file name (default: STDOUT)
+Name of output file (default: stdout). The output will be in bed
+format.
+
 ```txt
  -c, -chrom
 ```
-FASTA file or directory of chromosomes containing FASTA files [required]
+FASTA file or directory of chromosomes containing FASTA files. This
+parameter is required.
+
 ```txt
  -i, -itr
 ```
-max iterations
+The maximum number of iterations when training (default: 10).
+
 ```txt
  -w, -window
 ```
-size of sliding window (default: 10)
+Size of sliding window (default: 10 CpG sites).
+
 ```txt
  -m, -min-cov
 ```
-min coverage per CpG to test windows (default: 4)
+Minimum coverage per CpG to test in each window (default: 4).
+
 ```txt
  -g, -gap
 ```
-min allowed gap, in bp, between AMRs (default: 1000)
+Minimum allowed gap, in bp, between AMRs (default: 1000).
+
 ```txt
  -C, -crit
 ```
-critical p-value cutoff (default: 0.01)
+Critical p-value cutoff (default: 0.01).
+
 ```txt
  -f, -nofdr
 ```
-omits FDR multiple testing correction
+Omits the FDR multiple testing correction.
+
 ```txt
  -h, -pvals
 ```
- adjusts p-values using Hochberg step-up
+Adjusts p-values using Hochberg step-up.
+
 ```txt
  -b, -bic
 ```
-use Bayesian Information Criterion (BIC) to compare models
+Use Bayesian Information Criterion (BIC) to compare models.
+
 ```txt
  -v, -verbose
 ```
-print more run info to STDERR while the program is running.
+Print more information while the command is running.
+
 ```txt
  -P, -progress
 ```
-print progress info
+Print progress info while the command is running.

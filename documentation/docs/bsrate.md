@@ -75,7 +75,7 @@ been made at an earlier stage in the pipeline. The first 3 lines in
 the output indicate the overall conversion rate, the conversion rate
 for positive strand mappers, and the conversion rate for negative
 strand mappers. The total number of nucleotides used (e.g. all C+T
-mapping over genomic non-CpG C’s for method (3)) is given for positive
+mapping over genomic non-CpG Cs for method (3)) is given for positive
 and negative strand conversion rate computation, and if everything has
 worked up to this point these two numbers should be very similar. The
 4th line gives column labels for a table showing conversion rate at
@@ -120,7 +120,7 @@ File or directory of files containing the chromosome sequences (FASTA
 format; `.fa` suffix assumed). If the input is a directory, it should
 contain several FASTA files, each one of which contains a chromosome
 sequence. These should be the exact same as used for mapping the
-reads. [required]
+reads. This is required.
 
 ```txt
 -N, -all
@@ -133,7 +133,8 @@ unmethylated, like with a spike-in.
 -seq
 ```
 Use only reads that map to this chromosome (e.g. chrM). This simply
-avoids having to extract reads separately from the mapped reads file.
+avoids having to extract reads separately from the mapped reads file
+before using bsrate.
 
 ```txt
 -v, -verbose

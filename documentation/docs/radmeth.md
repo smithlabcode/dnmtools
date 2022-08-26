@@ -124,21 +124,22 @@ p-values of neighboring CpGs using [radadjust](../radadjust).
 ```txt
  -o, -out
 ```
-output file (default: STDOUT)
+The name of the output file (default: stdout).
 
 ```txt
  -n -na-info
 ```
-if a p-value is not calculated, print NAs in more
-detail: low count (`NA_LOW_COV`) extreme values (`NA_EXTREME`)
-or numerical errors in likelihood ratios (`NA`).
+If a p-value is not calculated, print NAs in more detail: low coverage
+(`NA_LOW_COV`), extreme values (`NA_EXTREME`) or numerical errors in
+likelihood ratios (`NA`).
 
 ```txt
  -v, -verbose
 ```
-print more run info to STDERR as the program runs.
+Print more information while the command is running.
 
 ```txt
  -f, -factor
 ```
-a factor to test, one of the columns in file `design-matrix.txt` [required]
+The name of the factor on which to test differences. This must be the
+name of one of the columns in file design matrix. This is required.

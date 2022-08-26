@@ -101,21 +101,23 @@ The name of the output file (default: stdout).
 -c, -chrom
 ```
 File or directory of files containing the chromosome sequences (FASTA
-format; `.fa` suffix assumed). If the input is a directory, it should
-contain several FASTA files, each one of which contains a chromosome
-sequence. These should be the exact same as used for mapping the
-reads. [required]
+format; the `.fa` suffix assumed). If the input is a directory, it
+should contain several FASTA files, each one of which contains a
+chromosome sequence. These should be the exact same as used for
+mapping the reads. This parameter is required.
 
 ```txt
 -s, -suffix
 ```
-Suffix of FASTA files (assumes `-c` specifies directory).
+Suffix of FASTA format files (only relevant if `-c` specifies a
+directory of files).
 
 ```txt
 -n, -cpg-only
 ```
 Print only CpG context cytosines. This significantly reduces the
-output size in most genomes.
+output size in most genomes. Note that using this option does not
+merge data as symmetric CpGs.
 
 ```txt
 -v, -verbose

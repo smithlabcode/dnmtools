@@ -107,6 +107,3 @@ mC pseudo methcount output file (default: null)
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.
-
-
-

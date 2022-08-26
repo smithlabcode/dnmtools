@@ -90,47 +90,6 @@ $ awk '$4 == CHG' human_esc.meth > human_esc_chg.meth
 Our convention is to name `counts` output with all cytosines like
 `*.meth`, with CHG like `*.chg.meth` and with CHH like `*.chh.meth`.
 
-### Creating UCSC Genome Browser tracks
-
-To view the methylation level or read coverage at individual CpG sites
-in a genome browser, one needs to create a `bigWig` format file from a
-counts file.
-
-To create methylation level tracks or read coverage tracks, one can
-follow these steps:
-
-* (1) Download the wigToBigWig program from UCSC genome browser’s
-  [directory](http://hgdownload.cse.ucsc.edu/admin/exe/) of binary
-  utilities.
-* (2) Use the `fetchChromSizes` script from the same directory to
-  create the \*.chrom.sizes file for the UCSC database you are
-  working with (e.g. hg38). Note that this is the file that is
-  referred to as `hg19.chrom.sizes` in step 3.
-* (3) To create a `bigWig` track for methylation level at single CpG sites,
-  convert the meth file to bed format using:
-```console
-$ awk -v OFS="\t" '{print $1, $2, $2+1, $4":"$6, $5, $3}' sample.meth > sample.meth.bed
-```
-* (4) To create a `bigWig` track from the bed format methcounts
-  output, modify and use the following command:
-```console
- $ cut -f 1-3,5 human_esc.meth.bed | wigToBigWig /dev/stdin hg19.chrom.sizes human_esc.meth.bw
-```
-* (5) To create a `bigWig` track for coverage at single CpG sites, modify
-  and use the following command:
-```console
-$ tr ':' '[Ctrl+v Tab]' < human_esc.meth.bed | \
-    cut -f 1-3,5 | \
-    wigToBigWig /dev/stdin hg19.chrom.sizes human_esc.reads.bw
-```
-
-Note that if the `wigToBigWig` or `fetchChromSizes` programs are not
-executable when downloaded, do the following:
-```console
-$ chmod +x wigToBigWig
-$ chmod +x fetchChromSizes
-```
-
 ## Options
 
 ```txt

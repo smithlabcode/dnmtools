@@ -329,7 +329,7 @@ main_format_reads(int argc, const char **argv) {
                       false, input_format);
     opt_parse.add_opt("output", 'o', "output file name",
                       false, outfile);
-    opt_parse.add_opt("suff", 's', "read name suffix length (default: 1)",
+    opt_parse.add_opt("suff", 's', "read name suffix length",
                       false, suff_len);
     opt_parse.add_opt("max-frag", 'L', "maximum allowed insert size",
                       false, max_frag_len);

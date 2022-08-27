@@ -25,7 +25,7 @@ using std::cout;
 using std::endl;
 
 #define PROGRAM_NAME "dnmtools"
-#define PROGRAM_VERSION " 1.0.0"
+#define PROGRAM_VERSION " 1.1.0"
 
 int abismal(int argc, const char **argv);
 int abismalidx(int argc, const char **argv);

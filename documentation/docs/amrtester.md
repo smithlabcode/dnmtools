@@ -23,7 +23,12 @@ the score is the p-value, which can easily be filtered later.
 ```txt
  -o, -output
 ```
-output file name (default: STDOUT)
+The name of the output file. If no file name is provided, the output
+will be written to standard output. Due to the size of this output, a
+file should be specified unless the output will be piped to another
+command or program. The output file contains genomic intervals in BED
+format, with intervals corresponding to those provided as input.
+
 ```txt
  -c, -chrom
 ```

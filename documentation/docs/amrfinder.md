@@ -73,7 +73,10 @@ to select AMRs.
 ```txt
  -o, -output
 ```
-Name of output file (default: stdout). The output will be in bed
+The name of the output file. If no file name is provided, the output
+will be written to standard output. Due to the size of this output, a
+file should be specified unless the output will be piped to another
+command or program. The output file contains genomic intervals in BED
 format.
 
 ```txt

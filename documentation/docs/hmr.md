@@ -109,8 +109,11 @@ $ dnmtools hmr -partial -o output.pmr input.meth
 ```txt
  -o, -out
 ```
-Name of the output file (default: stdout). This output will be in BED
-format.
+The name of the output file. If no file name is provided, the output
+will be written to standard output. Due to the size of this output, a
+file name should be specified unless the output will be piped to
+another command or program. The output file contains genomic intervals
+in BED format.
 
 ```txt
  -d, -desert

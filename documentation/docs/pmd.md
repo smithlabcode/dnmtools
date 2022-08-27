@@ -1,7 +1,7 @@
-# pmd - Partially methylated domains
+# pmd - partially methylated domains
 
 ## Synopsis
-```shell
+```console
 $ dnmtools pmd [OPTIONS] <input.meth>
 ```
 
@@ -14,9 +14,9 @@ Partially methylated domains (PMDs) are not homogeneously
 hypomethylated as in the case of HMRs, and contain focal
 hypermethylation at specific sites. PMDs are large domains with sizes
 ranging from 10kb to over 1Mb. Hidden Markov Models can also identify
-these larger domains. The program `pmd`  is provided for their
+these larger domains. The `pmd` command is provided for their
 identification, and can be run as follows:
-```shell
+```console
 $ dnmtools pmd -i 1000 -o output.bed input.meth
 ```
 
@@ -63,17 +63,17 @@ The first three columns give the chromosome, start, and end positions
 of the identified PMD. The fourth column has an arbitrarily assigned
 name for the PMD (counting up from zero) and boundary quality
 information: specifically the likelihood and certainty of the boundary
-at the PMD start (1&2) and boundary at the PMD end (3&4).
-These values can be used relative to other PMDs to assess
-the "sharpness" of the PMD boundaries, and the confidence we have in
-the boundary estimate based on the coverage of the sample. NaN
-boundary scores represent the case where the joint likelihood and
-confidence score of a boundary cannot be calculated because one side
-of the boundary has either zero coverage or no CpGs: this occurs when
-PMDs cut off due to deserts, for instance. The fifth column is the
-number of bins in the PMD, which is analogous to the number of CpGs
-segmented in the HMR program. PMDs should be called using information
-from both strands, so the last column is a placeholder.
+at the PMD start (1&2) and boundary at the PMD end (3&4).  These
+values can be used relative to other PMDs to assess the "sharpness" of
+the PMD boundaries, and the confidence we have in the boundary
+estimate based on the coverage of the sample. NaN boundary scores
+represent the case where the joint likelihood and confidence score of
+a boundary cannot be calculated because one side of the boundary has
+either zero coverage or no CpGs: this occurs when PMDs cut off due to
+deserts, for instance. The fifth column is the number of bins in the
+PMD, which is analogous to the number of CpGs segmented in the HMR
+program. PMDs should be called using information from both strands, so
+the last column is a placeholder.
 
 In general, the presence of a single HMR would not cause the program
 to report a PMD in that region. However, in cases where a number of
@@ -89,8 +89,8 @@ can obscure the sites we are trying to identify by providing an
 alternative foreground methylation state to the focused, very low
 methylation typically at promoter regions. A good workaround for this
 is to call PMDs first, and then call HMRs separately inside and
-outside of PMDs (e.g. using [selectsites](../selectsites) and
-using the output of PMDs as BED input). This ensures that the
+outside of PMDs (e.g. using [selectsites](../selectsites) and using
+the output of PMDs as the BED format input). This ensures that the
 foreground methylation state learned by the HMM in both types of
 background is the focused hypomethylation at CpG islands and promoter
 regions.
@@ -124,50 +124,65 @@ is best paired with matching WGBS data.
 ```txt
  -o, -out
 ```
-output file (default: stdout)
+The name of the output file. If no file name is provided, the output
+will be written to standard output. Due to the size of this output, a
+file name should be specified unless the output will be piped to
+another command or program. The output file contains genomic intervals
+in BED format.
+
 ```txt
  -d, -desert
 ```
-maximum distance between bins with data in PMD
+The maximum allowed span where no data is observed inside a PMD. If a
+PMD is larger than this size, it will be broken up.
+
 ```txt
  -f, -fixedbin
 ```
 Value of the fixed bin size
+
 ```txt
  -b, -bin
 ```
 Starting bin size
+
 ```txt
  -a, -arraymode
 ```
 Input is microarray data (e.g. from MethylationEPIC)
+
 ```txt
  -i, -itr
 ```
- max number of iterations
+max number of iterations
 
 ```txt
  -v, -verbose
 ```
-print more run info to STDERR while the program is running
+Print more information while the command is running.
+
 ```txt
  -D, -debug
 ```
-print debug info to STDERR while the program is runningo
+Print debug information while the command is running.
+
 ```txt
  -P, -params-in
 ```
-HMM parameter files for individual methylomes (separated with comma)
+HMM parameter files for individual methylomes. If multiple files
+are specified they must be separated with comma and not spaces.
+
 ```txt
  -r, -posteriors-out
 ```
-write out posterior probabilities in methcounts format
+Write posterior probabilities, in counts format, to this file.
+
 ```txt
  -p, -params-out
 ```
-write HMM parameters to this file
+Write the trained parameters to this file.
+
 ```txt
  -s, -seed
 ```
-specify random seed value
-
+Specify a random seed value.

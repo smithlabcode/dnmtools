@@ -16,6 +16,7 @@
 
 EXTRA_DIST = \
              README.md \
+	     LICENSE \
              documentation/README.md \
              documentation/mkdocs.yml \
              documentation/docs/abismal.md \

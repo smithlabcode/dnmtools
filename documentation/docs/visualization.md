@@ -35,7 +35,7 @@ these steps:
   sites, convert the symmetric methylation file ([counts](../counts)
   format) as follows:
 ```console
-$ cut -f 1-3,5 sample.meth | wigToBigWig /dev/stdin hg19.chrom.sizes sample.meth.bw
+$ awk '{print $1,$2,$2+1,$5}' sample.meth | wigToBigWig /dev/stdin hg19.chrom.sizes sample.meth.bw
 ```
   In the command above, the first part selects the appropriate columns
   to generate bedgraph format, and then the second part converts this
@@ -44,7 +44,7 @@ $ cut -f 1-3,5 sample.meth | wigToBigWig /dev/stdin hg19.chrom.sizes sample.meth
 * To create a bigWig format track for read coverage at CpG sites, use the
   following command, which is very similar to the previous one above:
 ```console
-$ cut -f 1-3,6 sample.meth | wigToBigWig /dev/stdin hg19.chrom.sizes sample.reads.bw
+$ awk '{print $1,$2,$2+1,$6}' sample.meth | wigToBigWig /dev/stdin hg19.chrom.sizes sample.reads.bw
 ```
 
 If the `wigToBigWig` or `fetchChromSizes` programs are not

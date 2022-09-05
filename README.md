@@ -1,4 +1,4 @@
-[![GitHub Downloads](https://img.shields.io/github/downloads/smithlabcode/dnmtools/v1.0.0/total?style=social)](https://github.com/smithlabcode/dnmtools/releases/v1.0.0)
+[![GitHub Downloads](https://img.shields.io/github/downloads/smithlabcode/dnmtools/v1.1.0/total?style=social)](https://github.com/smithlabcode/dnmtools/releases/v1.1.0)
 [![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/installer/conda.svg)](https://anaconda.org/bioconda/dnmtools)
 [![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/platforms.svg)](https://anaconda.org/bioconda/dnmtools)
 [![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/downloads.svg)](https://anaconda.org/bioconda/dnmtools)
@@ -10,7 +10,7 @@ sequencing (RRBS). These tools focus on overcoming the computing
 challenges imposed by the scale of genome-wide DNA methylation data,
 which is usually the early parts of data analysis.
 
-## Installing release 1.0.0
+## Installing release 1.1.0
 
 The documentation for DNMTools can be found
 [here](https://dnmtools.readthedocs.io). But if you want to install
@@ -40,14 +40,14 @@ all the formatting.
 
 ### Configuration
 
-* Download [dnmtools-1.0.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.0.0/dnmtools-1.0.0.tar.gz).
+* Download [dnmtools-1.1.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.1.0/dnmtools-1.1.0.tar.gz).
 * Unpack the archive:
 ```console
-$ tar -zxvf dnmtools-1.0.0.tar.gz
+$ tar -zxvf dnmtools-1.1.0.tar.gz
 ```
 * Move into the dnmtools directory and create a build directory:
 ```console
-$ cd dnmtools-1.0.0
+$ cd dnmtools-1.1.0
 $ mkdir build && cd build
 ```
 * Run the configuration script:

@@ -12,8 +12,9 @@ The `levels` command computes global summary statistics for the output
 of [counts](../counts). Example output is below. It computes multiple
 summary statistics related to the quantity of data (e.g., coverage of
 sites) and methylation (e.g., global average methylation). These
-summary statistics are also provided by context. The contexts are not
-exclusive categories, and include:
+summary statistics are also provided by context. The context are
+explained [here](../cytosine_contexts). These are not exclusive
+categories, and include:
 
 * cytosines, all of them, on either strand
 * cpg sites, on either strand

@@ -48,16 +48,26 @@ followed immediately by the same name that identifies that chromosome
 in the SAM output (the `.sam` files). An example of the output and
 explanation of each column follows:
 ```txt
-chr1    3000826 +   CpG 0.852941    34
-chr1    3001006 +   CHH 0.681818    44
-chr1    3001017 -   CpG 0.609756    41
-chr1    3001276 +   CpGx    0.454545    22
-chr1    3001628 -   CHH 0.419753    81
-chr1    3003225 +   CpG 0.357143    14
-chr1    3003338 +   CpG 0.673913    46
-chr1    3003378 +   CpG 0.555556    27
-chr1    3003581 -   CHG 0.641026    39
-chr1    3003639 +   CpG 0.285714    7
+chr1  1869  +  CCG  0         1
+chr1  1870  +  CpG  0         1
+chr1  1871  -  CpG  0.666667  6
+chr1  1874  +  CHH  0         1
+chr1  1875  +  CCG  0         1
+chr1  1876  +  CpG  0         1
+chr1  1877  -  CpG  0.333333  6
+chr1  1880  +  CHH  0         1
+chr1  1881  +  CCG  0         1
+chr1  1882  +  CpG  0         1
+chr1  1883  -  CpG  0.5       6
+chr1  1886  +  CHH  0         1
+chr1  1887  +  CCG  0         1
+chr1  1888  +  CpG  0         1
+chr1  1889  -  CpG  0.333333  6
+chr1  1892  +  CHH  0         1
+chr1  1893  +  CCG  0         1
+chr1  1894  +  CpG  0         1
+chr1  1895  -  CpG  0.25      4
+chr1  1898  +  CHH  0         1
 ```
 
 The output file contains one line per cytosine site. The first column

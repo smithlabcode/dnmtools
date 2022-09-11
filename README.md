@@ -3,6 +3,7 @@
 [![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/platforms.svg)](https://anaconda.org/bioconda/dnmtools)
 [![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/downloads.svg)](https://anaconda.org/bioconda/dnmtools)
 [![Documentation Status](https://readthedocs.org/projects/dnmtools/badge/?version=latest)](https://dnmtools.readthedocs.io/en/latest/?badge=latest)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 DNMTools is a set of tools for analyzing DNA methylation data from
 high-throughput sequencing experiments, especially whole genome

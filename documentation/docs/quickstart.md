@@ -3,31 +3,39 @@ Installation
 
 ## Installation via conda
 
-Right now this is probably the easiest way. If you know how to use
-conda then dnmtools is available among the bioconda recipes. You can
-install it as follows if you have a conda environment activated:
-
+Right now this is probably the easiest way. Dnmtools is among the
+bioconda recipes. If you know how to use conda and are setup to use
+bioconda, then you might simply be able to do:
 ```console
-$ conda install -c bioconda -c conda-forge dnmtools
+$ conda install dnmtools
 ```
 
-Dnmtools is in `bioconda` but in case the dependencies for dnmtools
-also have dependencies themselves that are in `conda-forge` we
-recommend specifying that channel too. Both the channels specified
-with `-c` above might be set for you by default, and therefore not
-needed in the command above.
+If you have problems with this, then you can try:
+```console
+$ conda install -c bioconda -c conda-forge --strict-channel-priority dnmtools
+```
 
-The instructions for installing conda are
-[here](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html).
+The dependencies for dnmtools might themselves have dependencies that
+are in the `conda-forge` channel. Using `--strict-channel-priority` is
+recommended by bioconda.
 
-If you encounter problems, try creating a new environment for dnmtools
-within conda:
+* Conda: you can find installation instructions
+  [here](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html).
 
+* Bioconda: additional helpful setup instructions can be found
+  [here](https://bioconda.github.io).
+
+
+If you encounter further problems, try creating a new environment for
+dnmtools within conda:
 ```console
 $ conda create --name dnmtools_env
 $ conda activate dnmtools_env
-$ conda install -c bioconda -c conda-forge dnmtools
+$ conda install -c bioconda -c conda-forge --strict-channel-priority dnmtools
 ```
+
+Above, you would have a new environment called `dnmtools_env` that
+would need to be activated when you want to use dnmtools.
 
 ## Building dnmtools from source release
 

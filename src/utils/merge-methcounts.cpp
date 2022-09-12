@@ -146,8 +146,19 @@ collect_sites_to_print(const vector<MSite> &sites,
 }
 
 
+static bool
+any_mutated(const vector<bool> &to_print,
+            const vector<MSite> &sites) {
+  size_t i = 0;
+  while (i < sites.size() && !(to_print[i] && sites[i].is_mutated()))
+    ++i;
+  return (i < sites.size());
+}
+
+
 static void
 write_line_for_tabular(const bool write_fractional,
+                       const bool report_any_mutated,
                        const size_t min_reads,
                        std::ostream &out,
                        const vector<bool> &to_print,
@@ -157,6 +168,8 @@ write_line_for_tabular(const bool write_fractional,
   const size_t n_files = sites.size();
 
   min_site.set_unmutated();
+  if (report_any_mutated && any_mutated(to_print, sites))
+    min_site.set_mutated();
 
   // ADS: is this the format we want for the row names?
   out << min_site.chrom << ':'
@@ -184,6 +197,7 @@ write_line_for_tabular(const bool write_fractional,
 
 static void
 write_line_for_merged_counts(std::ostream &out,
+                             const bool report_any_mutated,
                              const vector<bool> &to_print,
                              const vector<MSite> &sites,
                              MSite min_site) {
@@ -191,6 +205,8 @@ write_line_for_merged_counts(std::ostream &out,
   const size_t n_files = sites.size();
 
   min_site.set_unmutated();
+  if (report_any_mutated && any_mutated(to_print, sites))
+    min_site.set_mutated();
 
   double meth_sum = 0;
   min_site.n_reads = 0;
@@ -333,6 +349,7 @@ main_merge_methcounts(int argc, const char **argv) {
 
     string outfile;
     bool VERBOSE;
+    bool report_any_mutated = false;
     bool write_tabular_format = false;
     bool write_fractional = false;
     bool radmeth_format = false;
@@ -372,6 +389,9 @@ main_merge_methcounts(int argc, const char **argv) {
     opt_parse.add_opt("ignore", '\0',"Do not attempt to determine chromosome. "
                       "Lexicographic order will be used.",
                       false, ignore_chroms_order);
+    opt_parse.add_opt("mut", 'm',"If any of the sites being merged indicates "
+                      "mutated, mark the result has mutated.",
+                      false, report_any_mutated);
     opt_parse.add_opt("verbose", 'v',"print more run info", false, VERBOSE);
     opt_parse.set_show_defaults();
     vector<string> leftover_args;
@@ -475,10 +495,11 @@ main_merge_methcounts(int argc, const char **argv) {
 
       // output the appropriate sites' data
       if (write_tabular_format)
-        write_line_for_tabular(write_fractional, min_reads, out,
-                               sites_to_print, sites, sites[idx]);
+        write_line_for_tabular(write_fractional, report_any_mutated, min_reads,
+                               out, sites_to_print, sites, sites[idx]);
       else
-        write_line_for_merged_counts(out, sites_to_print, sites, sites[idx]);
+        write_line_for_merged_counts(out, report_any_mutated,
+                                     sites_to_print, sites, sites[idx]);
 
       swap(outdated, sites_to_print);
     }

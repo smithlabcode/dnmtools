@@ -46,3 +46,5 @@ nav:
      - 'selectsites': 'selectsites.md'
    - Visualization:
      - 'Visualization' : 'visualization.md'
+   - Other:
+     - 'Cytosine contexts' : 'cytosine_contexts.md'

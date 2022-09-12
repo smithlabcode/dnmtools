@@ -29,6 +29,10 @@ reads mapped over that site. If a site has no reads covering it, then
 we leave the value at 0, but also indicate this in the output (see
 below).
 
+Each site is marked with a *context* in the output of the `counts`
+command, and you can find out more about cytosine contexts
+[here](../cytosine_contexts).
+
 To compute methylation levels at each cytosine site along
 the genome you can use the following command:
 ```console

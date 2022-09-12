@@ -20,13 +20,13 @@ needed in the command above.
 The instructions for installing conda are
 [here](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html).
 
-If you encounter problems, try creating a new environment for dnmtoosl
+If you encounter problems, try creating a new environment for dnmtools
 within conda:
 
 ```console
 $ conda create --name dnmtools_env
 $ conda activate dnmtools_env
-$ conda install -c bioconda dnmtools
+$ conda install -c bioconda -c conda-forge dnmtools
 ```
 
 ## Building dnmtools from source release

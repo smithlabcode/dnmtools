@@ -12,7 +12,7 @@ $ conda install dnmtools
 
 If you have problems with this, then you can try:
 ```console
-$ conda install -c bioconda -c conda-forge --strict-channel-priority dnmtools
+$ conda install -c conda-forge -c bioconda --strict-channel-priority dnmtools
 ```
 
 The dependencies for dnmtools might themselves have dependencies that
@@ -31,7 +31,7 @@ dnmtools within conda:
 ```console
 $ conda create --name dnmtools_env
 $ conda activate dnmtools_env
-$ conda install -c bioconda -c conda-forge --strict-channel-priority dnmtools
+$ conda install -c conda-forge -c bioconda --strict-channel-priority dnmtools
 ```
 
 Above, you would have a new environment called `dnmtools_env` that

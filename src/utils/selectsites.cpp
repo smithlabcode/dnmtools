@@ -137,12 +137,18 @@ find_start_line(const string &chr, const size_t idx, ifstream &site_in) {
   site_in.seekg(pos, ios_base::beg);
   move_to_start_of_line(site_in);
 
-  while (step_size > 0) {
+  size_t prev_pos = 0;
+
+  while (step_size > 0 && prev_pos != pos) {
+
+    prev_pos = pos;
+
     string mid_chr;
     size_t mid_idx = 0;
     if (!(site_in >> mid_chr >> mid_idx))
       throw runtime_error("failed navigating inside file");
     step_size /= 2;
+
     if (chr < mid_chr || (chr == mid_chr && idx <= mid_idx)) {
       std::swap(mid_chr, high_chr);
       std::swap(mid_idx, high_idx);
@@ -168,8 +174,11 @@ get_sites_in_region(ifstream &site_in, const GenomicRegion &region,
   find_start_line(chrom, start_pos, site_in);
 
   MSite the_site;
-  while (site_in >> the_site && (the_site.chrom == chrom &&
-                                (the_site.pos < end_pos)))
+  // ADS: should only happen once that "the_site.chrom < chrom" and
+  // this is only needed because of end state of binary search on disk
+  while (site_in >> the_site &&
+         (the_site.chrom < chrom ||
+          (the_site.chrom == chrom && the_site.pos < end_pos)))
     if (start_pos <= the_site.pos)
       out << the_site << endl;
 }

@@ -1,17 +1,17 @@
-/*    Copyright (C) 2022 University of Southern California and
- *                            Andrew D. Smith
+/* Copyright (C) 2022 University of Southern California and
+ *                    Andrew D. Smith and Guilherme Sena
  *
- *    Authors: Andrew D. Smith and Song Qiang and Guilherme Sena
+ * Authors: Andrew D. Smith and Song Qiang and Guilherme Sena
  *
- *    This program is free software: you can redistribute it and/or modify
- *    it under the terms of the GNU General Public License as published by
- *    the Free Software Foundation, either version 3 of the License, or
- *    (at your option) any later version.
+ * This program is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
  *
- *    This program is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
  */
 
 #include <iostream>
@@ -25,7 +25,7 @@ using std::cout;
 using std::endl;
 
 #define PROGRAM_NAME "dnmtools"
-#define PROGRAM_VERSION " 1.1.0"
+#define PROGRAM_VERSION " 1.2.0"
 
 int abismal(int argc, const char **argv);
 int abismalidx(int argc, const char **argv);

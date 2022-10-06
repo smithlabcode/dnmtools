@@ -26,7 +26,16 @@ AC_LANG(C++)
 AC_PROG_CXX
 AX_CXX_COMPILE_STDCXX_11([noext], [mandatory])
 AC_PROG_RANLIB
-AC_OPENMP([C++]) dnl make sure we have openmp for multi-core in abismal
+
+dnl OpenMP happens here
+AC_OPENMP([C++])
+AS_VAR_IF(OPENMP_CXXFLAGS, [], [
+dnl check for the OpenMP library; can't be later
+AC_SEARCH_LIBS([omp_get_num_threads], [gomp omp], [],
+               [AC_MSG_FAILURE([OpenMP library not found])])
+dnl now we get setup for the right OpenMP flags
+ADS_OPENMP([], [AC_MSG_FAILURE([OpenMP must be installed to build dnmtools])])
+])dnl end of OpenMP stuff
 
 dnl recursively configure abismal and smithlab_cpp
 AC_CONFIG_SUBDIRS([src/abismal])

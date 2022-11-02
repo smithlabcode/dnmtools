@@ -1,5 +1,5 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/smithlabcode/dnmtools/total?style=social)](https://github.com/smithlabcode/dnmtools/releases)
-[![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/installer/conda.svg)](https://anaconda.org/bioconda/dnmtools)
+[![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/version.svg)](https://anaconda.org/bioconda/dnmtools)
 [![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/platforms.svg)](https://anaconda.org/bioconda/dnmtools)
 [![Install with Conda](https://anaconda.org/bioconda/dnmtools/badges/downloads.svg)](https://anaconda.org/bioconda/dnmtools)
 [![Documentation Status](https://readthedocs.org/projects/dnmtools/badge/?version=latest)](https://dnmtools.readthedocs.io/en/latest/?badge=latest)

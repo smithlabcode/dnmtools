@@ -23,6 +23,7 @@
 #include <fstream>
 #include <algorithm>
 #include <numeric>
+#include <unordered_map>
 
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
@@ -39,6 +40,7 @@ using std::endl;
 using std::ios_base;
 using std::runtime_error;
 using std::ifstream;
+using std::unordered_map;
 
 
 static void
@@ -73,21 +75,35 @@ template <class T>
 static void
 process_all_sites(const bool VERBOSE,
                   const string &sites_file,
-                  const vector<GenomicRegion> &regions,
+                  const unordered_map<string, vector<GenomicRegion>> &regions,
                   T &out) {
 
   igzfstream in(sites_file);
   if (!in)
     throw runtime_error("cannot open file: " + sites_file);
 
-  MSite the_site;
-  size_t i = 0;
+  MSite the_site, prev_site;
+  vector<GenomicRegion>::const_iterator i, i_lim;
+  bool chrom_is_relevant = false;
   while (in >> the_site) {
-    while (i < regions.size() && precedes(regions[i], the_site))
-      ++i;
+    if (the_site.chrom != prev_site.chrom) {
+      if (VERBOSE)
+        cerr << "processing " << the_site.chrom << endl;
+      auto r = regions.find(the_site.chrom);
+      chrom_is_relevant = (r != end(regions));
+      if (chrom_is_relevant) {
+        i = begin(r->second);
+        i_lim = end(r->second);
+      }
+    }
+    if (chrom_is_relevant) {
+      while (i != i_lim && precedes(*i, the_site))
+        ++i;
 
-    if (contains(regions[i], the_site))
-      out << the_site << "\n";
+      if (contains(*i, the_site))
+        out << the_site << "\n";
+    }
+    std::swap(prev_site, the_site);
   }
 }
 
@@ -198,6 +214,19 @@ process_with_sites_on_disk(const string &sites_file,
 ///  END OF CODE FOR SEARCHING ON DISK
 ////////////////////////////////////////////////////////////////////////
 
+static void
+regions_by_chrom(vector<GenomicRegion> &regions,
+                 unordered_map<string, vector<GenomicRegion> > &lookup) {
+  for (auto &&r: regions) {
+    const string chrom_name(r.get_chrom());
+    if (lookup.find(chrom_name) == end(lookup))
+      lookup[chrom_name] = vector<GenomicRegion>();
+    lookup[chrom_name].push_back(r);
+  }
+  regions.clear();
+  regions.shrink_to_fit();
+}
+
 inline bool
 file_exists(const string &filename) {
   return (access(filename.c_str(), F_OK) == 0);
@@ -265,22 +294,26 @@ main_selectsites(int argc, const char **argv) {
       cerr << "[number of regions merged due to overlap: "
            << n_orig_regions - regions.size() << "]" << endl;
 
+    unordered_map<string, vector<GenomicRegion>> regions_lookup;
+    if ((outfile.empty() || !has_gz_ext(outfile)) && LOAD_ENTIRE_FILE)
+      regions_by_chrom(regions, regions_lookup);
+
     if (outfile.empty() || !has_gz_ext(outfile)) {
       std::ofstream of;
-      if (!outfile.empty()) of.open(outfile.c_str());
+      if (!outfile.empty()) of.open(outfile);
       std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
       if (!outfile.empty() && !out)
         throw runtime_error("failed to open output file: " + outfile);
 
       if (LOAD_ENTIRE_FILE)
-        process_all_sites(VERBOSE, sites_file, regions, out);
+        process_all_sites(VERBOSE, sites_file, regions_lookup, out);
       else
         process_with_sites_on_disk(sites_file, regions, out);
     }
     else {
       // not supporting search on disk for gz file
       ogzfstream out(outfile);
-      process_all_sites(VERBOSE, sites_file, regions, out);
+      process_all_sites(VERBOSE, sites_file, regions_lookup, out);
     }
   }
   catch (const runtime_error &e) {

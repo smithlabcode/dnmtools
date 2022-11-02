@@ -380,6 +380,24 @@ main_roimethstat(int argc, const char **argv) {
 
   try {
 
+    // ADS: this information should be somehow presented to the user
+    // when the tool is run without arguments.
+    static const string description = R"""(
+
+Compute average CpG methylation levels in each interval from a given
+set of genomic intervals
+
+Columns (beyond the first 6) in the BED format output:
+(7) weighted mean methylation
+(8) unweighted mean methylation
+(9) fractional methylation
+(10) number of CpGs in the region
+(11) number of CpGs covered at least once
+(12) number of observations in reads indicating methylation
+(13) total number of observations from reads in the region
+
+)""";
+
     static const string default_name_prefix = "X";
 
     bool VERBOSE = false;
@@ -394,7 +412,8 @@ main_roimethstat(int argc, const char **argv) {
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), "Compute average CpG "
-                           "methylation in each of a set of genomic intervals",
+                           "methylation levels in each interval from "
+                           "a given set of genomic intervals",
                            "<intervals-bed> <methylation-file>");
     opt_parse.set_show_defaults();
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",

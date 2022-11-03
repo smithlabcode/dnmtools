@@ -488,7 +488,11 @@ Columns (beyond the first 6) in the BED format output:
       cerr << "[n_regions=" << regions.size() << "]" << endl;
 
     std::ofstream of;
-    if (!outfile.empty()) of.open(outfile);
+    if (!outfile.empty()) {
+      of.open(outfile);
+      if (!of)
+        throw runtime_error("failed to open outfile: " + outfile);
+    }
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
     if (load_entire_file)
@@ -503,12 +507,8 @@ Columns (beyond the first 6) in the BED format output:
                                 level_code[0],
                                 cpgs_file, regions, out);
   }
-  catch (const runtime_error &e) {
+  catch (const std::exception &e) {
     cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

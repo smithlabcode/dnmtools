@@ -1023,6 +1023,52 @@ load_bins(const size_t bin_size,
   }
 }
 
+static void
+get_union_of_bins(const vector<vector<SimpleGenomicRegion> > &orig,
+                  vector<SimpleGenomicRegion> &bins) {
+
+  // flatten the set of sorted bins
+  bins.clear();
+  for (auto &&i: orig)
+    bins.insert(end(bins), begin(i), end(i));
+
+  // merge each sorted interval of bins
+  const auto first = begin(bins);
+  auto middle = begin(bins);
+  for (size_t i = 1; i < orig.size(); ++i) {
+    middle += orig[i-1].size();
+    std::inplace_merge(first, middle, middle + orig[i].size());
+  }
+  // ensure unique bins
+  bins.resize(std::distance(begin(bins), unique(begin(bins), end(bins))));
+  bins.shrink_to_fit();
+
+  // make sure all bins are aligned at same boundaries
+  for (size_t i = 1; i < bins.size(); ++i)
+    if (bins[i-1].overlaps(bins[i]))
+      throw std::runtime_error("bins from reps not aligned");
+}
+
+
+static void
+add_missing_bins(const vector<SimpleGenomicRegion> &all_bins,
+                 vector<SimpleGenomicRegion> &bins,
+                 vector<pair<double, double>> &meth) {
+
+  const size_t n_bins = all_bins.size();
+  vector<pair<double, double>> tmp_meth(n_bins);
+
+  size_t j = 0; // assume j range no larger than i range
+  for (size_t i = 0; i < n_bins; ++i) {
+    if (all_bins[i] == bins[j])
+      tmp_meth[i] = meth[j++];
+    else
+      tmp_meth[i] = {0.0, 0.0};
+  }
+  std::swap(meth, tmp_meth);
+  bins = all_bins;
+}
+
 
 int
 main_pmd(int argc, const char **argv) {
@@ -1174,11 +1220,20 @@ main_pmd(int argc, const char **argv) {
              << endl;
     }
 
-    // ensure replicates have same number of sites
-    const size_t n_bins = bins[0].size();
-    for (size_t i = 0; i < n_replicates; ++i)
-      if (bins[i].size() != n_bins)
-        throw runtime_error("inputs contain different number of sites");
+    if (n_replicates > 1) {
+      bool need_to_adjust_bins = false;
+      const size_t n_bins_0 = bins[0].size();
+      for (size_t i = 1; i < n_replicates && !need_to_adjust_bins; ++i)
+        if (bins[i].size() != n_bins_0)
+          need_to_adjust_bins = true;
+
+      if (need_to_adjust_bins) {
+        vector<SimpleGenomicRegion> all_bins;
+        get_union_of_bins(bins, all_bins);
+        for (size_t i = 0; i < bins.size(); ++i)
+          add_missing_bins(all_bins, bins[i], meth[i]);
+      }
+    }
 
     // separate regions by chrom and desert; eliminate isolated Bins
     vector<size_t> reset_points;

@@ -134,7 +134,7 @@ main(int argc, const char **argv) {
   else if (strcmp(argv[1], "amrtester") == 0) ret = main_amrtester(argc - 1, argv + 1);
   else if (strcmp(argv[1], "bsrate") == 0) ret = main_bsrate(argc - 1, argv + 1);
   else if (strcmp(argv[1], "hmr") == 0) ret = main_hmr(argc - 1, argv + 1);
-  else if (strcmp(argv[1], "hmr_rep") == 0) ret = main_hmr_rep(argc - 1, argv + 1);
+  else if (strcmp(argv[1], "hmr-rep") == 0) ret = main_hmr_rep(argc - 1, argv + 1);
   else if (strcmp(argv[1], "hypermr") == 0) ret = main_hypermr(argc - 1, argv + 1);
   else if (strcmp(argv[1], "levels") == 0) ret = main_levels(argc - 1, argv + 1);
   else if (strcmp(argv[1], "entropy") == 0) ret = main_methentropy(argc - 1, argv + 1);

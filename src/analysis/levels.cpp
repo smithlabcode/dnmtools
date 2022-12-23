@@ -131,7 +131,11 @@ main_levels(int argc, const char **argv) {
     }
 
     std::ofstream of;
-    if (!outfile.empty()) of.open(outfile.c_str());
+    if (!outfile.empty()) {
+      of.open(outfile);
+      if (!of)
+        throw runtime_error("bad output file: " + outfile);
+    }
     std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
     out << cytosines << endl

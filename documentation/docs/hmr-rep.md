@@ -34,10 +34,6 @@ max number of iterations (default: 100)
 ```
 print more run info to STDERR while the program is running.
 ```txt
- -partial
-```
-identify PMRs instead of HMRs
-```txt
  -post-hypo
 ```
 output file for single-CpG posterior hypomethylation probability (default: none)
@@ -59,4 +55,3 @@ write HMM parameters to this file (default: none)
  -s, -seed
 ```
 specify random seed (default: 408)
-

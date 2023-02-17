@@ -136,7 +136,7 @@ stouffer_liptak(const vector<vector<double> > &corr_mat, vector<double> &pvals) 
 static bool
 is_number(const string& str) {
   for (const char &c : str)
-    if (c != '.' && !std::isdigit(c)) return false;
+    if (c != '.' && c != 'e' && c != '-' && !std::isdigit(c)) return false;
   return true;
 }
 

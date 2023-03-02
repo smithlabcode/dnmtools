@@ -1,8 +1,8 @@
-/* format_reads: a program to ensure SAM and BAM format reads
- * are conforming to expectations of dnmtools software
+/* format_reads: a program to ensure SAM and BAM format reads are
+ * conforming to expectations of dnmtools software
  *
- * Copyright (C) 2020-2022 University of Southern California and
- *                    Andrew D. Smith
+ * Copyright (C) 2020-2023 University of Southern California and
+ *                         Andrew D. Smith
  *
  * Authors: Andrew Smith and Guilherme Sena
  *
@@ -35,6 +35,8 @@
 #include <stdexcept>
 #include <cmath>
 #include <sstream>
+
+#include "config.h"
 
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
@@ -374,10 +376,9 @@ main_format_reads(int argc, const char **argv) {
       throw std::runtime_error("problem with input file: " + mapped_reads_file);
 
     out << sam_reader.get_header(); // includes newline
-    // GS TODO: the empty argument below is the program version, it
-    // should be an extern string to the dnmtools version when we
-    // set prefix command calls
-    write_pg_line(argc, argv, "FORMAT_READS", "", out);
+    // ADS: need to check why the command is quoted and has an extra
+    // space at the end
+    write_pg_line(argc, argv, "FORMAT_READS", VERSION, out);
 
     size_t count_a = 0, count_b = 0;
     sam_rec aln;

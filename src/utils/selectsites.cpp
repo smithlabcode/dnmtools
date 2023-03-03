@@ -1,7 +1,7 @@
 /* selectsites: program to select sites, specified in a methcounts
  * format file, that are contained in given (bed format) intervals
  *
- * Copyright (C) 2019 Andrew D. Smith
+ * Copyright (C) 2019-2023 Andrew D. Smith
  *
  * Authors: Andrew D. Smith
  *
@@ -152,25 +152,35 @@ find_start_line(const string &chr, const size_t idx, ifstream &site_in) {
   size_t pos = step_size;
   site_in.seekg(pos, ios_base::beg);
   move_to_start_of_line(site_in);
+  size_t prev_pos = 0; // keep track of previous position in file
 
-  size_t prev_pos = 0;
-
+  // binary search inside sorted file on disk
+  // iterate until step size is 0 or positions are identical
   while (step_size > 0 && prev_pos != pos) {
 
     prev_pos = pos;
 
-    string mid_chr;
-    size_t mid_idx = 0;
+    string mid_chr; // chromosome name at mid point
+    size_t mid_idx = 0; // position at mid point
     if (!(site_in >> mid_chr >> mid_idx))
       throw runtime_error("failed navigating inside file");
-    step_size /= 2;
+
+    // this check will never give a false indication of unsorted, but
+    // might catch an unsorted file
+    if (mid_chr < low_chr || mid_chr > high_chr)
+      throw runtime_error("chromosomes unsorted inside file: low=" + low_chr +
+                          ",mid=" + mid_chr + ",high=" + high_chr);
+
+    step_size /= 2; // cut the range in half
 
     if (chr < mid_chr || (chr == mid_chr && idx <= mid_idx)) {
+      // move to the left
       std::swap(mid_chr, high_chr);
       std::swap(mid_idx, high_idx);
       pos -= step_size;
     }
     else {
+      // move to the left
       std::swap(mid_chr, low_chr);
       std::swap(mid_idx, low_idx);
       pos += step_size;

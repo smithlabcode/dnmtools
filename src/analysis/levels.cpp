@@ -61,9 +61,10 @@ main_levels(int argc, const char **argv) {
     bool VERBOSE = false;
     string outfile;
 
+    const string description = "compute global summary of methylation levels";
+
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), "compute methylation levels",
-                           "<methcounts-file>");
+    OptionParser opt_parse(strip_path(argv[0]), description, "<counts-file>");
     opt_parse.add_opt("output", 'o', "output file (default: stdout)",
                       false, outfile);
     opt_parse.add_opt("alpha", 'a', "alpha for confidence interval",

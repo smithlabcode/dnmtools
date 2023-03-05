@@ -56,6 +56,9 @@ struct MSite {
   /// FUNCTIONS BELOW ARE FOR MANIPULATING SYMMETRIC CPG SITES
   //////////////////////////////////////////////////////////////
   void add(const MSite &other) {
+    // ADS: possible that this function has specific behavior that
+    // should be placed in the 'sym' source, since we might not want
+    // this line below to operate generally.
     if (!is_mutated() && other.is_mutated())
       context += 'x';
     // ADS: order matters below as n_reads update invalidates n_meth()

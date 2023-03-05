@@ -47,23 +47,23 @@ found_symmetric(const MSite &prev_cpg, const MSite &curr_cpg) {
 
 template <class T>
 static void
-process_sites(const bool include_mutated, igzfstream &in, T &out) {
+process_sites(igzfstream &in, T &out) {
 
   MSite prev_site, curr_site;
-  bool prev_is_good_cpg = false;
+  bool prev_is_cpg = false;
   if (in >> prev_site)
-    if (prev_site.is_cpg() && (include_mutated || !prev_site.is_mutated()))
-      prev_is_good_cpg = true;
+    if (prev_site.is_cpg())
+      prev_is_cpg = true;
 
   while (in >> curr_site) {
-    if (curr_site.is_cpg() && (include_mutated || !curr_site.is_mutated())) {
-      if (prev_is_good_cpg && found_symmetric(prev_site, curr_site)) {
+    if (curr_site.is_cpg()) {
+      if (prev_is_cpg && found_symmetric(prev_site, curr_site)) {
         prev_site.add(curr_site);
         out << prev_site << '\n';
       }
-      prev_is_good_cpg = true;
+      prev_is_cpg = true;
     }
-    else prev_is_good_cpg = false;
+    else prev_is_cpg = false;
     std::swap(prev_site, curr_site);
   }
 }
@@ -74,8 +74,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
   try {
 
     string outfile;
-    bool VERBOSE;
-    bool include_mutated = false;
+    // (not used) bool VERBOSE = false;
 
     const string description =
       "Get CpG sites and make methylation levels symmetric.";
@@ -85,9 +84,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
                            description, "<methcounts-file>");
     opt_parse.add_opt("output", 'o', "output file (default: stdout)",
                       false, outfile);
-    opt_parse.add_opt("muts", 'm', "include mutated CpG sites",
-                      false, include_mutated);
-    opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
+    // opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     std::vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
@@ -118,11 +115,11 @@ main_symmetric_cpgs(int argc, const char **argv) {
       std::ofstream of;
       if (!outfile.empty()) of.open(outfile.c_str());
       std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
-      process_sites(include_mutated, in, out);
+      process_sites(in, out);
     }
     else {
       ogzfstream out(outfile);
-      process_sites(include_mutated, in, out);
+      process_sites(in, out);
     }
   }
   catch (const std::runtime_error &e)  {

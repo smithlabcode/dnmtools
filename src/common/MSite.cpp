@@ -17,6 +17,7 @@
 
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <stdexcept>
 
@@ -29,7 +30,8 @@ MSite::MSite(const string &line) {
   /* GS: this is faster but seems to be genenerating issues when
    * compiled with clang
   std::istringstream iss;
-  iss.rdbuf()->pubsetbuf(const_cast<char*>(line.c_str()), line.length()); */
+  iss.rdbuf()->pubsetbuf(const_cast<char*>(line.c_str()), line.length());
+  */
   std::istringstream iss(line);
   string strand_tmp;
   if (!(iss >> chrom >> pos >> strand_tmp >> context >> meth >> n_reads))
@@ -55,6 +57,98 @@ MSite::tostring() const {
 
 size_t
 distance(const MSite &a, const MSite &b) {
-  return a.chrom == b.chrom ? std::max(a.pos, b.pos) - std::min(a.pos, b.pos) :
+  return a.chrom == b.chrom ?
+    std::max(a.pos, b.pos) - std::min(a.pos, b.pos) :
     std::numeric_limits<size_t>::max();
+}
+
+
+using std::ifstream;
+using std::ios_base;
+
+static void
+move_to_start_of_line(ifstream &in) {
+  char next;
+  // move backwards by: one step forward, two steps back
+  while (in.good() && in.get(next) && next != '\n') {
+    in.unget();
+    in.unget();
+  }
+  // ADS: need to reconsider this below
+  if (in.bad())
+    // hope this only happens when hitting the start of the file
+    in.clear();
+}
+
+
+void
+find_offset_for_msite(const std::string &chr,
+                      const size_t idx,
+                      std::ifstream &site_in) {
+
+  site_in.seekg(0, ios_base::beg);
+  const size_t begin_pos = site_in.tellg();
+  site_in.seekg(0, ios_base::end);
+  const size_t end_pos = site_in.tellg();
+
+  if (end_pos - begin_pos < 2)
+    throw runtime_error("empty counts file");
+
+  size_t step_size = (end_pos - begin_pos)/2;
+
+  site_in.seekg(0, ios_base::beg);
+  string low_chr;
+  size_t low_idx = 0;
+  if (!(site_in >> low_chr >> low_idx))
+    throw runtime_error("failed search in counts file");
+
+  // MAGIC: need the -2 here to get past the EOF and possibly a '\n'
+  site_in.seekg(-2, ios_base::end);
+  move_to_start_of_line(site_in);
+  string high_chr;
+  size_t high_idx;
+  if (!(site_in >> high_chr >> high_idx))
+    throw runtime_error("failed search in counts file");
+
+  size_t pos = step_size;
+  site_in.seekg(pos, ios_base::beg);
+  move_to_start_of_line(site_in);
+  size_t prev_pos = 0; // keep track of previous position in file
+
+  // binary search inside sorted file on disk
+  // iterate until step size is 0 or positions are identical
+  while (step_size > 0 && prev_pos != pos) {
+
+    // track (mid) position in file to make sure it keeps moving
+    prev_pos = pos;
+
+    string mid_chr; // chromosome name at mid point
+    size_t mid_idx = 0; // position at mid point
+    if (!(site_in >> mid_chr >> mid_idx))
+      throw runtime_error("failed navigating inside file");
+
+    // this check will never give a false indication of unsorted, but
+    // might catch an unsorted file
+    if (mid_chr < low_chr || mid_chr > high_chr)
+      throw runtime_error("chromosomes unsorted inside file: "
+                          "low=" + low_chr + ",mid=" + mid_chr +
+                          ",high=" + high_chr);
+
+    step_size /= 2; // cut the range in half
+
+    if (chr < mid_chr || (chr == mid_chr && idx <= mid_idx)) {
+      // move to the left
+      std::swap(mid_chr, high_chr);
+      std::swap(mid_idx, high_idx);
+      pos -= step_size;
+    }
+    else {
+      // move to the left
+      std::swap(mid_chr, low_chr);
+      std::swap(mid_idx, low_idx);
+      pos += step_size;
+    }
+    site_in.seekg(pos, ios_base::beg);
+    move_to_start_of_line(site_in);
+  }
 }

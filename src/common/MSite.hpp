@@ -130,4 +130,12 @@ operator<<(T &out, const MSite &s) {
 size_t
 distance(const MSite &a, const MSite &b);
 
+// find the byte offset within the given file of the first site in the
+// file (for the specified stream) that does not precede the specified
+// position given by the (chrom, start_pos) pair.
+void
+find_offset_for_msite(const std::string &chrom,
+                      const size_t start_pos,
+                      std::ifstream &site_in);
+
 #endif

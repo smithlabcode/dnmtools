@@ -49,7 +49,8 @@ collapsebed(vector<GenomicRegion> &regions) {
   for (size_t i = 1; i < regions.size(); ++i) {
     if (regions[j].same_chrom(regions[i]) &&
         regions[i].get_start() <= regions[j].get_end()) {
-      regions[j].set_end(std::max(regions[j].get_end(), regions[i].get_end()));
+      regions[j].set_end(std::max(regions[j].get_end(),
+                                  regions[i].get_end()));
     }
     else {
       regions[++j] = regions[i];
@@ -70,6 +71,7 @@ contains(const GenomicRegion &r, const MSite &s) {
   return (r.get_chrom() == s.chrom &&
           (r.get_start() <= s.pos && s.pos < r.get_end()));
 }
+
 
 template <class T>
 static void
@@ -108,88 +110,6 @@ process_all_sites(const bool VERBOSE,
 }
 
 
-////////////////////////////////////////////////////////////////////////
-///  CODE BELOW HERE IS FOR SEARCHING ON DISK
-static void
-move_to_start_of_line(ifstream &in) {
-  char next;
-  while (in.good() && in.get(next) && next != '\n') {
-    in.unget();
-    in.unget();
-  }
-  if (in.bad())
-    // hope this only happens when hitting the start of the file
-    in.clear();
-}
-
-static void
-find_start_line(const string &chr, const size_t idx, ifstream &site_in) {
-
-  site_in.seekg(0, ios_base::beg);
-  const size_t begin_pos = site_in.tellg();
-  site_in.seekg(0, ios_base::end);
-  const size_t end_pos = site_in.tellg();
-
-  if (end_pos - begin_pos < 2)
-    throw runtime_error("empty meth file");
-
-  size_t step_size = (end_pos - begin_pos)/2;
-
-  site_in.seekg(0, ios_base::beg);
-  string low_chr;
-  size_t low_idx = 0;
-  if (!(site_in >> low_chr >> low_idx))
-    throw runtime_error("failed navigating inside file");
-
-  // MAGIC: need the -2 here to get past the EOF and possibly a '\n'
-  site_in.seekg(-2, ios_base::end);
-  move_to_start_of_line(site_in);
-  string high_chr;
-  size_t high_idx;
-  if (!(site_in >> high_chr >> high_idx))
-    throw runtime_error("failed navigating inside file");
-
-  size_t pos = step_size;
-  site_in.seekg(pos, ios_base::beg);
-  move_to_start_of_line(site_in);
-  size_t prev_pos = 0; // keep track of previous position in file
-
-  // binary search inside sorted file on disk
-  // iterate until step size is 0 or positions are identical
-  while (step_size > 0 && prev_pos != pos) {
-
-    prev_pos = pos;
-
-    string mid_chr; // chromosome name at mid point
-    size_t mid_idx = 0; // position at mid point
-    if (!(site_in >> mid_chr >> mid_idx))
-      throw runtime_error("failed navigating inside file");
-
-    // this check will never give a false indication of unsorted, but
-    // might catch an unsorted file
-    if (mid_chr < low_chr || mid_chr > high_chr)
-      throw runtime_error("chromosomes unsorted inside file: low=" + low_chr +
-                          ",mid=" + mid_chr + ",high=" + high_chr);
-
-    step_size /= 2; // cut the range in half
-
-    if (chr < mid_chr || (chr == mid_chr && idx <= mid_idx)) {
-      // move to the left
-      std::swap(mid_chr, high_chr);
-      std::swap(mid_idx, high_idx);
-      pos -= step_size;
-    }
-    else {
-      // move to the left
-      std::swap(mid_chr, low_chr);
-      std::swap(mid_idx, low_idx);
-      pos += step_size;
-    }
-    site_in.seekg(pos, ios_base::beg);
-    move_to_start_of_line(site_in);
-  }
-}
-
 static void
 get_sites_in_region(ifstream &site_in, const GenomicRegion &region,
                    std::ostream &out) {
@@ -197,7 +117,7 @@ get_sites_in_region(ifstream &site_in, const GenomicRegion &region,
   string chrom(region.get_chrom());
   const size_t start_pos = region.get_start();
   const size_t end_pos = region.get_end();
-  find_start_line(chrom, start_pos, site_in);
+  find_offset_for_msite(chrom, start_pos, site_in);
 
   MSite the_site;
   // ADS: should only happen once that "the_site.chrom < chrom" and
@@ -208,6 +128,7 @@ get_sites_in_region(ifstream &site_in, const GenomicRegion &region,
     if (start_pos <= the_site.pos)
       out << the_site << endl;
 }
+
 
 static void
 process_with_sites_on_disk(const string &sites_file,
@@ -221,8 +142,7 @@ process_with_sites_on_disk(const string &sites_file,
   for (size_t i = 0; i < regions.size() && in; ++i)
     get_sites_in_region(in, regions[i], out);
 }
-///  END OF CODE FOR SEARCHING ON DISK
-////////////////////////////////////////////////////////////////////////
+
 
 static void
 regions_by_chrom(vector<GenomicRegion> &regions,

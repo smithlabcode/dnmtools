@@ -198,6 +198,12 @@ process_with_cpgs_loaded(const bool VERBOSE,
 }
 
 
+/*
+
+/// ADS: using code from MSite.*pp files now which should be in common
+/// for all counts files that must be searched on disk. Keeping this
+/// here for now.
+
 ////////////////////////////////////////////////////////////////////////
 ///
 ///  CODE BELOW HERE IS FOR SEARCHING ON DISK
@@ -265,7 +271,7 @@ find_start_line(const string &chr, const size_t idx, ifstream &cpg_in) {
     move_to_start_of_line(cpg_in);
   }
 }
-
+*/
 
 static bool
 cpg_not_past_region(const GenomicRegion &region, const size_t end_pos,
@@ -285,7 +291,7 @@ get_cpg_stats(ifstream &cpg_in, const GenomicRegion region,
   const string chrom(region.get_chrom());
   const size_t start_pos = region.get_start();
   const size_t end_pos = region.get_end();
-  find_start_line(chrom, start_pos, cpg_in);
+  find_offset_for_msite(chrom, start_pos, cpg_in);
 
   MSite cpg;
   while (cpg_in >> cpg && cpg_not_past_region(region, end_pos, cpg)) {

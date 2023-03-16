@@ -21,10 +21,11 @@
 #include <fstream>
 #include <utility>
 #include <stdexcept>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
-#include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
 #include "zlib_wrapper.hpp"
 
@@ -37,7 +38,6 @@ using std::vector;
 using std::cout;
 using std::endl;
 using std::cerr;
-using std::pair;
 using std::runtime_error;
 using std::min;
 
@@ -76,28 +76,45 @@ test_greater_population(const size_t meth_a, const size_t unmeth_a,
 
 
 template <class T> T&
-write_methdiff_site(T &out,
-                    const MSite &a, const MSite &b, const double diffscore) {
-
-  MSite c(a);
-  c.n_reads = a.n_meth();
-  c.meth = diffscore;
-
+write_methdiff_site(T &out, const MSite &a, const MSite &b,
+                    const double diffscore) {
   std::ostringstream oss;
-  oss << c;
-
-  oss << '\t' << a.n_unmeth() // a.n_meth() already output with 'c'
-      << '\t' << b.n_meth()
-      << '\t' << b.n_unmeth() << endl;
-
-  out << oss.str();
-  return out;
+  oss << a.chrom << '\t'
+      << a.pos << '\t'
+      << a.strand << '\t'
+      << a.context << '\t'
+      << diffscore << '\t'
+      << a.n_meth() << '\t'
+      << a.n_unmeth() << '\t'
+      << b.n_meth() << '\t'
+      << b.n_unmeth() << '\n';
+  return out << oss.str();
 }
 
 
 static bool
-same_chrom_and_pos(const MSite &a, const MSite &b) {
-  return a.chrom == b.chrom && a.pos == b.pos;
+site_precedes(const size_t lhs_chrom_idx, const size_t lhs_pos,
+              const size_t rhs_chrom_idx, const size_t rhs_pos) {
+  return (lhs_chrom_idx < rhs_chrom_idx ||
+          (lhs_chrom_idx == rhs_chrom_idx &&
+           (lhs_pos < rhs_pos)));
+}
+
+
+static size_t
+get_chrom_idx(std::unordered_map<string, size_t> &chrom_order,
+              std::unordered_set<string> &chroms_seen,
+              const MSite &s) {
+  if (chroms_seen.find(s.chrom) != end(chroms_seen))
+    throw runtime_error("unsorted chromosomes found");
+  chroms_seen.insert(s.chrom);
+  auto x = chrom_order.find(s.chrom);
+  if (x == end(chrom_order)) {
+    const size_t idx = chrom_order.size();
+    chrom_order.insert(std::make_pair(s.chrom, idx));
+    return idx;
+  }
+  else return x->second;
 }
 
 
@@ -106,17 +123,42 @@ static void
 process_sites(const bool VERBOSE, igzfstream &in_a, igzfstream &in_b,
               const bool allow_uncovered, const double pseudocount, T &out) {
 
+  // chromosome order in the files
+  std::unordered_map<string, size_t> chrom_order;
+  std::unordered_set<string> chroms_seen_a, chroms_seen_b;
+
   MSite a, b;
-  string prev_chrom;
-  in_b >> b; // load first site for "b"
+  string prev_chrom_a, prev_chrom_b;
+  size_t chrom_idx_a = std::numeric_limits<size_t>::max();
+  size_t chrom_idx_b = std::numeric_limits<size_t>::max();
+
+  size_t prev_pos_a = 0;
+  size_t prev_pos_b = 0;
+
   while (in_a >> a) {
 
-    if (VERBOSE && a.chrom != prev_chrom)
-      cerr << "[processing: " << a.chrom << "]" << endl;
+    if (prev_chrom_a.compare(a.chrom) != 0) {
+      chrom_idx_a = get_chrom_idx(chrom_order, chroms_seen_a, a);
+      prev_chrom_a = a.chrom;
+      if (VERBOSE)
+        cerr << "[processing: " << a.chrom << "]" << endl;
+    }
+    else if (a.pos <= prev_pos_a)
+      throw runtime_error("unsorted positions found");
 
-    while (in_b && b < a) in_b >> b; // find appropriate "b" site
+    bool advance_b = true;
+    while (advance_b && in_b >> b) {
+      if (prev_chrom_b.compare(b.chrom) != 0) {
+        chrom_idx_b = get_chrom_idx(chrom_order, chroms_seen_b, b);
+        prev_chrom_b = b.chrom;
+      }
+      else if (b.pos <= prev_pos_b)
+        throw runtime_error("unsorted positions found");
+      advance_b = site_precedes(chrom_idx_b, b.pos, chrom_idx_a, a.pos);
+      prev_pos_b = b.pos;
+    }
 
-    if (same_chrom_and_pos(a, b)) {
+    if (chrom_idx_a == chrom_idx_b && a.pos == b.pos) {
 
       if (allow_uncovered || min(a.n_reads, b.n_reads) > 0) {
 
@@ -131,7 +173,7 @@ process_sites(const bool VERBOSE, igzfstream &in_a, igzfstream &in_b,
         write_methdiff_site(out, a, b, diffscore);
       }
     }
-    swap(prev_chrom, a.chrom);
+    prev_pos_a = a.pos;
   }
 }
 

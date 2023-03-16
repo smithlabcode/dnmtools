@@ -102,19 +102,36 @@ site_precedes(const size_t lhs_chrom_idx, const size_t lhs_pos,
 
 
 static size_t
-get_chrom_idx(std::unordered_map<string, size_t> &chrom_order,
-              std::unordered_set<string> &chroms_seen,
-              const MSite &s) {
+get_chrom_id(std::unordered_map<string, size_t> &chrom_order,
+             std::unordered_set<string> &chroms_seen,
+             const MSite &s) {
   if (chroms_seen.find(s.chrom) != end(chroms_seen))
     throw runtime_error("unsorted chromosomes found");
   chroms_seen.insert(s.chrom);
   auto x = chrom_order.find(s.chrom);
   if (x == end(chrom_order)) {
-    const size_t idx = chrom_order.size();
+    const size_t idx = chrom_order.size() + 1; // exclude 0
     chrom_order.insert(std::make_pair(s.chrom, idx));
     return idx;
   }
   else return x->second;
+}
+
+
+static string
+bad_order(const std::unordered_map<string, size_t> &chrom_order,
+          const string prev_chrom, const size_t prev_pos,
+          const string chrom, const size_t pos) {
+  std::ostringstream oss;
+  const size_t chrom_id = chrom_order.find(chrom)->second;
+  const size_t prev_chrom_id = chrom_order.find(prev_chrom)->second;
+  oss << "bad order:\n"
+      << "chrom=" << chrom << " [id=" << chrom_id << "] pos="
+      << pos << "\n"
+      << "appears after\n"
+      << "chrom=" << prev_chrom << " [id=" << prev_chrom_id << "] pos="
+      << prev_pos << "\n";
+  return oss.str();
 }
 
 
@@ -129,36 +146,38 @@ process_sites(const bool VERBOSE, igzfstream &in_a, igzfstream &in_b,
 
   MSite a, b;
   string prev_chrom_a, prev_chrom_b;
-  size_t chrom_idx_a = std::numeric_limits<size_t>::max();
-  size_t chrom_idx_b = std::numeric_limits<size_t>::max();
-
-  size_t prev_pos_a = 0;
-  size_t prev_pos_b = 0;
+  size_t chrom_id_a = 0, chrom_id_b = 0;
+  size_t prev_chrom_id_a, prev_chrom_id_b = 0;
+  size_t prev_pos_a, prev_pos_b = 0;
 
   while (in_a >> a) {
 
     if (prev_chrom_a.compare(a.chrom) != 0) {
-      chrom_idx_a = get_chrom_idx(chrom_order, chroms_seen_a, a);
+      prev_chrom_id_a = chrom_id_a;
+      chrom_id_a = get_chrom_id(chrom_order, chroms_seen_a, a);
       prev_chrom_a = a.chrom;
       if (VERBOSE)
         cerr << "[processing: " << a.chrom << "]" << endl;
     }
-    else if (a.pos <= prev_pos_a)
-      throw runtime_error("unsorted positions found");
+    if (!site_precedes(prev_chrom_id_a, prev_pos_a, chrom_id_a, a.pos))
+      throw runtime_error(bad_order(chrom_order, prev_chrom_a, prev_pos_a,
+                                    a.chrom, a.pos));
 
     bool advance_b = true;
     while (advance_b && in_b >> b) {
       if (prev_chrom_b.compare(b.chrom) != 0) {
-        chrom_idx_b = get_chrom_idx(chrom_order, chroms_seen_b, b);
+        prev_chrom_id_b = chrom_id_b;
+        chrom_id_b = get_chrom_id(chrom_order, chroms_seen_b, b);
         prev_chrom_b = b.chrom;
       }
-      else if (b.pos <= prev_pos_b)
-        throw runtime_error("unsorted positions found");
-      advance_b = site_precedes(chrom_idx_b, b.pos, chrom_idx_a, a.pos);
+      if (!site_precedes(prev_chrom_id_b, prev_pos_b, chrom_id_b, b.pos))
+        throw runtime_error(bad_order(chrom_order, prev_chrom_b, prev_pos_b,
+                                      b.chrom, b.pos));
+      advance_b = site_precedes(chrom_id_b, b.pos, chrom_id_a, a.pos);
       prev_pos_b = b.pos;
     }
 
-    if (chrom_idx_a == chrom_idx_b && a.pos == b.pos) {
+    if (chrom_id_a == chrom_id_b && a.pos == b.pos) {
 
       if (allow_uncovered || min(a.n_reads, b.n_reads) > 0) {
 
@@ -194,7 +213,7 @@ main_methdiff(int argc, const char **argv) {
     OptionParser opt_parse(strip_path(argv[0]),
                            "compute probability that site "
                            "has higher methylation in file A than B",
-                           "<methcounts-A> <methcounts-B>");
+                           "<counts-a> <counts-b>");
     opt_parse.add_opt("pseudo", 'p', "pseudocount (default: 1)",
                       false, pseudocount);
     opt_parse.add_opt("nonzero-only", 'A',

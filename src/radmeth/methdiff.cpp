@@ -110,7 +110,7 @@ get_chrom_id(std::unordered_map<string, size_t> &chrom_order,
   chroms_seen.insert(s.chrom);
   auto x = chrom_order.find(s.chrom);
   if (x == end(chrom_order)) {
-    const size_t idx = chrom_order.size() + 1; // exclude 0
+    const size_t idx = chrom_order.size();
     chrom_order.insert(std::make_pair(s.chrom, idx));
     return idx;
   }

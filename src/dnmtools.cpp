@@ -16,7 +16,7 @@
 
 #include <iostream>
 #include <string>
-#include <string.h>
+#include <cstring>
 
 using std::string;
 using std::to_string;
@@ -25,7 +25,7 @@ using std::cout;
 using std::endl;
 
 #define PROGRAM_NAME "dnmtools"
-#define PROGRAM_VERSION " 1.2.1"
+#define PROGRAM_VERSION "1.2.1"
 
 int abismal(int argc, const char **argv);
 int abismalidx(int argc, const char **argv);
@@ -159,7 +159,6 @@ main(int argc, const char **argv) {
   else if (strcmp(argv[1], "merge") == 0) ret = main_merge_methcounts(argc - 1, argv + 1);
   else if (strcmp(argv[1], "selectsites") == 0) ret = main_selectsites(argc - 1, argv + 1);
   else if (strcmp(argv[1], "sym") == 0) ret = main_symmetric_cpgs(argc - 1, argv + 1);
-
 
   else {
     cerr << "command not found: " << argv[1] << endl;

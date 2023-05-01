@@ -1,20 +1,20 @@
-/*    methcounts: a program for counting the methylated and
- *    unmethylated reads mapping over each CpG or C
+/* methcounts: a program for counting the methylated and unmethylated
+ * reads mapping over each CpG or C
  *
- *    Copyright (C) 2011-2022 University of Southern California and
- *                            Andrew D. Smith
+ * Copyright (C) 2011-2022 University of Southern California and
+ *                         Andrew D. Smith
  *
- *    Authors: Andrew D. Smith and Song Qiang and Guilherme Sena
+ * Authors: Andrew D. Smith and Song Qiang and Guilherme Sena
  *
- *    This program is free software: you can redistribute it and/or modify
- *    it under the terms of the GNU General Public License as published by
- *    the Free Software Foundation, either version 3 of the License, or
- *    (at your option) any later version.
+ * This program is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
  *
- *    This program is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
  */
 
 #include <string>
@@ -264,26 +264,24 @@ inline static size_t
 get_chrom_id(const string &chrom_name,
              const unordered_map<string, size_t> &cl) {
 
-  const unordered_map<string, size_t>::const_iterator
-    the_chrom(cl.find(chrom_name));
-  if (the_chrom == end(cl))
+  auto the_chrom(chrom_lookup.find(chrom_name));
+  if (the_chrom == end(chrom_lookup))
     throw runtime_error("could not find chrom: " + chrom_name);
 
   return the_chrom->second;
 }
+
 
 template <class T>
 static void
 process_reads(const bool VERBOSE, SAMReader &in, T &out,
               const unordered_map<string, size_t> &chrom_lookup,
               const vector<size_t> &chrom_sizes,
-              const vector<string> &chrom_order,
               const vector<string> &chroms,
               const bool CPG_ONLY) {
 
-  size_t chrom_id = 0;
-  size_t chrom_size = 0;
-  GenomicRegion chrom_region; // holds chrom name for fast comparisons
+  string name;
+  string::const_iterator chrom_itr;
 
   sam_rec aln;
 
@@ -293,32 +291,32 @@ process_reads(const bool VERBOSE, SAMReader &in, T &out,
   unordered_set<string> chroms_seen;
   while (in >> aln) {
 
-    // if chrom changes, output previous results, get new one
-    if (counts.empty() || aln.rname != chrom_region.get_chrom()) {
-      // make sure all reads from same chrom are contiguous in the file
-      if (aln.rname != chrom_region.get_chrom()) {
-        if (chrom_lookup.find(aln.rname) == end(chrom_lookup))
-          throw runtime_error("chromosome in SAM file not found in reference:" +
-                              aln.rname);
+    // if chrom changes, output results, get the next one
+    if (aln.rname != name) {
 
-        if (chroms_seen.find(aln.rname) != end(chroms_seen))
-          throw runtime_error("reads in SAM file not sorted by position");
-        chroms_seen.insert(aln.rname);
-      }
-      if (!counts.empty()) // should be true after first iteration
-        write_output(out, chrom_region.get_chrom(),
-                     chroms[chrom_id], counts, CPG_ONLY);
+      // write output if there is any; should fail only once
+      if (!counts.empty())
+        write_output(out, name, *chrom_itr, counts, CPG_ONLY);
 
-      // move to the current chromosome
-      chrom_id = get_chrom_id(aln.rname, chrom_lookup);
-      chrom_size = chrom_sizes[chrom_id];
-      chrom_region.set_chrom(aln.rname);
-      // reset the counts
-      counts.clear();
-      counts.resize(chrom_size);
+      // make sure all reads from same chrom are consecutive
+      if (chroms_seen.find(aln.rname) != end(chroms_seen))
+        throw runtime_error("reads in SAM file not sorted");
+      chroms_seen.insert(aln.rname);
+
+      // get the next chrom to process
+      auto chrom_idx(chrom_lookup.find(aln.rname));
+      if (chrom_idx == end(chrom_lookup))
+        throw runtime_error("chromosome not found: " + aln.rname);
 
       if (VERBOSE)
         cerr << "PROCESSING:\t" << aln.rname << endl;
+
+      name = aln.rname;
+      chrom_itr = begin(chroms) + chrom_idx->second;
+
+      // reset the counts
+      counts.clear();
+      counts.resize(chrom_sizes[chrom_idx->second]);
     }
 
     // do the work for this mapped read, depending on strand
@@ -327,11 +325,10 @@ process_reads(const bool VERBOSE, SAMReader &in, T &out,
     else
       count_states_pos(aln, counts);
   }
-  if (!counts.empty()) {// should be true after first iteration
-    write_output(out, chrom_region.get_chrom(),
-                chroms[chrom_id], counts, CPG_ONLY);
-  }
+  if (!counts.empty())
+    write_output(out, name, *chrom_itr, counts, CPG_ONLY);
 }
+
 
 int
 main_methcounts(int argc, const char **argv) {
@@ -341,19 +338,16 @@ main_methcounts(int argc, const char **argv) {
     bool VERBOSE = false;
     bool CPG_ONLY = false;
 
-    string chrom_file;
+    string chroms_file;
     string outfile;
-    string fasta_suffix = "fa";
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), "get methylation levels from "
                            "mapped WGBS reads", "-c <chroms> <mapped-reads>");
-    opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
+    opt_parse.add_opt("output", 'o', "output file name (default: stdout)",
                       false, outfile);
-    opt_parse.add_opt("chrom", 'c', "file or dir of chroms (FASTA format; "
-                      ".fa suffix)", true , chrom_file);
-    opt_parse.add_opt("suffix", 's', "suffix of FASTA files "
-                      "(assumes -c specifies dir)", false , fasta_suffix);
+    opt_parse.add_opt("chrom", 'c', "reference genome file (FASTA format)",
+                      true , chroms_file);
     opt_parse.add_opt("cpg-only", 'n', "print only CpG context cytosines",
                       false, CPG_ONLY);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
@@ -378,40 +372,18 @@ main_methcounts(int argc, const char **argv) {
     if (!outfile.empty() && !is_valid_output_file(outfile))
       throw runtime_error("bad output file: " + outfile);
 
-    vector<string> chrom_files;
-    if (isdir(chrom_file.c_str()))
-      read_dir(chrom_file, fasta_suffix, chrom_files);
-    else chrom_files.push_back(chrom_file);
-
-    if (VERBOSE)
-      cerr << "n_chrom_files: " << chrom_files.size() << endl;
-
-    vector<string> chroms, names;
+    vector<string> chroms;
+    vector<string> names;
+    read_fasta_file_short_names(chroms_file, names, chroms);
     unordered_map<string, size_t> chrom_lookup;
-    vector<size_t> chrom_sizes;
-    for (auto i(begin(chrom_files)); i != end(chrom_files); ++i) {
-
-      const size_t chrom_counter = chroms.size();
-      vector<string> tmp_chroms, tmp_names;
-      read_fasta_file_short_names(*i, tmp_names, tmp_chroms);
-
-      chroms.resize(chrom_counter + tmp_chroms.size());
-      names.resize(chrom_counter + tmp_chroms.size());
-      chrom_sizes.resize(chrom_counter + tmp_chroms.size());
-
-      for (size_t j = 0; j < tmp_chroms.size(); ++j) {
-        const size_t k = chrom_counter + j;
-        names[k].swap(tmp_names[j]);
-        chroms[k].swap(tmp_chroms[j]);
-        chrom_sizes[k] = chroms[k].size();
-        chrom_lookup[names[k]] = k;
-      }
+    vector<size_t> chrom_sizes(chroms.size(), 0);
+    for (size_t i = 0; i < chroms.size(); ++i) {
+      chrom_lookup[names[i]] = i;
+      chrom_sizes[i] = chroms[i].size();
     }
-    vector<string> chrom_order(names);
-    sort(begin(chrom_order), end(chrom_order));
 
     if (VERBOSE)
-      cerr << "n_chroms: " << chroms.size() << endl;
+      cerr << "[n chroms in reference: " << chroms.size() << "]" << endl;
 
     SAMReader in(mapped_reads_file);
     if (!in)
@@ -422,13 +394,13 @@ main_methcounts(int argc, const char **argv) {
       if (!outfile.empty()) of.open(outfile);
       std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
-      process_reads(VERBOSE, in, out, chrom_lookup, chrom_sizes, chrom_order,
-                    chroms, CPG_ONLY);
+      process_reads(VERBOSE, in, out, chrom_lookup,
+                    chrom_sizes, chroms, CPG_ONLY);
     }
     else {
       ogzfstream out(outfile);
-      process_reads(VERBOSE, in, out, chrom_lookup, chrom_sizes, chrom_order,
-                    chroms, CPG_ONLY);
+      process_reads(VERBOSE, in, out, chrom_lookup,
+                    chrom_sizes, chroms, CPG_ONLY);
     }
   }
   catch (const runtime_error &e) {

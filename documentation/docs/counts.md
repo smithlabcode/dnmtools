@@ -133,22 +133,14 @@ way in the future.
 ```txt
 -o, -output
 ```
-The name of the output file (default: stdout).
+Output file name. The default is to write output to the terminal,
+which is not useful unless commands are piped.
 
 ```txt
 -c, -chrom
 ```
-File or directory of files containing the chromosome sequences (FASTA
-format; the `.fa` suffix assumed). If the input is a directory, it
-should contain several FASTA files, each one of which contains a
-chromosome sequence. These should be the exact same as used for
-mapping the reads. This parameter is required.
-
-```txt
--s, -suffix
-```
-Suffix of FASTA format files (only relevant if `-c` specifies a
-directory of files).
+Reference genome file, which must be in FASTA format. This is
+required.
 
 ```txt
 -n, -cpg-only

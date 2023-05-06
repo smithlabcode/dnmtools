@@ -114,6 +114,8 @@ main_levels(int argc, const char **argv) {
           cerr << "PROCESSING:\t" << site.chrom << "\n";
       }
 
+      cytosines.update(site);
+
       if (site.is_cpg()) {
         cpg.update(site);
         if (site.is_mate_of(prev_site)) {
@@ -125,8 +127,6 @@ main_levels(int argc, const char **argv) {
       else if (site.is_ccg()) ccg.update(site);
       else if (site.is_cxg()) cxg.update(site);
       else throw runtime_error("bad site context: " + site.context);
-
-      cytosines.update(site);
 
       prev_site = site;
     }

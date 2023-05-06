@@ -1,18 +1,18 @@
-/*    Copyright (C) 2013-2022 University of Southern California and
- *                       Egor Dolzhenko
- *                       Andrew D Smith
+/* Copyright (C) 2013-2023 University of Southern California and
+ *                         Egor Dolzhenko
+ *                         Andrew D Smith
  *
- *    Authors: Andrew D. Smith and Egor Dolzhenko and Guilherme Sena
+ * Authors: Andrew D. Smith and Egor Dolzhenko and Guilherme Sena
  *
- *    This program is free software: you can redistribute it and/or modify
- *    it under the terms of the GNU General Public License as published by
- *    the Free Software Foundation, either version 3 of the License, or
- *    (at your option) any later version.
+ * This program is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
  *
- *    This program is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
  */
 
 #include <iostream>
@@ -66,7 +66,7 @@ read_next_significant_cpg(istream &cpg_stream, GenomicRegion &cpg,
         >> adjusted_pval >> corrected_pval
         >> test_cov >> test_meth >> rest_cov >> rest_meth;
 
-    if (0 <= corrected_pval && corrected_pval < cutoff) {
+    if (corrected_pval >= 0.0 && corrected_pval < cutoff) {
       cpg.set_chrom(chrom);
       cpg.set_start(position);
       cpg.set_end(position + 1);
@@ -141,13 +141,15 @@ merge(istream &cpg_stream, ostream &dmr_stream, double cutoff) {
     }
   }
   if (dmr.get_score() != 0) {
+    const double diff =
+      static_cast<double>(dmr_test_meth)/dmr_test_cov -
+      static_cast<double>(dmr_rest_meth)/dmr_rest_cov;
     dmr_stream << dmr.get_chrom() << '\t'
                << dmr.get_start() << '\t'
                << dmr.get_end()   << '\t'
                << dmr.get_name()  << '\t'
                << dmr.get_score() << '\t'
-               << double(dmr_test_meth)/dmr_test_cov -
-      double(dmr_rest_meth)/dmr_rest_cov << endl;
+               << diff << endl;
   }
 }
 
@@ -158,7 +160,6 @@ main_radmeth_merge(int argc, const char **argv) {
 
     /* FILES */
     string outfile;
-    string bin_spec = "1:200:25";
     double cutoff = 0.01;
 
     /**************** GET COMMAND LINE ARGUMENTS *************************/
@@ -170,7 +171,6 @@ main_radmeth_merge(int argc, const char **argv) {
     opt_parse.add_opt("output", 'o',
                       "output file (default: stdout)", false, outfile);
     opt_parse.add_opt("cutoff", 'p', "p-value cutoff", false , cutoff);
-    opt_parse.add_opt("bins", 'b', "corrlation bin specs", false , bin_spec);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {

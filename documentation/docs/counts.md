@@ -104,27 +104,43 @@ $ awk '$4 == CHG' human_esc.meth > human_esc_chg.meth
 Our convention is to name `counts` output with all cytosines like
 `*.meth`, with CHG like `*.chg.meth` and with CHH like `*.chh.meth`.
 
+**Estimated "mutations" in the sample:**
+In version 1.2.1 sites are flagged if there is an indication that a
+mutation at a C in the sample might cause a T to appear in the reads,
+and then confound the issues of mutations vs. the absence of
+methylation. The 4th column in the output (as indicated above) is the
+"context" string for that cytosine, and if a site is flagged as a
+possible mutation, then an `x` will appear at the end of the context
+string. This is an example of what you would see in the output:
+
+```txt
+chr1  1870  +  CpGx  0         1
+```
+
+The data used to make this inference is on the opposite strand: if
+there is a C on the positive strand, then we should observe a G at the
+same position in reads mapping to the negative strand, regardless of
+the bisulfite. If the reference has a C, but molecules in the sample
+have mutated C->T, independent of methylation or bisulfite, then we
+would observe an A in reads mapping to the same position on the
+opposite strand. At present we use very poor statistical criteria for
+this, so unless you believe you understand it well, it's best to
+ignore. Hopefully we can do this in a more rigorous and interpretable
+way in the future.
+
 ## Options
 
 ```txt
 -o, -output
 ```
-The name of the output file (default: stdout).
+Output file name. The default is to write output to the terminal,
+which is not useful unless commands are piped.
 
 ```txt
 -c, -chrom
 ```
-File or directory of files containing the chromosome sequences (FASTA
-format; the `.fa` suffix assumed). If the input is a directory, it
-should contain several FASTA files, each one of which contains a
-chromosome sequence. These should be the exact same as used for
-mapping the reads. This parameter is required.
-
-```txt
--s, -suffix
-```
-Suffix of FASTA format files (only relevant if `-c` specifies a
-directory of files).
+Reference genome file, which must be in FASTA format. This is
+required.
 
 ```txt
 -n, -cpg-only

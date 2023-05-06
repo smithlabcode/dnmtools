@@ -8,9 +8,9 @@ $ dnmtools radmerge [OPTIONS] <radmeth-input.bed>
 ## Description
 
 After running [radmeth](../radmeth) followed by
-[radadjust](../radadjust), it is possible to further join
-individually differentially methylated CpGs into differentially
-methylated regions. This can be achieved with the command
+[radadjust](../radadjust), it is possible to further join individually
+differentially methylated CpGs into differentially methylated
+regions. This can be achieved with the command
 
 ```shell
 $ dnmtools radmerge -p 0.01 radmeth-input.bed > output-dmrs.bed
@@ -21,12 +21,13 @@ differentially methylated sites with p-value below 0.01 (set by the -p
 parameter). The output format is
 
 ```txt
- chrom  start   end dmr num-sites   meth-diff
+chrom    start    end   dmr    num-sites   meth-diff
 ```
 
-where `num-sites` and `meth-diff` are the number of significantly
+Above, `num-sites` and `meth-diff` are the number of significantly
 differentially methylated CpGs in the DMR and the estimated
-methylation difference. For our example, the output looks like this:
+methylation difference, respectively. Example output might look like
+this:
 
 ```txt
 chr1     57315   57721  dmr     10      -0.498148
@@ -36,14 +37,20 @@ chr1    149284  149444  dmr      7      -0.430453
 chr1    274339  275254  dmr     18      -0.520114
 ```
 
+Note that in addition to being conservative, the work done by
+`radmerge` is very simple, and does not consider genomic distance
+between neighboring sites. It will merge consecutive significant sites
+into one interval no matter how distant are those sites on a
+chromosome.
+
 ## Options
 
 ```txt
  -o, -output
 ```
-The name of the output file (default: stdout).
+Output file (default: stdout).
 
 ```txt
  -p, -cutoff
 ```
-P-value cutoff that defines statistical significance (default: 0.01)
+P-value cutoff (default: 0.01).

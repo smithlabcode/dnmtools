@@ -1,20 +1,20 @@
-/*    bsrate: a program for determining the rate of bisulfite
- *    conversion in a bisulfite sequencing experiment
+/* bsrate: a program for determining the rate of bisulfite conversion
+ * in a bisulfite sequencing experiment
  *
- *    Copyright (C) 2014-2022 University of Southern California and
- *                            Andrew D. Smith
+ * Copyright (C) 2014-2023 University of Southern California and
+ *                         Andrew D. Smith
  *
- *    Authors: Andrew D. Smith and Guilherme Sena
+ * Authors: Andrew D. Smith and Guilherme Sena
  *
- *    This program is free software: you can redistribute it and/or modify
- *    it under the terms of the GNU General Public License as published by
- *    the Free Software Foundation, either version 3 of the License, or
- *    (at your option) any later version.
+ * This program is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
  *
- *    This program is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
  */
 
 
@@ -232,26 +232,6 @@ write_output(const string &outfile,
 }
 
 
-typedef unordered_map<string, string> chrom_file_map;
-static void
-get_chrom(const sam_rec &aln,
-          const vector<string> &all_chroms,
-          const unordered_map<string, size_t> &chrom_lookup,
-          GenomicRegion &chrom_region, string &chrom) {
-
-  const unordered_map<string, size_t>::const_iterator
-    the_chrom(chrom_lookup.find(aln.rname));
-  if (the_chrom == chrom_lookup.end())
-    throw runtime_error("could not find chrom: " + aln.rname);
-
-  chrom = all_chroms[the_chrom->second];
-  if (chrom.empty())
-    throw runtime_error("could not find chrom: " + aln.rname);
-
-  chrom_region.set_chrom(aln.rname);
-}
-
-
 int
 main_bsrate(int argc, const char **argv) {
 
@@ -264,10 +244,9 @@ main_bsrate(int argc, const char **argv) {
     bool INCLUDE_CPGS = false;
     bool reads_are_a_rich = false;
 
-    string chrom_file;
+    string chroms_file;
     string outfile;
-    string fasta_suffix = "fa";
-    string sequence_to_use;
+    string seq_to_use; // use only this chrom/sequence in the analysis
 
 
     /****************** COMMAND LINE OPTIONS ********************/
@@ -277,16 +256,12 @@ main_bsrate(int argc, const char **argv) {
                            "-c <chroms> <mapped-reads>");
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
                       false, outfile);
-    opt_parse.add_opt("chrom", 'c', "file or dir of chroms (FASTA format; "
-                      ".fa suffix)", true , chrom_file);
-    //!!!!!! OPTION IS HIDDEN BECAUSE USERS DON'T NEED TO CHANGE IT...
-    //     opt_parse.add_opt("suffix", 's', "suffix of FASTA files "
-    //                "(assumes -c indicates dir)",
-    //                false , fasta_suffix);
+    opt_parse.add_opt("chrom", 'c', "File of chromosome sequences (FASTA)",
+                      true, chroms_file);
     opt_parse.add_opt("all", 'N', "count all Cs (including CpGs)",
                       false , INCLUDE_CPGS);
     opt_parse.add_opt("seq", '\0', "use only this sequence (e.g. chrM)",
-                      false , sequence_to_use);
+                      false , seq_to_use);
     opt_parse.add_opt("a-rich", 'A', "reads are A-rich",
                       false, reads_are_a_rich);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
@@ -312,30 +287,15 @@ main_bsrate(int argc, const char **argv) {
     const string mapped_reads_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    vector<string> chrom_files;
-    if (isdir(chrom_file.c_str()))
-      read_dir(chrom_file, fasta_suffix, chrom_files);
-    else chrom_files.push_back(chrom_file);
-
-    if (VERBOSE)
-      cerr << "n_chrom_files: " << chrom_files.size() << endl;
-
-    vector<string> all_chroms;
-    vector<string> chrom_names;
+    vector<string> chroms;
+    vector<string> names;
+    read_fasta_file_short_names(chroms_file, names, chroms);
     unordered_map<string, size_t> chrom_lookup;
-    for (auto i(begin(chrom_files)); i != end(chrom_files); ++i) {
-      vector<string> tmp_chroms, tmp_names;
-      read_fasta_file_short_names(*i, tmp_names, tmp_chroms);
-      for (size_t j = 0; j < tmp_chroms.size(); ++j) {
-        chrom_names.push_back(tmp_names[j]);
-        chrom_lookup[chrom_names.back()] = all_chroms.size();
-        all_chroms.push_back("");
-        all_chroms.back().swap(tmp_chroms[j]);
-      }
-    }
+    for (size_t i = 0; i < chroms.size(); ++i)
+      chrom_lookup[names[i]] = i;
 
     if (VERBOSE)
-      cerr << "n_chroms: " << all_chroms.size() << endl;
+      cerr << "[n chroms in reference: " << chroms.size() << "]" << endl;
 
     igzfstream in(mapped_reads_file);
     if (!in)
@@ -348,14 +308,11 @@ main_bsrate(int argc, const char **argv) {
     vector<size_t> err_pos(output_size, 0ul);
     vector<size_t> err_neg(output_size, 0ul);
 
-    string chrom;
-    GenomicRegion chrom_region; // exists only for faster comparison
+    size_t chrom_idx = 0;
+    string chrom_name;
     size_t hanging = 0;
 
-    GenomicRegion seq_to_use_check;
-    seq_to_use_check.set_chrom(sequence_to_use);
-
-    bool use_this_chrom = sequence_to_use.empty();
+    bool use_this_chrom = seq_to_use.empty();
 
     SAMReader sam_reader(mapped_reads_file);
     sam_rec aln;
@@ -367,7 +324,7 @@ main_bsrate(int argc, const char **argv) {
         revcomp(aln);
 
       // get the correct chrom if it has changed
-      if (chrom.empty() || aln.rname != chrom_region.get_chrom()) {
+      if (aln.rname != chrom_name) {
         // make sure all reads from same chrom are contiguous in the file
         if (chroms_seen.find(aln.rname) != end(chroms_seen))
           throw runtime_error("chroms out of order in mapped reads file");
@@ -376,18 +333,23 @@ main_bsrate(int argc, const char **argv) {
           cerr << "processing chromosome " << aln.rname << "\n";
 
         chroms_seen.insert(aln.rname);
-        get_chrom(aln, all_chroms, chrom_lookup, chrom_region, chrom);
-        use_this_chrom =
-          sequence_to_use.empty() || aln.rname == seq_to_use_check.get_chrom();
+
+        auto chrom_itr = chrom_lookup.find(aln.rname);
+        if (chrom_itr == end(chrom_lookup))
+          throw runtime_error("could not find chrom: " + aln.rname);
+
+        chrom_idx = chrom_itr->second;
+        chrom_name = aln.rname;
+        use_this_chrom = seq_to_use.empty() || chrom_name == seq_to_use;
       }
 
       if (use_this_chrom) {
         // do the work for this mapped read
         if (is_rc(aln))
-          count_states_neg(INCLUDE_CPGS, chrom, aln,
+          count_states_neg(INCLUDE_CPGS, chroms[chrom_idx], aln,
                            unconv_count_neg, conv_count_neg, err_neg, hanging);
         else
-          count_states_pos(INCLUDE_CPGS, chrom, aln,
+          count_states_pos(INCLUDE_CPGS, chroms[chrom_idx], aln,
                            unconv_count_pos, conv_count_pos, err_pos, hanging);
       }
     }
@@ -404,10 +366,6 @@ main_bsrate(int argc, const char **argv) {
   }
   catch (const runtime_error &e) {
     cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

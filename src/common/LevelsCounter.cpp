@@ -77,7 +77,7 @@ LevelsCounter::tostring() const {
   return oss.str();
 }
 
-double LevelsCounter::alpha = 0.95;
+double LevelsCounter::alpha = 0.05;
 
 std::ostream &
 operator<<(std::ostream &out, const LevelsCounter &cs) {

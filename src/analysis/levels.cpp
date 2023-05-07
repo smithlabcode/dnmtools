@@ -67,7 +67,8 @@ main_levels(int argc, const char **argv) {
     OptionParser opt_parse(strip_path(argv[0]), description, "<counts-file>");
     opt_parse.add_opt("output", 'o', "output file (default: stdout)",
                       false, outfile);
-    opt_parse.add_opt("alpha", 'a', "alpha for confidence interval",
+    opt_parse.add_opt("alpha", 'a',
+                      "alpha for confidence interval (default: 0.05)",
                       false, LevelsCounter::alpha);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;

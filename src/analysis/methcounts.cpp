@@ -264,8 +264,8 @@ inline static size_t
 get_chrom_id(const string &chrom_name,
              const unordered_map<string, size_t> &cl) {
 
-  auto the_chrom(chrom_lookup.find(chrom_name));
-  if (the_chrom == end(chrom_lookup))
+  auto the_chrom(cl.find(chrom_name));
+  if (the_chrom == end(cl))
     throw runtime_error("could not find chrom: " + chrom_name);
 
   return the_chrom->second;
@@ -281,7 +281,7 @@ process_reads(const bool VERBOSE, SAMReader &in, T &out,
               const bool CPG_ONLY) {
 
   string name;
-  string::const_iterator chrom_itr;
+  vector<string>::const_iterator chrom_itr;
 
   sam_rec aln;
 

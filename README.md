@@ -45,27 +45,26 @@ all the formatting.
 * Download [dnmtools-1.2.1.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.2.1/dnmtools-1.2.1.tar.gz).
 * Unpack the archive:
 ```console
-$ tar -zxvf dnmtools-1.2.1.tar.gz
+tar -zxvf dnmtools-1.2.1.tar.gz
 ```
 * Move into the dnmtools directory and create a build directory:
 ```console
-$ cd dnmtools-1.2.1
-$ mkdir build && cd build
+cd dnmtools-1.2.1 && mkdir build && cd build
 ```
 * Run the configuration script:
 ```console
-$ ../configure
+../configure
 ```
 If you do not want to install DNMTools system-wide, or if you do
 not have admin privileges, specify a prefix directory:
 ```console
-$ ../configure --prefix=/some/reasonable/place
+../configure --prefix=/some/reasonable/place
 ```
 If you installed HTSlib yourself in some non-standard directory,
 you must specify the location like this:
 ```console
-$ ../configure CPPFLAGS='-I /path/to/htslib/headers' \
-               LDFLAGS='-L/path/to/htslib/lib'
+../configure CPPFLAGS='-I /path/to/htslib/headers' \
+             LDFLAGS='-L/path/to/htslib/lib'
 ```
 Depending on how you obtained HTSlib, the headers may not be
 in a directory at the same depth as the library file.
@@ -75,13 +74,12 @@ in a directory at the same depth as the library file.
 If you are still in the `build` directory, run `make` to compile the
 tools, and then `make install` to install them:
 ```console
-$ make
-$ make install
+make && make install
 ```
 If your HTSlib (or some other library) is not installed system-wide,
 then you might need to udpate your library path:
 ```console
-$ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/htslib/lib
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/htslib/lib
 ```
 
 ### Testing the program
@@ -89,7 +87,7 @@ $ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/path/to/htslib/lib
 To test if everything was successful, simply run `dnmtools` without
 any arguments and you should see the list of available commands:
 ```console
-$ dnmtools
+dnmtools
 ```
 
 ### Using a clone of the repo
@@ -102,8 +100,11 @@ compile the source using a `Makefile` left in the root of the source
 tree. If HTSLib and other libraries are available system-wide,
 compile by running:
 ```console
-$ make
+make
 ```
+This functionality will probably be removed soon, and if you want to
+build the code this way, you should know what you are doing any be
+able to make it work yourself.
 
 ## Usage
 
@@ -120,7 +121,7 @@ desenabr@usc.edu
 
 ## Copyright and License Information
 
-Copyright (C) 2022
+Copyright (C) 2022-2023
 Andrew D. Smith and Guilherme de Sena Brandine
 
 Authors of DNMTools: Andrew D. Smith and Guilherme de Sena Brandine

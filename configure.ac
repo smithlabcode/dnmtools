@@ -1,6 +1,6 @@
 dnl This file is part of dnmtools
 dnl
-dnl Copyright (C) 2022: Andrew D. Smith
+dnl Copyright (C) 2022-2023: Andrew D. Smith
 dnl
 dnl Authors: Andrew D. Smith
 dnl
@@ -14,7 +14,7 @@ dnl but WITHOUT ANY WARRANTY; without even the implied warranty of
 dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 dnl General Public License for more details.
 
-AC_INIT([dnmtools], [1.2.1], [andrewds@usc.edu],
+AC_INIT([dnmtools], [1.2.2], [andrewds@usc.edu],
         [dnmtools], [https://github.com/smithlabcode/dnmtools])
 dnl the config.h is not currently #included in the source, and only
 dnl used to keep command lines short.

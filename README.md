@@ -12,7 +12,7 @@ sequencing (RRBS). These tools focus on overcoming the computing
 challenges imposed by the scale of genome-wide DNA methylation data,
 which is usually the early parts of data analysis.
 
-## Installing release 1.2.1
+## Installing release 1.2.2
 
 The documentation for DNMTools can be found
 [here](https://dnmtools.readthedocs.io). But if you want to install
@@ -42,14 +42,14 @@ all the formatting.
 
 ### Configuration
 
-* Download [dnmtools-1.2.1.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.2.1/dnmtools-1.2.1.tar.gz).
+* Download [dnmtools-1.2.2.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.2.2/dnmtools-1.2.2.tar.gz).
 * Unpack the archive:
 ```console
-tar -zxvf dnmtools-1.2.1.tar.gz
+tar -zxvf dnmtools-1.2.2.tar.gz
 ```
 * Move into the dnmtools directory and create a build directory:
 ```console
-cd dnmtools-1.2.1 && mkdir build && cd build
+cd dnmtools-1.2.2 && mkdir build && cd build
 ```
 * Run the configuration script:
 ```console

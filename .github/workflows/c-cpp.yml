@@ -17,6 +17,8 @@ jobs:
         submodules: recursive
     - name: Install autotools
       run: sudo apt-get install -y autoconf automake libtool
+    - name: Install dependencies
+      run: sudo apt-get install -y libhts gsl
     - name: Generate configure script
       run: autoreconf -i src/abismal/src/smithlab_cpp src/abismal src/smithlab_cpp .
     - name: configure

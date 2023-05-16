@@ -157,7 +157,7 @@ process_sites(const bool VERBOSE, igzfstream &in_a, igzfstream &in_b,
       chrom_id_a = get_chrom_id(chrom_order, chroms_seen_a, a);
       prev_chrom_a = a.chrom;
       if (VERBOSE)
-        cerr << "[processing: " << a.chrom << "]" << endl;
+        cerr << "processing " << a.chrom << endl;
     }
     if (!site_precedes(prev_chrom_id_a, prev_pos_a, chrom_id_a, a.pos))
       throw runtime_error(bad_order(chrom_order, prev_chrom_a, prev_pos_a,

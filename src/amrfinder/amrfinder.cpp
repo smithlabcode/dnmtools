@@ -305,7 +305,7 @@ process_chrom(const bool VERBOSE, const bool PROGRESS,
 
   const size_t chrom_cpgs = get_n_cpgs(epireads);
   if (VERBOSE)
-    cerr << "PROCESSING: " << chrom_name << " "
+    cerr << "processing " << chrom_name << " "
          << "[reads: " << epireads.size() << "] "
          << "[cpgs: " << chrom_cpgs << "]" << endl;
 

@@ -112,7 +112,7 @@ main_levels(int argc, const char **argv) {
       if (site.chrom != prev_site.chrom) {
         ++chrom_count;
         if (VERBOSE)
-          cerr << "PROCESSING:\t" << site.chrom << "\n";
+          cerr << "processing " << site.chrom << endl;
       }
 
       cytosines.update(site);

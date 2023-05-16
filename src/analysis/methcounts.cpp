@@ -309,7 +309,7 @@ process_reads(const bool VERBOSE, SAMReader &in, T &out,
         throw runtime_error("chromosome not found: " + aln.rname);
 
       if (VERBOSE)
-        cerr << "PROCESSING:\t" << aln.rname << endl;
+        cerr << "processing " << aln.rname << endl;
 
       name = aln.rname;
       chrom_itr = begin(chroms) + chrom_idx->second;

@@ -265,7 +265,7 @@ process_chrom(const bool VERBOSE, const string &chrom_name,
     max_epiread_len = std::max(max_epiread_len, epireads[i].length());
   const size_t chrom_cpgs = get_n_cpgs(epireads);
   if (VERBOSE)
-    cerr << "PROCESSING: " << chrom_name << " "
+    cerr << "processing " << chrom_name << " "
          << "[reads: " << epireads.size() << "] "
          << "[cpgs: " << chrom_cpgs << "]" << endl;
 

@@ -270,7 +270,7 @@ process_chrom(const bool VERBOSE, const size_t cpg_window,
 
   const size_t n_cpgs = cpg_lookup.size();
   if (VERBOSE)
-    cerr << "processing chrom: " << chrom
+    cerr << "processing " << chrom
          << " (cpgs = " << n_cpgs << ")" << endl;
 
   vector<double> site_probs;

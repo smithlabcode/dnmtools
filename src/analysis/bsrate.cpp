@@ -330,7 +330,7 @@ main_bsrate(int argc, const char **argv) {
           throw runtime_error("chroms out of order in mapped reads file");
 
         if (VERBOSE)
-          cerr << "processing chromosome " << aln.rname << "\n";
+          cerr << "processing " << aln.rname << endl;
 
         chroms_seen.insert(aln.rname);
 

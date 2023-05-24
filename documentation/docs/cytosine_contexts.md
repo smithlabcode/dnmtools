@@ -81,3 +81,45 @@ contexts would be:
 13   +   CHG
 15   -   CHG
 ```
+
+The following table should help explain which triples of nucleotides
+are counted towards each context. Each of the triples begins with a C,
+and in our formats, this is the cytosine where the methylation level
+or state is in question.
+
+| Trip | CpG | CHH | CHG | CWG | CCG |   |
+|------|-----|-----|-----|-----|-----|---|
+| CAA  |     | 1   |     |     |     |   |
+| CAC  |     | 1   |     |     |     |   |
+| CAG  |     |     | 1   | 1   |     | * |
+| CAT  |     | 1   |     |     |     |   |
+| CCA  |     | 1   |     |     |     |   |
+| CCC  |     | 1   |     |     |     |   |
+| CCG  |     |     | 1   |     | 1   | * |
+| CCT  |     | 1   |     |     |     |   |
+| CGA  | 1   |     |     |     |     |   |
+| CGC  | 1   |     |     |     |     |   |
+| CGG  | 1   |     |     |     |     |   |
+| CGT  | 1   |     |     |     |     |   |
+| CTA  |     | 1   |     |     |     |   |
+| CTC  |     | 1   |     |     |     |   |
+| CTG  |     |     | 1   | 1   |     | * |
+| CTT  |     | 1   |     |     |     |   |
+
+The traditional contexts considered are the CpG, the CHH and the
+CHG. The CHH and CHG have been of more interest in plants, especially
+Arabidopsis. Together the CpG, CHH and CHG contexts cover all
+trinucleotides that start with C, and partition the trinucs
+unambiguously. These are the first 3 columns above. The CWG and CCG
+are of interest mostly because the CWG is so important in vertebrate
+species (and more-so for mammalia) where a combination of
+deamination-induced loss of the middle cytosine of a CCG and tandem
+expansion of CAG/CTG repeats (including within human populations) has
+led to a relative abundance of the CWG in important places in the
+genome. The CWG may also be called "symmetric" in the same way as a
+CHG. However, in a strict sense, if one calls every CHG symmetric,
+then it might include CCG on one strand, with CGG on the other, and
+the CGG would not be a CHG.
+
+The above table does not mention the CXG; we plan to remove the CXG
+and only include contexts from the above table.

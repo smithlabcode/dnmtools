@@ -36,7 +36,7 @@
 #include <cmath>
 #include <sstream>
 
-#include "config.h"
+#include <config.h>
 
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
@@ -440,10 +440,6 @@ main_format_reads(int argc, const char **argv) {
   }
   catch (const runtime_error &e) {
     cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

@@ -3,7 +3,7 @@
  * on identical mapping location and possibly also using the read
  * sequence if requested.
  *
- * Copyright (C) 2013-2021 University of Southern California and
+ * Copyright (C) 2013-2023 University of Southern California and
  *                         Andrew D. Smith
  *
  * Authors: Andrew D. Smith, Ben Decato, Song Qiang, Guilherme Sena
@@ -25,6 +25,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <stdexcept>
+
+#include <config.h>
 
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
@@ -374,11 +376,8 @@ main_duplicate_remover(int argc, const char **argv) {
     if (!out)
       throw runtime_error("failed to open output file: " + outfile);
 
-    // GS TODO: the empty argument below is the program version, it
-    // should be an extern string to the dnmtools version when we
-    // set prefix command calls
     std::ostringstream oss;
-    write_pg_line(argc, argv, "DUPLICATE_REMOVER", "", oss);
+    write_pg_line(argc, argv, "DUPLICATE_REMOVER", VERSION, oss);
     const string pg_line = oss.str();
 
     duplicate_remover(VERBOSE, USE_SEQUENCE, ALL_C, DISABLE_SORT_TEST,
@@ -386,10 +385,6 @@ main_duplicate_remover(int argc, const char **argv) {
   }
   catch (const runtime_error &e) {
     cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

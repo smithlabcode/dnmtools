@@ -147,8 +147,8 @@ process_sites(const bool VERBOSE, igzfstream &in_a, igzfstream &in_b,
   MSite a, b;
   string prev_chrom_a, prev_chrom_b;
   size_t chrom_id_a = 0, chrom_id_b = 0;
-  size_t prev_chrom_id_a, prev_chrom_id_b = 0;
-  size_t prev_pos_a, prev_pos_b = 0;
+  size_t prev_chrom_id_a = 0, prev_chrom_id_b = 0;
+  size_t prev_pos_a = 0, prev_pos_b = 0;
 
   while (in_a >> a) {
 
@@ -159,7 +159,7 @@ process_sites(const bool VERBOSE, igzfstream &in_a, igzfstream &in_b,
       if (VERBOSE)
         cerr << "processing " << a.chrom << endl;
     }
-    if (!site_precedes(prev_chrom_id_a, prev_pos_a, chrom_id_a, a.pos))
+    if (site_precedes(chrom_id_a, a.pos, prev_chrom_id_a, prev_pos_a))
       throw runtime_error(bad_order(chrom_order, prev_chrom_a, prev_pos_a,
                                     a.chrom, a.pos));
 
@@ -170,7 +170,7 @@ process_sites(const bool VERBOSE, igzfstream &in_a, igzfstream &in_b,
         chrom_id_b = get_chrom_id(chrom_order, chroms_seen_b, b);
         prev_chrom_b = b.chrom;
       }
-      if (!site_precedes(prev_chrom_id_b, prev_pos_b, chrom_id_b, b.pos))
+      if (site_precedes(chrom_id_b, b.pos, prev_chrom_id_b, prev_pos_b))
         throw runtime_error(bad_order(chrom_order, prev_chrom_b, prev_pos_b,
                                       b.chrom, b.pos));
       advance_b = site_precedes(chrom_id_b, b.pos, chrom_id_a, a.pos);

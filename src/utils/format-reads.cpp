@@ -309,6 +309,79 @@ standardize_format(const string &input_format, sam_rec &aln) {
 }
 
 
+static bool
+check_mates_consecutive(const string &mapped_reads_file,
+                        const size_t suff_len,
+                        size_t buff_size) {
+  // ADS: magic
+  static const size_t n_reads_to_check = 1000000;
+
+  buff_size = min(n_reads_to_check, buff_size);
+
+  SAMReader sam_reader(mapped_reads_file);
+
+  sam_rec aln;
+  vector<string> buffer(buff_size); // ring buffer of names
+  unordered_map<string, size_t> mate_lookup; // allows them to be accessed
+
+  size_t count_a = 0, count_b = 0;
+  size_t read_count = 0;
+  while (sam_reader >> aln && read_count++ < n_reads_to_check) {
+    const string read_name(remove_suff(aln.qname, suff_len));
+    auto the_mate = mate_lookup.find(read_name);
+    if (the_mate == end(mate_lookup)) { // add name to tail
+      buffer[count_a % buff_size] = std::move(read_name);
+      mate_lookup[read_name] = count_a;
+      ++count_a;
+    }
+    else {
+      if (the_mate->second != count_a - 1)
+        return false;
+    }
+    if ((count_a - count_b) == buff_size) { // remove name from head
+      mate_lookup.erase(buffer[count_b % buff_size]);
+      ++count_b;
+    }
+  }
+  return true;
+}
+
+
+static bool
+check_suffix_length(const string &mapped_reads_file, const size_t suff_len) {
+  // ADS: more magic
+  static const size_t max_names = 100000;
+
+  SAMReader sam_reader(mapped_reads_file);
+
+  sam_rec aln;
+  vector<string> names;
+  for (size_t i = 0; sam_reader >> aln && i < max_names; ++i) {
+    names.push_back(remove_suff(aln.qname, suff_len));
+  }
+
+  sort(begin(names), end(names));
+
+  size_t repeat_count = 0;
+  for (size_t i = 1; i < names.size() && repeat_count < 2; ++i) {
+    if (names[i] == names[i-1]) ++repeat_count;
+    else repeat_count = 0;
+  }
+
+  return repeat_count < 2;
+}
+
+
+static bool
+check_input_file(const string &input_filename) {
+  // because this isn't so convenient with our sam file wrapper
+  std::ifstream in(input_filename);
+  if (!in)
+    return false;
+  return true;
+}
+
+
 int
 main_format_reads(int argc, const char **argv) {
 
@@ -370,72 +443,63 @@ main_format_reads(int argc, const char **argv) {
            << "[output file: "
            << (outfile.empty() ? "stdout" : outfile) << "]" << endl;
 
+    if (!check_input_file(mapped_reads_file))
+      throw runtime_error("problem with input file: " + mapped_reads_file);
+
+    if (!check_suffix_length(mapped_reads_file, suff_len))
+      throw runtime_error("incorrect read name suffix length in: " +
+                          mapped_reads_file);
+
+    if (!check_mates_consecutive(mapped_reads_file, suff_len, buff_size))
+      throw runtime_error("mates are not consecutive in: " +
+                          mapped_reads_file);
+
     SAMReader sam_reader(mapped_reads_file);
-    std::ifstream in(mapped_reads_file);
-    if (!in)
-      throw std::runtime_error("problem with input file: " + mapped_reads_file);
 
     out << sam_reader.get_header(); // includes newline
     // ADS: need to check why the command is quoted and has an extra
     // space at the end
     write_pg_line(argc, argv, "FORMAT_READS", VERSION, out);
 
-    size_t count_a = 0, count_b = 0;
-    sam_rec aln;
+    sam_rec aln, prev_aln;
+    string read_name, prev_name;
 
-    vector<sam_rec> buffer(buff_size); // keeps previous records
-    unordered_map<string, uint32_t> mate_lookup; // allows them to be accessed
+    bool previous_was_merged = false;
 
     while (sam_reader >> aln) {
       standardize_format(input_format, aln);
 
-      const string read_name(remove_suff(aln.qname, suff_len));
-      auto the_mate = mate_lookup.find(read_name);
-      if (the_mate == end(mate_lookup)) { // add solo end to buffer
-        const size_t real_idx = count_a % buff_size;
-        buffer[real_idx] = std::move(aln);
-        mate_lookup[read_name] = real_idx;
-        ++count_a;
-      }
-      else { // found a mate; attempt to merge
-        const size_t mate_idx = the_mate->second;
-
+      read_name = aln.qname; //(remove_suff(aln.qname, suff_len));
+      if (read_name == prev_name) {
         if (!is_rc(aln)) // essentially check for dovetail
-          swap(buffer[mate_idx], aln);
-
+          swap(prev_aln, aln);
         sam_rec merged;
-
-        const int frag_len =
-          merge_mates(max_frag_len, buffer[mate_idx], aln, merged);
-
+        const int frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
         if (frag_len > 0 && frag_len < max_frag_len) {
-          swap(buffer[mate_idx], merged);
-          // nothing to do for mate_lookup
+          out << merged << '\n';
         }
-        else { // if (frag_len > 0)
-          // leave "mate" alone, but add current read
-          const size_t real_idx = count_a % buff_size;
-          swap(buffer[real_idx], aln);
-          // no need to index this one; mate already incompatible
-          ++count_a;
+        else {
+          out << prev_aln << '\n'
+              << aln << '\n';
         }
+        previous_was_merged = true;
       }
-
-      if ((count_a % buff_size) == (count_b % buff_size)) {
-        const size_t real_idx = count_b % buff_size;
-        mate_lookup.erase(remove_suff(buffer[real_idx].qname, suff_len));
-        if (is_a_rich(buffer[real_idx]))
-          flip_conversion(buffer[real_idx]);
-        out << buffer[real_idx] << '\n';
-        ++count_b;
+      else {
+        if (!prev_name.empty() && !previous_was_merged) {
+          if (is_a_rich(prev_aln))
+            flip_conversion(prev_aln);
+          out << prev_aln << '\n';
+        }
+        previous_was_merged = false;
       }
+      prev_name = std::move(read_name);
+      prev_aln = std::move(aln);
     }
 
-    for (; count_b < count_a; ++count_b) { // no need to erase names
-      const size_t real_idx = count_b % buff_size;
-      if (is_a_rich(buffer[real_idx]))
-        flip_conversion(buffer[real_idx]);
-      out << buffer[real_idx] << '\n';
+    if (!prev_name.empty() && !previous_was_merged) {
+      if (is_a_rich(prev_aln))
+        flip_conversion(prev_aln);
+      out << prev_aln << '\n';
     }
   }
   catch (const runtime_error &e) {

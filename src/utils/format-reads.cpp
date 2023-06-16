@@ -35,6 +35,7 @@
 #include <stdexcept>
 #include <cmath>
 #include <sstream>
+#include <tuple>
 
 #include <config.h>
 
@@ -312,9 +313,8 @@ standardize_format(const string &input_format, sam_rec &aln) {
 static bool
 check_mates_consecutive(const string &mapped_reads_file,
                         const size_t suff_len,
+                        const size_t n_reads_to_check,
                         size_t buff_size) {
-  // ADS: magic
-  static const size_t n_reads_to_check = 1000000;
 
   buff_size = min(n_reads_to_check, buff_size);
 
@@ -348,15 +348,14 @@ check_mates_consecutive(const string &mapped_reads_file,
 
 
 static bool
-check_suffix_length(const string &mapped_reads_file, const size_t suff_len) {
-  // ADS: more magic
-  static const size_t max_names = 100000;
+check_suffix_length(const string &mapped_reads_file, const size_t suff_len,
+                    const size_t n_names_to_check) {
 
   SAMReader sam_reader(mapped_reads_file);
 
   sam_rec aln;
   vector<string> names;
-  for (size_t i = 0; sam_reader >> aln && i < max_names; ++i) {
+  for (size_t i = 0; sam_reader >> aln && i < n_names_to_check; ++i) {
     names.push_back(remove_suff(aln.qname, suff_len));
   }
 
@@ -369,6 +368,50 @@ check_suffix_length(const string &mapped_reads_file, const size_t suff_len) {
   }
 
   return repeat_count < 2;
+}
+
+
+static std::tuple<size_t, size_t>
+guess_suffix_length(const string &mapped_reads_file,
+                    const size_t n_names_to_check) {
+
+  SAMReader sam_reader(mapped_reads_file);
+
+  sam_rec aln;
+  vector<string> names;
+  size_t min_name_len = std::numeric_limits<size_t>::max();
+  for (size_t i = 0; sam_reader >> aln && i < n_names_to_check; ++i) {
+    min_name_len = std::min(min_name_len, aln.qname.size());
+    names.push_back(std::move(aln.qname));
+  }
+
+  sort(begin(names), end(names));
+
+  assert(min_name_len > 0);
+  const size_t max_suff_len = min_name_len - 1;
+
+  size_t suff_len = 0;
+  size_t repeat_count = 0;
+
+  // check the possible read name suffix lengths; if any causes a
+  // repeat count of more than 2 (here this means == 2), all greater
+  // suffix lengths will also
+  for (; suff_len < max_suff_len && repeat_count < 1; ++suff_len) {
+
+    // check current suffix length guess
+    size_t curr_repeat_count = 0;
+    for (size_t i = 1; i < names.size() && repeat_count < 2; ++i) {
+      if (names[i-1].size() == names[i].size() &&
+          equal(begin(names[i-1]), end(names[i-1]) - suff_len,
+                begin(names[i]), end(names[i]) - suff_len)) {
+        ++curr_repeat_count;
+      }
+      else curr_repeat_count = 0;
+      repeat_count = max(repeat_count, curr_repeat_count);
+    }
+  }
+
+  return { suff_len, repeat_count };
 }
 
 
@@ -387,11 +430,14 @@ main_format_reads(int argc, const char **argv) {
 
   try {
 
+    static const size_t n_reads_to_check = 100000;
+    size_t buff_size = 10000;
+
     string outfile;
     string input_format;
     int max_frag_len = 10000;
-    size_t buff_size = 10000;
-    size_t suff_len = 1;
+    size_t suff_len = 0; //std::numeric_limits<size_t>::max();
+    bool single_end = false;
     bool VERBOSE = false;
 
     const string description = "convert SAM/BAM mapped bs-seq reads "
@@ -406,6 +452,8 @@ main_format_reads(int argc, const char **argv) {
                       false, outfile);
     opt_parse.add_opt("suff", 's', "read name suffix length",
                       false, suff_len);
+    opt_parse.add_opt("single-end", '\0', "assume reads are single-end",
+                      false, single_end);
     opt_parse.add_opt("max-frag", 'L', "maximum allowed insert size",
                       false, max_frag_len);
     opt_parse.add_opt("buf-size", 'B', "maximum buffer size",
@@ -438,19 +486,35 @@ main_format_reads(int argc, const char **argv) {
     std::ofstream of;
     if (!outfile.empty()) of.open(outfile.c_str());
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
-    if (VERBOSE)
-      cerr << "[input file: " << mapped_reads_file << "]" << endl
-           << "[output file: "
+    if (VERBOSE) {
+      cerr << "[input file: " << mapped_reads_file << "]" << endl;
+      if (single_end)
+        cerr << "[assuming reads are single-end]" << endl;
+      cerr << "[output file: "
            << (outfile.empty() ? "stdout" : outfile) << "]" << endl;
+    }
 
     if (!check_input_file(mapped_reads_file))
       throw runtime_error("problem with input file: " + mapped_reads_file);
 
-    if (!check_suffix_length(mapped_reads_file, suff_len))
+    if (!single_end && suff_len == 0) {
+      auto [suff_len, repeat_count] =
+        guess_suffix_length(mapped_reads_file, n_reads_to_check);
+      if (repeat_count > 1)
+        throw runtime_error("failed guessing read name suffix length in: " +
+                            mapped_reads_file);
+      if (VERBOSE) {
+        cerr << "[guessed read name suffix length: " << suff_len << "]" << endl;
+      }
+    }
+    else if (!single_end &&
+             !check_suffix_length(mapped_reads_file, suff_len,
+                                  n_reads_to_check))
       throw runtime_error("incorrect read name suffix length in: " +
                           mapped_reads_file);
 
-    if (!check_mates_consecutive(mapped_reads_file, suff_len, buff_size))
+    if (!check_mates_consecutive(mapped_reads_file, suff_len,
+                                 n_reads_to_check, buff_size))
       throw runtime_error("mates are not consecutive in: " +
                           mapped_reads_file);
 

@@ -329,10 +329,8 @@ get_max_repeat_count(const vector<string> &names, const size_t suff_len) {
   size_t tmp_repeat_count = 0;
   for (size_t i = 1; i < names.size() && repeat_count < 1; ++i) {
     if (names[i-1].size() == names[i].size() &&
-        equal(begin(names[i-1]), end(names[i-1]) - suff_len,
-              begin(names[i]), end(names[i]) - suff_len)) {
+        equal(begin(names[i-1]), end(names[i-1]) - suff_len, begin(names[i])))
       ++tmp_repeat_count;
-    }
     else tmp_repeat_count = 0;
     repeat_count = max(repeat_count, tmp_repeat_count);
   }

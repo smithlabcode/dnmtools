@@ -310,108 +310,115 @@ standardize_format(const string &input_format, sam_rec &aln) {
 }
 
 
-static bool
-check_mates_consecutive(const string &mapped_reads_file,
-                        const size_t suff_len,
-                        const size_t n_reads_to_check,
-                        size_t buff_size) {
-
-  buff_size = min(n_reads_to_check, buff_size);
-
+static vector<string>
+load_read_names(const string &mapped_reads_file, const size_t n_reads) {
   SAMReader sam_reader(mapped_reads_file);
-
   sam_rec aln;
-  vector<string> buffer(buff_size); // ring buffer of names
-  unordered_map<string, size_t> mate_lookup; // allows them to be accessed
+  vector<string> names;
+  size_t count = 0;
+  while (sam_reader >> aln && count++ < n_reads)
+    names.push_back(std::move(aln.qname));
+  return names;
+}
 
-  size_t count_a = 0, count_b = 0;
-  size_t read_count = 0;
-  while (sam_reader >> aln && read_count++ < n_reads_to_check) {
-    const string read_name(remove_suff(aln.qname, suff_len));
-    auto the_mate = mate_lookup.find(read_name);
-    if (the_mate == end(mate_lookup)) { // add name to tail
-      buffer[count_a % buff_size] = std::move(read_name);
-      mate_lookup[read_name] = count_a;
-      ++count_a;
+
+static size_t
+get_max_repeat_count(const vector<string> &names, const size_t suff_len) {
+  // assume "suff_len" is shorter than the shortest entry in "names"
+  size_t repeat_count = 0;
+  size_t tmp_repeat_count = 0;
+  for (size_t i = 1; i < names.size() && repeat_count < 1; ++i) {
+    if (names[i-1].size() == names[i].size() &&
+        equal(begin(names[i-1]), end(names[i-1]) - suff_len,
+              begin(names[i]), end(names[i]) - suff_len)) {
+      ++tmp_repeat_count;
     }
-    else {
-      if (the_mate->second != count_a - 1)
-        return false;
-    }
-    if ((count_a - count_b) == buff_size) { // remove name from head
-      mate_lookup.erase(buffer[count_b % buff_size]);
-      ++count_b;
-    }
+    else tmp_repeat_count = 0;
+    repeat_count = max(repeat_count, tmp_repeat_count);
   }
-  return true;
+  return repeat_count;
 }
 
 
 static bool
 check_suffix_length(const string &mapped_reads_file, const size_t suff_len,
                     const size_t n_names_to_check) {
-
-  SAMReader sam_reader(mapped_reads_file);
-
-  sam_rec aln;
-  vector<string> names;
-  for (size_t i = 0; sam_reader >> aln && i < n_names_to_check; ++i) {
-    names.push_back(remove_suff(aln.qname, suff_len));
-  }
-
+  auto names(load_read_names(mapped_reads_file, n_names_to_check));
+  // get the minimum read name length
+  size_t min_name_len = std::numeric_limits<size_t>::max();
+  for (auto &&i: names)
+    min_name_len = min(min_name_len, i.size());
+  if (min_name_len <= suff_len)
+    throw runtime_error("given suffix length exceeds min read name length" );
   sort(begin(names), end(names));
-
-  size_t repeat_count = 0;
-  for (size_t i = 1; i < names.size() && repeat_count < 2; ++i) {
-    if (names[i] == names[i-1]) ++repeat_count;
-    else repeat_count = 0;
-  }
-
-  return repeat_count < 2;
+  return get_max_repeat_count(names, suff_len) < 2;
 }
 
 
-static std::tuple<size_t, size_t>
+static size_t
 guess_suffix_length(const string &mapped_reads_file,
-                    const size_t n_names_to_check) {
+                    const size_t n_names_to_check,
+                    size_t &repeat_count) {
 
-  SAMReader sam_reader(mapped_reads_file);
+  // ADS: assuming copy elision but should test it
+  auto names(load_read_names(mapped_reads_file, n_names_to_check));
 
-  sam_rec aln;
-  vector<string> names;
+  // get the minimum read name length
   size_t min_name_len = std::numeric_limits<size_t>::max();
-  for (size_t i = 0; sam_reader >> aln && i < n_names_to_check; ++i) {
-    min_name_len = std::min(min_name_len, aln.qname.size());
-    names.push_back(std::move(aln.qname));
-  }
+  for (auto &&i: names)
+    min_name_len = min(min_name_len, i.size());
+  assert(min_name_len > 0);
 
   sort(begin(names), end(names));
 
-  assert(min_name_len > 0);
-  const size_t max_suff_len = min_name_len - 1;
-
+  // these will be returned
   size_t suff_len = 0;
-  size_t repeat_count = 0;
+  repeat_count = 0;
 
   // check the possible read name suffix lengths; if any causes a
-  // repeat count of more than 2 (here this means == 2), all greater
+  // repeat count of more than 1 (here this means == 2), all greater
   // suffix lengths will also
-  for (; suff_len < max_suff_len && repeat_count < 1; ++suff_len) {
-
+  const size_t max_suff_len = min_name_len - 1;
+  while (suff_len < max_suff_len && repeat_count == 0) {
     // check current suffix length guess
-    size_t curr_repeat_count = 0;
-    for (size_t i = 1; i < names.size() && repeat_count < 2; ++i) {
-      if (names[i-1].size() == names[i].size() &&
-          equal(begin(names[i-1]), end(names[i-1]) - suff_len,
-                begin(names[i]), end(names[i]) - suff_len)) {
-        ++curr_repeat_count;
-      }
-      else curr_repeat_count = 0;
-      repeat_count = max(repeat_count, curr_repeat_count);
-    }
+    repeat_count = get_max_repeat_count(names, suff_len);
+    // we want to lag by one iteration
+    if (repeat_count == 0)
+      ++suff_len;
+  }
+  // repeat_count should be equal to the greatest value of
+  // tmp_repeat_count over all inner iterations above. If this value
+  // is not 1, it will indicate whether we have exactly hit a max
+  // repeat count of 2, indicating mates, or exceeded it, indicating
+  // there seems not to be a good suffix length to remove for
+  // identifying mates
+
+  return suff_len;
+}
+
+
+static bool
+check_mates_consecutive(const string &mapped_reads_file,
+                        const size_t suff_len, size_t n_reads) {
+  // In order to check if mates are consecutive we need to check if a
+  // given end has a mate and that mate is not adjacent. This requires
+  // storing previous reads, not simply checking for adjacent pairs.
+
+  auto names(load_read_names(mapped_reads_file, n_reads));
+  for (auto &&i : names)
+    i = remove_suff(i, suff_len);
+
+  unordered_map<string, size_t> mate_lookup;
+  for (size_t i = 0; i < names.size(); ++i) {
+    auto the_mate = mate_lookup.find(names[i]);
+    if (the_mate == end(mate_lookup)) // 1st time seeing this one
+      mate_lookup[names[i]] = i;
+    else if (the_mate->second != i - 1)
+      return false;
   }
 
-  return { suff_len, repeat_count };
+  // made it here: all reads with mates are consecutive
+  return true;
 }
 
 
@@ -425,18 +432,30 @@ check_input_file(const string &input_filename) {
 }
 
 
+static bool
+check_format_matches_sam_header(string input_format,
+                                const string &mapped_reads_file) {
+  SAMReader sam_reader(mapped_reads_file);
+  string header = sam_reader.get_header();
+  std::transform(begin(header), end(header), begin(header),
+                 [](unsigned char c){return std::tolower(c);});
+  std::transform(begin(input_format), end(input_format), begin(input_format),
+                 [](unsigned char c){return std::tolower(c);});
+  return header.find(input_format) != std::string::npos;
+}
+
+
 int
 main_format_reads(int argc, const char **argv) {
 
   try {
 
-    static const size_t n_reads_to_check = 100000;
-    size_t buff_size = 10000;
+    size_t n_reads_to_check = 1000000;
 
     string outfile;
     string input_format;
-    int max_frag_len = 10000;
-    size_t suff_len = 0; //std::numeric_limits<size_t>::max();
+    int max_frag_len = std::numeric_limits<int>::max();
+    size_t suff_len = 0;
     bool single_end = false;
     bool VERBOSE = false;
 
@@ -452,12 +471,14 @@ main_format_reads(int argc, const char **argv) {
                       false, outfile);
     opt_parse.add_opt("suff", 's', "read name suffix length",
                       false, suff_len);
-    opt_parse.add_opt("single-end", '\0', "assume reads are single-end",
+    opt_parse.add_opt("single-end", '\0',
+                      "assume single-end [do not use with -suff]",
                       false, single_end);
     opt_parse.add_opt("max-frag", 'L', "maximum allowed insert size",
                       false, max_frag_len);
-    opt_parse.add_opt("buf-size", 'B', "maximum buffer size",
-                      false, buff_size);
+    opt_parse.add_opt("check", 'c',
+                      "check this many reads to validate read name suffix",
+                      false, n_reads_to_check);
     opt_parse.add_opt("verbose", 'v', "print more information",
                       false, VERBOSE);
     opt_parse.set_show_defaults();
@@ -474,18 +495,20 @@ main_format_reads(int argc, const char **argv) {
     }
     if (opt_parse.option_missing()) {
       cerr << opt_parse.option_missing_message() << endl;
-      return EXIT_SUCCESS;
+      return EXIT_FAILURE;
     }
     if (leftover_args.empty()) {
       cerr << opt_parse.help_message() << endl;
       return EXIT_SUCCESS;
     }
+    if (suff_len != 0 && single_end) {
+      cerr << "incompatible arguments specified" << endl
+           << opt_parse.help_message() << endl;
+      return EXIT_FAILURE;
+    }
     const string mapped_reads_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    std::ofstream of;
-    if (!outfile.empty()) of.open(outfile.c_str());
-    std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
     if (VERBOSE) {
       cerr << "[input file: " << mapped_reads_file << "]" << endl;
       if (single_end)
@@ -494,46 +517,64 @@ main_format_reads(int argc, const char **argv) {
            << (outfile.empty() ? "stdout" : outfile) << "]" << endl;
     }
 
-    if (!check_input_file(mapped_reads_file))
-      throw runtime_error("problem with input file: " + mapped_reads_file);
-
-    if (!single_end && suff_len == 0) {
-      auto [suff_len, repeat_count] =
-        guess_suffix_length(mapped_reads_file, n_reads_to_check);
-      if (repeat_count > 1)
-        throw runtime_error("failed guessing read name suffix length in: " +
-                            mapped_reads_file);
-      if (VERBOSE) {
-        cerr << "[guessed read name suffix length: " << suff_len << "]" << endl;
-      }
+    // prep the output stream and make sure it's valid
+    std::ofstream of;
+    if (!outfile.empty()) {
+      of.open(outfile);
+      if (!of)
+        throw runtime_error("failed opening output file: " + outfile);
     }
-    else if (!single_end &&
-             !check_suffix_length(mapped_reads_file, suff_len,
-                                  n_reads_to_check))
-      throw runtime_error("incorrect read name suffix length in: " +
-                          mapped_reads_file);
+    std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
-    if (!check_mates_consecutive(mapped_reads_file, suff_len,
-                                 n_reads_to_check, buff_size))
-      throw runtime_error("mates are not consecutive in: " +
-                          mapped_reads_file);
+    // check the input and parameters
+    if (!check_input_file(mapped_reads_file))
+      throw runtime_error("failed to open input file: " + mapped_reads_file);
 
+    if (VERBOSE)
+      if (!check_format_matches_sam_header(input_format, mapped_reads_file))
+        cerr << "[warning: specified input format not found in header "
+             << "(" << input_format << ", "
+             << mapped_reads_file << ")]" << endl;
+
+    if (!single_end) {
+      if (suff_len == 0) {
+        size_t repeat_count = 0;
+        suff_len = guess_suffix_length(mapped_reads_file, n_reads_to_check,
+                                       repeat_count);
+        if (repeat_count > 1)
+          throw runtime_error("failed to identify read name suffix length\n"
+                              "verify reads are not single-end\n"
+                              "specify read name suffix length directly");
+        if (VERBOSE)
+          cerr << "[read name suffix length guess: " << suff_len << "]" << endl;
+      }
+      else if (!check_suffix_length(mapped_reads_file, suff_len,
+                                    n_reads_to_check))
+        throw runtime_error("incorrect read name suffix length in: " +
+                            mapped_reads_file);
+
+      if (!check_mates_consecutive(mapped_reads_file, suff_len,
+                                   n_reads_to_check))
+        throw runtime_error("mates are not consecutive in: " +
+                            mapped_reads_file);
+    }
+
+    // deal with the header
     SAMReader sam_reader(mapped_reads_file);
-
     out << sam_reader.get_header(); // includes newline
     // ADS: need to check why the command is quoted and has an extra
     // space at the end
     write_pg_line(argc, argv, "FORMAT_READS", VERSION, out);
 
+    // now process the reads
     sam_rec aln, prev_aln;
     string read_name, prev_name;
-
     bool previous_was_merged = false;
 
     while (sam_reader >> aln) {
       standardize_format(input_format, aln);
 
-      read_name = aln.qname; //(remove_suff(aln.qname, suff_len));
+      read_name = remove_suff(aln.qname, suff_len);
       if (read_name == prev_name) {
         if (!is_rc(aln)) // essentially check for dovetail
           swap(prev_aln, aln);

@@ -327,7 +327,10 @@ get_max_repeat_count(const vector<string> &names, const size_t suff_len) {
   // assume "suff_len" is shorter than the shortest entry in "names"
   size_t repeat_count = 0;
   size_t tmp_repeat_count = 0;
-  for (size_t i = 1; i < names.size() && repeat_count < 1; ++i) {
+  // allow the repeat_count to go to 2, which might not be the "max"
+  // but still would indicate that this suffix length is too long and
+  // would result in more that two reads identified mutually as mates.
+  for (size_t i = 1; i < names.size() && repeat_count < 2; ++i) {
     if (names[i-1].size() == names[i].size() &&
         equal(begin(names[i-1]), end(names[i-1]) - suff_len, begin(names[i])))
       ++tmp_repeat_count;
@@ -548,7 +551,8 @@ main_format_reads(int argc, const char **argv) {
       }
       else if (!check_suffix_length(mapped_reads_file, suff_len,
                                     n_reads_to_check))
-        throw runtime_error("incorrect read name suffix length in: " +
+        throw runtime_error("incorrect read name suffix length [" +
+                            to_string(suff_len) + "] in: " +
                             mapped_reads_file);
 
       if (!check_mates_consecutive(mapped_reads_file, suff_len,

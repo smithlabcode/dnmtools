@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1
 
-## Copy this file to where the directory where you have the dnmtools
-   binary. Make sure it was built on linux x86_64.
+## Copy this file to where the directory where you have the dnmtools binary. Make sure it was built on linux x86_64.
 
 FROM ubuntu:22.04
 

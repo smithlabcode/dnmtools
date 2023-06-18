@@ -106,7 +106,7 @@ desenabr@usc.edu
 Copyright and License Information
 =================================
 
-Copyright (C) 2022
+Copyright (C) 2023
 Andrew D. Smith and Guilherme de Sena Brandine
 
 Authors of DNMTools: Andrew D. Smith and Guilherme de Sena Brandine

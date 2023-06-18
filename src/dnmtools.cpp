@@ -18,6 +18,8 @@
 #include <string>
 #include <cstring>
 
+#include <config.h>
+
 using std::string;
 using std::to_string;
 using std::cerr;
@@ -66,7 +68,7 @@ void
 print_help() {
   static const string sep = "  ";
   cout <<  "Program: " << PROGRAM_NAME << "\n";
-  cout <<  "Version: " << PROGRAM_VERSION << "\n";
+  cout <<  "Version: " << VERSION << "\n";
   cout <<  "Usage: " << PROGRAM_NAME << " <command> [options]\n";
   cout <<  "Commands:";
 

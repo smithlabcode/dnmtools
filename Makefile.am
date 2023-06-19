@@ -1,6 +1,6 @@
 # This file is part of dnmtools
 #
-# Copyright (C) 2022 Andrew D. Smith
+# Copyright (C) 2023 Andrew D. Smith
 #
 # Authors: Andrew D. Smith
 #
@@ -116,7 +116,7 @@ dnmtools_SOURCES += src/analysis/hypermr.cpp
 
 dnmtools_SOURCES += src/utils/clean-hairpins.cpp
 dnmtools_SOURCES += src/utils/guessprotocol.cpp
-dnmtools_SOURCES += src/utils/duplicate-remover.cpp
+dnmtools_SOURCES += src/utils/uniq.cpp
 dnmtools_SOURCES += src/utils/merge-bsrate.cpp
 dnmtools_SOURCES += src/utils/format-reads.cpp
 dnmtools_SOURCES += src/utils/lc-approx.cpp

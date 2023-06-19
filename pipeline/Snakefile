@@ -180,7 +180,7 @@ rule samtools_sort:
 
 rule remove_duplicates:
     """
-    Uses the duplicate-remover tool to remove duplicate reads in a
+    Uses the uniq tool to remove duplicate reads in a
     mapped read file and produce statistics on duplication level.
     """
     input:

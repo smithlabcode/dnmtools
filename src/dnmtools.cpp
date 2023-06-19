@@ -1,7 +1,6 @@
-/* Copyright (C) 2022 University of Southern California and
- *                    Andrew D. Smith and Guilherme Sena
+/* Copyright (C) 2022-2023 Andrew D. Smith and Guilherme Sena
  *
- * Authors: Andrew D. Smith and Song Qiang and Guilherme Sena
+ * Authors: Andrew D. Smith and Guilherme Sena
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -53,7 +52,7 @@ int main_radmeth_adjust(int argc, const char **argv);
 int main_radmeth(int argc, const char **argv);
 int main_radmeth_merge(int argc, const char **argv);
 int main_clean_hairpins(int argc, const char **argv);
-int main_duplicate_remover(int argc, const char **argv);
+int main_uniq(int argc, const char **argv);
 int main_fast_liftover(int argc, const char **argv);
 int main_format_reads(int argc, const char **argv);
 int main_guessprotocol(int argc, const char **argv);
@@ -151,7 +150,7 @@ main(int argc, const char **argv) {
   else if (strcmp(argv[1], "radadjust") == 0) ret = main_radmeth_adjust(argc - 1, argv + 1);
   else if (strcmp(argv[1], "radmerge") == 0) ret = main_radmeth_merge(argc - 1, argv + 1);
   else if (strcmp(argv[1], "cleanhp") == 0) ret = main_clean_hairpins(argc - 1, argv + 1);
-  else if (strcmp(argv[1], "uniq") == 0) ret = main_duplicate_remover(argc - 1, argv + 1);
+  else if (strcmp(argv[1], "uniq") == 0) ret = main_uniq(argc - 1, argv + 1);
   else if (strcmp(argv[1], "fastlift") == 0) ret = main_fast_liftover(argc - 1, argv + 1);
   else if (strcmp(argv[1], "format") == 0) ret = main_format_reads(argc - 1, argv + 1);
   else if (strcmp(argv[1], "guessprotocol") == 0) ret = main_guessprotocol(argc - 1, argv + 1);

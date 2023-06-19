@@ -64,7 +64,7 @@ analysis/levels.o analysis/methcounts.o analysis/methentropy.o \
 analysis/methstates.o analysis/multimethstat.o analysis/pmd.o \
 analysis/roimethstat.o mlml/mlml.o radmeth/dmr.o radmeth/methdiff.o \
 radmeth/radmeth-adjust.o radmeth/radmeth-merge.o radmeth/radmeth.o \
-utils/clean-hairpins.o utils/duplicate-remover.o utils/fast-liftover.o \
+utils/clean-hairpins.o utils/uniq.o utils/fast-liftover.o \
 utils/format-reads.o utils/guessprotocol.o utils/lc-approx.o \
 utils/lift-filter.o utils/merge-bsrate.o utils/merge-methcounts.o \
 utils/symmetric-cpgs.o utils/selectsites.o

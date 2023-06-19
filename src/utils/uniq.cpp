@@ -123,7 +123,7 @@ write_hist_output(const vector<size_t> &hist, const string &histfile) {
 static void
 process_inner_buffer(const vector<bam1_t*>::const_iterator it,
                      const vector<bam1_t*>::const_iterator jt,
-                     sam_hdr_t *hdr, htsFile *out,
+                     sam_hdr_t *hdr, samFile *out,
                      size_t &reads_out,
                      size_t &good_bases_out,
                      size_t &reads_with_dups,
@@ -146,7 +146,7 @@ process_inner_buffer(const vector<bam1_t*>::const_iterator it,
 static void
 process_buffer(size_t &reads_out, size_t &good_bases_out,
                size_t &reads_with_dups, vector<size_t> &hist,
-               vector<bam1_t*> &buffer, sam_hdr_t *hdr, htsFile *out) {
+               vector<bam1_t*> &buffer, sam_hdr_t *hdr, samFile *out) {
   sort(begin(buffer), end(buffer), precedes_by_end_and_strand);
   auto it(begin(buffer));
   auto jt = it + 1;
@@ -170,14 +170,14 @@ process_buffer(size_t &reads_out, size_t &good_bases_out,
 
 
 static bam1_t *
-get_read(htsFile *hts, bam_hdr_t *hdr) {
+get_read(samFile *hts, sam_hdr_t *hdr) {
   bam1_t *b = bam_init1();
   const int result = sam_read1(hts, hdr, b);
-  if (result > 0) return b;
+  if (result >= 0) return b;
 
   if (result < -1)
     throw runtime_error("error reading file: " + string(hts->fn));
-  else // means EOF, so we free this read
+  else // -1 should mean EOF, so we free this read
     bam_destroy1(b);
   return 0;
 }
@@ -185,26 +185,27 @@ get_read(htsFile *hts, bam_hdr_t *hdr) {
 
 static void
 uniq(const bool VERBOSE, const bool NO_SORT_TEST,
-                  const string &cmd, const string &infile,
-                  const string &statfile, const string &histfile,
-                  const string &outfile) {
+     const string &cmd, const string &infile,
+     const string &statfile, const string &histfile,
+     const bool bam_format, const string &outfile) {
 
-  htsFile* hts = hts_open(infile.c_str(), "r");
+  samFile* hts = hts_open(infile.c_str(), "r");
   if (!hts || errno)
     throw runtime_error("bad htslib file: " + infile);
 
   if (hts_get_format(hts)->category != sequence_data)
     throw runtime_error("bad file format: " + infile);
 
-  bam_hdr_t *hdr = sam_hdr_read(hts);
+  sam_hdr_t *hdr = sam_hdr_read(hts);
   if (!hdr)
     throw runtime_error("failed to read header: " + infile);
 
   // open the output file
-  htsFile *out = hts_open(outfile.c_str(), "wb");
+  samFile *out = bam_format ? hts_open(outfile.c_str(), "wb") :
+    hts_open(outfile.c_str(), "w");
 
   // take care of the output file's header
-  bam_hdr_t *hdr_out = bam_hdr_dup(hdr);
+  sam_hdr_t *hdr_out = bam_hdr_dup(hdr);
   if (sam_hdr_add_line(hdr_out, "PG", "ID",
                        "DNMTOOLS", "VN", VERSION, "CL", cmd.c_str(), NULL))
     throw runtime_error("failed to format header");
@@ -274,6 +275,9 @@ main_uniq(int argc, const char **argv) {
     bool VERBOSE = false;
     bool NO_SORT_TEST = false;
 
+    bool bam_format = false;
+    bool use_stdout = false;
+
     // ADS: Not recommended to change this seed. It shouldn't matter
     // at all, and we want results to behave as deterministic.
     size_t the_seed = 408;
@@ -288,8 +292,10 @@ main_uniq(int argc, const char **argv) {
     opt_parse.add_opt("stats", 'S', "statistics output file", false, statfile);
     opt_parse.add_opt("hist", '\0', "histogram output file for library"
                       " complexity analysis", false, histfile);
-    opt_parse.add_opt("disable", 'D', "disable sort test",
-                      false, NO_SORT_TEST);
+    opt_parse.add_opt("bam", 'B', "output in BAM format", false, bam_format);
+    opt_parse.add_opt("stdout", '\0',
+                      "write to standard output", false, use_stdout);
+    opt_parse.add_opt("disable", 'D', "disable sort test", false, NO_SORT_TEST);
     opt_parse.add_opt("seed", 's', "random seed", false, the_seed);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     opt_parse.set_show_defaults();
@@ -308,14 +314,21 @@ main_uniq(int argc, const char **argv) {
       cerr << opt_parse.option_missing_message() << endl;
       return EXIT_SUCCESS;
     }
-    if (leftover_args.size() != 1 && leftover_args.size() != 2) {
+    if (leftover_args.size() == 1 && !use_stdout) {
+      cerr << opt_parse.help_message() << endl
+           << opt_parse.about_message() << endl;
+      return EXIT_SUCCESS;
+    }
+    if (leftover_args.size() == 2 && use_stdout) {
       cerr << opt_parse.help_message() << endl
            << opt_parse.about_message() << endl;
       return EXIT_SUCCESS;
     }
     const string infile(leftover_args.front());
-    if (leftover_args.size() == 2)
+    if (leftover_args.size() == 2 && !use_stdout)
       outfile = leftover_args.back();
+    else
+      outfile = string("-"); // so htslib can write to stdout
     /****************** END COMMAND LINE OPTIONS *****************/
 
     // ADS: Random here is because we choose randomly when keeping one
@@ -327,11 +340,12 @@ main_uniq(int argc, const char **argv) {
 
     if (VERBOSE)
       cerr << "[output file: " << outfile << "]" << endl
+           << "[output format: " << (bam_format ? "B" : "S") << "AM]" << endl
            << "[command line: \"" << cmd.str() << "\"]" << endl
-           << "[random number seed: " << the_seed << "]" << endl
-           << endl;
+           << "[random number seed: " << the_seed << "]" << endl;
 
-    uniq(VERBOSE, NO_SORT_TEST, cmd.str(), infile, statfile, histfile, outfile);
+    uniq(VERBOSE, NO_SORT_TEST, cmd.str(),
+         infile, statfile, histfile, bam_format, outfile);
   }
   catch (const runtime_error &e) {
     cerr << e.what() << endl;

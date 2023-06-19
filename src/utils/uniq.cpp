@@ -184,7 +184,7 @@ get_read(samFile *hts, sam_hdr_t *hdr) {
 
 
 static void
-uniq(const bool VERBOSE, const bool NO_SORT_TEST,
+uniq(const bool VERBOSE, const size_t n_threads,
      const string &cmd, const string &infile,
      const string &statfile, const string &histfile,
      const bool bam_format, const string &outfile) {
@@ -192,6 +192,9 @@ uniq(const bool VERBOSE, const bool NO_SORT_TEST,
   samFile* hts = hts_open(infile.c_str(), "r");
   if (!hts || errno)
     throw runtime_error("bad htslib file: " + infile);
+
+  if (n_threads > 1 && hts_set_threads(hts, n_threads/2) < 0)
+    throw runtime_error("error setting threads");
 
   if (hts_get_format(hts)->category != sequence_data)
     throw runtime_error("bad file format: " + infile);
@@ -203,6 +206,9 @@ uniq(const bool VERBOSE, const bool NO_SORT_TEST,
   // open the output file
   samFile *out = bam_format ? hts_open(outfile.c_str(), "wb") :
     hts_open(outfile.c_str(), "w");
+
+  if (n_threads > 1 && hts_set_threads(out, (n_threads + 1)/2) < 0)
+    throw runtime_error("error setting threads");
 
   // take care of the output file's header
   sam_hdr_t *hdr_out = bam_hdr_dup(hdr);
@@ -235,18 +241,18 @@ uniq(const bool VERBOSE, const bool NO_SORT_TEST,
   while (aln = get_read(hts, hdr)) {
     ++reads_in;
     good_bases_in += qlen(aln);
-    if (!NO_SORT_TEST) {
-      // below works because buffer is reset every chrom
-      if (precedes_by_start(aln, buffer.front()))
-        throw runtime_error("input not properly sorted:\n" +
-                            read_name(buffer[0]) + "\n" + read_name(aln));
-      const int32_t chrom = get_tid(aln);
-      if (chrom != cur_chrom) {
-        if (chroms_seen[chrom]) throw runtime_error("input not sorted");
-        chroms_seen[chrom] = true;
-        cur_chrom = chrom;
-      }
+
+    // below works because buffer is reset every chrom
+    if (precedes_by_start(aln, buffer.front()))
+      throw runtime_error("input not properly sorted:\n" +
+                          read_name(buffer[0]) + "\n" + read_name(aln));
+    const int32_t chrom = get_tid(aln);
+    if (chrom != cur_chrom) {
+      if (chroms_seen[chrom]) throw runtime_error("input not sorted");
+      chroms_seen[chrom] = true;
+      cur_chrom = chrom;
     }
+
     if (!equivalent_chrom_and_start(buffer.front(), aln))
       process_buffer(reads_out, good_bases_out, reads_with_dups,
                      hist, buffer, hdr, out);
@@ -273,7 +279,6 @@ main_uniq(int argc, const char **argv) {
   try {
 
     bool VERBOSE = false;
-    bool NO_SORT_TEST = false;
 
     bool bam_format = false;
     bool use_stdout = false;
@@ -284,18 +289,19 @@ main_uniq(int argc, const char **argv) {
     string outfile;
     string statfile;
     string histfile;
+    size_t n_threads = 1;
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), "program to remove "
                            "duplicate reads from sorted mapped reads",
                            "<in-file> [out-file]", 2);
+    opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("stats", 'S', "statistics output file", false, statfile);
     opt_parse.add_opt("hist", '\0', "histogram output file for library"
                       " complexity analysis", false, histfile);
     opt_parse.add_opt("bam", 'B', "output in BAM format", false, bam_format);
     opt_parse.add_opt("stdout", '\0',
                       "write to standard output", false, use_stdout);
-    opt_parse.add_opt("disable", 'D', "disable sort test", false, NO_SORT_TEST);
     opt_parse.add_opt("seed", 's', "random seed", false, the_seed);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     opt_parse.set_show_defaults();
@@ -341,10 +347,11 @@ main_uniq(int argc, const char **argv) {
     if (VERBOSE)
       cerr << "[output file: " << outfile << "]" << endl
            << "[output format: " << (bam_format ? "B" : "S") << "AM]" << endl
+           << "[threads requested: " << n_threads << "]" << endl
            << "[command line: \"" << cmd.str() << "\"]" << endl
            << "[random number seed: " << the_seed << "]" << endl;
 
-    uniq(VERBOSE, NO_SORT_TEST, cmd.str(),
+    uniq(VERBOSE, n_threads, cmd.str(),
          infile, statfile, histfile, bam_format, outfile);
   }
   catch (const runtime_error &e) {

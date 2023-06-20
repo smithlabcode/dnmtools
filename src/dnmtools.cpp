@@ -26,7 +26,6 @@ using std::cout;
 using std::endl;
 
 #define PROGRAM_NAME "dnmtools"
-#define PROGRAM_VERSION "1.2.2"
 
 int abismal(int argc, const char **argv);
 int abismalidx(int argc, const char **argv);
@@ -54,7 +53,7 @@ int main_radmeth_merge(int argc, const char **argv);
 int main_clean_hairpins(int argc, const char **argv);
 int main_uniq(int argc, const char **argv);
 int main_fast_liftover(int argc, const char **argv);
-int main_format_reads(int argc, const char **argv);
+int main_format(int argc, const char **argv);
 int main_guessprotocol(int argc, const char **argv);
 int main_lc_approx(int argc, const char **argv);
 int main_lift_filter(int argc, const char **argv);
@@ -152,7 +151,7 @@ main(int argc, const char **argv) {
   else if (strcmp(argv[1], "cleanhp") == 0) ret = main_clean_hairpins(argc - 1, argv + 1);
   else if (strcmp(argv[1], "uniq") == 0) ret = main_uniq(argc - 1, argv + 1);
   else if (strcmp(argv[1], "fastlift") == 0) ret = main_fast_liftover(argc - 1, argv + 1);
-  else if (strcmp(argv[1], "format") == 0) ret = main_format_reads(argc - 1, argv + 1);
+  else if (strcmp(argv[1], "format") == 0) ret = main_format(argc - 1, argv + 1);
   else if (strcmp(argv[1], "guessprotocol") == 0) ret = main_guessprotocol(argc - 1, argv + 1);
   else if (strcmp(argv[1], "lc") == 0) ret = main_lc_approx(argc - 1, argv + 1);
   else if (strcmp(argv[1], "liftfilter") == 0) ret = main_lift_filter(argc - 1, argv + 1);

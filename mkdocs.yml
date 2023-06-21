@@ -1,5 +1,5 @@
 site_name: DNMTools
-strict: true
+strict: false
 
 theme: readthedocs
 nav:

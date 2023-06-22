@@ -46,8 +46,6 @@
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
-#include "sam_record.hpp"
-#include "cigar_utils.hpp"
 
 using std::string;
 using std::vector;
@@ -64,6 +62,74 @@ using std::to_string;
 using std::ostringstream;
 
 
+void
+complement_seq(char *first, char *last) {
+  while (first != last) {
+    *first = complement(*first);
+    assert(valid_base(*first));
+  }
+}
+
+
+void
+reverse(char *a, char *b) {
+  char *p1, *p2;
+  for (p1 = a, p2 = b - 1; p2 > p1; ++p1, --p2) {
+    *p1 ^= *p2;
+    *p2 ^= *p1;
+    *p1 ^= *p2;
+    assert(*p1 == 'A' ||
+           *p1 == 'C' ||
+           *p1 == 'G' ||
+           *p1 == 'T');
+    assert(*p2 == 'A' ||
+           *p2 == 'C' ||
+           *p2 == 'G' ||
+           *p2 == 'T');
+  }
+}
+
+
+void
+error_and_exit(const int64_t e, const char *msg) {
+  fprintf(stderr, "ERROR: %ld %d %s %s\n",
+          e, errno, strerror(errno), msg);
+  exit(e);
+}
+
+
+static inline bool
+consumes_reference(uint32_t op) {
+  return bam_cigar_type(bam_cigar_op(op)) & 2;
+}
+
+
+static uint32_t
+get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
+                         const uint32_t n_ref, uint32_t *partial_oplen) {
+  // assume: n_ops <= size(cig_in) <= size(cig_out)
+  size_t bases = 0;
+  int i = 0;
+  for (i = 0; i < in_ops; ++i) {
+    if (consumes_reference(cig_in[i])) {
+      if (bases + bam_cigar_oplen(cig_in[i]) > n_ref)
+        break;
+      bases += bam_cigar_oplen(cig_in[i]);
+    }
+  }
+  *partial_oplen = n_ref - bases;
+  return i;
+}
+
+
+void
+swap_bams(bam1_t **a, bam1_t **b) {
+  bam1_t *c = *a;
+  *a = *b;
+  *b = c;
+}
+
+
 template <class T> void
 revcomp_inplace(T first, T last) {
   std::transform(first, last, first, complement);
@@ -71,35 +137,9 @@ revcomp_inplace(T first, T last) {
 }
 
 
-// ADS: do we need to check that both mates are on the same strand? Or
-// that they are on opposite strands?
-static uint32_t
-abismal_get_nm(const sam_rec &aln) {
-  auto the_entry = find_if(begin(aln.tags), end(aln.tags),
-                           [](const string &t) {
-                             return t.compare (0, 3, "NM:") == 0;
-                           });
-  if (the_entry != end(aln.tags))
-    return std::atoi(the_entry->c_str() + 5);
-  return 0;
-}
-
-
-static bool
-abismal_is_a_rich(const sam_rec &aln) {
-  auto the_cv_tag = find_if(begin(aln.tags), end(aln.tags),
-                            [](const string &t) {
-                              return t.compare (0, 3, "CV:") == 0;
-                            });
-  if (the_cv_tag != end(aln.tags))
-    return the_cv_tag->back() == 'A';
-  return false;
-}
-
-
-static bool
-is_a_rich(const sam_rec &aln) {
-  return abismal_is_a_rich(aln);
+inline bool
+is_a_rich(const bam1_t *aln) {
+  return bam_aux2A(bam_aux_get(aln, "CV")) == 'A';
 }
 
 
@@ -125,153 +165,318 @@ get_read(samFile *hts, sam_hdr_t *hdr) {
 }
 
 
-static int
-get_sam_record(sam_hdr_t *hdr, bam1_t *b, sam_rec &sr) {
-  int fmt_ret = 0;
-  kstring_t line = { 0, 0, NULL };
-  if ((fmt_ret = sam_format1(hdr, b, &line)) <= 0)
-    throw runtime_error("failed parsing sam record");
-  sr = sam_rec(line.s);
-  return 0;
+inline bool
+is_rc(const bam1_t *aln) {
+  return bam_is_rev(aln);
 }
 
-
-static int
-get_n_cigar(const sam_rec &sr) {
-  return count_if(begin(sr.cigar), end(sr.cigar),
-                  [](unsigned char c) { return std::isalpha(c);});
-}
-
-
-static uint32_t *
-get_cigar(const sam_rec &sr, size_t n_cigar) {
-  uint32_t *a_cigar = (uint32_t *)malloc(n_cigar*sizeof(uint32_t));
-  ssize_t res = sam_parse_cigar(sr.cigar.c_str(), NULL, &a_cigar, &n_cigar);
-  return a_cigar;
-}
-
-
-static int
-sam_rec_to_bam(sam_hdr_t *hdr, const sam_rec &sr, bam1_t **b) {
-  const size_t n_cigar = get_n_cigar(sr);
-  uint32_t *a_cigar = get_cigar(sr, n_cigar);
-  int32_t tid = sam_hdr_name2tid(hdr, sr.rname.c_str());
-  int32_t mtid = sam_hdr_name2tid(hdr, sr.rnext.c_str());
-
-  *b = bam_init1();
-  bam_set1(*b, sr.qname.size(), sr.qname.c_str(), sr.flags, tid,
-           sr.pos - 1, sr.mapq, n_cigar, a_cigar, mtid, 0, sr.tlen,
-           sr.seq.size(), sr.seq.c_str(), 0, 0ul);
-
-  uint32_t nm = abismal_get_nm(sr);
-  int res = bam_aux_append(*b, "NM", 'i', sizeof(uint32_t), (uint8_t*)&nm);
-
-  uint8_t *cv_data = (uint8_t *)calloc(1, sizeof(char));
-  *cv_data = abismal_is_a_rich(sr) ? 'A' : 'T';
-  res = bam_aux_append(*b, "CV", 'A', sizeof(char), cv_data);
-
-  free(a_cigar);
-  return 0;
-}
 
 
 static void
-write_bam(samFile *out, sam_hdr_t *hdr, const sam_rec &aln) {
-  bam1_t *b = 0;
-  int r = sam_rec_to_bam(hdr, aln, &b);
-  int res = sam_write1(out, hdr, b);
-  if (res < 0)
-    throw runtime_error("failed writing sam/bam record");
-  bam_destroy1(b);
-}
-
-
-bool
-is_rc(const sam_rec &aln) {
-  return check_flag(aln, samflags::read_rc);
-}
-
-
-static void
-flip_strand(sam_rec &aln) {
-  if (check_flag(aln, samflags::read_rc))
-    unset_flag(aln, samflags::read_rc);
+flip_conversion(bam1_t *aln) {
+  if (aln->core.flag & BAM_FREVERSE)
+    aln->core.flag = aln->core.flag & (~BAM_FREVERSE);
   else
-    set_flag(aln, samflags::read_rc);
+    aln->core.flag = aln->core.flag | BAM_FREVERSE;
+
+  // generate the sequence in ascii
+  auto a_seq = bam_get_seq(aln);
+  const size_t a_len = aln->core.l_qseq;
+  char *buf = (char *)malloc(a_len*sizeof(char));
+  for (int i = 0; i < a_len; ++i)
+    buf[i] = seq_nt16_str[bam_seqi(a_seq, i)];
+
+  revcomp_inplace(buf, buf + a_len);
+
+  for (int i = 0; i < a_len; ++i)
+    bam_set_seqi(a_seq, i, seq_nt16_table[(unsigned char)buf[i]]);
+
+  uint8_t *cv = bam_aux_get(aln, "CV");
+  *(cv + 1) = 'T';
+
+  // uint8_t updated_cv = bam_aux2A(original_cv) == 'A' ? 'T' : 'A';
+  // int e = bam_aux_del(aln, original_cv);
+  // e = bam_aux_append(aln, "CV", 'A', 1, &updated_cv);
 }
 
 
-static void
-flip_conversion(sam_rec &aln) {
-  flip_strand(aln); // set strand to opposite of current value
-  revcomp_inplace(aln.seq); // reverse complement sequence
-  std::reverse(begin(aln.qual), end(aln.qual)); // and quality scores
+static bool
+are_mates(const bam1_t *one, const bam1_t *two) {
+  return one->core.mtid == two->core.tid &&
+    one->core.mpos == two->core.pos &&
+    bam_is_rev(one) != bam_is_rev(two);
+  // below is a consistency check and should not be necessary
+  /* &&
+     two->core.mtid == one->core.tid &&
+     two->core.mpos == one->core.pos; */
+}
 
-  // ADS: assuming abismal here
-  auto the_cv_tag = find_if(begin(aln.tags), end(aln.tags),
-                            [](const string &t) {
-                              return t.compare (0, 3, "CV:") == 0;
-                            });
-  if (the_cv_tag != end(aln.tags)) {
-    if (abismal_is_a_rich(aln))
-      the_cv_tag->back() = 'T';
-    else
-      the_cv_tag->back() = 'A';
+
+static int
+truncate_overlapping(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
+
+  const uint32_t *a_cig = bam_get_cigar(a);
+  const uint32_t a_ops = a->core.n_cigar;
+
+  uint32_t part_op = 0;
+  const uint32_t c_cur =
+    get_full_and_partial_ops(a_cig, a_ops, overlap, &part_op);
+
+  const uint32_t c_ops = c_cur + (part_op > 0);
+  uint32_t *c_cig = (uint32_t*)calloc(c_ops, sizeof(uint32_t));
+
+  memcpy(c_cig, a_cig, c_cur*sizeof(uint32_t));
+  if (part_op > 0)
+    c_cig[c_cur] = bam_cigar_gen(part_op, bam_cigar_op(a_cig[c_cur]));
+
+  const uint32_t c_seq_len = bam_cigar2qlen(c_ops, c_cig);
+  char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
+  if (!c_seq) error_and_exit((int64_t)c_seq, "allocating c_seq");
+
+  // copy the prefix of a into c
+  for (int i = 0; i < c_seq_len; ++i)
+    c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
+
+  // get the template length
+  const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
+
+  // flag only needs to worry about strand and single-end stuff
+  uint16_t flag = (a->core.flag & (BAM_FREAD1 |
+                                   BAM_FREAD2 |
+                                   BAM_FREVERSE));
+
+  int ret = bam_set1(c,
+                     strlen(bam_get_qname(a)), // name length from "a"
+                     bam_get_qname(a), // get name from "a"
+                     flag,             // flags (no PE; revcomp info)
+                     a->core.tid,      // tid
+                     a->core.pos,      // pos
+                     a->core.qual,     // mapq from a (consider update)
+                     c_ops,            // merged cigar ops
+                     c_cig,            // merged cigar
+                     -1,               // (no mate)
+                     -1,               // (no mate)
+                     isize,            // TLEN (relative to reference; SAM docs)
+                     c_seq_len,        // merged sequence length
+                     c_seq,            // merged sequence
+                     NULL,             // no qual info
+                     8);               // enough for 2 tags?
+  if (ret < 0) error_and_exit(ret, "bam_set1 in truncate_overlapping");
+
+  /* add the tags */
+  const int64_t nm = bam_aux2i(bam_aux_get(a, "NM")); // ADS: do better here!
+  // "udpate" for "int" because it determines the right size
+  ret = bam_aux_update_int(c, "NM", nm);
+  if (ret < 0) error_and_exit(ret, "bam_aux_update_int in truncate_overlapping");
+
+  const uint8_t conversion = bam_aux2A(bam_aux_get(a, "CV"));
+  // "append" for "char" because there is no corresponding update
+  ret = bam_aux_append(c, "CV", 'A', 1, &conversion);
+  if (ret < 0) error_and_exit(ret, "bam_aux_append in truncate_overlapping");
+
+  return ret;
+}
+
+
+
+static int
+merge_overlapping(const bam1_t *a, const bam1_t *b,
+                  const uint32_t head, bam1_t *c) {
+
+  const uint32_t *a_cig = bam_get_cigar(a);
+  const uint32_t a_ops = a->core.n_cigar;
+
+  const uint32_t *b_cig = bam_get_cigar(b);
+  const uint32_t b_ops = b->core.n_cigar;
+
+  uint32_t part_op = 0;
+  uint32_t c_cur = get_full_and_partial_ops(a_cig, a_ops, head, &part_op);
+
+  // check if the middle op would be the same
+  const bool merge_mid = head != 0 &&
+    (part_op > 0 ?
+     bam_cigar_op(a_cig[c_cur]) == bam_cigar_op(b_cig[0]) :
+     bam_cigar_op(a_cig[c_cur-1]) == bam_cigar_op(b_cig[0]));
+
+  // c_ops: include the prefix of a_cig we need; then add for the
+  // partial op; subtract for the identical op in the middle; finally
+  // add the rest of b_cig.
+  const uint32_t c_ops = c_cur + (head != 0 || part_op > 0) - merge_mid + b_ops;
+  uint32_t *c_cig = (uint32_t*)calloc(c_ops, sizeof(uint32_t));
+
+  memcpy(c_cig, a_cig, c_cur*sizeof(uint32_t));
+  if (head != 0 && part_op > 0) {
+    c_cig[c_cur] = bam_cigar_gen(part_op, bam_cigar_op(a_cig[c_cur]));
+    c_cur++; // index of dest for copying b_cig; faciltates corner case
   }
+  // here we get the length of a's sequence part contribution to c's
+  // sequence before the possibility of merging the last entry with
+  // the first entry in b's cigar
+  const uint32_t a_seq_len = bam_cigar2qlen(c_cur, c_cig);
+
+  if (merge_mid) // update the middle op if it's the same
+    c_cig[c_cur-1] = bam_cigar_gen(bam_cigar_oplen(c_cig[c_cur-1]) +
+                                   bam_cigar_oplen(b_cig[0]),
+                                   bam_cigar_op(b_cig[0]));
+  // copy the cigar from b into c
+  memcpy(c_cig + c_cur, b_cig + merge_mid, (b_ops-merge_mid)*sizeof(uint32_t));
+  /* done with cigar string here */
+
+  /* now deal with sequence */
+  // allocate the right size for c's seq using the query-consuming ops
+  // corresponding to the prefix of a copied into c.
+  const uint32_t c_seq_len = a_seq_len + b->core.l_qseq;
+  char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
+
+  // copy the prefix of a into c
+  for (int i = 0; i < a_seq_len; ++i)
+    c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
+  // copy all of b into c
+  for (int i = 0; i < b->core.l_qseq; ++i)
+    c_seq[a_seq_len + i] = seq_nt16_str[bam_seqi(bam_get_seq(b), i)];
+
+  // reverse and complement the part of c corresponding to b
+  reverse(c_seq + a_seq_len, c_seq + c_seq_len);
+  complement_seq(c_seq + a_seq_len, c_seq + c_seq_len);
+
+  // get the template length
+  const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
+
+  // check for internal soft-clip?
+
+  // flag only needs to worry about strand and single-end stuff
+  uint16_t flag = (a->core.flag & (BAM_FREAD1 |
+                                   BAM_FREAD2 |
+                                   BAM_FREVERSE));
+
+  int ret = bam_set1(c,
+                     strlen(bam_get_qname(a)), // name length from "a"
+                     bam_get_qname(a), // get name from "a"
+                     flag,             // flags (no PE; revcomp info)
+                     a->core.tid,      // tid
+                     a->core.pos,      // pos
+                     a->core.qual,     // mapq from a (consider update)
+                     c_ops,            // merged cigar ops
+                     c_cig,            // merged cigar
+                     -1,               // (no mate)
+                     -1,               // (no mate)
+                     isize,            // TLEN (relative to reference; SAM docs)
+                     c_seq_len,        // merged sequence length
+                     c_seq,            // merged sequence
+                     NULL,             // no qual info
+                     8);               // enough for 2 tags?
+  if (ret < 0) error_and_exit(ret, "bam_set1 in merge_overlapping");
+
+  // add the tag for mismatches
+  const int64_t n_mismatches =
+    bam_aux2i(bam_aux_get(a, "NM")) + bam_aux2i(bam_aux_get(b, "NM"));
+  ret = bam_aux_update_int(c, "NM", n_mismatches);
+  if (ret < 0) error_and_exit(ret, "set mismatches in merge_overlapping");
+
+  // add the tag for conversion
+  const uint8_t conversion = bam_aux2A(bam_aux_get(a, "CV"));
+  ret = bam_aux_append(c, "CV", 'A', 1, &conversion);
+  if (ret < 0) error_and_exit(ret, "set cv in merge_overlapping");
+
+  return ret;
 }
 
 
-static bool
-are_opposite_strands(const sam_rec &one, const sam_rec &two) {
-  return (check_flag(one, samflags::template_first) !=
-          check_flag(two, samflags::template_first)) &&
-         (check_flag(one, samflags::template_last) !=
-          check_flag(two, samflags::template_last));
-}
+static int
+merge_non_overlapping(const bam1_t *a, const bam1_t *b,
+                      const uint32_t spacer, bam1_t *c) {
+  // ADS: convert internal softclip to insertion (BAM_CINS consumes query)
 
+  /* make the cigar string */
+  const uint32_t *a_cig = bam_get_cigar(a);
+  const uint32_t a_ops = a->core.n_cigar;
 
-static bool
-are_mates(const sam_rec &one, const sam_rec &two) {
-  return ((one.rnext == "=" && two.rnext == "=") ||
-          (one.rnext == two.qname)) &&
-           one.pnext == two.pos &&
-           two.pnext == one.pos &&
-           are_opposite_strands(one, two);
-}
+  const uint32_t *b_cig = bam_get_cigar(b);
+  const uint32_t b_ops = b->core.n_cigar;
 
+  const uint32_t c_ops = a_ops + b_ops + 1;
+  uint32_t *c_cig = (uint32_t*)calloc(c_ops, sizeof(uint32_t));
 
-size_t
-get_edit_distance(const sam_rec &aln) {
-  auto the_nm_tag = find_if(begin(aln.tags), end(aln.tags),
-                            [](const string &t) {
-                              return t.compare (0, 3, "NM:") == 0;
-                            });
-  // GS: NM:i:xxxx, get xxxx
-  assert(the_nm_tag->size() > 5);
-  return stoi(the_nm_tag->substr(5));
+  // copy the cigars into c
+  memcpy(c_cig, a_cig, a_ops*sizeof(uint32_t));
+  c_cig[a_ops] = bam_cigar_gen(spacer, BAM_CREF_SKIP);
+  memcpy(c_cig + a_ops + 1, b_cig, b_ops*sizeof(uint32_t));
+  /* done with cigars */
+
+  /* now make the sequence */
+  const uint32_t a_seq_len = a->core.l_qseq;
+  const uint32_t b_seq_len = b->core.l_qseq;
+  const uint32_t c_seq_len = a_seq_len + b_seq_len;
+  char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
+  for (int i = 0; i < a_seq_len; ++i)
+    c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
+  for (int i = 0; i < b_seq_len; ++i)
+    c_seq[a_seq_len + i] = seq_nt16_str[bam_seqi(bam_get_seq(b), i)];
+  // reverse and complement the part of c corresponding to b
+  reverse(c_seq + a_seq_len, c_seq + c_seq_len);
+  complement_seq(c_seq + a_seq_len, c_seq + c_seq_len);
+
+  // get the template length
+  const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
+
+  // flag only needs to worry about strand and single-end stuff
+  uint16_t flag = (a->core.flag & (BAM_FREAD1 |
+                                   BAM_FREAD2 |
+                                   BAM_FREVERSE));
+
+  int ret = bam_set1(c,
+                     strlen(bam_get_qname(a)), // name length from "a"
+                     bam_get_qname(a), // get name from "a"
+                     flag,             // flags (no PE; revcomp info)
+                     a->core.tid,      // tid
+                     a->core.pos,      // pos
+                     a->core.qual,     // mapq from a (consider update)
+                     c_ops,            // merged cigar ops
+                     c_cig,            // merged cigar
+                     -1,               // (no mate)
+                     -1,               // (no mate)
+                     isize,            // TLEN (relative to reference; SAM docs)
+                     c_seq_len,        // merged sequence length
+                     c_seq,            // merged sequence
+                     NULL,             // no qual info
+                     8);               // enough for 2 tags?
+  if (ret < 0) error_and_exit(ret, "bam_set1 in merge_non_overlapping");
+
+  /* add the tags */
+  const int64_t nm = (bam_aux2i(bam_aux_get(a, "NM")) +
+                      bam_aux2i(bam_aux_get(b, "NM")));
+  // "udpate" for "int" because it determines the right size
+  ret = bam_aux_update_int(c, "NM", nm);
+  if (ret < 0) error_and_exit(ret, "set n_mismatches in merge_non_overlapping");
+
+  const uint8_t conversion = bam_aux2A(bam_aux_get(a, "CV"));
+  // "append" for "char" because there is no corresponding update
+  ret = bam_aux_append(c, "CV", 'A', 1, &conversion);
+  if (ret < 0) error_and_exit(ret, "set cv in merge_non_overlapping");
+
+  return ret;
 }
 
 
 static size_t
 merge_mates(const size_t range,
-            const sam_rec &one, const sam_rec &two, sam_rec &merged) {
+            const bam1_t *one, const bam1_t *two, bam1_t *merged) {
 
-  if (!are_mates(one, two)) {
+  if (!are_mates(one, two))
     return -std::numeric_limits<int>::max();
-  }
 
+  // ADS: tests show that revcomp is now different from before. Not
+  // sure if this has to do with a revcomp deleted recently, or if
+  // it's because of something else.
 
   // ADS: not sure this can be consistent across mappers
   // GS: true after standardization
 
-  merged = one;
-  merged.rnext = "*";
-
   // arithmetic easier using base 0 so subtracting 1 from pos
-  const int one_s = one.pos - 1;
-  const int one_e = one_s + cigar_rseq_ops(one.cigar);
-  const int two_s = two.pos - 1;
-  const int two_e = two_s + cigar_rseq_ops(two.cigar);
+  const int one_s = one->core.pos;
+  const int one_e = bam_endpos(one);
+  const int two_s = two->core.pos;
+  const int two_e = bam_endpos(two);
   assert(one_s >= 0 && two_s >= 0);
 
   const int spacer = two_s - one_e;
@@ -285,11 +490,8 @@ merge_mates(const size_t range,
      * one_s                    one_e      two_s                    two_e
      * [------------end1------------]______[------------end2------------]
      */
-    merged.seq += revcomp(two.seq);
+    int res = merge_non_overlapping(one, two, spacer, merged);
     // ADS: need to take care of soft clipping in between;
-    merged.cigar += to_string(spacer) + "N";
-    merged.cigar += two.cigar;
-    // merged.qual = (one.qual == "*" ? one.qual : one.qual + revcomp(two.qual));
   }
   else {
     const int head = two_s - one_s;
@@ -302,23 +504,14 @@ merge_mates(const size_t range,
        * reference start of end1. For negative strand, this is
        * reference start of end1 minus reference start of end2.
        *
-       * <======= head ================>
+       * <======= head =========>
        *
        * left                                             right
        * one_s              two_s      one_e              two_e
        * [------------end1------[======]------end2------------]
        */
-      truncate_cigar_r(merged.cigar, head);
-      const uint32_t one_seq_len = cigar_qseq_ops(merged.cigar);
-      merged.cigar += two.cigar;
-      merge_equal_neighbor_cigar_ops(merged.cigar);
-      // ADS: need to take care of soft clipping in between;
-      merged.seq.resize(one_seq_len);
-      merged.seq += revcomp(two.seq);
-      // if (merged.qual != "*") {
-      //   merged.qual.resize(one_seq_len);
-      //   merged.qual += two.qual;
-      // }
+      int res = merge_overlapping(one, two, head, merged);
+      // ADS: need to take care of soft clipping in between
     }
     else {
       /* dovetail fragments shorter than read length: this is
@@ -333,20 +526,13 @@ merge_mates(const size_t range,
        */
       const int overlap = two_e - one_s;
       if (overlap >= 0) {
-        truncate_cigar_r(merged.cigar, overlap);
-        const uint32_t overlap_qlen = cigar_qseq_ops(merged.cigar);
-        merged.seq.resize(overlap_qlen);
-        // if (merged.qual != "*")
-        //   merged.qual.resize(overlap_qlen);
+        int res = truncate_overlapping(one, overlap, merged);
       }
     }
   }
-  merged.rnext = "*";
-  merged.pnext = 0;
-  merged.tlen = 0;
+
   return two_e - one_s;
 }
-
 /********Above are functions for merging pair-end reads********/
 
 // ADS: there is a bug somewhere when a value of 0 is given for
@@ -369,54 +555,6 @@ bsmap_get_a_rich(const string &richness_tag) {
 bool
 bismark_get_a_rich(const string &richness_tag) {
   return richness_tag.size() > 5 && richness_tag[5] == 'G';
-}
-
-static void
-standardize_format(const string &input_format, sam_rec &aln) {
-
-  if (input_format == "abismal" || input_format == "walt") return;
-
-  if (input_format == "bsmap") {
-    auto z_tag_itr = find_if(begin(aln.tags), end(aln.tags),
-                             [](const string &t) {
-                               return t.compare (0, 3, "ZS:") == 0;
-                             });
-    if (z_tag_itr == end(aln.tags))
-      throw runtime_error("record appears to be invalid for bsmap");
-    const string z_tag = *z_tag_itr;
-    aln.tags.erase(z_tag_itr);
-
-    aln.add_tag(bsmap_get_a_rich(z_tag) ? "CV:A:A" : "CV:A:T");
-    if (is_rc(aln)) revcomp_inplace(aln.seq);
-  }
-
-  if (input_format == "bismark") {
-    // remove everything after _ in read name
-    aln.qname = aln.qname.substr(0, aln.qname.find_first_of("_"));
-    auto xr_tag_itr = find_if(begin(aln.tags), end(aln.tags),
-                             [](const string &t) {
-                               return t.compare (0, 3, "XR:") == 0;
-                             }),
-         nm_tag_itr = find_if(begin(aln.tags), end(aln.tags),
-                             [](const string &t) {
-                               return t.compare (0, 3, "NM:") == 0;
-                             });
-
-    if (xr_tag_itr == end(aln.tags))
-      throw runtime_error("record appears to be invalid for bismark");
-
-    const string xr_tag = *xr_tag_itr,
-                 nm_tag = *nm_tag_itr;
-
-    aln.tags.clear();
-    aln.add_tag(nm_tag);
-    aln.add_tag(bismark_get_a_rich(xr_tag) ? "CV:A:A" : "CV:A:T");
-
-    if (is_rc(aln)) revcomp_inplace(aln.seq);
-  }
-
-  // doesn't depend on mapper
-  aln.qual = "*";
 }
 
 
@@ -497,7 +635,7 @@ get_max_repeat_count(const vector<string> &names, const size_t suff_len) {
 
 static bool
 check_suff_len(const string &inputfile, const size_t suff_len,
-                    const size_t n_names_to_check) {
+               const size_t n_names_to_check) {
   auto names(load_read_names(inputfile, n_names_to_check));
   // get the minimum read name length
   size_t min_name_len = std::numeric_limits<size_t>::max();
@@ -511,9 +649,8 @@ check_suff_len(const string &inputfile, const size_t suff_len,
 
 
 static size_t
-guess_suff_len(const string &inputfile,
-                    const size_t n_names_to_check,
-                    size_t &repeat_count) {
+guess_suff_len(const string &inputfile, const size_t n_names_to_check,
+               size_t &repeat_count) {
 
   // ADS: assuming copy elision but should test it
   auto names(load_read_names(inputfile, n_names_to_check));
@@ -553,8 +690,7 @@ guess_suff_len(const string &inputfile,
 
 
 static bool
-check_sorted(const string &inputfile,
-                        const size_t suff_len, size_t n_reads) {
+check_sorted(const string &inputfile, const size_t suff_len, size_t n_reads) {
   // In order to check if mates are consecutive we need to check if a
   // given end has a mate and that mate is not adjacent. This requires
   // storing previous reads, not simply checking for adjacent pairs.
@@ -592,8 +728,7 @@ check_input_file(const string &input_filename) {
 
 
 static bool
-check_format_in_header(string input_format,
-                                const string &inputfile) {
+check_format_in_header(const string &input_format, const string &inputfile) {
   samFile* hts = hts_open(inputfile.c_str(), "r");
   if (!hts || errno)
     throw runtime_error("error opening file: " + inputfile);
@@ -614,91 +749,114 @@ check_format_in_header(string input_format,
 }
 
 
+static bool
+same_name(const bam1_t *a, const bam1_t *b, const size_t suff_len) {
+  const uint16_t a_l = a->core.l_qname - (a->core.l_extranul + 1);
+  const uint16_t b_l = b->core.l_qname - (b->core.l_extranul + 1);
+
+  if (a_l != b_l) return false;
+  assert(a_l > suff_len);
+
+  return !std::strncmp(bam_get_qname(a), bam_get_qname(b), a_l - suff_len);
+}
+
+
 static void
 format(const string &cmd, const size_t n_threads,
-       const string &inputfile,
-       const string &outfile,
+       const string &inputfile, const string &outfile,
        const bool bam_format, const string &input_format,
        const size_t suff_len, const size_t max_frag_len) {
 
+  // open the hts files
   samFile* hts = hts_open(inputfile.c_str(), "r");
-  if (!hts || errno)
-    throw runtime_error("bad htslib file: " + inputfile);
+  samFile *out = hts_open(outfile.c_str(), bam_format ? "wb" : "w");
 
+  // set the threads
   htsThreadPool the_thread_pool{hts_tpool_init(n_threads), 0};
   if (hts_set_thread_pool(hts, &the_thread_pool) < 0)
     throw runtime_error("error setting threads");
+  if (hts_set_thread_pool(out, &the_thread_pool) < 0)
+    throw runtime_error("error setting threads");
 
-    if (!format_is_bam_or_sam(hts))
-      throw runtime_error("bad file format: " + inputfile);
+  // headers: load the input file's header, and then update to the
+  // output file's header, then write it and destroy; we will only use
+  // the input file header.
+  sam_hdr_t *hdr = sam_hdr_read(hts);
+  sam_hdr_t *hdr_out = bam_hdr_dup(hdr);
+  if (sam_hdr_add_line(hdr_out, "PG", "ID", "DNMTOOLS",
+                       "VN", VERSION, "CL", cmd.c_str(), NULL))
+    throw runtime_error("failed to format header");
+  if (sam_hdr_write(out, hdr_out))
+    throw runtime_error("failed to output header");
 
-    sam_hdr_t *hdr = sam_hdr_read(hts);
-    if (!hdr)
-      throw runtime_error("failed to read header: " + inputfile);
+  // now process the reads
+  // sam_rec aln, prev_aln;
+  bam1_t *aln = bam_init1();
+  bam1_t *prev_aln = bam_init1();
+  bam1_t *merged = bam_init1();
+  // string read_name, prev_name;
+  bool previous_was_merged = false;
 
-    // open the output file
-    samFile *out = hts_open(outfile.c_str(), bam_format ? "wb" : "w");
+  int res = sam_read1(hts, hdr, aln);
+  if (res < 0) error_and_exit((int64_t)aln, "K");
 
-    if (hts_set_thread_pool(out, &the_thread_pool) < 0)
-      throw runtime_error("error setting threads");
+  swap_bams(&aln, &prev_aln);
 
-    // take care of the output file's header
-    sam_hdr_t *hdr_out = bam_hdr_dup(hdr);
-    if (sam_hdr_add_line(hdr_out, "PG", "ID",
-                         "DNMTOOLS", "VN", VERSION, "CL", cmd.c_str(), NULL))
-      throw runtime_error("failed to format header");
-    if (sam_hdr_write(out, hdr_out))
-      throw runtime_error("failed to output header");
-    bam_hdr_destroy(hdr_out);
-    hdr_out = 0; // don't use it again...
+  // bam1_t *bam_rec;
+  while ((res = sam_read1(hts, hdr, aln)) >= 0) {
 
-    // now process the reads
-    sam_rec aln, prev_aln;
-    string read_name, prev_name;
-    bool previous_was_merged = false;
+    // get_sam_record(hdr, bam_rec, aln);
+    standardize_format(input_format, aln);
+    // read_name = remove_suff(aln.qname, suff_len);
 
-    bam1_t *b;
-    while (b = get_read(hts, hdr)) {
-      get_sam_record(hdr, b, aln);
-      standardize_format(input_format, aln);
-      read_name = remove_suff(aln.qname, suff_len);
-      if (read_name == prev_name) {
-        if (!is_rc(aln)) // essentially check for dovetail
-          swap(prev_aln, aln);
-        sam_rec merged;
-        const int frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
-        if (frag_len > 0 && frag_len < max_frag_len) {
-          write_bam(out, hdr, merged);
-        }
-        else {
-          write_bam(out, hdr, prev_aln);
-          write_bam(out, hdr, aln);
-        }
-        previous_was_merged = true;
+    if (same_name(prev_aln, aln, suff_len)) {
+      if (!is_rc(aln)) // essentially check for dovetail
+        swap_bams(&prev_aln, &aln); // swap(prev_aln, aln);
+      const int frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
+      if (frag_len > 0 && frag_len < max_frag_len) {
+        if (is_a_rich(merged))
+          flip_conversion(merged);
+        if (sam_write1(out, hdr, merged) < 0)
+          throw runtime_error("failed writing bam record");
       }
       else {
-        if (!prev_name.empty() && !previous_was_merged) {
-          if (is_a_rich(prev_aln))
-            flip_conversion(prev_aln);
-          write_bam(out, hdr, prev_aln);
-        }
-        previous_was_merged = false;
+        if (is_a_rich(aln))
+          flip_conversion(aln);
+        if (is_a_rich(prev_aln))
+          flip_conversion(prev_aln);
+        if (sam_write1(out, hdr, prev_aln) < 0 ||
+            sam_write1(out, hdr, aln) < 0)
+          throw runtime_error("failed writing bam record");
       }
-      prev_name = std::move(read_name);
-      prev_aln = std::move(aln);
+      previous_was_merged = true;
     }
-
-    if (!prev_name.empty() && !previous_was_merged) {
-      if (is_a_rich(prev_aln))
-        flip_conversion(prev_aln);
-      write_bam(out, hdr, prev_aln);
+    else {
+      if (!previous_was_merged) {
+        if (is_a_rich(prev_aln))
+          flip_conversion(prev_aln);
+        if (sam_write1(out, hdr, prev_aln) < 0)
+          throw runtime_error("failed writing bam record");
+      }
+      previous_was_merged = false;
     }
+    swap_bams(&prev_aln, &aln);
+  }
 
-    // turn off the lights
-    bam_hdr_destroy(hdr);
-    hts_close(out);
-    hts_close(hts);
-    hts_tpool_destroy(the_thread_pool.pool);
+  if (!previous_was_merged) {
+    if (is_a_rich(prev_aln))
+      flip_conversion(prev_aln);
+    if (sam_write1(out, hdr, prev_aln) < 0)
+      throw runtime_error("failed writing bam record");
+  }
+
+  // turn off the lights
+  bam_destroy1(prev_aln);
+  bam_destroy1(aln);
+  bam_hdr_destroy(hdr);
+  hts_close(hts);
+  bam_hdr_destroy(hdr_out);
+  hts_close(out);
+  hts_tpool_destroy(the_thread_pool.pool);
 }
 
 

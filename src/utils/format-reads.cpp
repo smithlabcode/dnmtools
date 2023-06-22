@@ -56,17 +56,36 @@ using std::ifstream;
 using std::max;
 using std::min;
 using std::runtime_error;
-using std::unordered_map;
 using std::swap;
 using std::to_string;
 using std::ostringstream;
 
 
+struct fr_expt: public std::exception {
+  int64_t err;   // error possibly from HTSlib
+  int the_errno; // ERRNO at time of construction
+  string msg;    // the message
+  string the_what;    // the message
+  fr_expt(const int64_t _err, const string &_msg) :
+    err{_err}, the_errno{errno}, msg{_msg} {
+    std::ostringstream oss;
+    oss << "[error code: " << err << "]["
+        << "ERRNO: " << the_errno << "]["
+        << strerror(the_errno) << "]["
+        << msg << "]";
+    the_what = oss.str();
+  }
+  fr_expt(const string &_msg) : fr_expt(0, _msg) {}
+  const char*
+  what() const noexcept override {return the_what.c_str();}
+};
+
+
 void
 complement_seq(char *first, char *last) {
   while (first != last) {
-    *first = complement(*first);
     assert(valid_base(*first));
+    *first++ = complement(*first);
   }
 }
 
@@ -78,23 +97,8 @@ reverse(char *a, char *b) {
     *p1 ^= *p2;
     *p2 ^= *p1;
     *p1 ^= *p2;
-    assert(*p1 == 'A' ||
-           *p1 == 'C' ||
-           *p1 == 'G' ||
-           *p1 == 'T');
-    assert(*p2 == 'A' ||
-           *p2 == 'C' ||
-           *p2 == 'G' ||
-           *p2 == 'T');
+    assert(valid_base(*p1) && valid_base(*p2));
   }
-}
-
-
-void
-error_and_exit(const int64_t e, const char *msg) {
-  fprintf(stderr, "ERROR: %ld %d %s %s\n",
-          e, errno, strerror(errno), msg);
-  exit(e);
 }
 
 
@@ -124,6 +128,7 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
 
 void
 swap_bams(bam1_t **a, bam1_t **b) {
+  /* want to avoid swapping values pointed to */
   bam1_t *c = *a;
   *a = *b;
   *b = c;
@@ -136,6 +141,23 @@ revcomp_inplace(T first, T last) {
   std::reverse(first, last);
 }
 
+
+void
+revcomp_seq(bam1_t *aln) {
+  // generate the sequence in ascii
+  const auto seq = bam_get_seq(aln);
+  const size_t l_qseq = aln->core.l_qseq;
+  char *buf = (char *)malloc(l_qseq*sizeof(char));
+  for (size_t i = 0; i < l_qseq; ++i)
+    buf[i] = seq_nt16_str[bam_seqi(seq, i)];
+
+  // do the reverse complement
+  revcomp_inplace(buf, buf + l_qseq);
+
+  // copy it back...
+  for (int i = 0; i < l_qseq; ++i)
+    bam_set_seqi(seq, i, seq_nt16_table[(unsigned char)buf[i]]);
+}
 
 inline bool
 is_a_rich(const bam1_t *aln) {
@@ -154,22 +176,14 @@ format_is_bam_or_sam(htsFile *hts) {
 static bam1_t *
 get_read(samFile *hts, sam_hdr_t *hdr) {
   bam1_t *b = bam_init1();
-  const int result = sam_read1(hts, hdr, b);
-  if (result >= 0) return b;
-
-  if (result < -1)
-    throw runtime_error("error reading file: " + string(hts->fn));
+  const int err_code = sam_read1(hts, hdr, b);
+  if (err_code >= 0) return b;
+  if (err_code < -1)
+    throw fr_expt(err_code, "error reading: " + string(hts->fn));
   else // -1 should mean EOF, so we free this read
     bam_destroy1(b);
   return 0;
 }
-
-
-inline bool
-is_rc(const bam1_t *aln) {
-  return bam_is_rev(aln);
-}
-
 
 
 static void
@@ -191,12 +205,10 @@ flip_conversion(bam1_t *aln) {
   for (int i = 0; i < a_len; ++i)
     bam_set_seqi(a_seq, i, seq_nt16_table[(unsigned char)buf[i]]);
 
+  // ADS: don't like *(cv + 1) below, but no HTSlib function for it?
   uint8_t *cv = bam_aux_get(aln, "CV");
+  if (!cv) throw fr_expt("bam_aux_get failed for CV");
   *(cv + 1) = 'T';
-
-  // uint8_t updated_cv = bam_aux2A(original_cv) == 'A' ? 'T' : 'A';
-  // int e = bam_aux_del(aln, original_cv);
-  // e = bam_aux_append(aln, "CV", 'A', 1, &updated_cv);
 }
 
 
@@ -213,7 +225,7 @@ are_mates(const bam1_t *one, const bam1_t *two) {
 
 
 static int
-truncate_overlapping(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
+truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
 
   const uint32_t *a_cig = bam_get_cigar(a);
   const uint32_t a_ops = a->core.n_cigar;
@@ -231,7 +243,8 @@ truncate_overlapping(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
 
   const uint32_t c_seq_len = bam_cigar2qlen(c_ops, c_cig);
   char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
-  if (!c_seq) error_and_exit((int64_t)c_seq, "allocating c_seq");
+  if (!c_seq)
+    throw fr_expt("allocating sequence");
 
   // copy the prefix of a into c
   for (int i = 0; i < c_seq_len; ++i)
@@ -261,27 +274,29 @@ truncate_overlapping(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
                      c_seq,            // merged sequence
                      NULL,             // no qual info
                      8);               // enough for 2 tags?
-  if (ret < 0) error_and_exit(ret, "bam_set1 in truncate_overlapping");
+  if (ret < 0)
+    throw fr_expt(ret, "bam_set1");
 
   /* add the tags */
   const int64_t nm = bam_aux2i(bam_aux_get(a, "NM")); // ADS: do better here!
   // "udpate" for "int" because it determines the right size
   ret = bam_aux_update_int(c, "NM", nm);
-  if (ret < 0) error_and_exit(ret, "bam_aux_update_int in truncate_overlapping");
+  if (ret < 0)
+    throw fr_expt(ret, "bam_aux_update_int");
 
   const uint8_t conversion = bam_aux2A(bam_aux_get(a, "CV"));
   // "append" for "char" because there is no corresponding update
   ret = bam_aux_append(c, "CV", 'A', 1, &conversion);
-  if (ret < 0) error_and_exit(ret, "bam_aux_append in truncate_overlapping");
+  if (ret < 0)
+    throw fr_expt(ret, "bam_aux_append");
 
   return ret;
 }
 
 
-
 static int
-merge_overlapping(const bam1_t *a, const bam1_t *b,
-                  const uint32_t head, bam1_t *c) {
+merge_overlap(const bam1_t *a, const bam1_t *b,
+              const uint32_t head, bam1_t *c) {
 
   const uint32_t *a_cig = bam_get_cigar(a);
   const uint32_t a_ops = a->core.n_cigar;
@@ -336,8 +351,9 @@ merge_overlapping(const bam1_t *a, const bam1_t *b,
     c_seq[a_seq_len + i] = seq_nt16_str[bam_seqi(bam_get_seq(b), i)];
 
   // reverse and complement the part of c corresponding to b
-  reverse(c_seq + a_seq_len, c_seq + c_seq_len);
-  complement_seq(c_seq + a_seq_len, c_seq + c_seq_len);
+  revcomp_inplace(c_seq + a_seq_len, c_seq + c_seq_len);
+  // reverse(c_seq + a_seq_len, c_seq + c_seq_len);
+  // complement_seq(c_seq + a_seq_len, c_seq + c_seq_len);
 
   // get the template length
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
@@ -365,94 +381,97 @@ merge_overlapping(const bam1_t *a, const bam1_t *b,
                      c_seq,            // merged sequence
                      NULL,             // no qual info
                      8);               // enough for 2 tags?
-  if (ret < 0) error_and_exit(ret, "bam_set1 in merge_overlapping");
+  if (ret < 0) throw fr_expt(ret, "bam_set1 in merge_overlap");
 
   // add the tag for mismatches
   const int64_t n_mismatches =
     bam_aux2i(bam_aux_get(a, "NM")) + bam_aux2i(bam_aux_get(b, "NM"));
   ret = bam_aux_update_int(c, "NM", n_mismatches);
-  if (ret < 0) error_and_exit(ret, "set mismatches in merge_overlapping");
+  if (ret < 0) throw fr_expt(ret, "bam_aux_update_int in merge_overlap");
 
   // add the tag for conversion
   const uint8_t conversion = bam_aux2A(bam_aux_get(a, "CV"));
   ret = bam_aux_append(c, "CV", 'A', 1, &conversion);
-  if (ret < 0) error_and_exit(ret, "set cv in merge_overlapping");
+  if (ret < 0) throw fr_expt(ret, "bam_aux_append in merge_overlap");
 
   return ret;
 }
 
 
 static int
-merge_non_overlapping(const bam1_t *a, const bam1_t *b,
-                      const uint32_t spacer, bam1_t *c) {
+merge_non_overlap(const bam1_t *a, const bam1_t *b,
+                  const uint32_t spacer, bam1_t *c) {
   // ADS: convert internal softclip to insertion (BAM_CINS consumes query)
 
   /* make the cigar string */
+  // collect info about the cigar strings
   const uint32_t *a_cig = bam_get_cigar(a);
   const uint32_t a_ops = a->core.n_cigar;
-
   const uint32_t *b_cig = bam_get_cigar(b);
   const uint32_t b_ops = b->core.n_cigar;
-
+  // allocate the new cigar string
   const uint32_t c_ops = a_ops + b_ops + 1;
   uint32_t *c_cig = (uint32_t*)calloc(c_ops, sizeof(uint32_t));
-
-  // copy the cigars into c
+  // concatenate the new cigar strings with a "skip" in the middle
   memcpy(c_cig, a_cig, a_ops*sizeof(uint32_t));
   c_cig[a_ops] = bam_cigar_gen(spacer, BAM_CREF_SKIP);
   memcpy(c_cig + a_ops + 1, b_cig, b_ops*sizeof(uint32_t));
   /* done with cigars */
 
   /* now make the sequence */
+  // get info about the lengths
   const uint32_t a_seq_len = a->core.l_qseq;
   const uint32_t b_seq_len = b->core.l_qseq;
   const uint32_t c_seq_len = a_seq_len + b_seq_len;
+  // allocate and fill the new one as a char array
   char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
   for (int i = 0; i < a_seq_len; ++i)
     c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
   for (int i = 0; i < b_seq_len; ++i)
     c_seq[a_seq_len + i] = seq_nt16_str[bam_seqi(bam_get_seq(b), i)];
-  // reverse and complement the part of c corresponding to b
-  reverse(c_seq + a_seq_len, c_seq + c_seq_len);
-  complement_seq(c_seq + a_seq_len, c_seq + c_seq_len);
+  // reverse and complement the part corresponding to "b"
+  revcomp_inplace(c_seq + a_seq_len, c_seq + c_seq_len);
+  // reverse(c_seq + a_seq_len, c_seq + c_seq_len);
+  // complement_seq(c_seq + a_seq_len, c_seq + c_seq_len);
 
-  // get the template length
+  // get the template length from the cigar
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
 
-  // flag only needs to worry about strand and single-end stuff
-  uint16_t flag = (a->core.flag & (BAM_FREAD1 |
-                                   BAM_FREAD2 |
-                                   BAM_FREVERSE));
+  // flag: only need to keep strand and single-end info
+  const uint16_t flag = a->core.flag & (BAM_FREAD1 |
+                                        BAM_FREAD2 |
+                                        BAM_FREVERSE);
 
-  int ret = bam_set1(c,
-                     strlen(bam_get_qname(a)), // name length from "a"
-                     bam_get_qname(a), // get name from "a"
-                     flag,             // flags (no PE; revcomp info)
-                     a->core.tid,      // tid
-                     a->core.pos,      // pos
-                     a->core.qual,     // mapq from a (consider update)
-                     c_ops,            // merged cigar ops
-                     c_cig,            // merged cigar
-                     -1,               // (no mate)
-                     -1,               // (no mate)
-                     isize,            // TLEN (relative to reference; SAM docs)
-                     c_seq_len,        // merged sequence length
-                     c_seq,            // merged sequence
-                     NULL,             // no qual info
-                     8);               // enough for 2 tags?
-  if (ret < 0) error_and_exit(ret, "bam_set1 in merge_non_overlapping");
+  int ret =
+    bam_set1(c,
+             strlen(bam_get_qname(a)), // name length from "a"
+             bam_get_qname(a), // get name from "a"
+             flag,             // flags (no PE; revcomp info)
+             a->core.tid,      // tid
+             a->core.pos,      // pos
+             a->core.qual,     // mapq from a (consider update)
+             c_ops,            // merged cigar ops
+             c_cig,            // merged cigar
+             -1,               // (no mate)
+             -1,               // (no mate)
+             isize,            // TLEN (relative to reference; SAM docs)
+             c_seq_len,        // merged sequence length
+             c_seq,            // merged sequence
+             NULL,             // no qual info
+             8);               // enough for 2 tags of 1 byte value?
+  if (ret < 0) throw fr_expt(ret, "bam_set1 in merge_non_overlap");
 
   /* add the tags */
   const int64_t nm = (bam_aux2i(bam_aux_get(a, "NM")) +
                       bam_aux2i(bam_aux_get(b, "NM")));
   // "udpate" for "int" because it determines the right size
   ret = bam_aux_update_int(c, "NM", nm);
-  if (ret < 0) error_and_exit(ret, "set n_mismatches in merge_non_overlapping");
+  if (ret < 0) throw fr_expt(ret, "merge_non_overlap:bam_aux_update_int");
 
-  const uint8_t conversion = bam_aux2A(bam_aux_get(a, "CV"));
+  const uint8_t cv = bam_aux2A(bam_aux_get(a, "CV"));
   // "append" for "char" because there is no corresponding update
-  ret = bam_aux_append(c, "CV", 'A', 1, &conversion);
-  if (ret < 0) error_and_exit(ret, "set cv in merge_non_overlapping");
+  ret = bam_aux_append(c, "CV", 'A', 1, &cv);
+  if (ret < 0) throw fr_expt(ret, "merge_non_overlap:bam_aux_append");
 
   return ret;
 }
@@ -485,12 +504,13 @@ merge_mates(const size_t range,
      * size of the spacer ("_") is determined based on the reference
      * positions of the two ends, and here we assume "one" maps to
      * positive genome strand.
-     *
+     *                               spacer
+     *                              <======>
      * left                                                         right
      * one_s                    one_e      two_s                    two_e
      * [------------end1------------]______[------------end2------------]
      */
-    int res = merge_non_overlapping(one, two, spacer, merged);
+    int res = merge_non_overlap(one, two, spacer, merged);
     // ADS: need to take care of soft clipping in between;
   }
   else {
@@ -510,7 +530,7 @@ merge_mates(const size_t range,
        * one_s              two_s      one_e              two_e
        * [------------end1------[======]------end2------------]
        */
-      int res = merge_overlapping(one, two, head, merged);
+      int res = merge_overlap(one, two, head, merged);
       // ADS: need to take care of soft clipping in between
     }
     else {
@@ -520,13 +540,14 @@ merge_mates(const size_t range,
        * ends of reads, which in theory shouldn't happen unless the
        * two ends are covering identical genomic intervals.
        *
+       *                 <=== overlap ==>
        * left                                       right
-       * two_s            one_s    two_e            one_e
-       * [--end2----------[============]----------end1--]
+       * two_s           one_s      two_e           one_e
+       * [--end2---------[==============]---------end1--]
        */
       const int overlap = two_e - one_s;
       if (overlap >= 0) {
-        int res = truncate_overlapping(one, overlap, merged);
+        int res = truncate_overlap(one, overlap, merged);
       }
     }
   }
@@ -552,46 +573,71 @@ bsmap_get_a_rich(const string &richness_tag) {
   return richness_tag.size() > 6 && richness_tag[6] == '-';
 }
 
-bool
-bismark_get_a_rich(const string &richness_tag) {
-  return richness_tag.size() > 5 && richness_tag[5] == 'G';
-}
-
 
 // ADS: will move to using this function once it is written
 static void
 standardize_format(const string &input_format, bam1_t *aln) {
+  int err_code = 0;
 
   if (input_format == "abismal" || input_format == "walt") return;
 
   if (input_format == "bsmap") {
-    int res = 0; // result of htslib calls
-    kstring_t s = KS_INITIALIZE;
-    res = bam_aux_get_str(aln, "ZS", &s);
-    if (res != 1)
-      throw runtime_error("record appears to be invalid for bsmap");
-    const bool a_rich = s.l > 6 && s.s[6] == '-';
+    // A/T rich; get the ZS tag value
+    auto zs_tag = bam_aux_get(aln, "ZS");
+    if (!zs_tag) throw fr_expt("bam_aux_get for ZS (invalid bsmap)");
+    // ADS: test for errors on the line below
+    const uint8_t cv = string(bam_aux2Z(zs_tag))[1] == '-' ? 'A' : 'T';
+    // get the "mismatches" tag
+    auto nm_tag = bam_aux_get(aln, "NM");
+    if (!nm_tag) throw fr_expt("bam_aux_get for NM (invalid bsmap)");
+    const int64_t nm = bam_aux2i(nm_tag);
 
-    uint8_t *zs_tag = bam_aux_get(aln, "ZS");
-    if (!zs_tag)
-      throw runtime_error("error interpreting bam record");
-    res = bam_aux_del(aln, zs_tag);
-    if (res < 0)
-      throw runtime_error("error updating tag");
+    aln->l_data = bam_get_aux(aln) - aln->data; // del aux (no data resize)
 
-    const uint8_t cv_val = a_rich ? 'A' : 'T';
-    res = bam_aux_append(aln, "CV", 'A', sizeof(char), &cv_val);
-    if (res == -1)
-      throw runtime_error("error updating tag");
+    /* add the tags we want */
+    // "udpate" for "int" because it determines the right size; even
+    // though we just deleted all tags, it will add it back here.
+    err_code = bam_aux_update_int(aln, "NM", nm);
+    if (err_code < 0) throw fr_expt(err_code, "bam_aux_update_int");
+    // "append" for "char" because there is no corresponding update
+    err_code = bam_aux_append(aln, "CV", 'A', 1, &cv);
+    if (err_code < 0) throw fr_expt(err_code, "bam_aux_append");
 
-    if (bam_is_rev(aln)) {
-      uint8_t *begin_seq = bam_get_seq(aln);
-      uint8_t *end_seq = begin_seq + aln->core.l_qseq;
-      revcomp_inplace(begin_seq, end_seq);
-    }
+    if (bam_is_rev(aln)) revcomp_seq(aln); // reverse complement if needed
   }
-  // doesn't depend on mapper
-  // aln.qual = "*";
+  if (input_format == "bismark") {
+    // ADS: Previously we modified the read names at the first
+    // underscore. Even if the names are still that way, it should no
+    // longer be needed since we compare names up to a learned suffix.
+
+    // A/T rich; get the XR tag value
+    auto xr_tag = bam_aux_get(aln, "XR");
+    if (!xr_tag) throw fr_expt("bam_aux_get for XR (invalid bismark)");
+    const uint8_t cv = string(bam_aux2Z(xr_tag)) == "GA" ? 'A' : 'T';
+    // get the "mismatches" tag
+    auto nm_tag = bam_aux_get(aln, "NM");
+    if (!nm_tag) throw fr_expt("bam_aux_get for NM (invalid bismark)");
+    const int64_t nm = bam_aux2i(nm_tag);
+
+    aln->l_data = bam_get_aux(aln) - aln->data; // del aux (no data resize)
+
+    /* add the tags we want */
+    // "udpate" for "int" because it determines the right size; even
+    // though we just deleted all tags, it will add it back here.
+    err_code = bam_aux_update_int(aln, "NM", nm);
+    if (err_code < 0) throw fr_expt(err_code, "bam_aux_update_int");
+    // "append" for "char" because there is no corresponding update
+    err_code = bam_aux_append(aln, "CV", 'A', 1, &cv);
+    if (err_code < 0) throw fr_expt(err_code, "bam_aux_append");
+
+    if (bam_is_rev(aln)) revcomp_seq(aln); // reverse complement if needed
+  }
+
+  // Be sure this doesn't depend on mapper! Removes the "qual" part of
+  // the data in a bam1_t struct but does not change its uncompressed
+  // size.
+  const auto qs = bam_get_qual(aln);
+  std::fill(qs, qs + aln->core.l_qseq, '\xff'); // delets qseq
 }
 
 
@@ -699,7 +745,7 @@ check_sorted(const string &inputfile, const size_t suff_len, size_t n_reads) {
   for (auto &&i : names)
     i = remove_suff(i, suff_len);
 
-  unordered_map<string, size_t> mate_lookup;
+  std::unordered_map<string, size_t> mate_lookup;
   for (size_t i = 0; i < names.size(); ++i) {
     auto the_mate = mate_lookup.find(names[i]);
     if (the_mate == end(mate_lookup)) // 1st time seeing this one
@@ -714,15 +760,14 @@ check_sorted(const string &inputfile, const size_t suff_len, size_t n_reads) {
 
 
 static bool
-check_input_file(const string &input_filename) {
-  samFile* hts = hts_open(input_filename.c_str(), "r");
-  if (!hts || errno)
-    throw runtime_error("error opening file: " + input_filename);
+check_input_file(const string &infile) {
+  samFile* hts = hts_open(infile.c_str(), "r");
+  if (!hts || errno) throw fr_expt("error opening: " + infile);
   const htsFormat *fmt = hts_get_format(hts);
   if (fmt->category != sequence_data)
-    throw runtime_error("not sequence data: " + input_filename);
+    throw fr_expt("not sequence data: " + infile);
   if (fmt->format != bam && fmt->format != sam)
-    throw runtime_error("not SAM/BAM file: " + input_filename);
+    throw fr_expt("not SAM/BAM format: " + infile);
   return true;
 }
 
@@ -790,52 +835,45 @@ format(const string &cmd, const size_t n_threads,
     throw runtime_error("failed to output header");
 
   // now process the reads
-  // sam_rec aln, prev_aln;
   bam1_t *aln = bam_init1();
   bam1_t *prev_aln = bam_init1();
   bam1_t *merged = bam_init1();
-  // string read_name, prev_name;
   bool previous_was_merged = false;
 
   int res = sam_read1(hts, hdr, aln);
-  if (res < 0) error_and_exit((int64_t)aln, "K");
+  if (res < 0) throw fr_expt("sam_read1 in format");
 
-  swap_bams(&aln, &prev_aln);
+  swap(aln, prev_aln);
 
-  // bam1_t *bam_rec;
+  int err_code = 0;
   while ((res = sam_read1(hts, hdr, aln)) >= 0) {
 
-    // get_sam_record(hdr, bam_rec, aln);
     standardize_format(input_format, aln);
-    // read_name = remove_suff(aln.qname, suff_len);
 
     if (same_name(prev_aln, aln, suff_len)) {
-      if (!is_rc(aln)) // essentially check for dovetail
-        swap_bams(&prev_aln, &aln); // swap(prev_aln, aln);
+      if (!bam_is_rev(aln)) // essentially check for dovetail
+        swap(prev_aln, aln);
       const int frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
       if (frag_len > 0 && frag_len < max_frag_len) {
-        if (is_a_rich(merged))
-          flip_conversion(merged);
-        if (sam_write1(out, hdr, merged) < 0)
-          throw runtime_error("failed writing bam record");
+        if (is_a_rich(merged)) flip_conversion(merged);
+        err_code = sam_write1(out, hdr, merged);
+        if (err_code < 0) throw fr_expt(err_code, "format:sam_write1");
       }
       else {
-        if (is_a_rich(aln))
-          flip_conversion(aln);
-        if (is_a_rich(prev_aln))
-          flip_conversion(prev_aln);
-        if (sam_write1(out, hdr, prev_aln) < 0 ||
-            sam_write1(out, hdr, aln) < 0)
-          throw runtime_error("failed writing bam record");
+        if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
+        err_code = sam_write1(out, hdr, prev_aln);
+        if (err_code < 0) throw fr_expt(err_code, "format:sam_write1");
+        if (is_a_rich(aln)) flip_conversion(aln);
+        err_code = sam_write1(out, hdr, aln);
+        if (err_code < 0) throw fr_expt(err_code, "format:sam_write1");
       }
       previous_was_merged = true;
     }
     else {
       if (!previous_was_merged) {
-        if (is_a_rich(prev_aln))
-          flip_conversion(prev_aln);
-        if (sam_write1(out, hdr, prev_aln) < 0)
-          throw runtime_error("failed writing bam record");
+        if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
+        err_code = sam_write1(out, hdr, prev_aln);
+        if (err_code < 0) throw fr_expt(err_code, "format:sam_write1");
       }
       previous_was_merged = false;
     }
@@ -843,19 +881,23 @@ format(const string &cmd, const size_t n_threads,
   }
 
   if (!previous_was_merged) {
-    if (is_a_rich(prev_aln))
-      flip_conversion(prev_aln);
-    if (sam_write1(out, hdr, prev_aln) < 0)
-      throw runtime_error("failed writing bam record");
+    if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
+    err_code = sam_write1(out, hdr, prev_aln);
+    if (err_code < 0) throw fr_expt(err_code, "format:sam_write1");
   }
 
   // turn off the lights
   bam_destroy1(prev_aln);
   bam_destroy1(aln);
   bam_hdr_destroy(hdr);
-  hts_close(hts);
   bam_hdr_destroy(hdr_out);
-  hts_close(out);
+
+  err_code = hts_close(hts);
+  if (err_code < 0) throw fr_expt(err_code, "format:hts_close");
+  err_code = hts_close(out);
+  if (err_code < 0) throw fr_expt(err_code, "format:hts_close");
+
+  // do this after the files have been closed
   hts_tpool_destroy(the_thread_pool.pool);
 }
 
@@ -976,6 +1018,10 @@ main_format(int argc, const char **argv) {
 
   }
   catch (const runtime_error &e) {
+    cerr << e.what() << endl;
+    return EXIT_FAILURE;
+  }
+  catch (const std::exception &e) {
     cerr << e.what() << endl;
     return EXIT_FAILURE;
   }

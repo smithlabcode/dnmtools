@@ -1,6 +1,8 @@
 site_name: DNMTools
 strict: true
 
+docs_dir: content
+
 theme: readthedocs
 nav:
    - Home: 'index.md'

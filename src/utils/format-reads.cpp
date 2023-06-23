@@ -583,9 +583,16 @@ main_format_reads(int argc, const char **argv) {
         sam_rec merged;
         const int frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
         if (frag_len > 0 && frag_len < max_frag_len) {
+          if (is_a_rich(merged))
+            flip_conversion(merged);
           out << merged << '\n';
         }
         else {
+          // ADS: only one of these below should happen...
+          if (is_a_rich(prev_aln))
+            flip_conversion(prev_aln);
+          if (is_a_rich(aln))
+            flip_conversion(aln);
           out << prev_aln << '\n'
               << aln << '\n';
         }

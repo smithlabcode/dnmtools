@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+infile1=test_1.fq
+infile2=test_2.fq
+infile3=test.idx
+if [[ -e "${infile1}" && -e "${infile2}" && -e "${infile3}" ]]; then
+    ./dnmtools abismal -o test.sam -i ${infile3} ${infile1} ${infile2};
+    rm ${infile1} ${infile2} ${infile3}
+elif [[ ! -e "${infile1}" || ! -e "${infile2}" ]]; then
+    echo "missing fastq input file(s); skipping remaining tests";
+    rm -f ${infile3};
+    exit 77;
+else ## if [[ ! -e "${infile3}" ]]; then
+    echo "missing index file; skipping remaining tests";
+    rm -f ${infile1} ${infile2};
+    exit 77;
+fi

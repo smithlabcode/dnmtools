@@ -61,23 +61,23 @@ using std::to_string;
 using std::ostringstream;
 
 
-static size_t get_rlen(const bam1_t *b) {
+static inline size_t
+get_rlen(const bam1_t *b) {
+  // less tedious to type
   return bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
 }
 
 
 struct fr_expt: public std::exception {
-  int64_t err;   // error possibly from HTSlib
-  int the_errno; // ERRNO at time of construction
-  string msg;    // the message
-  string the_what;    // the message
+  int64_t err;        // error possibly from HTSlib
+  int the_errno;      // ERRNO at time of construction
+  string msg;         // the message
+  string the_what;    // to report
   fr_expt(const int64_t _err, const string &_msg) :
     err{_err}, the_errno{errno}, msg{_msg} {
     std::ostringstream oss;
-    oss << "[error code: " << err << "]["
-        << "ERRNO: " << the_errno << "]["
-        << strerror(the_errno) << "]["
-        << msg << "]";
+    oss << "[error: " << err << "][" << "ERRNO: " << the_errno << "]"
+        << "[" << strerror(the_errno) << "][" << msg << "]";
     the_what = oss.str();
   }
   fr_expt(const string &_msg) : fr_expt(0, _msg) {}
@@ -86,7 +86,7 @@ struct fr_expt: public std::exception {
 };
 
 
-void
+static inline void
 complement_seq(char *first, char *last) {
   while (first != last) {
     assert(valid_base(*first));
@@ -95,7 +95,7 @@ complement_seq(char *first, char *last) {
 }
 
 
-void
+static inline void
 reverse(char *a, char *b) {
   char *p1, *p2;
   for (p1 = a, p2 = b - 1; p2 > p1; ++p1, --p2) {
@@ -108,7 +108,7 @@ reverse(char *a, char *b) {
 
 
 static inline bool
-consumes_reference(uint32_t op) {
+consumes_reference(const uint32_t op) {
   return bam_cigar_type(bam_cigar_op(op)) & 2;
 }
 
@@ -138,7 +138,7 @@ revcomp_inplace(T first, T last) {
 }
 
 
-void
+static void
 revcomp_seq(bam1_t *aln) {
   // generate the sequence in ascii
   const auto seq = bam_get_seq(aln);
@@ -547,6 +547,8 @@ merge_mates(const size_t range,
       // **ELSE**
       if (head == 0) { // keep the end with more ref bases
         merged = bam_copy1(merged, get_rlen(one) >= get_rlen(two) ? one : two);
+        merged->core.mtid = -1;
+        merged->core.mpos = -1;
       }
     }
     else {

@@ -61,6 +61,11 @@ using std::to_string;
 using std::ostringstream;
 
 
+static size_t get_rlen(const bam1_t *b) {
+  return bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
+}
+
+
 struct fr_expt: public std::exception {
   int64_t err;   // error possibly from HTSlib
   int the_errno; // ERRNO at time of construction
@@ -123,15 +128,6 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
   }
   *partial_oplen = n_ref - bases;
   return i;
-}
-
-
-void
-swap_bams(bam1_t **a, bam1_t **b) {
-  /* want to avoid swapping values pointed to */
-  bam1_t *c = *a;
-  *a = *b;
-  *b = c;
 }
 
 
@@ -254,9 +250,9 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
 
   // flag only needs to worry about strand and single-end stuff
-  uint16_t flag = (a->core.flag & (BAM_FREAD1 |
-                                   BAM_FREAD2 |
-                                   BAM_FREVERSE));
+  uint16_t flag = a->core.flag & (BAM_FREAD1 |
+                                  BAM_FREAD2 |
+                                  BAM_FREVERSE);
 
   int ret = bam_set1(c,
                      strlen(bam_get_qname(a)), // name length from "a"
@@ -274,21 +270,18 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
                      c_seq,            // merged sequence
                      NULL,             // no qual info
                      8);               // enough for 2 tags?
-  if (ret < 0)
-    throw fr_expt(ret, "bam_set1");
+  if (ret < 0) throw fr_expt(ret, "bam_set1");
 
   /* add the tags */
   const int64_t nm = bam_aux2i(bam_aux_get(a, "NM")); // ADS: do better here!
   // "udpate" for "int" because it determines the right size
   ret = bam_aux_update_int(c, "NM", nm);
-  if (ret < 0)
-    throw fr_expt(ret, "bam_aux_update_int");
+  if (ret < 0) throw fr_expt(ret, "bam_aux_update_int");
 
   const uint8_t conversion = bam_aux2A(bam_aux_get(a, "CV"));
   // "append" for "char" because there is no corresponding update
   ret = bam_aux_append(c, "CV", 'A', 1, &conversion);
-  if (ret < 0)
-    throw fr_expt(ret, "bam_aux_append");
+  if (ret < 0) throw fr_expt(ret, "bam_aux_append");
 
   return ret;
 }
@@ -297,6 +290,7 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
 static int
 merge_overlap(const bam1_t *a, const bam1_t *b,
               const uint32_t head, bam1_t *c) {
+  assert(head > 0);
 
   const uint32_t *a_cig = bam_get_cigar(a);
   const uint32_t a_ops = a->core.n_cigar;
@@ -308,7 +302,7 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
   uint32_t c_cur = get_full_and_partial_ops(a_cig, a_ops, head, &part_op);
 
   // check if the middle op would be the same
-  const bool merge_mid = head != 0 &&
+  const bool merge_mid =
     (part_op > 0 ?
      bam_cigar_op(a_cig[c_cur]) == bam_cigar_op(b_cig[0]) :
      bam_cigar_op(a_cig[c_cur-1]) == bam_cigar_op(b_cig[0]));
@@ -316,11 +310,13 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
   // c_ops: include the prefix of a_cig we need; then add for the
   // partial op; subtract for the identical op in the middle; finally
   // add the rest of b_cig.
-  const uint32_t c_ops = c_cur + (head != 0 || part_op > 0) - merge_mid + b_ops;
-  uint32_t *c_cig = (uint32_t*)calloc(c_ops, sizeof(uint32_t));
+  const uint32_t c_ops = c_cur + (part_op > 0) - merge_mid + b_ops;
 
+  uint32_t *c_cig = (uint32_t*)calloc(c_ops, sizeof(uint32_t));
+  // std::fill(c_cig, c_cig + c_ops, std::numeric_limits<uint32_t>::max());
   memcpy(c_cig, a_cig, c_cur*sizeof(uint32_t));
-  if (head != 0 && part_op > 0) {
+
+  if (part_op > 0) {
     c_cig[c_cur] = bam_cigar_gen(part_op, bam_cigar_op(a_cig[c_cur]));
     c_cur++; // index of dest for copying b_cig; faciltates corner case
   }
@@ -333,6 +329,7 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
     c_cig[c_cur-1] = bam_cigar_gen(bam_cigar_oplen(c_cig[c_cur-1]) +
                                    bam_cigar_oplen(b_cig[0]),
                                    bam_cigar_op(b_cig[0]));
+
   // copy the cigar from b into c
   memcpy(c_cig + c_cur, b_cig + merge_mid, (b_ops-merge_mid)*sizeof(uint32_t));
   /* done with cigar string here */
@@ -479,17 +476,10 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
 
 static size_t
 merge_mates(const size_t range,
-            const bam1_t *one, const bam1_t *two, bam1_t *merged) {
+            bam1_t *one, bam1_t *two, bam1_t *merged) {
 
   if (!are_mates(one, two))
     return -std::numeric_limits<int>::max();
-
-  // ADS: tests show that revcomp is now different from before. Not
-  // sure if this has to do with a revcomp deleted recently, or if
-  // it's because of something else.
-
-  // ADS: not sure this can be consistent across mappers
-  // GS: true after standardization
 
   // arithmetic easier using base 0 so subtracting 1 from pos
   const int one_s = one->core.pos;
@@ -516,13 +506,18 @@ merge_mates(const size_t range,
   else {
     const int head = two_s - one_s;
     if (head >= 0) {
-      /* fragment longer than or equal to the read length, but shorter
-       * than twice the read length: this is determined by obtaining
-       * the size of the "head" in the diagram below: the portion of
-       * end1 that is not within [=]. If the read maps to the positive
-       * strand, this depends on the reference start of end2 minus the
-       * reference start of end1. For negative strand, this is
-       * reference start of end1 minus reference start of end2.
+      /* (Even if "head == 0" we will deal with it here.)
+       *
+       * CASE 1: head > 0
+       *
+       * fragment longer than or equal to the length of the left-most
+       * read, but shorter than twice the read length (hence spacer
+       * was < 0): this is determined by obtaining the size of the
+       * "head" in the diagram below: the portion of end1 that is not
+       * within [=]. If the read maps to the positive strand, this
+       * depends on the reference start of end2 minus the reference
+       * start of end1. For negative strand, this is reference start
+       * of end1 minus reference start of end2.
        *
        * <======= head =========>
        *
@@ -530,8 +525,29 @@ merge_mates(const size_t range,
        * one_s              two_s      one_e              two_e
        * [------------end1------[======]------end2------------]
        */
-      int res = merge_overlap(one, two, head, merged);
-      // ADS: need to take care of soft clipping in between
+      if (head > 0) {
+        int res = merge_overlap(one, two, head, merged);
+        // ADS: need to take care of soft clipping in between
+      }
+      /* CASE 2: head == 0
+       *
+       * CASE 2A: one_e < two_e
+       * left                                             right
+       * one_s/two_s               one_e                  two_e
+       * [=========== end1/end2========]------ end2 ----------]
+       * keep "two"
+       *
+       * CASE 2B: one_e >= two_e
+       * left                                             right
+       * one_s/two_s               two_e                  one_e
+       * [=========== end1/end2========]------ end1 ----------]
+       * keep "one"
+       *
+       */
+      // **ELSE**
+      if (head == 0) { // keep the end with more ref bases
+        merged = bam_copy1(merged, get_rlen(one) >= get_rlen(two) ? one : two);
+      }
     }
     else {
       /* dovetail fragments shorter than read length: this is
@@ -546,7 +562,7 @@ merge_mates(const size_t range,
        * [--end2---------[==============]---------end1--]
        */
       const int overlap = two_e - one_s;
-      if (overlap >= 0) {
+      if (overlap > 0) {
         int res = truncate_overlap(one, overlap, merged);
       }
     }
@@ -847,9 +863,7 @@ format(const string &cmd, const size_t n_threads,
 
   int err_code = 0;
   while ((res = sam_read1(hts, hdr, aln)) >= 0) {
-
     standardize_format(input_format, aln);
-
     if (same_name(prev_aln, aln, suff_len)) {
       if (!bam_is_rev(aln)) // essentially check for dovetail
         swap(prev_aln, aln);
@@ -877,9 +891,8 @@ format(const string &cmd, const size_t n_threads,
       }
       previous_was_merged = false;
     }
-    swap_bams(&prev_aln, &aln);
+    swap(prev_aln, aln);
   }
-
   if (!previous_was_merged) {
     if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
     err_code = sam_write1(out, hdr, prev_aln);
@@ -889,14 +902,13 @@ format(const string &cmd, const size_t n_threads,
   // turn off the lights
   bam_destroy1(prev_aln);
   bam_destroy1(aln);
+  bam_destroy1(merged);
   bam_hdr_destroy(hdr);
   bam_hdr_destroy(hdr_out);
-
   err_code = hts_close(hts);
   if (err_code < 0) throw fr_expt(err_code, "format:hts_close");
   err_code = hts_close(out);
   if (err_code < 0) throw fr_expt(err_code, "format:hts_close");
-
   // do this after the files have been closed
   hts_tpool_destroy(the_thread_pool.pool);
 }

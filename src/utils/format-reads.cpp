@@ -61,13 +61,6 @@ using std::to_string;
 using std::ostringstream;
 
 
-static inline size_t
-get_rlen(const bam1_t *b) {
-  // less tedious to type
-  return bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
-}
-
-
 struct fr_expt: public std::exception {
   int64_t err;        // error possibly from HTSlib
   int the_errno;      // ERRNO at time of construction
@@ -84,6 +77,102 @@ struct fr_expt: public std::exception {
   const char*
   what() const noexcept override {return the_what.c_str();}
 };
+
+
+static void
+print_cigar(const size_t n_cigar, const uint32_t *cigar) {
+  for (auto c = cigar; c != cigar + n_cigar; ++c)
+    cerr << bam_cigar_oplen(*c) << bam_cigar_opchr(*c);
+  cerr << endl;
+}
+
+
+static void
+correct_internal_softclip(const size_t n_cigar, uint32_t *cigar) {
+  if (n_cigar < 3) return;
+  auto c_itr = cigar + 1;
+  auto c_end = c_itr + n_cigar;
+  while (c_itr != c_end) {
+    if (bam_cigar_op(*c_itr) == BAM_CSOFT_CLIP)
+      *c_itr = bam_cigar_gen(bam_cigar_oplen(*c_itr), BAM_CINS);
+    ++c_itr;
+  }
+}
+
+
+static inline bool
+consumes_reference(uint32_t c) {return bam_cigar_type(bam_cigar_op(c)) & 2;}
+
+
+static inline bool
+consumes_query(uint32_t c) {return bam_cigar_type(bam_cigar_op(c)) & 1;}
+
+
+static void
+correct_external_insertion(const size_t n_cigar, uint32_t *cigar) {
+  if (n_cigar < 2) return;
+  auto c_itr = cigar;
+  const auto c_end = c_itr + n_cigar;
+  while (!consumes_reference(*c_itr) && c_itr != c_end) {
+    *c_itr++ = bam_cigar_gen(bam_cigar_oplen(*c_itr), BAM_CSOFT_CLIP);
+  }
+  c_itr = cigar + n_cigar - 1;
+  while (!consumes_reference(*c_itr) && c_itr != cigar) {
+    *c_itr-- = bam_cigar_gen(bam_cigar_oplen(*c_itr), BAM_CSOFT_CLIP);
+  }
+}
+
+
+static size_t
+merge_cigar_ops(const size_t n_cigar, uint32_t *cigar) {
+  if (n_cigar < 2) return n_cigar;
+  auto c_itr1 = cigar;
+  auto c_end = c_itr1 + n_cigar;
+  auto c_itr2 = c_itr1 + 1;
+  auto op1 = bam_cigar_op(*c_itr1);
+  while (c_itr2 != c_end) {
+    auto op2 = bam_cigar_op(*c_itr2);
+    if (op1 == op2) {
+      *c_itr1 = bam_cigar_gen(bam_cigar_oplen(*c_itr1) +
+                              bam_cigar_oplen(*c_itr2), op1);
+    }
+    else {
+      *(++c_itr1) = *c_itr2;
+      op1 = op2;
+    }
+    ++c_itr2;
+  }
+  return std::distance(cigar, ++c_itr1);
+}
+
+
+static size_t
+fix_cigar(bam1_t *b) {
+  uint32_t *cigar = bam_get_cigar(b);
+  size_t n_cigar = b->core.n_cigar;
+  correct_external_insertion(n_cigar, cigar);
+  correct_internal_softclip(n_cigar, cigar);
+
+  // get the new number of cigar ops
+  n_cigar = merge_cigar_ops(n_cigar, cigar);
+  // difference in bytes to shift the internal data
+  const size_t delta = (b->core.n_cigar - n_cigar)*sizeof(uint32_t);
+  if (delta > 0) { // if there is a difference;
+    // do the shift
+    auto data_end = bam_get_aux(b) + bam_get_l_aux(b);
+    std::copy(bam_get_seq(b), data_end, bam_get_seq(b) - delta);
+    // update the number of cigar ops
+    b->core.n_cigar = n_cigar;
+  }
+  return delta;
+}
+
+
+static inline size_t
+get_rlen(const bam1_t *b) {
+  // less tedious to type
+  return bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
+}
 
 
 static inline void
@@ -107,12 +196,10 @@ reverse(char *a, char *b) {
 }
 
 
-static inline bool
-consumes_reference(const uint32_t op) {
-  return bam_cigar_type(bam_cigar_op(op)) & 2;
-}
-
-
+// return value is the number of cigar ops that are fully consumed in
+// order to read n_ref, while "partial_oplen" is the number of bases
+// that could be taken from the next operation, which might be merged
+// with the other read.
 static uint32_t
 get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
                          const uint32_t n_ref, uint32_t *partial_oplen) {
@@ -230,19 +317,26 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
   const uint32_t c_cur =
     get_full_and_partial_ops(a_cig, a_ops, overlap, &part_op);
 
-  const uint32_t c_ops = c_cur + (part_op > 0);
+  // ADS: hack here because the get_full_and_partial_ops doesn't do
+  // exactly what is needed for this.
+  const bool use_partial = (c_cur < a->core.n_cigar && part_op > 0);
+
+  const uint32_t c_ops = c_cur + use_partial;
   uint32_t *c_cig = (uint32_t*)calloc(c_ops, sizeof(uint32_t));
 
+  // ADS: replace this with a std::copy
   memcpy(c_cig, a_cig, c_cur*sizeof(uint32_t));
-  if (part_op > 0)
+  // ADS: warning, if !use_partial, the amount of part_op used below
+  // would make no sense.
+  if (use_partial)
     c_cig[c_cur] = bam_cigar_gen(part_op, bam_cigar_op(a_cig[c_cur]));
+  /* after this point the cigar is set and should decide everything */
 
   const uint32_t c_seq_len = bam_cigar2qlen(c_ops, c_cig);
   char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
-  if (!c_seq)
-    throw fr_expt("allocating sequence");
+  if (!c_seq) throw fr_expt("allocating sequence");
 
-  // copy the prefix of a into c
+  // copy the prefix of a into c; must be easier
   for (int i = 0; i < c_seq_len; ++i)
     c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
 
@@ -250,26 +344,24 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
 
   // flag only needs to worry about strand and single-end stuff
-  uint16_t flag = a->core.flag & (BAM_FREAD1 |
-                                  BAM_FREAD2 |
-                                  BAM_FREVERSE);
+  const uint16_t flag = a->core.flag & (BAM_FREAD1 | BAM_FREAD2 | BAM_FREVERSE);
 
   int ret = bam_set1(c,
-                     strlen(bam_get_qname(a)), // name length from "a"
-                     bam_get_qname(a), // get name from "a"
-                     flag,             // flags (no PE; revcomp info)
-                     a->core.tid,      // tid
-                     a->core.pos,      // pos
-                     a->core.qual,     // mapq from a (consider update)
-                     c_ops,            // merged cigar ops
-                     c_cig,            // merged cigar
-                     -1,               // (no mate)
-                     -1,               // (no mate)
-                     isize,            // TLEN (relative to reference; SAM docs)
-                     c_seq_len,        // merged sequence length
-                     c_seq,            // merged sequence
-                     NULL,             // no qual info
-                     8);               // enough for 2 tags?
+                     a->core.l_qname,
+                     bam_get_qname(a),
+                     flag,       // flags (SR and revcomp info)
+                     a->core.tid,
+                     a->core.pos,
+                     a->core.qual,
+                     c_ops,      // merged cigar ops
+                     c_cig,      // merged cigar
+                     -1,         // (no mate)
+                     -1,         // (no mate)
+                     isize,      // rlen from new cigar
+                     c_seq_len,  // truncated seq length
+                     c_seq,      // truncated sequence
+                     NULL,       // no qual info
+                     8);         // enough for the 2 tags?
   if (ret < 0) throw fr_expt(ret, "bam_set1");
 
   /* add the tags */
@@ -300,36 +392,39 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
 
   uint32_t part_op = 0;
   uint32_t c_cur = get_full_and_partial_ops(a_cig, a_ops, head, &part_op);
+  // ADS: hack here because the get_full_and_partial_ops doesn't do
+  // exactly what is needed for this.
+  const bool use_partial = (c_cur < a->core.n_cigar && part_op > 0);
 
   // check if the middle op would be the same
   const bool merge_mid =
-    (part_op > 0 ?
+    (use_partial > 0 ?
      bam_cigar_op(a_cig[c_cur]) == bam_cigar_op(b_cig[0]) :
      bam_cigar_op(a_cig[c_cur-1]) == bam_cigar_op(b_cig[0]));
 
   // c_ops: include the prefix of a_cig we need; then add for the
   // partial op; subtract for the identical op in the middle; finally
   // add the rest of b_cig.
-  const uint32_t c_ops = c_cur + (part_op > 0) - merge_mid + b_ops;
+  const uint32_t c_ops = c_cur + use_partial - merge_mid + b_ops;
 
   uint32_t *c_cig = (uint32_t*)calloc(c_ops, sizeof(uint32_t));
   // std::fill(c_cig, c_cig + c_ops, std::numeric_limits<uint32_t>::max());
   memcpy(c_cig, a_cig, c_cur*sizeof(uint32_t));
 
-  if (part_op > 0) {
+  if (use_partial) {
     c_cig[c_cur] = bam_cigar_gen(part_op, bam_cigar_op(a_cig[c_cur]));
     c_cur++; // index of dest for copying b_cig; faciltates corner case
   }
-  // here we get the length of a's sequence part contribution to c's
+  // Here we get the length of a's sequence part contribution to c's
   // sequence before the possibility of merging the last entry with
-  // the first entry in b's cigar
+  // the first entry in b's cigar. This is done with the cigar, so
+  // everything depends on the "use_partial"
   const uint32_t a_seq_len = bam_cigar2qlen(c_cur, c_cig);
 
   if (merge_mid) // update the middle op if it's the same
     c_cig[c_cur-1] = bam_cigar_gen(bam_cigar_oplen(c_cig[c_cur-1]) +
                                    bam_cigar_oplen(b_cig[0]),
                                    bam_cigar_op(b_cig[0]));
-
   // copy the cigar from b into c
   memcpy(c_cig + c_cur, b_cig + merge_mid, (b_ops-merge_mid)*sizeof(uint32_t));
   /* done with cigar string here */
@@ -363,7 +458,7 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                                    BAM_FREVERSE));
 
   int ret = bam_set1(c,
-                     strlen(bam_get_qname(a)), // name length from "a"
+                     a->core.l_qname,  // name length from "a"
                      bam_get_qname(a), // get name from "a"
                      flag,             // flags (no PE; revcomp info)
                      a->core.tid,      // tid
@@ -441,7 +536,7 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
 
   int ret =
     bam_set1(c,
-             strlen(bam_get_qname(a)), // name length from "a"
+             a->core.l_qname,  // name length from "a"
              bam_get_qname(a), // get name from "a"
              flag,             // flags (no PE; revcomp info)
              a->core.tid,      // tid
@@ -549,6 +644,8 @@ merge_mates(const size_t range,
         merged = bam_copy1(merged, get_rlen(one) >= get_rlen(two) ? one : two);
         merged->core.mtid = -1;
         merged->core.mpos = -1;
+        merged->core.isize = get_rlen(merged);
+        merged->core.flag &= (BAM_FREAD1 | BAM_FREAD2 | BAM_FREVERSE);
       }
     }
     else {
@@ -569,6 +666,8 @@ merge_mates(const size_t range,
       }
     }
   }
+
+  fix_cigar(merged);
 
   return two_e - one_s;
 }

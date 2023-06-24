@@ -2,7 +2,7 @@
 
 infile=test.sam
 if [[ -e "${infile}" ]]; then
-    ./dnmtools format -f abismal -o test.sam.fmt ${infile}
+    ./dnmtools format -f abismal ${infile} test.sam.fmt
     rm ${infile}
 else
     echo "${infile} not found; skipping remaining tests";

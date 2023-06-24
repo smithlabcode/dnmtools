@@ -49,16 +49,8 @@
 
 using std::string;
 using std::vector;
-using std::cout;
 using std::cerr;
 using std::endl;
-using std::ifstream;
-using std::max;
-using std::min;
-using std::runtime_error;
-using std::swap;
-using std::to_string;
-using std::ostringstream;
 
 
 struct fr_expt: public std::exception {
@@ -79,33 +71,44 @@ struct fr_expt: public std::exception {
 };
 
 
-static void
-print_cigar(const size_t n_cigar, const uint32_t *cigar) {
-  for (auto c = cigar; c != cigar + n_cigar; ++c)
-    cerr << bam_cigar_oplen(*c) << bam_cigar_opchr(*c);
-  cerr << endl;
-}
-
+static inline bool
+eats_ref(const uint32_t c) {return bam_cigar_type(bam_cigar_op(c)) & 2;}
 
 static inline bool
-consumes_reference(const uint32_t c) {
-  return bam_cigar_type(bam_cigar_op(c)) & 2;
-}
+eats_query(const uint32_t c) {return bam_cigar_type(bam_cigar_op(c)) & 1;}
+
+static inline size_t
+bam_get_n_cigar(const bam1_t *b) {return b->core.n_cigar;}
 
 
-static inline bool
-consumes_query(const uint32_t c) {
-  return bam_cigar_type(bam_cigar_op(c)) & 1;
+static inline uint32_t
+to_insertion(const uint32_t x) {
+  return (x & ~BAM_CIGAR_MASK) | BAM_CINS;
 }
 
 
 static void
 fix_internal_softclip(const size_t n_cigar, uint32_t *cigar) {
   if (n_cigar < 3) return;
-  const auto c_end = cigar + n_cigar;
-  for (auto c_itr = cigar + 1; c_itr != c_end; ++c_itr)
+  // find first non-softclip
+  auto c_beg = cigar;
+  auto c_end = cigar + n_cigar;
+
+  while (!eats_ref(*c_beg) && ++c_beg != c_end);
+  if (c_beg == c_end) throw fr_expt("cigar eats no ref");
+
+  while (!eats_ref(*(c_end-1)) && --c_end != c_beg);
+  if (c_beg == c_end) throw fr_expt("cigar eats no ref");
+
+  for (auto c_itr = c_beg; c_itr != c_end; ++c_itr)
     if (bam_cigar_op(*c_itr) == BAM_CSOFT_CLIP)
-      *c_itr = bam_cigar_gen(bam_cigar_oplen(*c_itr), BAM_CINS);
+      *c_itr = to_insertion(*c_itr);
+}
+
+
+static inline uint32_t
+to_softclip(const uint32_t x) {
+  return (x & ~BAM_CIGAR_MASK) | BAM_CSOFT_CLIP;
 }
 
 
@@ -113,15 +116,16 @@ static void
 fix_external_insertion(const size_t n_cigar, uint32_t *cigar) {
   if (n_cigar < 2) return;
 
-  // fix I->S at the insertions do the left end of the cigar
   auto c_itr = cigar;
   const auto c_end = c_itr + n_cigar;
-  while (!consumes_reference(*c_itr) && c_itr != c_end)
-    *c_itr++ = bam_cigar_gen(bam_cigar_oplen(*c_itr), BAM_CSOFT_CLIP);
+
+  while (!eats_ref(*c_itr) && c_itr != c_end)
+    *c_itr++ = to_softclip(*c_itr);
+  if (c_itr == c_end) throw fr_expt("cigar eats no ref");
 
   c_itr = cigar + n_cigar - 1;
-  while (!consumes_reference(*c_itr) && c_itr != cigar)
-    *c_itr-- = bam_cigar_gen(bam_cigar_oplen(*c_itr), BAM_CSOFT_CLIP);
+  while (!eats_ref(*c_itr) && c_itr != cigar)
+    *c_itr-- = to_softclip(*c_itr);
 }
 
 
@@ -151,7 +155,15 @@ merge_cigar_ops(const size_t n_cigar, uint32_t *cigar) {
 
 
 static size_t
-fix_cigar(bam1_t *b) {
+correct_cigar(bam1_t *b) {
+  /* This function will change external insertions into soft clip
+     operations. Not sure why those would be present. It will also
+     change internal soft-clip operations into insertions. This could
+     be needed if soft-clipped ends of reads were moved to the middle
+     of a merged fragment. Finally, it will collapse adjacent
+     identical operations. None of this impacts the seq/qual/aux which
+     get moved as a block */
+
   uint32_t *cigar = bam_get_cigar(b);
   size_t n_cigar = b->core.n_cigar;
   fix_external_insertion(n_cigar, cigar);
@@ -208,7 +220,7 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
   size_t rlen = 0;
   int i = 0;
   for (i = 0; i < in_ops; ++i) {
-    if (consumes_reference(cig_in[i])) {
+    if (eats_ref(cig_in[i])) {
       if (rlen + bam_cigar_oplen(cig_in[i]) > n_ref_full)
         break;
       rlen += bam_cigar_oplen(cig_in[i]);
@@ -532,11 +544,11 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
 
   int ret =
     bam_set1(c,
-             a->core.l_qname,  // name length from "a"
-             bam_get_qname(a), // get name from "a"
+             a->core.l_qname,
+             bam_get_qname(a),
              flag,             // flags (no PE; revcomp info)
-             a->core.tid,      // tid
-             a->core.pos,      // pos
+             a->core.tid,
+             a->core.pos,
              a->core.qual,     // mapq from a (consider update)
              c_ops,            // merged cigar ops
              c_cig,            // merged cigar
@@ -562,6 +574,17 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
   if (ret < 0) throw fr_expt(ret, "merge_non_overlap:bam_aux_append");
 
   return ret;
+}
+
+
+static int
+keep_better_end(const bam1_t *a, const bam1_t *b, bam1_t *c) {
+  c = bam_copy1(c, get_rlen(a) >= get_rlen(b) ? a : b);
+  c->core.mtid = -1;
+  c->core.mpos = -1;
+  c->core.isize = get_rlen(c);
+  c->core.flag &= (BAM_FREAD1 | BAM_FREAD2 | BAM_FREVERSE);
+  return 0;
 }
 
 
@@ -591,7 +614,7 @@ merge_mates(const size_t range,
      * one_s                    one_e      two_s                    two_e
      * [------------end1------------]______[------------end2------------]
      */
-    int res = merge_non_overlap(one, two, spacer, merged);
+    merge_non_overlap(one, two, spacer, merged);
   }
   else {
     const int head = two_s - one_s;
@@ -616,7 +639,7 @@ merge_mates(const size_t range,
        * [------------end1------[======]------end2------------]
        */
       if (head > 0) {
-        int res = merge_overlap(one, two, head, merged);
+        merge_overlap(one, two, head, merged);
       }
       /* CASE 2: head == 0
        *
@@ -633,13 +656,9 @@ merge_mates(const size_t range,
        * keep "one"
        *
        */
-      // **ELSE**
+      // *** ELSE ***
       if (head == 0) { // keep the end with more ref bases
-        merged = bam_copy1(merged, get_rlen(one) >= get_rlen(two) ? one : two);
-        merged->core.mtid = -1;
-        merged->core.mpos = -1;
-        merged->core.isize = get_rlen(merged);
-        merged->core.flag &= (BAM_FREAD1 | BAM_FREAD2 | BAM_FREVERSE);
+        keep_better_end(one, two, merged);
       }
     }
     else {
@@ -656,12 +675,13 @@ merge_mates(const size_t range,
        */
       const int overlap = two_e - one_s;
       if (overlap > 0) {
-        int res = truncate_overlap(one, overlap, merged);
+        truncate_overlap(one, overlap, merged);
       }
     }
   }
 
-  fix_cigar(merged);
+  // if merging two ends caused strange things in the cigar, fix them.
+  correct_cigar(merged);
 
   return two_e - one_s;
 }
@@ -731,7 +751,7 @@ standardize_format(const string &input_format, bam1_t *aln) {
   // the data in a bam1_t struct but does not change its uncompressed
   // size.
   const auto qs = bam_get_qual(aln);
-  std::fill(qs, qs + aln->core.l_qseq, '\xff'); // delets qseq
+  std::fill(qs, qs + aln->core.l_qseq, '\xff'); // deletes qseq
 }
 
 
@@ -772,7 +792,7 @@ get_max_repeat_count(const vector<string> &names, const size_t suff_len) {
         equal(begin(names[i-1]), end(names[i-1]) - suff_len, begin(names[i])))
       ++tmp_repeat_count;
     else tmp_repeat_count = 0;
-    repeat_count = max(repeat_count, tmp_repeat_count);
+    repeat_count = std::max(repeat_count, tmp_repeat_count);
   }
   return repeat_count;
 }
@@ -787,9 +807,9 @@ check_suff_len(const string &inputfile, const size_t suff_len,
   // get the minimum read name length
   size_t min_name_len = std::numeric_limits<size_t>::max();
   for (auto &&i: names)
-    min_name_len = min(min_name_len, i.size());
+    min_name_len = std::min(min_name_len, i.size());
   if (min_name_len <= suff_len)
-    throw runtime_error("given suffix length exceeds min read name length" );
+    throw fr_expt("given suffix length exceeds min read name length");
   sort(begin(names), end(names));
   return get_max_repeat_count(names, suff_len) < 2;
 }
@@ -805,7 +825,7 @@ guess_suff_len(const string &inputfile, const size_t n_names_to_check,
   // get the minimum read name length
   size_t min_name_len = std::numeric_limits<size_t>::max();
   for (auto &&i: names)
-    min_name_len = min(min_name_len, i.size());
+    min_name_len = std::min(min_name_len, i.size());
   assert(min_name_len > 0);
 
   sort(begin(names), end(names));
@@ -901,10 +921,8 @@ same_name(const bam1_t *a, const bam1_t *b, const size_t suff_len) {
   // "+ 1" below: extranul counts *extras*; we don't want *any* nulls
   const uint16_t a_l = a->core.l_qname - (a->core.l_extranul + 1);
   const uint16_t b_l = b->core.l_qname - (b->core.l_extranul + 1);
-
   if (a_l != b_l) return false;
   assert(a_l > suff_len);
-
   return !std::strncmp(bam_get_qname(a), bam_get_qname(b), a_l - suff_len);
 }
 
@@ -957,13 +975,13 @@ format(const string &cmd, const size_t n_threads,
   err_code = sam_read1(hts, hdr, aln); // for EOF, err_code == -1
   if (err_code < -1) throw fr_expt(err_code, "format:sam_read1");
 
-  swap(aln, prev_aln); // start with prev_aln being first read
+  std::swap(aln, prev_aln); // start with prev_aln being first read
 
   while ((err_code = sam_read1(hts, hdr, aln)) >= 0) {
     standardize_format(input_format, aln);
     if (same_name(prev_aln, aln, suff_len)) {
       // below: essentially check for dovetail
-      if (!bam_is_rev(aln)) swap(prev_aln, aln);
+      if (!bam_is_rev(aln)) std::swap(prev_aln, aln);
       const int frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
       if (frag_len > 0 && frag_len < max_frag_len) {
         if (is_a_rich(merged)) flip_conversion(merged);
@@ -988,7 +1006,7 @@ format(const string &cmd, const size_t n_threads,
       }
       previous_was_merged = false;
     }
-    swap(prev_aln, aln);
+    std::swap(prev_aln, aln);
   }
   if (err_code < -1) throw fr_expt(err_code, "format:sam_read1");
 
@@ -1101,17 +1119,17 @@ main_format(int argc, const char **argv) {
         size_t repeat_count = 0;
         suff_len = guess_suff_len(inputfile, n_reads_to_check, repeat_count);
         if (repeat_count > 1)
-          throw runtime_error("failed to identify read name suffix length\n"
-                              "verify reads are not single-end\n"
-                              "specify read name suffix length directly");
+          throw fr_expt("failed to identify read name suffix length\n"
+                        "verify reads are not single-end\n"
+                        "specify read name suffix length directly");
         if (VERBOSE)
           cerr << "[read name suffix length guess: " << suff_len << "]" << endl;
       }
       else if (!check_suff_len(inputfile, suff_len, n_reads_to_check))
-        throw runtime_error("wrong read name suffix length [" +
-                            to_string(suff_len) + "] in: " + inputfile);
+        throw fr_expt("wrong read name suffix length [" +
+                      std::to_string(suff_len) + "] in: " + inputfile);
       if (!check_sorted(inputfile, suff_len, n_reads_to_check))
-        throw runtime_error("mates not consecutive in: " + inputfile);
+        throw fr_expt("mates not consecutive in: " + inputfile);
     }
 
     if (VERBOSE)
@@ -1127,10 +1145,6 @@ main_format(int argc, const char **argv) {
     format(cmd.str(), n_threads, inputfile, outfile,
            bam_format, input_format, suff_len, max_frag_len);
 
-  }
-  catch (const runtime_error &e) {
-    cerr << e.what() << endl;
-    return EXIT_FAILURE;
   }
   catch (const std::exception &e) {
     cerr << e.what() << endl;

@@ -358,7 +358,7 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
   const uint16_t flag = a->core.flag & (BAM_FREAD1 | BAM_FREAD2 | BAM_FREVERSE);
 
   int ret = bam_set1(c,
-                     a->core.l_qname,
+                     a->core.l_qname - (a->core.l_extranul + 1),
                      bam_get_qname(a),
                      flag,       // flags (SR and revcomp info)
                      a->core.tid,
@@ -467,7 +467,7 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                                    BAM_FREVERSE));
 
   int ret = bam_set1(c,
-                     a->core.l_qname,
+                     a->core.l_qname - (a->core.l_extranul + 1),
                      bam_get_qname(a),
                      flag,             // (no PE; revcomp info)
                      a->core.tid,
@@ -544,7 +544,7 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
 
   int ret =
     bam_set1(c,
-             a->core.l_qname,
+             a->core.l_qname - (a->core.l_extranul + 1),
              bam_get_qname(a),
              flag,             // flags (no PE; revcomp info)
              a->core.tid,

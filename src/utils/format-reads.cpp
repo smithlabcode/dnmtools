@@ -1144,7 +1144,6 @@ main_format(int argc, const char **argv) {
 
     format(cmd.str(), n_threads, inputfile, outfile,
            bam_format, input_format, suff_len, max_frag_len);
-
   }
   catch (const std::exception &e) {
     cerr << e.what() << endl;

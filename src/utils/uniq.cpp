@@ -317,25 +317,18 @@ main_uniq(int argc, const char **argv) {
     opt_parse.set_show_defaults();
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
-    if (opt_parse.help_requested()) {
+    if (opt_parse.about_requested() || opt_parse.help_requested() ||
+        leftover_args.empty()) {
       cerr << opt_parse.help_message() << endl
            << opt_parse.about_message() << endl;
-      return EXIT_SUCCESS;
-    }
-    if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
       cerr << opt_parse.option_missing_message() << endl;
       return EXIT_SUCCESS;
     }
-    if (leftover_args.size() == 1 && !use_stdout) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
-      return EXIT_SUCCESS;
-    }
-    if (leftover_args.size() == 2 && use_stdout) {
+    if ((leftover_args.size() == 1 && !use_stdout) ||
+        (leftover_args.size() == 2 && use_stdout)) {
       cerr << opt_parse.help_message() << endl
            << opt_parse.about_message() << endl;
       return EXIT_SUCCESS;

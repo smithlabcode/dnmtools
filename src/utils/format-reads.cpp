@@ -1097,7 +1097,7 @@ main_format(int argc, const char **argv) {
            << opt_parse.about_message() << endl;
       return EXIT_FAILURE;
     }
-    const string inputfile(leftover_args.front());
+    const string infile(leftover_args.front());
     if (leftover_args.size() == 2 && !use_stdout)
       outfile = leftover_args.back();
     else
@@ -1107,17 +1107,17 @@ main_format(int argc, const char **argv) {
     std::ostringstream cmd;
     copy(argv, argv + argc, std::ostream_iterator<const char*>(cmd, " "));
 
-    check_input_file(inputfile);
+    check_input_file(infile);
 
     if (VERBOSE)
-      if (!check_format_in_header(input_format, inputfile))
+      if (!check_format_in_header(input_format, infile))
         cerr << "[warning: input format not found in header "
-             << "(" << input_format << ", " << inputfile << ")]" << endl;
+             << "(" << input_format << ", " << infile << ")]" << endl;
 
     if (!single_end) {
       if (suff_len == 0) {
         size_t repeat_count = 0;
-        suff_len = guess_suff_len(inputfile, n_reads_to_check, repeat_count);
+        suff_len = guess_suff_len(infile, n_reads_to_check, repeat_count);
         if (repeat_count > 1)
           throw fr_expt("failed to identify read name suffix length\n"
                         "verify reads are not single-end\n"
@@ -1125,15 +1125,15 @@ main_format(int argc, const char **argv) {
         if (VERBOSE)
           cerr << "[read name suffix length guess: " << suff_len << "]" << endl;
       }
-      else if (!check_suff_len(inputfile, suff_len, n_reads_to_check))
+      else if (!check_suff_len(infile, suff_len, n_reads_to_check))
         throw fr_expt("wrong read name suffix length [" +
-                      std::to_string(suff_len) + "] in: " + inputfile);
-      if (!check_sorted(inputfile, suff_len, n_reads_to_check))
-        throw fr_expt("mates not consecutive in: " + inputfile);
+                      std::to_string(suff_len) + "] in: " + infile);
+      if (!check_sorted(infile, suff_len, n_reads_to_check))
+        throw fr_expt("mates not consecutive in: " + infile);
     }
 
     if (VERBOSE)
-      cerr << "[input file: " << inputfile << "]" << endl
+      cerr << "[input file: " << infile << "]" << endl
            << "[mapper: " << input_format << "]" << endl
            << "[configuration: " << (single_end ? "SE" : "PE") << "]" << endl
            << "[output file: " << outfile << "]" << endl
@@ -1142,7 +1142,7 @@ main_format(int argc, const char **argv) {
            << "[command line: \"" << cmd.str() << "\"]" << endl
            << "[readname suffix length: " << suff_len << "]" << endl;
 
-    format(cmd.str(), n_threads, inputfile, outfile,
+    format(cmd.str(), n_threads, infile, outfile,
            bam_format, input_format, suff_len, max_frag_len);
   }
   catch (const std::exception &e) {

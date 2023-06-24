@@ -28,7 +28,7 @@ runautoreconf() {
     autoreconf -i;
 }
 
-if test -d .git && test "$(basename ${PWD})" = "dnmtools"
+if test -d .git && test "$(basename "${PWD}")" = "dnmtools"
 then
     runautoreconf
     exit 0

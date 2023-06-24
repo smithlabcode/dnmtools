@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+infile=test.sam
+if [[ -e "${infile}" ]]; then
+    ./dnmtools format -f abismal -o test.sam.fmt ${infile}
+    rm ${infile}
+else
+    echo "${infile} not found; skipping remaining tests";
+    exit 77;
+fi

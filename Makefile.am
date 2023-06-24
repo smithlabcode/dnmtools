@@ -55,7 +55,13 @@ EXTRA_DIST = \
              docs/content/uniq.md \
              pipeline/config.yaml \
              pipeline/runconfig.yaml \
-             pipeline/Snakefile
+             pipeline/Snakefile \
+             test/test.fa \
+             test/test_abismalidx.test \
+             test/test_simreads.test \
+             test/test_abismal.test \
+             test/test_format.test \
+             test/test_bsrate.test
 
 ACLOCAL_AMFLAGS = -I m4
 
@@ -64,6 +70,19 @@ install installdirs: SUBDIRS := $(filter-out src/smithlab_cpp src/abismal, $(SUB
 AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp
 
 CXXFLAGS = -O3 $(OPENMP_CXXFLAGS) # default has optimization on
+
+TESTS = test/test_abismalidx.test \
+	test/test_simreads.test \
+	test/test_abismal.test \
+	test/test_format.test \
+	test/test_bsrate.test
+
+TEST_EXTENSIONS = .test
+
+test_simreads.log: test_abismalidx.log
+test_abismal.log: test_simreads.log
+test_format.log: test_abismal.log
+test_bsrate.log: test_format.log
 
 noinst_LIBRARIES = libdnmtools.a
 libdnmtools_a_SOURCES = \

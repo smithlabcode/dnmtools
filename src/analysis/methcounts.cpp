@@ -33,12 +33,13 @@
 #include "GenomicRegion.hpp"
 #include "MappedRead.hpp"
 #include "MSite.hpp"
-#include "zlib_wrapper.hpp"
 #include "bsutils.hpp"
-
+#include "dnmt_error.hpp"
 #include "cigar_utils.hpp"
-#include "htslib_wrapper.hpp"
-#include "sam_record.hpp"
+
+#include <htslib/sam.h>
+#include <htslib/bgzf.h>
+#include <htslib/thread_pool.h>
 
 using std::string;
 using std::vector;
@@ -49,11 +50,7 @@ using std::unordered_set;
 using std::unordered_map;
 using std::runtime_error;
 using std::end;
-
-inline bool
-is_rc(const sam_rec &aln) {
-  return check_flag(aln, samflags::read_rc);
-}
+using std::to_string;
 
 
 /* The three functions below here should probably be moved into
@@ -127,9 +124,9 @@ struct CountSet {
   count_type unconverted_guanine() const {return nC;}
   count_type converted_guanine() const {return nT;}
 
-  count_type pA, pC, pG, pT;
-  count_type nA, nC, nG, nT;
-  count_type N;
+  count_type pA{0}, pC{0}, pG{0}, pT{0};
+  count_type nA{0}, nC{0}, nG{0}, nT{0};
+  count_type N{0};
 };
 
 
@@ -154,59 +151,6 @@ get_methylation_context_tag_from_genome(const string &s, const size_t pos) {
     else return "CCG";
   }
   return "N";
-}
-
-
-template <class count_type>
-static void
-count_states_pos(const sam_rec &aln,
-                 vector<CountSet<count_type> > &counts) {
-
-  const size_t width = cigar_rseq_ops(aln.cigar);
-  size_t position = aln.pos - 1;
-  string seq(aln.seq);
-  apply_cigar(aln.cigar, seq);
-  assert(seq.size() == width);
-
-  const size_t chrom_len = counts.size(); // the counts should have
-                                          // one entry per position
-  if (chrom_len < position) {
-    //throw runtime_error("read mapped past chrom end: " + aln.qname);
-    position = chrom_len;
-  }
-
-  for (size_t i = 0; i < width && position < chrom_len; ++i, ++position)
-    counts[position].add_count_pos(seq[i]);
-}
-
-
-template <class count_type>
-static void
-count_states_neg(const sam_rec &aln,
-                 vector<CountSet<count_type> > &counts) {
-
-  const size_t width = cigar_rseq_ops(aln.cigar);
-  size_t position = (aln.pos - 1) + width;
-  string seq(aln.seq);
-  revcomp_inplace(seq);
-  apply_cigar(aln.cigar, seq);
-  revcomp_inplace(seq);
-  assert(seq.size() == width);
-
-  const size_t chrom_len = counts.size(); // the counts should have
-                                          // one entry per position
-  if (chrom_len < position) {
-    //throw runtime_error("read mapped past chrom end: " + aln.qname);
-    position = chrom_len;
-  }
-  // skip past any part of read not overlapping chrom; condition above
-  // ensures value for i remains valid as it is incremented in this
-  // first loop below
-  size_t i = 0;
-  for (; position > chrom_len; ++i, --position);
-
-  for (; i < width && position > 0; ++i)
-    counts[--position].add_count_neg(seq[i]);
 }
 
 
@@ -266,52 +210,228 @@ get_chrom_id(const string &chrom_name,
 
   auto the_chrom(cl.find(chrom_name));
   if (the_chrom == end(cl))
-    throw runtime_error("could not find chrom: " + chrom_name);
+    throw dnmt_error("could not find chrom: " + chrom_name);
 
   return the_chrom->second;
 }
 
 
-template <class T>
+
+template <class count_type>
 static void
-process_reads(const bool VERBOSE, SAMReader &in, T &out,
-              const unordered_map<string, size_t> &chrom_lookup,
-              const vector<size_t> &chrom_sizes,
-              const vector<string> &chroms,
-              const bool CPG_ONLY) {
+write_output(sam_hdr_t *hdr, BGZF *out,
+             const int32_t tid, const string &chrom,
+             const vector<CountSet<count_type> > &counts,
+             bool CPG_ONLY) {
 
-  string name;
-  vector<string>::const_iterator chrom_itr;
+  for (size_t i = 0; i < counts.size(); ++i) {
+    const char base = chrom[i];
+    if (is_cytosine(base) || is_guanine(base)) {
+      MSite the_site;
+      the_site.chrom = string(sam_hdr_tid2name(hdr, tid));
+      the_site.pos = i;
+      the_site.strand = is_cytosine(base) ? '+' : '-';
+      const double unconverted = is_cytosine(base) ?
+        counts[i].unconverted_cytosine() : counts[i].unconverted_guanine();
+      const double converted = is_cytosine(base) ?
+        counts[i].converted_cytosine() : counts[i].converted_guanine();
+      the_site.n_reads = unconverted + converted;
+      the_site.meth = the_site.n_reads > 0 ?
+        unconverted/(converted + unconverted) : 0.0;
+      the_site.context = get_methylation_context_tag_from_genome(chrom, i) +
+        (has_mutated(base, counts[i]) ? "x" : "");
+      if (!CPG_ONLY || is_cpg_site(chrom, i)) {
+        std::ostringstream oss;
+        oss << the_site << '\n';
+        const ssize_t err_code =
+          bgzf_write(out, oss.str().c_str(), oss.str().size());
+        if (err_code < 0) throw dnmt_error(err_code, "error writing output");
+      }
+    }
+  }
+}
 
-  sam_rec aln;
+
+#define get_tid(b) ((b)->core.tid)
+#define get_rlen(b) (bam_cigar2rlen((b)->core.n_cigar, bam_get_cigar(b)))
+#define get_pos(b) ((b)->core.pos)
+#define get_qlen(b) ((b)->core.l_qseq)
+
+
+static string
+bam_seq_inflate(const bam1_t *b) {
+  const size_t qlen = get_qlen(b);
+  const auto bam_seq = bam_get_seq(b);
+  string seq(qlen, '\0');
+  for (size_t i = 0; i < qlen; ++i)
+    seq[i] = seq_nt16_str[bam_seqi(bam_seq, i)];
+  return seq;
+}
+
+
+static string
+bam_cigar_inflate(const bam1_t *b) {
+  string cigar;
+  cigar.reserve(256);
+  auto c_itr = bam_get_cigar(b);
+  const auto c_end = c_itr + b->core.n_cigar;
+  for (; c_itr != c_end; ++c_itr) {
+    cigar += to_string(bam_cigar_oplen(*c_itr));
+    cigar += bam_cigar_opchr(*c_itr);
+  }
+  return cigar;
+}
+
+
+template <class count_type> static void
+count_states_pos(const bam1_t *aln, vector<CountSet<count_type> > &counts) {
+
+  const size_t width = get_rlen(aln);
+  size_t position = get_pos(aln);
+  string seq(bam_seq_inflate(aln));
+  const string cigar(bam_cigar_inflate(aln));
+
+  apply_cigar(cigar, seq);
+  assert(seq.size() == width);
+
+  const size_t chrom_len = counts.size(); // the counts should have
+                                          // one entry per position
+  if (chrom_len < position) {
+    //throw dnmt_error("mapped past chrom end: " + string(bam_get_qname(aln)));
+    position = chrom_len;
+  }
+
+  for (size_t i = 0; i < width && position < chrom_len; ++i, ++position)
+    counts[position].add_count_pos(seq[i]);
+}
+
+
+template <class count_type> static void
+count_states_neg(const bam1_t *aln, vector<CountSet<count_type> > &counts) {
+
+  const size_t width = get_rlen(aln);
+  size_t position = get_pos(aln) + width;
+  string seq(bam_seq_inflate(aln));
+  const string cigar(bam_cigar_inflate(aln));
+
+  revcomp_inplace(seq);
+  apply_cigar(cigar, seq);
+  revcomp_inplace(seq);
+  assert(seq.size() == width);
+
+  const size_t chrom_len = counts.size(); // the counts should have
+                                          // one entry per position
+
+  if (chrom_len < position) {
+    //throw dnmt_error("mapped past chrom end: " + string(bam_get_qname(aln)));
+    position = chrom_len;
+  }
+  // skip past any part of read not overlapping chrom; condition above
+  // ensures value for i remains valid as it is incremented in this
+  // first loop below
+  size_t i = 0;
+  for (; position > chrom_len; ++i, --position);
+
+  for (; i < width && position > 0; ++i)
+    counts[--position].add_count_neg(seq[i]);
+}
+
+
+static inline bool
+has_gz_ext(const string &fn) {
+  static const char *ext = ".gz";
+  static const size_t ext_sz = 3;
+  return fn.size() > ext_sz &&
+    (fn.compare(fn.size() - ext_sz, ext_sz, ext) == 0);
+}
+
+
+static void
+process_reads(const bool VERBOSE, const size_t n_threads,
+              const string &infile, const string &outfile,
+              const string &chroms_file, const bool CPG_ONLY) {
+
+  int err_code = 0;
+
+  vector<string> chroms, names;
+  read_fasta_file_short_names(chroms_file, names, chroms);
+  if (VERBOSE)
+    cerr << "[n chroms in reference: " << chroms.size() << "]" << endl;
+
+  unordered_map<string, size_t> name_to_idx;
+  vector<size_t> chrom_sizes(chroms.size(), 0);
+  for (size_t i = 0; i < chroms.size(); ++i) {
+    name_to_idx[names[i]] = i;
+    chrom_sizes[i] = chroms[i].size();
+  }
+
+  // open the hts input file
+  samFile *hts = hts_open(infile.c_str(), "r");
+  if (!hts) throw dnmt_error("failed to open input file");
+  // load the input file's header
+  sam_hdr_t *hdr = sam_hdr_read(hts);
+  if (!hdr) throw dnmt_error("failed to read header");
+
+  unordered_map<int32_t, size_t> tid_to_idx;
+  for (int32_t i = 0; i < hdr->n_targets; ++i) {
+    // "curr_name" gives a "tid_to_name" mapping allowing to get
+    // "tid_to_idx" using "name_to_idx"
+    const string curr_name(hdr->target_name[i]);
+    const auto name_itr(name_to_idx.find(curr_name));
+    if (name_itr == end(name_to_idx))
+      throw dnmt_error("failed to find chrom: " + curr_name);
+    tid_to_idx[i] = name_itr->second;
+  }
+  //// ADS: cross-check the chromosome sizes
+  // copy(begin(chrom_sizes), end(chrom_sizes),
+  // std::ostream_iterator<size_t>(cout, "\n"));
+
+  /* set the threads */
+  htsThreadPool tp{hts_tpool_init(n_threads), 0};
+  err_code = hts_set_thread_pool(hts, &tp);
+  if (err_code < 0) throw dnmt_error(err_code, "error setting threads");
+
+  const string output_mode = has_gz_ext(outfile) ? "w" : "wu";
+  BGZF* out = bgzf_open(outfile.c_str(), output_mode.c_str());
+  if (!out) throw dnmt_error("error opening output file: " + outfile);
+
+  err_code = bgzf_thread_pool(out, tp.pool, tp.qsize);
+  if (err_code) throw dnmt_error(err_code, "error setting bgzf threads");
+
+  // now process the reads
+  bam1_t *aln = bam_init1();
+  int32_t prev_tid = -1;
 
   // this is where all the counts are accumulated
-  vector<CountSet<unsigned short> > counts;
+  vector<CountSet<uint32_t> > counts;
 
-  unordered_set<string> chroms_seen;
-  while (in >> aln) {
+  unordered_set<int32_t> chroms_seen;
+  vector<string>::const_iterator chrom_itr;
+  while ((err_code = sam_read1(hts, hdr, aln)) >= 0) {
 
     // if chrom changes, output results, get the next one
-    if (aln.rname != name) {
+    const int32_t tid = get_tid(aln);
+    if (tid != prev_tid) {
 
       // write output if there is any; should fail only once
       if (!counts.empty())
-        write_output(out, name, *chrom_itr, counts, CPG_ONLY);
+        write_output(hdr, out, prev_tid, *chrom_itr, counts, CPG_ONLY);
 
       // make sure all reads from same chrom are consecutive
-      if (chroms_seen.find(aln.rname) != end(chroms_seen))
-        throw runtime_error("reads in SAM file not sorted");
-      chroms_seen.insert(aln.rname);
+      if (chroms_seen.find(tid) != end(chroms_seen))
+        throw dnmt_error("reads in SAM file not sorted");
+      chroms_seen.insert(tid);
 
       // get the next chrom to process
-      auto chrom_idx(chrom_lookup.find(aln.rname));
-      if (chrom_idx == end(chrom_lookup))
-        throw runtime_error("chromosome not found: " + aln.rname);
+      auto chrom_idx(tid_to_idx.find(tid));
+      if (chrom_idx == end(tid_to_idx))
+        throw dnmt_error("chromosome not found: " +
+                         string(sam_hdr_tid2name(hdr, tid)));
 
       if (VERBOSE)
-        cerr << "processing " << aln.rname << endl;
+        cerr << "processing " << sam_hdr_tid2name(hdr, tid) << endl;
 
-      name = aln.rname;
+      prev_tid = tid;
       chrom_itr = begin(chroms) + chrom_idx->second;
 
       // reset the counts
@@ -320,13 +440,23 @@ process_reads(const bool VERBOSE, SAMReader &in, T &out,
     }
 
     // do the work for this mapped read, depending on strand
-    if (is_rc(aln))
+    if (bam_is_rev(aln))
       count_states_neg(aln, counts);
     else
       count_states_pos(aln, counts);
   }
   if (!counts.empty())
-    write_output(out, name, *chrom_itr, counts, CPG_ONLY);
+    write_output(hdr, out, prev_tid, *chrom_itr, counts, CPG_ONLY);
+
+  // turn off the lights
+  bam_destroy1(aln);
+  bam_hdr_destroy(hdr);
+  err_code = hts_close(hts);
+  if (err_code < 0) throw dnmt_error(err_code, "process_reads:hts_close");
+  err_code = bgzf_close(out);
+  if (err_code) throw dnmt_error(err_code, "process_reads:bgzf_close");
+  // do this after the files have been closed
+  hts_tpool_destroy(tp.pool);
 }
 
 
@@ -340,10 +470,12 @@ main_methcounts(int argc, const char **argv) {
 
     string chroms_file;
     string outfile;
+    size_t n_threads = 1;
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), "get methylation levels from "
                            "mapped WGBS reads", "-c <chroms> <mapped-reads>");
+    opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("output", 'o', "output file name (default: stdout)",
                       false, outfile);
     opt_parse.add_opt("chrom", 'c', "reference genome file (FASTA format)",
@@ -370,45 +502,13 @@ main_methcounts(int argc, const char **argv) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (!outfile.empty() && !is_valid_output_file(outfile))
-      throw runtime_error("bad output file: " + outfile);
+      throw dnmt_error("bad output file: " + outfile);
 
-    vector<string> chroms;
-    vector<string> names;
-    read_fasta_file_short_names(chroms_file, names, chroms);
-    unordered_map<string, size_t> chrom_lookup;
-    vector<size_t> chrom_sizes(chroms.size(), 0);
-    for (size_t i = 0; i < chroms.size(); ++i) {
-      chrom_lookup[names[i]] = i;
-      chrom_sizes[i] = chroms[i].size();
-    }
-
-    if (VERBOSE)
-      cerr << "[n chroms in reference: " << chroms.size() << "]" << endl;
-
-    SAMReader in(mapped_reads_file);
-    if (!in)
-      throw runtime_error("cannot open file: " + mapped_reads_file);
-
-    if (outfile.empty() || !has_gz_ext(outfile)) {
-      std::ofstream of;
-      if (!outfile.empty()) of.open(outfile);
-      std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
-
-      process_reads(VERBOSE, in, out, chrom_lookup,
-                    chrom_sizes, chroms, CPG_ONLY);
-    }
-    else {
-      ogzfstream out(outfile);
-      process_reads(VERBOSE, in, out, chrom_lookup,
-                    chrom_sizes, chroms, CPG_ONLY);
-    }
+    process_reads(VERBOSE, n_threads, mapped_reads_file,
+                  outfile, chroms_file, CPG_ONLY);
   }
-  catch (const runtime_error &e) {
+  catch (const std::exception &e) {
     cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

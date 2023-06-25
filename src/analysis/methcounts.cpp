@@ -35,7 +35,6 @@
 #include "MSite.hpp"
 #include "bsutils.hpp"
 #include "dnmt_error.hpp"
-// #include "cigar_utils.hpp"
 
 #include <htslib/sam.h>
 #include <htslib/bgzf.h>
@@ -52,6 +51,34 @@ using std::runtime_error;
 using std::end;
 using std::to_string;
 
+
+struct quick_buf : public std::ostringstream, public std::basic_stringbuf<char> {
+  quick_buf() {
+    static_cast<std::basic_ios<char>&>(*this).rdbuf(this);
+  }
+  void clear() {
+    setp(pbase(), pbase());
+  }
+  char const* c_str() {
+    *pptr() = '\0';
+    return pbase();
+  }
+};
+
+
+// static inline string
+// stringify_msite(const MSite &s) {
+//   std::ostringstream oss;
+//   oss << s.chrom << '\t'
+//       << s.pos << '\t'
+//       << s.strand << '\t'
+//       << s.context << '\t'
+//       << s.meth << '\t'
+//       << s.n_reads << '\n';
+//   return oss.str();
+// }
+
+
 // ADS: we should never have to worry about coverage over > 32767 in
 // any downstream analysis, so using "int16_t" here would allow to
 // detect wrap around and report it as some kind of weird thing.
@@ -62,87 +89,6 @@ eats_ref(const uint32_t c) {return bam_cigar_type(bam_cigar_op(c)) & 2;}
 
 static inline bool
 eats_query(const uint32_t c) {return bam_cigar_type(bam_cigar_op(c)) & 1;}
-
-// void
-// apply_cigar(const uint32_t *cigar, const uint32_t n_cigar, string &to_inflate,
-//             const char inflation_symbol = 'N') {
-
-//   string inflated_seq; // not needed if we do things directly
-//   size_t seq_pos = 0;
-//   auto to_inflate_beg = std::begin(to_inflate);
-//   for (size_t i = 0; i < n_cigar; ++i) { //while (iss >> n >> op) {
-//     const size_t op = bam_cigar_op(cigar[i]);
-//     const char n = bam_cigar_oplen(cigar[i]);
-//     if (eats_ref(op) && eats_query(op)) {
-//       inflated_seq.append(to_inflate_beg + seq_pos, to_inflate_beg + seq_pos + n);
-//       seq_pos += n;
-//     }
-//     else if (eats_query(op)) {
-//       // no addition of symbols to query
-//       seq_pos += n;
-//     }
-//     else if (eats_ref(op)) {
-//       ///// increment ref pos
-//       inflated_seq.append(n, inflation_symbol);
-//       // no increment of index within query
-//     }
-//   }
-
-//   // sum of total M/I/S/=/X/N operations must equal length of seq
-//   const size_t orig_len = to_inflate.length();
-//   if (seq_pos != orig_len)
-//     throw runtime_error("inconsistent number of qseq ops in cigar: " +
-//                         to_inflate + " "  + // cigar + " " +
-//                         to_string(seq_pos) + " " +
-//                         to_string(orig_len));
-//   to_inflate.swap(inflated_seq);
-// }
-
-
-// void
-// apply_cigar_rc(const uint32_t *cigar, const uint32_t n_cigar, string &to_inflate,
-//                const char inflation_symbol = 'N') {
-//   // std::istringstream iss(cigar);
-
-//   string inflated_seq;
-//   size_t n;
-//   char op;
-//   size_t seq_pos = 0;
-//   auto to_inflate_beg = std::begin(to_inflate);
-//   size_t i = 0;
-//   for (size_t j = 0; j < n_cigar; ++j) { //while (iss >> n >> op) {
-//     i = n_cigar - 1 - j;
-//     op = bam_cigar_op(cigar[i]);
-//     n = bam_cigar_oplen(cigar[i]);
-//     if (eats_ref(op) && eats_query(op)) {
-//       // for (size_t k = 0; k < n; ++k) {
-//       //        // update the right CountSet
-//       //        // increment seq_pos;
-//       // }
-//       inflated_seq.append(to_inflate_beg + seq_pos, to_inflate_beg + seq_pos + n);
-//       seq_pos += n;
-//     }
-//     else if (eats_query(op)) {
-//       // no addition of symbols to query
-//       seq_pos += n;
-//     }
-//     else if (eats_ref(op)) {
-//       ///// increment ref pos
-//       inflated_seq.append(n, inflation_symbol);
-//       // no increment of index within query
-//     }
-//   }
-
-//   // sum of total M/I/S/=/X/N operations must equal length of seq
-//   const size_t orig_len = to_inflate.length();
-//   if (seq_pos != orig_len)
-//     throw runtime_error("inconsistent number of qseq ops in cigar: " +
-//                         to_inflate + " "  + // cigar + " " +
-//                         to_string(seq_pos) + " " +
-//                         to_string(orig_len));
-//   to_inflate.swap(inflated_seq);
-// }
-
 
 
 /* The three functions below here should probably be moved into
@@ -227,21 +173,21 @@ struct CountSet {
  * works as long as the chromosome size is not the maximum size of a
  * size_t.
  */
-static string
+static uint32_t
 get_methylation_context_tag_from_genome(const string &s, const size_t pos) {
   if (is_cytosine(s[pos])) {
-    if (is_cpg(s, pos)) return "CpG";
-    else if (is_chh(s, pos)) return "CHH";
-    else if (is_c_at_g(s, pos)) return "CXG";
-    else return "CCG";
+    if (is_cpg(s, pos)) return 0;
+    else if (is_chh(s, pos)) return 1;
+    else if (is_c_at_g(s, pos)) return 2;
+    else return 3;
   }
   if (is_guanine(s[pos])) {
-    if (is_cpg(s, pos - 1)) return "CpG";
-    else if (is_ddg(s, pos - 2)) return "CHH";
-    else if (is_c_at_g(s, pos - 2)) return "CXG";
-    else return "CCG";
+    if (is_cpg(s, pos - 1)) return 0;
+    else if (is_ddg(s, pos - 2)) return 1;
+    else if (is_c_at_g(s, pos - 2)) return 2;
+    else return 3;
   }
-  return "N"; // shouldn't be used for anything
+  return 4; // shouldn't be used for anything
 }
 
 
@@ -277,33 +223,49 @@ get_chrom_id(const string &chrom_name,
 }
 
 
+static const char *tags[] = {
+  "CpG", // 0
+  "CHH", // 1
+  "CXG", // 2
+  "CCG", // 3
+  "N"    // 4
+  // "CpGx",// 5
+  // "CHHx",// 6
+  // "CXGx",// 7
+  // "CCGx",// 8
+  // "Nx"   // 9
+};
+
 static void
 write_output(sam_hdr_t *hdr, BGZF *out,
              const int32_t tid, const string &chrom,
              const vector<CountSet> &counts,
              bool CPG_ONLY) {
 
+  quick_buf out_buf; // maybe keep the underlying buffer reserved?
+
   for (size_t i = 0; i < counts.size(); ++i) {
     const char base = chrom[i];
     if (is_cytosine(base) || is_guanine(base)) {
-      MSite the_site;
-      the_site.chrom = string(sam_hdr_tid2name(hdr, tid)); // string::assign
-      the_site.pos = i;
-      the_site.strand = is_cytosine(base) ? '+' : '-';
-      const double unconverted = is_cytosine(base) ?
+      const bool is_c = is_cytosine(base);
+      const double unconverted = is_c ?
         counts[i].unconverted_cytosine() : counts[i].unconverted_guanine();
-      const double converted = is_cytosine(base) ?
+      const double converted = is_c ?
         counts[i].converted_cytosine() : counts[i].converted_guanine();
-      the_site.n_reads = unconverted + converted;
-      the_site.meth = the_site.n_reads > 0 ?
-        unconverted/(converted + unconverted) : 0.0;
-      the_site.context = get_methylation_context_tag_from_genome(chrom, i) +
-        (has_mutated(base, counts[i]) ? "x" : "");
-      if (!CPG_ONLY || is_cpg_site(chrom, i)) {
-        std::ostringstream oss;
-        oss << the_site << '\n';
+      const uint32_t the_tag = get_methylation_context_tag_from_genome(chrom, i);
+      const bool mut = has_mutated(base, counts[i]);
+      if (!CPG_ONLY || the_tag == 0) {
+        const size_t n_reads = unconverted + converted;
+        out_buf.clear();
+        out_buf << sam_hdr_tid2name(hdr, tid) << '\t'
+                << i << '\t'
+                << (is_c ? '+' : '-') << '\t'
+                << tags[the_tag]
+                << (has_mutated(base, counts[i]) ? "x" : "") << '\t'
+                << (n_reads > 0 ? unconverted/n_reads : 0.0) << '\t'
+                << n_reads << '\n';
         const ssize_t err_code =
-          bgzf_write(out, oss.str().c_str(), oss.str().size());
+          bgzf_write(out, out_buf.c_str(), out_buf.tellp());
         if (err_code < 0) throw dnmt_error(err_code, "error writing output");
       }
     }
@@ -423,6 +385,9 @@ process_reads(const bool VERBOSE, const size_t n_threads,
 
   vector<string> chroms, names;
   read_fasta_file_short_names(chroms_file, names, chroms);
+  for (auto &&i: chroms)
+    transform(begin(i), end(i), begin(i),
+              [](const char c){return std::toupper(c);});
   if (VERBOSE)
     cerr << "[n chroms in reference: " << chroms.size() << "]" << endl;
 

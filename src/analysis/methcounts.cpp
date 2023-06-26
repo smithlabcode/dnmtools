@@ -1,7 +1,7 @@
-/* methcounts: a program for counting the methylated and unmethylated
+/* counts: a program for counting the methylated and unmethylated
  * reads mapping over each CpG or C
  *
- * Copyright (C) 2011-2022 University of Southern California and
+ * Copyright (C) 2011-2023 University of Southern California and
  *                         Andrew D. Smith
  *
  * Authors: Andrew D. Smith and Song Qiang and Guilherme Sena
@@ -20,63 +20,49 @@
 #include <string>
 #include <vector>
 #include <iostream>
-#include <fstream>
 #include <numeric>
 #include <sstream>
-#include <iomanip>
 #include <stdexcept>
 #include <unordered_set>
 
 #include "OptionParser.hpp"
-#include "smithlab_utils.hpp"
-#include "smithlab_os.hpp"
-#include "GenomicRegion.hpp"
-#include "MappedRead.hpp"
-#include "MSite.hpp"
+// #include "GenomicRegion.hpp"
+/* ADS: This code writes MSite objects to files, but does not use
+   MSite to do it. Possiby dangerous, but currently much faster. If
+   MSite has a way to serialize into a char[] directly, then we should
+   use it. */
+// #include "MSite.hpp"
 #include "bsutils.hpp"
 #include "dnmt_error.hpp"
 
+/* HTSlib */
 #include <htslib/sam.h>
 #include <htslib/bgzf.h>
 #include <htslib/thread_pool.h>
 
 using std::string;
 using std::vector;
-using std::cout;
 using std::cerr;
 using std::endl;
 using std::unordered_set;
 using std::unordered_map;
-using std::runtime_error;
-using std::end;
-using std::to_string;
 
 
-struct quick_buf : public std::ostringstream, public std::basic_stringbuf<char> {
+struct quick_buf : public std::ostringstream,
+                   public std::basic_stringbuf<char> {
   quick_buf() {
     static_cast<std::basic_ios<char>&>(*this).rdbuf(this);
   }
   void clear() {
+    // reset buffer pointers (member functions)
     setp(pbase(), pbase());
   }
   char const* c_str() {
+    /* between c_str and insertion make sure to clear() */
     *pptr() = '\0';
     return pbase();
   }
 };
-
-
-// static inline string
-// stringify_msite(const MSite &s) {
-//   std::ostringstream oss;
-//   oss << s.chrom << '\t'
-//       << s.pos << '\t'
-//       << s.strand << '\t'
-//       << s.context << '\t'
-//       << s.meth << '\t'
-//       << s.n_reads << '\n';
-//   return oss.str();
-// }
 
 
 // ADS: we should never have to worry about coverage over > 32767 in
@@ -174,7 +160,7 @@ struct CountSet {
  * size_t.
  */
 static uint32_t
-get_methylation_context_tag_from_genome(const string &s, const size_t pos) {
+get_tag_from_genome(const string &s, const size_t pos) {
   if (is_cytosine(s[pos])) {
     if (is_cpg(s, pos)) return 0;
     else if (is_chh(s, pos)) return 1;
@@ -203,15 +189,16 @@ has_mutated(const char base, const CountSet &cs) {
     (cs.pG < MUTATION_DEFINING_FRACTION*(cs.pos_total()));
 }
 
-inline static bool
+
+static inline bool
 is_cpg_site(const string &s, const size_t pos) {
-  return (is_cytosine(s[pos]) ? is_guanine(s[pos+1]) :
+  return (is_cytosine(s[pos]) ? is_guanine(s[pos + 1]) :
           (is_guanine(s[pos]) ?
            (pos > 0 && is_cytosine(s[pos - 1])) : false));
 }
 
 
-inline static size_t
+static inline size_t
 get_chrom_id(const string &chrom_name,
              const unordered_map<string, size_t> &cl) {
 
@@ -223,84 +210,84 @@ get_chrom_id(const string &chrom_name,
 }
 
 
-static const char *tags[] = {
+static const char *tag_values[] = {
   "CpG", // 0
   "CHH", // 1
   "CXG", // 2
   "CCG", // 3
-  "N"    // 4
-  // "CpGx",// 5
-  // "CHHx",// 6
-  // "CXGx",// 7
-  // "CCGx",// 8
-  // "Nx"   // 9
+  "N",   // 4
+  "CpGx",// 5
+  "CHHx",// 6
+  "CXGx",// 7
+  "CCGx",// 8
+  "Nx"   // 9
 };
+
+
+static inline uint32_t
+tag_with_mut(const uint32_t tag, const bool mut) {return tag + (mut ? 5 : 0);}
+
 
 static void
 write_output(sam_hdr_t *hdr, BGZF *out,
              const int32_t tid, const string &chrom,
-             const vector<CountSet> &counts,
-             bool CPG_ONLY) {
+             const vector<CountSet> &counts, bool CPG_ONLY) {
 
-  quick_buf out_buf; // maybe keep the underlying buffer reserved?
+  quick_buf buf; // keep underlying buffer space?
 
   for (size_t i = 0; i < counts.size(); ++i) {
     const char base = chrom[i];
     if (is_cytosine(base) || is_guanine(base)) {
+
+      const uint32_t the_tag = get_tag_from_genome(chrom, i);
+      if (CPG_ONLY && the_tag != 0) continue;
+
       const bool is_c = is_cytosine(base);
       const double unconverted = is_c ?
         counts[i].unconverted_cytosine() : counts[i].unconverted_guanine();
       const double converted = is_c ?
         counts[i].converted_cytosine() : counts[i].converted_guanine();
-      const uint32_t the_tag = get_methylation_context_tag_from_genome(chrom, i);
       const bool mut = has_mutated(base, counts[i]);
-      if (!CPG_ONLY || the_tag == 0) {
-        const size_t n_reads = unconverted + converted;
-        out_buf.clear();
-        out_buf << sam_hdr_tid2name(hdr, tid) << '\t'
-                << i << '\t'
-                << (is_c ? '+' : '-') << '\t'
-                << tags[the_tag]
-                << (has_mutated(base, counts[i]) ? "x" : "") << '\t'
-                << (n_reads > 0 ? unconverted/n_reads : 0.0) << '\t'
-                << n_reads << '\n';
-        const ssize_t err_code =
-          bgzf_write(out, out_buf.c_str(), out_buf.tellp());
-        if (err_code < 0) throw dnmt_error(err_code, "error writing output");
-      }
+      const size_t n_reads = unconverted + converted;
+      buf.clear();
+      // ADS: here is where we make an MSite, but not using MSite
+      buf << sam_hdr_tid2name(hdr, tid) << '\t'
+          << i << '\t'
+          << (is_c ? '+' : '-') << '\t'
+          << tag_values[tag_with_mut(the_tag, mut)] << '\t'
+          << (n_reads > 0 ? unconverted/n_reads : 0.0) << '\t'
+          << n_reads << '\n';
+      const ssize_t err_code = bgzf_write(out, buf.c_str(), buf.tellp());
+      if (err_code < 0) throw dnmt_error(err_code, "error writing output");
     }
   }
 }
 
 
-#define get_tid(b) ((b)->core.tid)
-#define get_rlen(b) (bam_cigar2rlen((b)->core.n_cigar, bam_get_cigar(b)))
-#define get_pos(b) ((b)->core.pos)
-#define get_qlen(b) ((b)->core.l_qseq)
+/* ADS: was tempted to use these until I passed in a "b++"... */
+// #define get_tid(b) ((b)->core.tid)
+// #define get_rlen(b) (bam_cigar2rlen((b)->core.n_cigar, bam_get_cigar(b)))
+// #define get_pos(b) ((b)->core.pos)
+// #define get_qlen(b) ((b)->core.l_qseq)
 
-
-static string
-bam_seq_inflate(const bam1_t *b) {
-  const size_t qlen = get_qlen(b);
-  const auto bam_seq = bam_get_seq(b);
-  string seq(qlen, '\0');
-  for (size_t i = 0; i < qlen; ++i)
-    seq[i] = seq_nt16_str[bam_seqi(bam_seq, i)];
-  return seq;
+static inline int32_t
+get_tid(const bam1_t *b) {
+  return b->core.tid;
 }
 
+static inline hts_pos_t
+get_rlen(const bam1_t *b) {
+  return bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
+}
 
-static string
-bam_cigar_inflate(const bam1_t *b) {
-  string cigar;
-  cigar.reserve(256);
-  auto c_itr = bam_get_cigar(b);
-  const auto c_end = c_itr + b->core.n_cigar;
-  for (; c_itr != c_end; ++c_itr) {
-    cigar += to_string(bam_cigar_oplen(*c_itr));
-    cigar += bam_cigar_opchr(*c_itr);
-  }
-  return cigar;
+static inline hts_pos_t
+get_pos(const bam1_t *b) {
+  return b->core.pos;
+}
+
+static inline int32_t
+get_qlen(const bam1_t *b) {
+  return b->core.l_qseq;
 }
 
 
@@ -367,17 +354,9 @@ count_states_neg(const bam1_t *aln, vector<CountSet> &counts) {
 }
 
 
-static inline bool
-has_gz_ext(const string &fn) {
-  static const char *ext = ".gz";
-  static const size_t ext_sz = 3;
-  return fn.size() > ext_sz &&
-    (fn.compare(fn.size() - ext_sz, ext_sz, ext) == 0);
-}
-
-
 static void
-process_reads(const bool VERBOSE, const size_t n_threads,
+process_reads(const bool VERBOSE,
+              const bool compress_output, const size_t n_threads,
               const string &infile, const string &outfile,
               const string &chroms_file, const bool CPG_ONLY) {
 
@@ -419,19 +398,22 @@ process_reads(const bool VERBOSE, const size_t n_threads,
   // copy(begin(chrom_sizes), end(chrom_sizes),
   // std::ostream_iterator<size_t>(cout, "\n"));
 
-  /* set the threads for the input file decompression */
-  htsThreadPool tp{hts_tpool_init(n_threads), 0};
-  err_code = hts_set_thread_pool(hts, &tp);
-  if (err_code < 0) throw dnmt_error(err_code, "error setting threads");
-
   // open the output file
-  const string output_mode = has_gz_ext(outfile) ? "w" : "wu";
+  const string output_mode = compress_output ? "w" : "wu";
   BGZF* out = bgzf_open(outfile.c_str(), output_mode.c_str());
   if (!out) throw dnmt_error("error opening output file: " + outfile);
 
-  /* set threads for the output file compression */
-  err_code = bgzf_thread_pool(out, tp.pool, tp.qsize);
-  if (err_code) throw dnmt_error(err_code, "error setting bgzf threads");
+  /* set the threads for the input file decompression */
+  htsThreadPool tp;
+  if (n_threads > 1) {
+    tp = {hts_tpool_init(n_threads - 1), 0};
+    err_code = hts_set_thread_pool(hts, &tp);
+    if (err_code < 0) throw dnmt_error(err_code, "error setting threads");
+
+    /* set threads for the output file compression */
+    err_code = bgzf_thread_pool(out, tp.pool, tp.qsize);
+    if (err_code) throw dnmt_error(err_code, "error setting bgzf threads");
+  }
 
   /* now iterate over the reads, switching chromosomes and writing
      output as needed */
@@ -492,7 +474,7 @@ process_reads(const bool VERBOSE, const size_t n_threads,
   err_code = bgzf_close(out);
   if (err_code) throw dnmt_error(err_code, "process_reads:bgzf_close");
   // do this after the files have been closed
-  hts_tpool_destroy(tp.pool);
+  if (n_threads > 1) hts_tpool_destroy(tp.pool);
 }
 
 
@@ -503,31 +485,33 @@ main_methcounts(int argc, const char **argv) {
 
     bool VERBOSE = false;
     bool CPG_ONLY = false;
+    bool compress_output = false;
 
     string chroms_file;
     string outfile;
-    size_t n_threads = 1;
+    int n_threads = 1;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), "get methylation levels from "
-                           "mapped WGBS reads", "-c <chroms> <mapped-reads>");
-    opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
+    OptionParser opt_parse(strip_path(argv[0]),
+                           "get methylation levels from "
+                           "mapped bisulfite sequencing reads",
+                           "-c <chroms> <mapped-reads>");
+    opt_parse.add_opt("threads", 't', "threads to use (few needed)",
+                      false, n_threads);
     opt_parse.add_opt("output", 'o', "output file name (default: stdout)",
                       false, outfile);
     opt_parse.add_opt("chrom", 'c', "reference genome file (FASTA format)",
                       true , chroms_file);
     opt_parse.add_opt("cpg-only", 'n', "print only CpG context cytosines",
                       false, CPG_ONLY);
+    opt_parse.add_opt("zip", 'z', "output gzip format", false, compress_output);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
-    if (argc == 1 || opt_parse.help_requested()) {
+    if (opt_parse.about_requested() || opt_parse.help_requested() ||
+        leftover_args.empty()) {
       cerr << opt_parse.help_message() << endl
            << opt_parse.about_message() << endl;
-      return EXIT_SUCCESS;
-    }
-    if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
@@ -537,10 +521,27 @@ main_methcounts(int argc, const char **argv) {
     const string mapped_reads_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (!outfile.empty() && !is_valid_output_file(outfile))
-      throw dnmt_error("bad output file: " + outfile);
+    if (n_threads < 0)
+      throw dnmt_error("thread count cannot be negative");
 
-    process_reads(VERBOSE, n_threads, mapped_reads_file,
+    std::ostringstream cmd;
+    copy(argv, argv + argc, std::ostream_iterator<const char*>(cmd, " "));
+
+    // file types from HTSlib use "-" for the filename to go to stdout
+    if (outfile.empty())
+      outfile = "-";
+
+    if (VERBOSE)
+      cerr << "[input BAM/SAM file: " << mapped_reads_file << "]" << endl
+           << "[output file: " << outfile << "]" << endl
+           << "[output format: "
+           << (compress_output ? "bgzf" : "text") << "]" << endl
+           << "[genome file: " << chroms_file << "]" << endl
+           << "[threads requested: " << n_threads << "]" << endl
+           << "[CpG only mode: " << (CPG_ONLY ? "yes" : "no") << "]" << endl
+           << "[command line: \"" << cmd.str() << "\"]" << endl;
+
+    process_reads(VERBOSE, compress_output, n_threads, mapped_reads_file,
                   outfile, chroms_file, CPG_ONLY);
   }
   catch (const std::exception &e) {

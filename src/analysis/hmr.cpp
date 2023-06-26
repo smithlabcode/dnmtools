@@ -311,7 +311,7 @@ load_cpgs(const string &cpgs_file, vector<MSite> &cpgs,
 
   MSite prev_site, the_site;
   while (in >> the_site) {
-    if (!the_site.is_cpg() || distance(prev_site, the_site) < 2)
+    if (!the_site.is_cpg())
       throw runtime_error("error: input is not symmetric-CpGs: " + cpgs_file);
     cpgs.push_back(the_site);
     reads.push_back(the_site.n_reads);
@@ -377,6 +377,7 @@ main_hmr(int argc, const char **argv) {
     // run mode flags
     bool VERBOSE = false;
     bool PARTIAL_METH = false;
+    bool allow_asymmetric_cpgs = false;
 
     // corrections for small values
     const double tolerance = 1e-10;
@@ -403,6 +404,9 @@ main_hmr(int argc, const char **argv) {
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     opt_parse.add_opt("partial", '\0', "identify PMRs instead of HMRs",
                       false, PARTIAL_METH);
+    opt_parse.add_opt("allow-asym", '\0',
+                      "allow asymmetric cpgs (not fully tested)",
+                      false, allow_asymmetric_cpgs);
     opt_parse.add_opt("post-hypo", '\0', "output file for single-CpG posterior "
                       "hypomethylation probability (default: none)",
                       false, hypo_post_outfile);
@@ -444,6 +448,15 @@ main_hmr(int argc, const char **argv) {
     if (VERBOSE)
       cerr << "[reading methylation levels]" << endl;
     load_cpgs(cpgs_file, cpgs, meth, reads);
+
+    if (!allow_asymmetric_cpgs) {
+      size_t i = 1;
+      for (; i < cpgs.size() && (distance(cpgs[i-1], cpgs[i]) >= 2); ++i);
+      if (i < cpgs.size())
+        throw runtime_error("sites seem asymmetric:\n" +
+                            cpgs[i-1].tostring() + "\n" +
+                            cpgs[i].tostring());
+    }
 
     if (VERBOSE)
       cerr << "[checking if input is properly formatted]" << endl;

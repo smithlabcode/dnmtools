@@ -113,7 +113,8 @@ libdnmtools_a_SOURCES += \
         src/common/TwoStateHMM.hpp \
         src/common/TwoStateHMM_PMD.hpp \
         src/common/bsutils.hpp \
-        src/common/numerical_utils.hpp
+        src/common/numerical_utils.hpp \
+        src/common/dnmt_error.hpp
 
 LDADD = libdnmtools.a  src/abismal/libabismal.a src/smithlab_cpp/libsmithlab_cpp.a
 

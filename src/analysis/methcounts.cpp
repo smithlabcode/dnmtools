@@ -50,7 +50,9 @@ using std::unordered_map;
 
 struct quick_buf : public std::ostringstream,
                    public std::basic_stringbuf<char> {
+  // ADS: By user ecatmur on SO; very fast. Seems to work...
   quick_buf() {
+    // ...but this seems to depend on data layout
     static_cast<std::basic_ios<char>&>(*this).rdbuf(this);
   }
   void clear() {
@@ -67,11 +69,15 @@ struct quick_buf : public std::ostringstream,
 
 // ADS: we should never have to worry about coverage over > 32767 in
 // any downstream analysis, so using "int16_t" here would allow to
-// detect wrap around and report it as some kind of weird thing.
+// detect wrap around and report it as some kind of weird thing, maybe
+// zeroing it and flagging the output. As it is now, if we really need
+// >65535-fold coverage, we can make the change here.
 typedef uint16_t count_type;
+
 
 static inline bool
 eats_ref(const uint32_t c) {return bam_cigar_type(bam_cigar_op(c)) & 2;}
+
 
 static inline bool
 eats_query(const uint32_t c) {return bam_cigar_type(bam_cigar_op(c)) & 1;}
@@ -133,7 +139,7 @@ struct CountSet {
     // else ++N; /* not used */
   }
   void add_count_neg(const char x) {
-    if (x == 'T') ++nT; // conditions ordered for efficiency
+    if (x == 'T') ++nT; // conditions ordered for efficiency(??)
     else if (x == 'C') ++nC;
     else if (x == 'G') ++nG;
     else if (x == 'A') ++nA;
@@ -216,16 +222,19 @@ static const char *tag_values[] = {
   "CXG", // 2
   "CCG", // 3
   "N",   // 4
-  "CpGx",// 5
+  "CpGx",// 5 <---- MUT_OFFSET
   "CHHx",// 6
   "CXGx",// 7
   "CCGx",// 8
   "Nx"   // 9
 };
+static const uint32_t MUT_OFFSET = 5;
 
 
 static inline uint32_t
-tag_with_mut(const uint32_t tag, const bool mut) {return tag + (mut ? 5 : 0);}
+tag_with_mut(const uint32_t tag, const bool mut) {
+  return tag + (mut ? MUT_OFFSET : 0);
+}
 
 
 static void
@@ -257,8 +266,10 @@ write_output(sam_hdr_t *hdr, BGZF *out,
           << tag_values[tag_with_mut(the_tag, mut)] << '\t'
           << (n_reads > 0 ? unconverted/n_reads : 0.0) << '\t'
           << n_reads << '\n';
-      const ssize_t err_code = bgzf_write(out, buf.c_str(), buf.tellp());
-      if (err_code < 0) throw dnmt_error(err_code, "error writing output");
+      const size_t expected_size = buf.tellp();
+      const ssize_t err_code = bgzf_write(out, buf.c_str(), expected_size);
+      if (err_code < 0 || err_code != expected_size)
+        throw dnmt_error(err_code, "error writing output");
     }
   }
 }
@@ -270,29 +281,29 @@ write_output(sam_hdr_t *hdr, BGZF *out,
 // #define get_pos(b) ((b)->core.pos)
 // #define get_qlen(b) ((b)->core.l_qseq)
 
+
 static inline int32_t
-get_tid(const bam1_t *b) {
-  return b->core.tid;
-}
+get_tid(const bam1_t *b) {return b->core.tid;}
+
 
 static inline hts_pos_t
 get_rlen(const bam1_t *b) {
   return bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
 }
 
+
 static inline hts_pos_t
-get_pos(const bam1_t *b) {
-  return b->core.pos;
-}
+get_pos(const bam1_t *b) {return b->core.pos;}
+
 
 static inline int32_t
-get_qlen(const bam1_t *b) {
-  return b->core.l_qseq;
-}
+get_qlen(const bam1_t *b) {return b->core.l_qseq;}
 
 
 static void
 count_states_pos(const bam1_t *aln, vector<CountSet> &counts) {
+  /* Move through cigar, reference and read positions without
+     inflating cigar or read sequence */
   const auto seq = bam_get_seq(aln);
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + aln->core.n_cigar;
@@ -327,6 +338,8 @@ count_states_pos(const bam1_t *aln, vector<CountSet> &counts) {
 
 static void
 count_states_neg(const bam1_t *aln, vector<CountSet> &counts) {
+  /* Move through cigar, reference and (*backward*) through read
+     positions without inflating cigar or read sequence */
   const auto seq = bam_get_seq(aln);
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + aln->core.n_cigar;
@@ -400,7 +413,7 @@ process_reads(const bool VERBOSE,
 
   // open the output file
   const string output_mode = compress_output ? "w" : "wu";
-  BGZF* out = bgzf_open(outfile.c_str(), output_mode.c_str());
+  BGZF *out = bgzf_open(outfile.c_str(), output_mode.c_str());
   if (!out) throw dnmt_error("error opening output file: " + outfile);
 
   /* set the threads for the input file decompression */

@@ -69,7 +69,7 @@ SUBDIRS := src/smithlab_cpp src/abismal
 install installdirs: SUBDIRS := $(filter-out src/smithlab_cpp src/abismal, $(SUBDIRS))
 AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp
 
-CXXFLAGS = -O3 $(OPENMP_CXXFLAGS) # default has optimization on
+CXXFLAGS = -Wall -O3 $(OPENMP_CXXFLAGS) # default has optimization on
 
 TESTS = test/test_abismalidx.test \
 	test/test_simreads.test \

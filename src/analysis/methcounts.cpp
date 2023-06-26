@@ -24,6 +24,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>
+#include <cstdint> // for [u]int[0-9]+_t
 
 #include "OptionParser.hpp"
 // #include "GenomicRegion.hpp"

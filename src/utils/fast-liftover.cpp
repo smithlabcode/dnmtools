@@ -32,6 +32,7 @@
 #include <unordered_map>
 #include <stdexcept>
 #include <algorithm>
+#include <cstdint> // for [u]int[0-9]+_t
 
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"

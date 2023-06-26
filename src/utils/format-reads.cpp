@@ -35,6 +35,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <cstring>
+#include <cstdint> // for [u]int[0-9]+_t
 
 #include <config.h>
 

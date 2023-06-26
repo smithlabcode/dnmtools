@@ -19,6 +19,7 @@
 #include <stdexcept>
 #include <string>
 #include <cstring>
+#include <cstdint> // for int64_t
 
 struct dnmt_error: public std::exception {
   int64_t err;        // error possibly from HTSlib

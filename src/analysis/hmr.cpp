@@ -21,6 +21,7 @@
 #include <string>
 #include <stdexcept>
 #include <unordered_set>
+#include <cstdint> // for [u]int[0-9]+_t
 
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"

@@ -30,7 +30,7 @@ using std::endl;
 int abismal(int argc, const char **argv);
 int abismalidx(int argc, const char **argv);
 int simreads(int argc, const char **argv);
-int main_methcounts(int argc, const char **argv);
+int main_counts(int argc, const char **argv);
 int main_allelicmeth(int argc, const char **argv);
 int main_amrfinder(int argc, const char **argv);
 int main_amrtester(int argc, const char **argv);
@@ -114,7 +114,7 @@ print_help() {
   cout <<  sep+sep << "guessprotocol: guess whether protocol is ordinary, pbat or random\n";
   cout <<  sep+sep << "lc:            approximate line counts in a file\n";
   cout <<  sep+sep << "merge-bsrate:  merge the BS conversion rate from two sets of BS-seq reads mapped to a genome\n";
-  cout <<  sep+sep << "merge:         merge multiple methcounts files\n";
+  cout <<  sep+sep << "merge:         merge multiple counts files\n";
   cout <<  sep+sep << "selectsites:   sites inside a set of genomic intervals\n";
 
   cout <<  "\n";
@@ -128,7 +128,7 @@ main(int argc, const char **argv) {
   if (strcmp(argv[1], "abismal") == 0) ret = abismal(argc - 1, argv + 1);
   else if (strcmp(argv[1], "abismalidx") == 0) ret = abismalidx(argc - 1, argv + 1);
   else if (strcmp(argv[1], "simreads") == 0) ret = simreads(argc - 1, argv + 1);
-  else if (strcmp(argv[1], "counts") == 0) ret = main_methcounts(argc - 1, argv + 1);
+  else if (strcmp(argv[1], "counts") == 0) ret = main_counts(argc - 1, argv + 1);
   else if (strcmp(argv[1], "allelic") == 0) ret = main_allelicmeth(argc - 1, argv + 1);
   else if (strcmp(argv[1], "amrfinder") == 0) ret = main_amrfinder(argc - 1, argv + 1);
   else if (strcmp(argv[1], "amrtester") == 0) ret = main_amrtester(argc - 1, argv + 1);

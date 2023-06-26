@@ -492,7 +492,7 @@ process_reads(const bool VERBOSE,
 
 
 int
-main_methcounts(int argc, const char **argv) {
+main_counts(int argc, const char **argv) {
 
   try {
 

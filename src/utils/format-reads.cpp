@@ -120,13 +120,14 @@ fix_external_insertion(const size_t n_cigar, uint32_t *cigar) {
   auto c_itr = cigar;
   const auto c_end = c_itr + n_cigar;
 
-  while (!eats_ref(*c_itr) && c_itr != c_end)
-    *c_itr++ = to_softclip(*c_itr);
+  for (; !eats_ref(*c_itr) && c_itr != c_end; ++c_itr)
+    *c_itr = to_softclip(*c_itr);
+
   if (c_itr == c_end) throw fr_expt("cigar eats no ref");
 
   c_itr = cigar + n_cigar - 1;
-  while (!eats_ref(*c_itr) && c_itr != cigar)
-    *c_itr-- = to_softclip(*c_itr);
+  for (; !eats_ref(*c_itr) && c_itr != cigar; --c_itr)
+    *c_itr = to_softclip(*c_itr);
 }
 
 
@@ -189,11 +190,17 @@ get_rlen(const bam1_t *b) { // less tedious
 }
 
 
+static inline size_t
+get_qlen(const bam1_t *b) { // less tedious
+  return b->core.l_qseq;
+}
+
+
 static inline void
 complement_seq(char *first, char *last) {
-  while (first != last) {
+  for (; first != last; ++first) {
     assert(valid_base(*first));
-    *first++ = complement(*first);
+    *first = complement(*first);
   }
 }
 
@@ -219,7 +226,7 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
                          const uint32_t n_ref_full, uint32_t *partial_oplen) {
   // assume: n_ops <= size(cig_in) <= size(cig_out)
   size_t rlen = 0;
-  int i = 0;
+  uint32_t i = 0;
   for (i = 0; i < in_ops; ++i) {
     if (eats_ref(cig_in[i])) {
       if (rlen + bam_cigar_oplen(cig_in[i]) > n_ref_full)
@@ -243,15 +250,15 @@ static void
 revcomp_seq(bam1_t *aln) {
   // generate the sequence in ascii
   const auto seq = bam_get_seq(aln);
-  const auto l_qseq = aln->core.l_qseq;
-  char *buf = (char *)malloc(l_qseq*sizeof(char));
-  for (auto i = 0; i < l_qseq; ++i)
+  const size_t l_qseq = get_qlen(aln);
+  unsigned char *buf = (unsigned char *)malloc(l_qseq*sizeof(unsigned char));
+  for (size_t i = 0; i < l_qseq; ++i)
     buf[i] = seq_nt16_str[bam_seqi(seq, i)];
 
   revcomp_inplace(buf, buf + l_qseq); // point of this function
 
   // copy it back...
-  for (auto i = 0; i < l_qseq; ++i)
+  for (size_t i = 0; i < l_qseq; ++i)
     bam_set_seqi(seq, i, seq_nt16_table[buf[i]]);
 }
 
@@ -268,19 +275,6 @@ format_is_bam_or_sam(htsFile *hts) {
 }
 
 
-static bam1_t *
-get_read(samFile *hts, sam_hdr_t *hdr) {
-  bam1_t *b = bam_init1();
-  const int err_code = sam_read1(hts, hdr, b);
-  if (err_code >= 0) return b;
-  if (err_code < -1)
-    throw fr_expt(err_code, "error reading: " + string(hts->fn));
-  else // -1 should mean EOF, so we free this read
-    bam_destroy1(b);
-  return 0;
-}
-
-
 static void
 flip_conversion(bam1_t *aln) {
   if (aln->core.flag & BAM_FREVERSE)
@@ -292,12 +286,12 @@ flip_conversion(bam1_t *aln) {
   auto a_seq = bam_get_seq(aln);
   const size_t a_len = aln->core.l_qseq;
   char *buf = (char *)malloc(a_len*sizeof(char));
-  for (int i = 0; i < a_len; ++i)
+  for (size_t i = 0; i < a_len; ++i)
     buf[i] = seq_nt16_str[bam_seqi(a_seq, i)];
 
   revcomp_inplace(buf, buf + a_len);
 
-  for (int i = 0; i < a_len; ++i)
+  for (size_t i = 0; i < a_len; ++i)
     bam_set_seqi(a_seq, i, seq_nt16_table[(unsigned char)buf[i]]);
 
   // ADS: don't like *(cv + 1) below, but no HTSlib function for it?
@@ -349,7 +343,7 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
   if (!c_seq) throw fr_expt("allocating sequence");
 
   // copy the prefix of a into c; must be easier
-  for (int i = 0; i < c_seq_len; ++i)
+  for (size_t i = 0; i < c_seq_len; ++i)
     c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
 
   // get the template length
@@ -431,7 +425,10 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
   // sequence before the possibility of merging the last entry with
   // the first entry in b's cigar. This is done with the cigar, so
   // everything depends on the "use_partial"
-  const uint32_t a_seq_len = bam_cigar2qlen(c_cur, c_cig);
+  const size_t a_seq_len = bam_cigar2qlen(c_cur, c_cig);
+  /* ADS: above the return type of bam_cigar2qlen is uint64_t, but
+     according to the source as of 05/2023 it cannot become
+     negative; no possible error code returned */
 
   if (merge_mid) // update the middle op if it's the same
     c_cig[c_cur-1] = bam_cigar_gen(bam_cigar_oplen(c_cig[c_cur-1]) +
@@ -448,10 +445,10 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
   char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
 
   // copy the prefix of a into c
-  for (int i = 0; i < a_seq_len; ++i)
+  for (size_t i = 0; i < a_seq_len; ++i)
     c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
   // copy all of b into c
-  for (int i = 0; i < b->core.l_qseq; ++i)
+  for (size_t i = 0; i < get_qlen(b); ++i)
     c_seq[a_seq_len + i] = seq_nt16_str[bam_seqi(bam_get_seq(b), i)];
 
   // reverse and complement the part of c corresponding to b
@@ -521,14 +518,14 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
 
   /* now make the sequence */
   // get info about the lengths
-  const uint32_t a_seq_len = a->core.l_qseq;
-  const uint32_t b_seq_len = b->core.l_qseq;
-  const uint32_t c_seq_len = a_seq_len + b_seq_len;
+  const size_t a_seq_len = get_qlen(a);
+  const size_t b_seq_len = get_qlen(b);
+  const size_t c_seq_len = a_seq_len + b_seq_len;
   // allocate and fill the new one as a char array
   char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
-  for (int i = 0; i < a_seq_len; ++i)
+  for (size_t i = 0; i < a_seq_len; ++i)
     c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
-  for (int i = 0; i < b_seq_len; ++i)
+  for (size_t i = 0; i < b_seq_len; ++i)
     c_seq[a_seq_len + i] = seq_nt16_str[bam_seqi(bam_get_seq(b), i)];
   // reverse and complement the part corresponding to "b"
   revcomp_inplace(c_seq + a_seq_len, c_seq + c_seq_len);
@@ -983,7 +980,7 @@ format(const string &cmd, const size_t n_threads,
     if (same_name(prev_aln, aln, suff_len)) {
       // below: essentially check for dovetail
       if (!bam_is_rev(aln)) std::swap(prev_aln, aln);
-      const int frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
+      const size_t frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
       if (frag_len > 0 && frag_len < max_frag_len) {
         if (is_a_rich(merged)) flip_conversion(merged);
         err_code = sam_write1(out, hdr, merged);

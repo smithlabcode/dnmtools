@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+infile=tests/reads.counts.gz
+outfile=tests/reads.counts.sym
+if [[ -e "${infile}" ]]; then
+    ./dnmtools sym -o ${outfile} ${infile}
+else
+    echo "${infile} not found; skipping remaining tests";
+    exit 77;
+fi

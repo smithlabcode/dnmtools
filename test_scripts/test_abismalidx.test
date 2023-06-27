@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+infile=tests/tRex1.fa
+outfile=tests/tRex1.idx
+if [[ -e "${infile}" ]]; then
+    ./dnmtools abismalidx ${infile} ${outfile}
+else
+    echo "${infile} not found; skipping remaining tests";
+    exit 77;
+fi

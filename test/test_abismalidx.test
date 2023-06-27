@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-
-inputfile=test.fa
-if [[ -e "${inputfile}" ]]; then
-    ./dnmtools abismalidx ${inputfile} test.idx
-else
-    echo "${inputfile} not found; skipping remaining tests";
-    exit 77;
-fi

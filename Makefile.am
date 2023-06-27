@@ -56,12 +56,14 @@ EXTRA_DIST = \
              pipeline/config.yaml \
              pipeline/runconfig.yaml \
              pipeline/Snakefile \
-             test/test.fa \
-             test/test_abismalidx.test \
-             test/test_simreads.test \
-             test/test_abismal.test \
-             test/test_format.test \
-             test/test_bsrate.test
+             data/tRex.fa \
+             data/reads_1.fq.gz \
+             date/reads_2.fq.gz \
+             test_scripts/test_abismalidx.test \
+             test_scripts/test_simreads.test \
+             test_scripts/test_abismal.test \
+             test_scripts/test_format.test \
+             test_scripts/test_bsrate.test
 
 ACLOCAL_AMFLAGS = -I m4
 
@@ -71,11 +73,10 @@ AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp
 
 CXXFLAGS = -Wall -O3 $(OPENMP_CXXFLAGS) # default has optimization on
 
-TESTS = test/test_abismalidx.test \
-	test/test_simreads.test \
-	test/test_abismal.test \
-	test/test_format.test \
-	test/test_bsrate.test
+TESTS = test_scripts/test_abismalidx.test \
+	test_scripts/test_abismal.test \
+	test_scripts/test_format.test \
+	test_scripts/test_bsrate.test
 
 TEST_EXTENSIONS = .test
 

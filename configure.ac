@@ -65,7 +65,13 @@ AC_SEARCH_LIBS([zlibVersion], [z], [], [AC_MSG_FAILURE([$zlib_fail_msg])])
 AC_SEARCH_LIBS([cblas_dgemm], [gslcblas], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 AC_SEARCH_LIBS([gsl_blas_dgemm], [gsl], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([
+Makefile
+])
 dnl make the test data file available in the build tree
-AC_CONFIG_LINKS([test.fa:test/test.fa])
+AC_CONFIG_LINKS([
+tests/tRex1.fa:data/tRex1.fa
+tests/reads_1.fq.gz:data/reads_1.fq.gz
+tests/reads_2.fq.gz:data/reads_2.fq.gz
+])
 AC_OUTPUT

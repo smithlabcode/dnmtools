@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-inputfile=test.fa
+inputfile=tests/tRex1.fa
 if [[ -e "${inputfile}" ]]; then
-    ./dnmtools abismalidx ${inputfile} test.idx
+    ./dnmtools abismalidx ${inputfile} tests/tRex1.idx
 else
     echo "${inputfile} not found; skipping remaining tests";
     exit 77;

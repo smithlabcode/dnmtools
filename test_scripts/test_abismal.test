@@ -8,6 +8,11 @@ outfile2=tests/reads.mstats
 if [[ -e "${infile1}" && -e "${infile2}" && -e "${infile3}" ]]; then
     ./dnmtools abismal -s ${outfile2} -o ${outfile1} \
                -i ${infile3} ${infile1} ${infile2};
+    x1=$(md5sum -c tests/md5sum.txt | grep ${outfile1} | cut -d ' ' -f 2)
+    x2=$(md5sum -c tests/md5sum.txt | grep ${outfile2} | cut -d ' ' -f 2)
+    if [[ "${x1}" != "OK" || "${x2}" != "OK" ]]; then
+        exit 1;
+    fi
 elif [[ ! -e "${infile1}" || ! -e "${infile2}" ]]; then
     echo "missing fastq input file(s); skipping remaining tests";
     exit 77;

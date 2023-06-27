@@ -4,6 +4,10 @@ infile=tests/reads.counts.sym
 outfile=tests/reads.hmr
 if [[ -e "${infile}" ]]; then
     ./dnmtools hmr -v -o ${outfile} ${infile}
+    x=$(md5sum -c tests/md5sum.txt | grep ${outfile} | cut -d ' ' -f 2)
+    if [[ "${x}" != "OK" ]]; then
+        exit 1;
+    fi
 else
     echo "${infile} not found; skipping remaining tests";
     exit 77;

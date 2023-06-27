@@ -92,15 +92,15 @@ TESTS = test_scripts/test_abismalidx.test \
 
 TEST_EXTENSIONS = .test
 
-test_abismal.log: test_abismalidx.log
-test_format.log: test_abismal.log
-test_uniq.log: test_format.log
-test_bsrate.log: test_uniq.log
-test_counts.log: test_uniq.log
-test_levels.log: test_counts.log
-test_sym.log: test_counts.log
-test_hmr.log: test_sym.log
-test_roi.log: test_sym.log
+test_scripts/test_abismal.log: test_scripts/test_abismalidx.log
+test_scripts/test_format.log: test_scripts/test_abismal.log
+test_scripts/test_uniq.log: test_scripts/test_format.log
+test_scripts/test_bsrate.log: test_scripts/test_uniq.log
+test_scripts/test_counts.log: test_scripts/test_uniq.log
+test_scripts/test_levels.log: test_scripts/test_counts.log
+test_scripts/test_sym.log: test_scripts/test_counts.log
+test_scripts/test_hmr.log: test_scripts/test_sym.log
+test_scripts/test_roi.log: test_scripts/test_sym.log
 
 noinst_LIBRARIES = libdnmtools.a
 libdnmtools_a_SOURCES = \

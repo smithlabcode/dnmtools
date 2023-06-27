@@ -58,7 +58,7 @@ EXTRA_DIST = \
              pipeline/Snakefile \
              data/tRex1.fa \
              data/reads_1.fq.gz \
-             date/reads_2.fq.gz \
+             data/reads_2.fq.gz \
              test_scripts/test_abismalidx.test \
              test_scripts/test_simreads.test \
              test_scripts/test_abismal.test \

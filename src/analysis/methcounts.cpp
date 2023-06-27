@@ -269,7 +269,8 @@ write_output(sam_hdr_t *hdr, BGZF *out,
           << n_reads << '\n';
       const size_t expected_size = buf.tellp();
       const ssize_t err_code = bgzf_write(out, buf.c_str(), expected_size);
-      if (err_code < 0 || err_code != expected_size)
+      if (err_code < 0 ||
+          static_cast<size_t>(err_code) != expected_size)
         throw dnmt_error(err_code, "error writing output");
     }
   }
@@ -309,12 +310,12 @@ count_states_pos(const bam1_t *aln, vector<CountSet> &counts) {
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + aln->core.n_cigar;
   size_t rpos = get_pos(aln);
-  size_t qpos = 0;
+  int32_t qpos = 0; // to match type with b->core.l_qseq
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
     const uint32_t n = bam_cigar_oplen(*c_itr);
     if (eats_ref(op) && eats_query(op)) {
-      const size_t end_qpos = qpos + n;
+      const int32_t end_qpos = qpos + n;
       for (; qpos < end_qpos; ++qpos) {
         // ADS: beware!!! bam_seqi is a macro, so no "qpos++" inside
         // its arguments! Why macros?!?! Just make sure the compiler
@@ -345,13 +346,13 @@ count_states_neg(const bam1_t *aln, vector<CountSet> &counts) {
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + aln->core.n_cigar;
   size_t rpos = get_pos(aln);
-  size_t qpos = get_qlen(aln);
+  int32_t qpos = 0; // to match type with b->core.l_qseq
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
     const uint32_t n = bam_cigar_oplen(*c_itr);
     if (eats_ref(op) && eats_query(op)) {
-      const size_t end_qpos = qpos - n;
-      for (; qpos > end_qpos; --qpos) // beware ++ in macro!!!
+      const int32_t end_qpos = qpos - n; // to match type with qpos
+      for (; qpos > end_qpos; --qpos) // beware ++ in macro below!!!
         counts[rpos++].add_count_neg(seq_nt16_str[bam_seqi(seq, qpos-1)]);
     }
     else if (eats_query(op)) {

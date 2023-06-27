@@ -216,6 +216,17 @@ reverse(char *a, char *b) {
   }
 }
 
+static inline void
+reverse(unsigned char *a, unsigned char *b) {
+  unsigned char *p1, *p2;
+  for (p1 = a, p2 = b - 1; p2 > p1; ++p1, --p2) {
+    *p1 ^= *p2;
+    *p2 ^= *p1;
+    *p1 ^= *p2;
+  }
+}
+
+
 
 // return value is the number of cigar ops that are fully consumed in
 // order to read n_ref, while "partial_oplen" is the number of bases
@@ -260,6 +271,45 @@ revcomp_seq(bam1_t *aln) {
   // copy it back...
   for (size_t i = 0; i < l_qseq; ++i)
     bam_set_seqi(seq, i, seq_nt16_table[buf[i]]);
+}
+
+
+const uint8_t byte_revcom_table[] ={
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  8, 136, 72, 0, 40, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 248,
+  4, 132, 68, 0, 36, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 244,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  2, 130, 66, 0, 34, 0, 0, 0, 18, 0, 0, 0, 0, 0, 0, 242,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  1, 129, 65, 0, 33, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 241,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  15, 143, 79, 0, 47, 0, 0, 0, 31, 0, 0, 0, 0, 0, 0, 255
+};
+
+
+static void
+revcomp_seq_by_byte(bam1_t *aln) {
+  const size_t l_qseq = get_qlen(aln);
+  auto seq = bam_get_seq(aln);
+  size_t num_bytes = ceil(l_qseq / 2.0);
+  auto seq_end = seq + num_bytes;
+  for (size_t i = 0; i < num_bytes; i++) {
+    seq[i] = byte_revcom_table[seq[i]];
+  }
+  reverse(seq, seq_end);
+  if (l_qseq % 2 == 1){
+    for (size_t i = 0; i < num_bytes - 1; i++ ) {
+      seq[i] = (seq[i] << 4) | (seq[i+1] >> 4 );
+    }
+    seq[num_bytes-1] <<= 4;
+  }  
 }
 
 

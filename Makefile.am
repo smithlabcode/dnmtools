@@ -63,7 +63,13 @@ EXTRA_DIST = \
              test_scripts/test_simreads.test \
              test_scripts/test_abismal.test \
              test_scripts/test_format.test \
-             test_scripts/test_bsrate.test
+             test_scripts/test_uniq.test \
+             test_scripts/test_bsrate.test \
+             test_scripts/test_counts.test \
+             test_scripts/test_levels.test \
+             test_scripts/test_sym.test \
+             test_scripts/test_hmr.test \
+	     test_scripts/test_roi.test
 
 ACLOCAL_AMFLAGS = -I m4
 
@@ -76,14 +82,25 @@ CXXFLAGS = -Wall -O3 $(OPENMP_CXXFLAGS) # default has optimization on
 TESTS = test_scripts/test_abismalidx.test \
 	test_scripts/test_abismal.test \
 	test_scripts/test_format.test \
-	test_scripts/test_bsrate.test
+	test_scripts/test_uniq.test \
+	test_scripts/test_bsrate.test \
+	test_scripts/test_counts.test \
+	test_scripts/test_levels.test \
+	test_scripts/test_sym.test \
+	test_scripts/test_hmr.test \
+	test_scripts/test_roi.test
 
 TEST_EXTENSIONS = .test
 
-test_simreads.log: test_abismalidx.log
-test_abismal.log: test_simreads.log
+test_abismal.log: test_abismalidx.log
 test_format.log: test_abismal.log
-test_bsrate.log: test_format.log
+test_uniq.log: test_format.log
+test_bsrate.log: test_uniq.log
+test_counts.log: test_uniq.log
+test_levels.log: test_counts.log
+test_sym.log: test_counts.log
+test_hmr.log: test_sym.log
+test_roi.log: test_sym.log
 
 noinst_LIBRARIES = libdnmtools.a
 libdnmtools_a_SOURCES = \

@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 
 infile=tests/reads.sam
+outfile1=tests/reads.fmt.bam
+outfile2=tests/reads.fmt.srt.bam
+cmd=samtools
 if [[ -e "${infile}" ]]; then
-    ./dnmtools format -f abismal ${infile} tests/test.fmt.bam
+    ./dnmtools format -f abismal ${infile} ${outfile1}
 else
     echo "${infile} not found; skipping remaining tests";
     exit 77;
+fi
+
+if [[ -e $(type -P "${cmd}") ]]; then
+    samtools sort -o ${outfile2} ${outfile1};
+else
+    echo "${cmd} not found"
 fi

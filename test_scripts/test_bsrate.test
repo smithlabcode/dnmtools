@@ -1,20 +1,10 @@
 #!/usr/bin/env bash
 
-infile1=tests/reads.fmt.bam
+infile1=tests/reads.fmt.srt.uniq.bam
 infile2=tests/tRex1.fa
-cmd=samtools
-if [[ -e "${infile1}" && $(type -P "${cmd}") ]]; then
-    samtools sort -o reads.fmt.srt.bam ${infile1};
-elif [[ ! $(type -P "${cmd}") ]]; then
-    echo "${cmd} not found; skipping remaining tests";
-    exit 77;
-else
-    echo "${infile1} not found; skipping remaining tests";
-    exit 77;
-fi
-
-if [[ -e "${infile2}" && -e reads.fmt.srt.bam ]]; then
-    ./dnmtools bsrate -c ${infile2} reads.fmt.srt.bam | awk 'NR==1{print $5}';
+outfile=tests/reads.bsrate
+if [[ -e "${infile1}" && -e "${infile2}" ]]; then
+    ./dnmtools bsrate -c ${infile2} -o ${outfile} ${infile1}
 else
     exit 1;
 fi

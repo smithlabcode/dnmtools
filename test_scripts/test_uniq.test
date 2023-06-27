@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+infile=tests/reads.fmt.srt.bam
+outfile1=tests/reads.fmt.srt.uniq.bam
+outfile2=tests/reads.ustats
+if [[ -e "${infile}" ]]; then
+    ./dnmtools uniq -v -B -S ${outfile2} ${infile} ${outfile1}
+else
+    echo "${infile} not found; skipping remaining tests";
+    exit 77;
+fi

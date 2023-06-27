@@ -71,6 +71,7 @@ Makefile
 dnl make the test data file available in the build tree
 AC_CONFIG_LINKS([
 tests/tRex1.fa:data/tRex1.fa
+tests/tRex1_promoters.bed:data/tRex1_promoters.bed
 tests/reads_1.fq.gz:data/reads_1.fq.gz
 tests/reads_2.fq.gz:data/reads_2.fq.gz
 ])

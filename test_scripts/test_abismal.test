@@ -4,7 +4,8 @@ infile1=tests/reads_1.fq.gz
 infile2=tests/reads_2.fq.gz
 infile3=tests/tRex1.idx
 if [[ -e "${infile1}" && -e "${infile2}" && -e "${infile3}" ]]; then
-    ./dnmtools abismal -o tests/test.sam -i ${infile3} ${infile1} ${infile2};
+    ./dnmtools abismal -s tests/reads.mstats -o tests/reads.sam \
+               -i ${infile3} ${infile1} ${infile2};
 elif [[ ! -e "${infile1}" || ! -e "${infile2}" ]]; then
     echo "missing fastq input file(s); skipping remaining tests";
     exit 77;

@@ -59,6 +59,7 @@ EXTRA_DIST = \
              data/tRex1.fa \
              data/reads_1.fq.gz \
              data/reads_2.fq.gz \
+             data/md5sum.txt \
              test_scripts/test_abismalidx.test \
              test_scripts/test_simreads.test \
              test_scripts/test_abismal.test \

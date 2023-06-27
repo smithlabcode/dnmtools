@@ -68,8 +68,9 @@ AC_SEARCH_LIBS([gsl_blas_dgemm], [gsl], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 AC_CONFIG_FILES([
 Makefile
 ])
-dnl make the test data file available in the build tree
+dnl make the test data files available in the build tree
 AC_CONFIG_LINKS([
+tests/md5sum.txt:data/md5sum.txt
 tests/tRex1.fa:data/tRex1.fa
 tests/tRex1_promoters.bed:data/tRex1_promoters.bed
 tests/reads_1.fq.gz:data/reads_1.fq.gz

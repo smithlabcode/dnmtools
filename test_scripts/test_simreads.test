@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 
-inputfile=test.fa
-if [[ -e "${inputfile}" ]]; then
-    ./dnmtools simreads -o test -n 10000 -m 0.01 -b 0.98 ${inputfile};
+infile=tests/tRex1.fa
+outfile1=tests/simreads_1.fq
+outfile2=tests/simreads_2.fq
+outprefix=tests/simreads
+if [[ -e "${infile}" ]]; then
+    ./dnmtools simreads -o ${outprefix} -n 10000 -m 0.01 -b 0.98 ${infile};
 else
-    echo "${inputfile} missing; skipping remaining tests";
+    echo "${infile} missing; skipping remaining tests";
     exit 77;
 fi

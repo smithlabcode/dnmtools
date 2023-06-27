@@ -79,7 +79,8 @@ AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp
 
 CXXFLAGS = -Wall -O3 $(OPENMP_CXXFLAGS) # default has optimization on
 
-TESTS = test_scripts/test_abismalidx.test \
+TESTS = test_scripts/test_simreads.test \
+	test_scripts/test_abismalidx.test \
 	test_scripts/test_abismal.test \
 	test_scripts/test_format.test \
 	test_scripts/test_uniq.test \
@@ -175,3 +176,25 @@ dnmtools_SOURCES += src/radmeth/radmeth-adjust.cpp
 dnmtools_SOURCES += src/radmeth/radmeth-merge.cpp
 
 dnmtools_SOURCES += src/mlml/mlml.cpp
+
+## ADS: these are the files output by the test scripts. They can be
+## identified by doing:
+##
+## grep "^outfile" test_scripts/*.test
+##
+CLEANFILES = \
+	tests/tRex1.idx \
+	tests/reads.sam \
+	tests/reads.mstats \
+	tests/reads.bsrate \
+	tests/reads.counts.gz \
+	tests/reads.fmt.bam \
+	tests/reads.fmt.srt.bam \
+	tests/reads.hmr \
+	tests/reads.levels \
+	tests/tRex1_promoters.roi.bed \
+	tests/simreads_1.fq \
+	tests/simreads_2.fq \
+	tests/reads.counts.sym \
+	tests/reads.fmt.srt.uniq.bam \
+	tests/reads.ustats

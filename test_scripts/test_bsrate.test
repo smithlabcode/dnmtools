@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-infile1=tests/reads.fmt.srt.uniq.bam
+infile1=tests/reads.fmt.srt.uniq.sam
 infile2=tests/tRex1.fa
 outfile=tests/reads.bsrate
 if [[ -e "${infile1}" && -e "${infile2}" ]]; then

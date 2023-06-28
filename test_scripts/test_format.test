@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 infile=tests/reads.sam
-outfile1=tests/reads.fmt.bam
+outfile1=tests/reads.fmt.sam
 outfile2=tests/reads.fmt.srt.sam
 cmd=samtools
 if [[ -e "${infile}" ]]; then

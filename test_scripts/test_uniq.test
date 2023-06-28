@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 infile=tests/reads.fmt.srt.sam
-outfile1=tests/reads.fmt.srt.uniq.bam
+outfile1=tests/reads.fmt.srt.uniq.sam
 outfile2=tests/reads.ustats
 if [[ -e "${infile}" ]]; then
-    ./dnmtools uniq -v -B -S ${outfile2} ${infile} ${outfile1}
+    ./dnmtools uniq -v -S ${outfile2} ${infile} ${outfile1}
     x1=$(md5sum -c tests/md5sum.txt | grep ${outfile1} | cut -d ' ' -f 2)
     x2=$(md5sum -c tests/md5sum.txt | grep ${outfile2} | cut -d ' ' -f 2)
     if [[ "${x1}" != "OK" || "${x2}" != "OK" ]]; then

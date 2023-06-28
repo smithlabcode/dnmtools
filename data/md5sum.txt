@@ -4,8 +4,8 @@ cd862d6d57ea148375ddec9935574dfb  tests/reads_1.fq.gz
 0b617e1d8dfbf4df1846ca502ebba2f9  tests/reads.counts.gz
 9af847370bbb0e78fdc0cd435a9f724f  tests/reads.counts.sym
 9d2826b98ae3642dbae75eef6f041cce  tests/reads.fmt.bam
-b121505a1543836f4061ab0ece18a016  tests/reads.fmt.srt.bam
-de1c938ff428ea53d9bb5d251ce31a3c  tests/reads.fmt.srt.uniq.bam
+14c5b448db9c1c37cfbd20619ae914a3  tests/reads.fmt.srt.sam
+19c5541f89c9e78301cae1f093f9fd4b  tests/reads.fmt.srt.uniq.bam
 6dabc63bcab01f8c2b03708dad6bc0b7  tests/reads.hmr
 2610d1e63613e4e092f15aa132de3a20  tests/reads.levels
 8ee3daa36fad0e196d6d86696abed3dc  tests/reads.mstats

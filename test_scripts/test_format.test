@@ -2,7 +2,7 @@
 
 infile=tests/reads.sam
 outfile1=tests/reads.fmt.bam
-outfile2=tests/reads.fmt.srt.bam
+outfile2=tests/reads.fmt.srt.sam
 cmd=samtools
 if [[ -e "${infile}" ]]; then
     ./dnmtools format -f abismal ${infile} ${outfile1}
@@ -18,7 +18,7 @@ else
 fi
 
 if [[ -e $(type -P "${cmd}") ]]; then
-    samtools sort --no-PG -o ${outfile2} ${outfile1};
+    samtools sort --no-PG -O SAM -o ${outfile2} ${outfile1};
 else
     echo "${cmd} not found"
 fi

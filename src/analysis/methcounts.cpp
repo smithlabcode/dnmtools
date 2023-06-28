@@ -346,7 +346,7 @@ count_states_neg(const bam1_t *aln, vector<CountSet> &counts) {
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + aln->core.n_cigar;
   size_t rpos = get_pos(aln);
-  int32_t qpos = 0; // to match type with b->core.l_qseq
+  int32_t qpos = get_qlen(aln); // to match type with b->core.l_qseq
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
     const uint32_t n = bam_cigar_oplen(*c_itr);

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-infile=tests/reads.counts.gz
+infile=tests/reads.counts
 outfile=tests/reads.counts.sym
 if [[ -e "${infile}" ]]; then
     ./dnmtools sym -o ${outfile} ${infile}
-    x=$(md5sum -c tests/md5sum.txt | grep ${outfile} | cut -d ' ' -f 2)
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile}:" | cut -d ' ' -f 2)
     if [[ "${x}" != "OK" ]]; then
         exit 1;
     fi

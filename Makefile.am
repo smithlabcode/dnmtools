@@ -188,18 +188,18 @@ dnmtools_SOURCES += src/mlml/mlml.cpp
 ## grep "^outfile" test_scripts/*.test
 ##
 CLEANFILES = \
-	tests/tRex1.idx \
-	tests/reads.sam \
-	tests/reads.mstats \
 	tests/reads.bsrate \
-	tests/reads.counts.gz \
-	tests/reads.fmt.bam \
-	tests/reads.fmt.srt.bam \
+	tests/reads.counts \
+	tests/reads.counts.sym \
+	tests/reads.fmt.sam \
+	tests/reads.fmt.srt.sam \
+	tests/reads.fmt.srt.uniq.sam \
 	tests/reads.hmr \
 	tests/reads.levels \
-	tests/tRex1_promoters.roi.bed \
+	tests/reads.mstats \
+	tests/reads.sam \
+	tests/reads.ustats \
 	tests/simreads_1.fq \
 	tests/simreads_2.fq \
-	tests/reads.counts.sym \
-	tests/reads.fmt.srt.uniq.bam \
-	tests/reads.ustats
+	tests/tRex1.idx \
+	tests/tRex1_promoters.roi.bed

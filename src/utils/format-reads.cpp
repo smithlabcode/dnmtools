@@ -332,17 +332,7 @@ flip_conversion(bam1_t *aln) {
   else
     aln->core.flag = aln->core.flag | BAM_FREVERSE;
 
-  // generate the sequence in ascii
-  auto a_seq = bam_get_seq(aln);
-  const size_t a_len = aln->core.l_qseq;
-  char *buf = (char *)malloc(a_len*sizeof(char));
-  for (size_t i = 0; i < a_len; ++i)
-    buf[i] = seq_nt16_str[bam_seqi(a_seq, i)];
-
-  revcomp_inplace(buf, buf + a_len);
-
-  for (size_t i = 0; i < a_len; ++i)
-    bam_set_seqi(a_seq, i, seq_nt16_table[(unsigned char)buf[i]]);
+  revcomp_seq_by_byte(aln);
 
   // ADS: don't like *(cv + 1) below, but no HTSlib function for it?
   uint8_t *cv = bam_aux_get(aln, "CV");

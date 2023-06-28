@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 infile=tests/reads.sam
-outfile1=tests/reads.fmt.bam
-outfile2=tests/reads.fmt.srt.bam
+outfile1=tests/reads.fmt.sam
+outfile2=tests/reads.fmt.srt.sam
 cmd=samtools
 if [[ -e "${infile}" ]]; then
     ./dnmtools format -f abismal ${infile} ${outfile1}
-    x=$(md5sum -c tests/md5sum.txt | grep ${outfile1} | cut -d ' ' -f 2)
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile1}:" | cut -d ' ' -f 2)
     ### ADS: only want to check the first output here; any failure
     ### later will result in a skip for subsequent tests.
     if [[ "${x}" != "OK" ]]; then
@@ -18,7 +18,7 @@ else
 fi
 
 if [[ -e $(type -P "${cmd}") ]]; then
-    samtools sort -o ${outfile2} ${outfile1};
+    samtools sort --no-PG -O SAM -o ${outfile2} ${outfile1};
 else
     echo "${cmd} not found"
 fi

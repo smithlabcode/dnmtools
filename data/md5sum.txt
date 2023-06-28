@@ -1,11 +1,11 @@
 cd862d6d57ea148375ddec9935574dfb  tests/reads_1.fq.gz
 43947b43b6888a17d9e8036692ce54c5  tests/reads_2.fq.gz
 96bfaea99753a9cf6193c5b7ced6d732  tests/reads.bsrate
-0b617e1d8dfbf4df1846ca502ebba2f9  tests/reads.counts.gz
+8e289a0d800c1165ca213812cbc75bdb  tests/reads.counts
 9af847370bbb0e78fdc0cd435a9f724f  tests/reads.counts.sym
-9d2826b98ae3642dbae75eef6f041cce  tests/reads.fmt.bam
-892cb87c55714055ff9dbd33132b0307  tests/reads.fmt.srt.bam
-7dcb23a0ce5478f9cc16d1f8992bd5a4  tests/reads.fmt.srt.uniq.bam
+4a27ffa9f858d8c32352d30c9623a338  tests/reads.fmt.sam
+e832cd0a2b0e1cfa43364610663590f3  tests/reads.fmt.srt.sam
+230fd48c3b9959a34078671770842fe6  tests/reads.fmt.srt.uniq.sam
 6dabc63bcab01f8c2b03708dad6bc0b7  tests/reads.hmr
 2610d1e63613e4e092f15aa132de3a20  tests/reads.levels
 8ee3daa36fad0e196d6d86696abed3dc  tests/reads.mstats

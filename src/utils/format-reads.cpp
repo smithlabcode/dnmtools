@@ -765,7 +765,7 @@ standardize_format(const string &input_format, bam1_t *aln) {
     err_code = bam_aux_append(aln, "CV", 'A', 1, &cv);
     if (err_code < 0) throw fr_expt(err_code, "bam_aux_append");
 
-    if (bam_is_rev(aln)) revcomp_seq(aln); // reverse complement if needed
+    if (bam_is_rev(aln)) revcomp_seq_by_byte(aln); // reverse complement if needed
   }
   if (input_format == "bismark") {
     // ADS: Previously we modified the read names at the first
@@ -792,7 +792,7 @@ standardize_format(const string &input_format, bam1_t *aln) {
     err_code = bam_aux_append(aln, "CV", 'A', 1, &cv);
     if (err_code < 0) throw fr_expt(err_code, "bam_aux_append");
 
-    if (bam_is_rev(aln)) revcomp_seq(aln); // reverse complement if needed
+    if (bam_is_rev(aln)) revcomp_seq_by_byte(aln); // reverse complement if needed
   }
 
   // Be sure this doesn't depend on mapper! Removes the "qual" part of

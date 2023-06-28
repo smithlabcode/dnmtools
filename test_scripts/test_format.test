@@ -6,7 +6,7 @@ outfile2=tests/reads.fmt.srt.sam
 cmd=samtools
 if [[ -e "${infile}" ]]; then
     ./dnmtools format -f abismal ${infile} ${outfile1}
-    x=$(md5sum -c tests/md5sum.txt | grep ${outfile1} | cut -d ' ' -f 2)
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile1}:" | cut -d ' ' -f 2)
     ### ADS: only want to check the first output here; any failure
     ### later will result in a skip for subsequent tests.
     if [[ "${x}" != "OK" ]]; then

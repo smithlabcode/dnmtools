@@ -5,8 +5,8 @@ outfile1=tests/reads.fmt.srt.uniq.sam
 outfile2=tests/reads.ustats
 if [[ -e "${infile}" ]]; then
     ./dnmtools uniq -v -S ${outfile2} ${infile} ${outfile1}
-    x1=$(md5sum -c tests/md5sum.txt | grep ${outfile1} | cut -d ' ' -f 2)
-    x2=$(md5sum -c tests/md5sum.txt | grep ${outfile2} | cut -d ' ' -f 2)
+    x1=$(md5sum -c tests/md5sum.txt | grep "${outfile1}:" | cut -d ' ' -f 2)
+    x2=$(md5sum -c tests/md5sum.txt | grep "${outfile2}:" | cut -d ' ' -f 2)
     if [[ "${x1}" != "OK" || "${x2}" != "OK" ]]; then
         exit 1;
     fi

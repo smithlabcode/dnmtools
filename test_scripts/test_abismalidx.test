@@ -4,7 +4,7 @@ infile=tests/tRex1.fa
 outfile=tests/tRex1.idx
 if [[ -e "${infile}" ]]; then
     ./dnmtools abismalidx ${infile} ${outfile}
-    x=$(md5sum -c tests/md5sum.txt | grep ${outfile} | cut -d ' ' -f 2)
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile}:" | cut -d ' ' -f 2)
     if [[ "${x}" != "OK" ]]; then
         exit 1;
     fi

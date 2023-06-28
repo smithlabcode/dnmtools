@@ -18,7 +18,7 @@ else
 fi
 
 if [[ -e $(type -P "${cmd}") ]]; then
-    samtools sort -o ${outfile2} ${outfile1};
+    samtools sort --no-PG -o ${outfile2} ${outfile1};
 else
     echo "${cmd} not found"
 fi

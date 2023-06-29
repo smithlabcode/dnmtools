@@ -319,7 +319,7 @@ revcomp_seq_by_byte(bam1_t *aln) {
 // Also assumes the number of bytes allocated to sequence potion of c->data 
 // has been set to ceil((a_seq_len + b_seq_len) / 2.0)
 static void
-revcomp_emplace_end(const bam1_t *a, const bam1_t *b, bam1_t *c) {
+merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   const size_t b_seq_len = get_qlen(b);
   const size_t c_seq_len = get_qlen(c);
   const size_t a_used_len = c_seq_len - b_seq_len;
@@ -339,9 +339,15 @@ revcomp_emplace_end(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   for (size_t i = 0; i < a_num_bytes; i++) {
     c_seq[i] = a_seq[i];
   }
+  // Here, c_seq looks either like aa aa aa aa 
+  //                       or like aa aa aa a-
   if (is_a_odd) {
-    c_seq[a_num_bytes - 1] |= byte_revcom_table[b_seq[b_seq_len - 1]] >> 4;
+    c_seq[a_num_bytes - 1] |= is_b_odd ? 
+                  byte_revcom_table[b_seq[b_seq_len - 1]] :
+                  byte_revcom_table[b_seq[b_seq_len - 1]] >> 4;
   }
+  // Here, c_seq looks either like aa aa aa aa 
+  //                       or like aa aa aa ab
   if (is_c_odd) {
     for (size_t i = 0; i < b_num_bytes - 1; i++) {
       c_seq[a_num_bytes + i] = 
@@ -349,11 +355,15 @@ revcomp_emplace_end(const bam1_t *a, const bam1_t *b, bam1_t *c) {
           (byte_revcom_table[b_seq[b_seq_len - i - 2]] >> 4 );
     }
     c_seq[a_num_bytes + b_num_bytes - 1] = byte_revcom_table[b_seq[0]] << 4;
+    // Here, c_seq looks either like aa aa aa aa bb bb bb b- (a even and b odd)
+    //                       or like aa aa aa ab bb bb bb b- (a odd and b odd)
   }
   else {
     for (size_t i = 0; i < b_num_bytes - b_offset; i++) {
       c_seq[a_num_bytes + i] = byte_revcom_table[b_seq[b_seq_len-i-1-b_offset]];
     }
+    // Here, c_seq looks either like aa aa aa aa bb bb bb bb (a even and b even)
+    //                       or like aa aa aa ab bb bb bb    (a odd and b odd)
   }
 }
 

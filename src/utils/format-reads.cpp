@@ -312,6 +312,51 @@ revcomp_seq_by_byte(bam1_t *aln) {
   }  
 }
 
+// places seq of b at the end of seq of c
+// assumes 0 < c_seq_len - b_seq_len <= a_seq_len
+// also assumes that c_seq_len has been figured out
+// Also assumes the number of bytes allocated to sequence potion of c->data 
+// has been set to ceil((a_seq_len + b_seq_len) / 2.0)
+static void
+revcomp_emplace_end(const bam1_t *a, const bam1_t *b, bam1_t *c) {
+  const size_t b_seq_len = get_qlen(b);
+  const size_t c_seq_len = get_qlen(c);
+  const size_t a_used_len = c_seq_len - b_seq_len;
+  const bool is_a_odd = a_used_len % 2 == 1;
+  const bool is_b_odd = b_seq_len % 2 == 1;
+  const bool is_c_odd = c_seq_len % 2 == 1;
+  const size_t a_num_bytes = ceil(a_used_len / 2.0);
+  const size_t b_num_bytes = ceil(b_seq_len / 2.0);
+  const size_t c_num_bytes = ceil(c_seq_len / 2.0);
+
+  const size_t b_offset = (size_t) (is_b_odd);
+
+  const auto a_seq = bam_get_seq(a);
+  const auto b_seq = bam_get_seq(b);
+  auto c_seq = bam_get_seq(c);
+
+  for (size_t i = 0; i < a_num_bytes; i++) {
+    c_seq[i] = a_seq[i];
+  }
+  if (is_a_odd) {
+    c_seq[a_num_bytes - 1] |= byte_revcom_table[b_seq[b_seq_len - 1]] >> 4;
+  }
+  if (is_c_odd) {
+    for (size_t i = 0; i < b_num_bytes - 1; i++) {
+      c_seq[a_num_bytes + i] = 
+        (byte_revcom_table[b_seq[b_seq_len - i - 1]] << 4) |
+          (byte_revcom_table[b_seq[b_seq_len - i - 2]] >> 4 );
+    }
+    c_seq[a_num_bytes + b_num_bytes - 1] = byte_revcom_table[b_seq[0]] << 4;
+  }
+  else {
+    for (size_t i = 0; i < b_num_bytes - b_offset; i++) {
+      c_seq[a_num_bytes + i] = byte_revcom_table[b_seq[b_seq_len-i-1-b_offset]];
+    }
+  }
+}
+
+
 
 static inline bool
 is_a_rich(const bam1_t *b) {return bam_aux2A(bam_aux_get(b, "CV")) == 'A';}

@@ -328,7 +328,7 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   const bool is_c_odd = c_seq_len % 2 == 1;
   const size_t a_num_bytes = ceil(a_used_len / 2.0);
   const size_t b_num_bytes = ceil(b_seq_len / 2.0);
-  const size_t c_num_bytes = ceil(c_seq_len / 2.0);
+  // const size_t c_num_bytes = ceil(c_seq_len / 2.0);
 
   const size_t b_offset = (size_t) (is_b_odd);
 

@@ -271,6 +271,7 @@ revcomp_seq(bam1_t *aln) {
   // copy it back...
   for (size_t i = 0; i < l_qseq; ++i)
     bam_set_seqi(seq, i, seq_nt16_table[buf[i]]);
+  free(buf);
 }
 
 
@@ -453,6 +454,8 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
                      c_seq,      // truncated sequence
                      NULL,       // no qual info
                      8);         // enough for the 2 tags?
+  free(c_cig);
+  free(c_seq);
   if (ret < 0) throw fr_expt(ret, "bam_set1");
 
   /* add the tags */
@@ -565,6 +568,8 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                      c_seq,            // merged sequence
                      NULL,             // no qual info
                      8);               // enough for 2 tags?
+  free(c_cig);
+  free(c_seq);
   if (ret < 0) throw fr_expt(ret, "bam_set1 in merge_overlap");
 
   // add the tag for mismatches
@@ -642,6 +647,8 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
              c_seq,            // merged sequence
              NULL,             // no qual info
              8);               // enough for 2 tags of 1 byte value?
+  free(c_cig);
+  free(c_seq);
   if (ret < 0) throw fr_expt(ret, "bam_set1 in merge_non_overlap");
 
   /* add the tags */
@@ -857,6 +864,9 @@ load_read_names(const string &inputfile, const size_t n_reads) {
   if (err_code < -1) fr_expt(err_code, "load_read_names:sam_read1");
 
   bam_destroy1(aln);
+  bam_hdr_destroy(hdr);
+  err_code = hts_close(hts);
+  if (err_code < 0) throw fr_expt(err_code, "check_input_file:hts_close");
 
   return names;
 }
@@ -976,6 +986,10 @@ check_input_file(const string &infile) {
     throw fr_expt("not sequence data: " + infile);
   if (fmt->format != bam && fmt->format != sam)
     throw fr_expt("not SAM/BAM format: " + infile);
+
+  const int err_code = hts_close(hts);
+  if (err_code < 0) throw fr_expt(err_code, "check_input_file:hts_close");
+
   return true;
 }
 
@@ -995,6 +1009,10 @@ check_format_in_header(const string &input_format, const string &inputfile) {
                         [](const unsigned char a, const unsigned char b) {
                           return std::toupper(a) == std::toupper(b);
                         });
+  bam_hdr_destroy(hdr);
+  const int err_code = hts_close(hts);
+  if (err_code < 0) throw fr_expt(err_code, "check_format_in_header:hts_close");
+
   return it != end_hdr;
 }
 

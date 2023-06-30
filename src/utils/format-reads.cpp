@@ -533,16 +533,16 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   //                       or like aa aa aa a-
   if (is_a_odd) {
     c_seq[a_num_bytes - 1] |= is_b_odd ? 
-                  byte_revcom_table[b_seq[b_seq_len - 1]] :
-                  byte_revcom_table[b_seq[b_seq_len - 1]] >> 4;
+                  byte_revcom_table[b_seq[b_num_bytes - 1]] :
+                  byte_revcom_table[b_seq[b_num_bytes - 1]] >> 4;
   }
   // Here, c_seq looks either like aa aa aa aa 
   //                       or like aa aa aa ab
   if (is_c_odd) {
     for (size_t i = 0; i < b_num_bytes - 1; i++) {
       c_seq[a_num_bytes + i] = 
-        (byte_revcom_table[b_seq[b_seq_len - i - 1]] << 4) |
-          (byte_revcom_table[b_seq[b_seq_len - i - 2]] >> 4 );
+        (byte_revcom_table[b_seq[b_num_bytes - i - 1]] << 4) |
+          (byte_revcom_table[b_seq[b_num_bytes - i - 2]] >> 4 );
     }
     c_seq[a_num_bytes + b_num_bytes - 1] = byte_revcom_table[b_seq[0]] << 4;
     // Here, c_seq looks either like aa aa aa aa bb bb bb b- (a even and b odd)
@@ -550,7 +550,7 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   }
   else {
     for (size_t i = 0; i < b_num_bytes - b_offset; i++) {
-      c_seq[a_num_bytes + i] = byte_revcom_table[b_seq[b_seq_len-i-1-b_offset]];
+      c_seq[a_num_bytes + i] = byte_revcom_table[b_seq[b_num_bytes-i-1-b_offset]];
     }
     // Here, c_seq looks either like aa aa aa aa bb bb bb bb (a even and b even)
     //                       or like aa aa aa ab bb bb bb    (a odd and b odd)

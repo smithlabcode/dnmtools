@@ -54,6 +54,49 @@ using std::cerr;
 using std::endl;
 
 
+
+
+// copied and modified from htslib/sam.c
+int sam_realloc_bam_data(bam1_t *b, size_t desired)
+{
+    uint32_t new_m_data;
+    uint8_t *new_data;
+    new_m_data = desired;
+    kroundup32(new_m_data);
+    if (new_m_data < desired) {
+        // errno = ENOMEM; // Not strictly true but we can't store the size
+        return -1;
+    }
+    // if ((bam_get_mempolicy(b) & BAM_USER_OWNS_DATA) == 0) {
+    if ((b->mempolicy & BAM_USER_OWNS_DATA) == 0) {
+        new_data = (uint8_t *) realloc(b->data, new_m_data);
+    } else {
+        if ((new_data = (uint8_t *) malloc(new_m_data)) != NULL) {
+            if (b->l_data > 0)
+                memcpy(new_data, b->data,
+                       (uint32_t) b->l_data < b->m_data ? b->l_data : b->m_data);
+            // bam_set_mempolicy(b, bam_get_mempolicy(b) & (~BAM_USER_OWNS_DATA));
+            b->mempolicy &= (~BAM_USER_OWNS_DATA);
+        }
+    }
+    if (!new_data) return -1;
+    b->data = new_data;
+    b->m_data = new_m_data;
+    return 0;
+}
+
+//copied from htslib/sam_internal.h
+static inline int realloc_bam_data(bam1_t *b, size_t desired)
+{
+    if (desired <= b->m_data) return 0;
+    return sam_realloc_bam_data(b, desired);
+}
+
+//copied from htslib/cram/cram_samtools.h
+#define bam_reg2bin(beg,end) hts_reg2bin((beg),(end),14,5)
+
+
+
 struct fr_expt: public std::exception {
   int64_t err;        // error possibly from HTSlib
   int the_errno;      // ERRNO at time of construction
@@ -70,6 +113,153 @@ struct fr_expt: public std::exception {
   const char*
   what() const noexcept override {return the_what.c_str();}
 };
+
+
+// copied from htslib/sam.c
+static int subtract_check_underflow(size_t length, size_t *limit)
+{
+    if (length <= *limit) {
+        *limit -= length;
+        return 0;
+    }
+    return -1;
+}
+
+
+
+// copied from htslib/sam.c and modified
+int bam_set1_wrapper(bam1_t *bam,
+             size_t l_qname, const char *qname,
+             uint16_t flag, int32_t tid, hts_pos_t pos, uint8_t mapq,
+             size_t n_cigar, const uint32_t *cigar,
+             int32_t mtid, hts_pos_t mpos, hts_pos_t isize,
+             size_t l_seq, 
+            //  const char *seq, 
+             const char *qual,
+             size_t l_aux)
+{
+    // use a default qname "*" if none is provided
+    if (l_qname == 0) {
+        l_qname = 1;
+        qname = "*";
+    }
+
+    // note: the qname is stored nul terminated and padded as described in the
+    // documentation for the bam1_t struct.
+    size_t qname_nuls = 4 - l_qname % 4;
+
+    // Assuming that this has already been figured out
+    hts_pos_t rlen = isize;
+    hts_pos_t qlen = (hts_pos_t) l_seq;
+    // if (!(flag & BAM_FUNMAP)) {
+    //     bam_cigar2rqlens((int)n_cigar, cigar, &rlen, &qlen);
+    // }
+    if (rlen == 0) {
+        rlen = 1;
+    }
+
+    // validate parameters
+    if (l_qname > 254) {
+        // hts_log_error("Query name too long");
+        // errno = EINVAL;
+        throw fr_expt("Query name too long");
+        return -1;
+    }
+    if (HTS_POS_MAX - rlen <= pos) {
+        // hts_log_error("Read ends beyond highest supported position");
+        // errno = EINVAL;
+        throw fr_expt("Read ends beyond highest supported position");
+        return -1;
+    }
+    if (!(flag & BAM_FUNMAP) && l_seq > 0 && n_cigar == 0) {
+        // hts_log_error("Mapped query must have a CIGAR");
+        // errno = EINVAL;
+        throw fr_expt("Mapped query must have a CIGAR");
+        return -1;
+    }
+    if (!(flag & BAM_FUNMAP) && l_seq > 0 && (hts_pos_t)l_seq != qlen) {
+        // hts_log_error("CIGAR and query sequence are of different length");
+        // errno = EINVAL;
+        throw fr_expt("CIGAR and query sequence are of different length");
+        return -1;
+    }
+
+    size_t limit = INT32_MAX;
+    int u = subtract_check_underflow(l_qname + qname_nuls, &limit);
+    u    += subtract_check_underflow(n_cigar * 4, &limit);
+    u    += subtract_check_underflow((l_seq + 1) / 2, &limit);
+    u    += subtract_check_underflow(l_seq, &limit);
+    u    += subtract_check_underflow(l_aux, &limit);
+    if (u != 0) {
+        // hts_log_error("Size overflow");
+        // errno = EINVAL;
+        throw fr_expt("Size overflow");
+        return -1;
+    }
+
+    // re-allocate the data buffer as needed.
+    size_t data_len = l_qname + qname_nuls + n_cigar * 4 + (l_seq + 1) / 2 + l_seq;
+    if (realloc_bam_data(bam, data_len + l_aux) < 0) {
+        return -1;
+    }
+
+    bam->l_data = (int)data_len;
+    bam->core.pos = pos;
+    bam->core.tid = tid;
+    bam->core.bin = bam_reg2bin(pos, pos + rlen);
+    bam->core.qual = mapq;
+    bam->core.l_extranul = (uint8_t)(qname_nuls - 1);
+    bam->core.flag = flag;
+    bam->core.l_qname = (uint16_t)(l_qname + qname_nuls);
+    bam->core.n_cigar = (uint32_t)n_cigar;
+    bam->core.l_qseq = (int32_t)l_seq;
+    bam->core.mtid = mtid;
+    bam->core.mpos = mpos;
+    bam->core.isize = isize;
+
+    uint8_t *cp = bam->data;
+    strncpy((char *)cp, qname, l_qname);
+    size_t i;
+    for (i = 0; i < qname_nuls; i++) {
+        cp[l_qname + i] = '\0';
+    }
+    cp += l_qname + qname_nuls;
+
+    if (n_cigar > 0) {
+        memcpy(cp, cigar, n_cigar * 4);
+    }
+    cp += n_cigar * 4;
+
+// #define NN 16
+//     const uint8_t *useq = (uint8_t *)seq;
+//     for (i = 0; i + NN < l_seq; i += NN) {
+//         int j;
+//         const uint8_t *u2 = useq+i;
+//         for (j = 0; j < NN/2; j++)
+//             cp[j] = (seq_nt16_table[u2[j*2]]<<4) | seq_nt16_table[u2[j*2+1]];
+//         cp += NN/2;
+//     }
+//     for (; i + 1 < l_seq; i += 2) {
+//         *cp++ = (seq_nt16_table[useq[i]] << 4) | seq_nt16_table[useq[i + 1]];
+//     }
+
+//     for (; i < l_seq; i++) {
+//         *cp++ = seq_nt16_table[(unsigned char)seq[i]] << 4;
+//     }
+    // skip seq assignment
+    cp += l_seq / 2 + l_seq % 2;
+
+    if (qual) {
+        memcpy(cp, qual, l_seq);
+    }
+    else {
+        memset(cp, '\xff', l_seq);
+    }
+
+    return (int)data_len;
+}
+
+
 
 
 static inline bool
@@ -540,19 +730,19 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
   // allocate the right size for c's seq using the query-consuming ops
   // corresponding to the prefix of a copied into c.
   const uint32_t c_seq_len = a_seq_len + b->core.l_qseq;
-  char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
+  // char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
 
-  // copy the prefix of a into c
-  for (size_t i = 0; i < a_seq_len; ++i)
-    c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
-  // copy all of b into c
-  for (size_t i = 0; i < get_qlen(b); ++i)
-    c_seq[a_seq_len + i] = seq_nt16_str[bam_seqi(bam_get_seq(b), i)];
+  // // copy the prefix of a into c
+  // for (size_t i = 0; i < a_seq_len; ++i)
+  //   c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
+  // // copy all of b into c
+  // for (size_t i = 0; i < get_qlen(b); ++i)
+  //   c_seq[a_seq_len + i] = seq_nt16_str[bam_seqi(bam_get_seq(b), i)];
 
-  // reverse and complement the part of c corresponding to b
-  revcomp_inplace(c_seq + a_seq_len, c_seq + c_seq_len);
-  // reverse(c_seq + a_seq_len, c_seq + c_seq_len);
-  // complement_seq(c_seq + a_seq_len, c_seq + c_seq_len);
+  // // reverse and complement the part of c corresponding to b
+  // revcomp_inplace(c_seq + a_seq_len, c_seq + c_seq_len);
+  // // reverse(c_seq + a_seq_len, c_seq + c_seq_len);
+  // // complement_seq(c_seq + a_seq_len, c_seq + c_seq_len);
 
   // get the template length
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
@@ -562,7 +752,7 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                                    BAM_FREAD2 |
                                    BAM_FREVERSE));
 
-  int ret = bam_set1(c,
+  int ret = bam_set1_wrapper(c,
                      a->core.l_qname - (a->core.l_extranul + 1),
                      bam_get_qname(a),
                      flag,             // (no PE; revcomp info)
@@ -575,12 +765,14 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                      -1,               // (no mate)
                      isize,            // updated
                      c_seq_len,        // merged sequence length
-                     c_seq,            // merged sequence
+                    //  c_seq,            // merged sequence
                      NULL,             // no qual info
                      8);               // enough for 2 tags?
   free(c_cig);
-  free(c_seq);
+  // free(c_seq);
   if (ret < 0) throw fr_expt(ret, "bam_set1 in merge_overlap");
+
+  merge_by_byte(a, b, c);
 
   // add the tag for mismatches
   const int64_t nm = (bam_aux2i(bam_aux_get(a, "NM")) +
@@ -621,16 +813,16 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
   const size_t a_seq_len = get_qlen(a);
   const size_t b_seq_len = get_qlen(b);
   const size_t c_seq_len = a_seq_len + b_seq_len;
-  // allocate and fill the new one as a char array
-  char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
-  for (size_t i = 0; i < a_seq_len; ++i)
-    c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
-  for (size_t i = 0; i < b_seq_len; ++i)
-    c_seq[a_seq_len + i] = seq_nt16_str[bam_seqi(bam_get_seq(b), i)];
-  // reverse and complement the part corresponding to "b"
-  revcomp_inplace(c_seq + a_seq_len, c_seq + c_seq_len);
-  // reverse(c_seq + a_seq_len, c_seq + c_seq_len);
-  // complement_seq(c_seq + a_seq_len, c_seq + c_seq_len);
+  // // allocate and fill the new one as a char array
+  // char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
+  // for (size_t i = 0; i < a_seq_len; ++i)
+  //   c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
+  // for (size_t i = 0; i < b_seq_len; ++i)
+  //   c_seq[a_seq_len + i] = seq_nt16_str[bam_seqi(bam_get_seq(b), i)];
+  // // reverse and complement the part corresponding to "b"
+  // revcomp_inplace(c_seq + a_seq_len, c_seq + c_seq_len);
+  // // reverse(c_seq + a_seq_len, c_seq + c_seq_len);
+  // // complement_seq(c_seq + a_seq_len, c_seq + c_seq_len);
 
   // get the template length from the cigar
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
@@ -641,7 +833,7 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
                                         BAM_FREVERSE);
 
   int ret =
-    bam_set1(c,
+    bam_set1_wrapper(c,
              a->core.l_qname - (a->core.l_extranul + 1),
              bam_get_qname(a),
              flag,             // flags (no PE; revcomp info)
@@ -654,12 +846,14 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
              -1,               // (no mate)
              isize,            // TLEN (relative to reference; SAM docs)
              c_seq_len,        // merged sequence length
-             c_seq,            // merged sequence
+            //  c_seq,            // merged sequence
              NULL,             // no qual info
              8);               // enough for 2 tags of 1 byte value?
   free(c_cig);
-  free(c_seq);
+  // free(c_seq);
   if (ret < 0) throw fr_expt(ret, "bam_set1 in merge_non_overlap");
+
+  merge_by_byte(a, b, c);
 
   /* add the tags */
   const int64_t nm = (bam_aux2i(bam_aux_get(a, "NM")) +

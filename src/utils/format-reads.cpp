@@ -526,12 +526,15 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   const auto b_seq = bam_get_seq(b);
   auto c_seq = bam_get_seq(c);
 
-  for (size_t i = 0; i < a_num_bytes; i++) {
-    c_seq[i] = a_seq[i];
-  }
+  // for (size_t i = 0; i < a_num_bytes; i++) {
+  //   c_seq[i] = a_seq[i];
+  // }
+  memcpy(c_seq, a_seq, a_num_bytes);
+
   // Here, c_seq looks either like aa aa aa aa 
   //                       or like aa aa aa a-
   if (is_a_odd) {
+    c_seq[a_num_bytes -1 ] &= 0xf0;
     c_seq[a_num_bytes - 1] |= is_b_odd ? 
                   byte_revcom_table[b_seq[b_num_bytes - 1]] :
                   byte_revcom_table[b_seq[b_num_bytes - 1]] >> 4;

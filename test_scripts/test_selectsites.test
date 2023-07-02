@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+infile1=tests/tRex1_promoters.bed
+infile2=tests/reads.counts
+outfile=tests/reads.counts.select
+if [[ -e "${infile1}" && -e "${infile2}" ]]; then
+    ./dnmtools selectsites -o ${outfile} ${infile1} ${infile2}
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile}:" | cut -d ' ' -f 2)
+    if [[ "${x}" != "OK" ]]; then
+        exit 1;
+    fi
+  elif [[ -e "${infile1}" ]]; then
+    echo "${infile1} not found; skipping remaining tests";
+    exit 77;
+  else
+    echo "${infile2} not found; skipping remaining tests";
+    exit 77;
+fi

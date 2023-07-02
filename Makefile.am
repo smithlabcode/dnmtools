@@ -207,4 +207,4 @@ CLEANFILES = \
     tests/simreads_2.fq \
     tests/tRex1.idx \
     tests/tRex1_promoters.roi.bed \
-    tests/read.counts.select
+    tests/reads.counts.select

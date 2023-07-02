@@ -67,18 +67,9 @@ sam_realloc_bam_data(bam1_t *b, size_t desired)
     // errno = ENOMEM; // Not strictly true but we can't store the size
     return -1;
   }
-  // if ((bam_get_mempolicy(b) & BAM_USER_OWNS_DATA) == 0) {
-  // if ((b->mempolicy & BAM_USER_OWNS_DATA) == 0) {
+
   new_data = (uint8_t *)realloc(b->data, new_m_data);
-  // } else {
-  //     if ((new_data = (uint8_t *) malloc(new_m_data)) != NULL) {
-  //         if (b->l_data > 0)
-  //             memcpy(new_data, b->data,
-  //                    (uint32_t) b->l_data < b->m_data ? b->l_data : b->m_data);
-  //         // bam_set_mempolicy(b, bam_get_mempolicy(b) & (~BAM_USER_OWNS_DATA));
-  //         b->mempolicy &= (~BAM_USER_OWNS_DATA);
-  //     }
-  // }
+
   if (!new_data)
     return -1;
   b->data = new_data;
@@ -86,14 +77,6 @@ sam_realloc_bam_data(bam1_t *b, size_t desired)
   return 0;
 }
 
-// copied from htslib/sam_internal.h
-static inline int
-realloc_bam_data(bam1_t *b, size_t desired)
-{
-  if (desired <= b->m_data)
-    return 0;
-  return sam_realloc_bam_data(b, desired);
-}
 
 struct fr_expt : public std::exception
 {
@@ -201,11 +184,15 @@ static int bam_set1_wrapper(bam1_t *bam,
   size_t qname_nuls = 4 - l_qname % 4;
 
   // re-allocate the data buffer as needed.
-  size_t data_len = l_qname + qname_nuls + n_cigar * 4 + (l_seq + 1) / 2 + l_seq;
-  if (realloc_bam_data(bam, data_len + l_aux) < 0)
-  {
-    return -1;
+  size_t data_len = l_qname + qname_nuls + n_cigar * 4 + 
+                              (l_seq + 1) / 2 + l_seq;
+  if (data_len + l_aux > bam->m_data) {
+    int ret = sam_realloc_bam_data(bam, data_len + l_aux);
+    if (ret < 0) {
+      throw fr_expt(ret, "Failed to allocate memory for BAM record");
+    }
   }
+
 
   bam->l_data = (int)data_len;
   bam->core.pos = pos;
@@ -435,30 +422,7 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
   return i;
 }
 
-template <class T>
-void revcomp_inplace(T first, T last)
-{
-  std::transform(first, last, first, complement);
-  std::reverse(first, last);
-}
 
-static void
-revcomp_seq(bam1_t *aln)
-{
-  // generate the sequence in ascii
-  const auto seq = bam_get_seq(aln);
-  const size_t l_qseq = get_qlen(aln);
-  unsigned char *buf = (unsigned char *)malloc(l_qseq * sizeof(unsigned char));
-  for (size_t i = 0; i < l_qseq; ++i)
-    buf[i] = seq_nt16_str[bam_seqi(seq, i)];
-
-  revcomp_inplace(buf, buf + l_qseq); // point of this function
-
-  // copy it back...
-  for (size_t i = 0; i < l_qseq; ++i)
-    bam_set_seqi(seq, i, seq_nt16_table[buf[i]]);
-  free(buf);
-}
 
 const uint8_t byte_revcom_table[] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -531,9 +495,7 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c)
   if (is_a_odd)
   {
     c_seq[a_num_bytes - 1] &= 0xf0;
-    c_seq[a_num_bytes - 1] |= is_b_odd ? 
-                              byte_revcom_table[b_seq[b_num_bytes - 1]] : 
-                              byte_revcom_table[b_seq[b_num_bytes - 1]] >> 4;
+    c_seq[a_num_bytes - 1] |= is_b_odd ? byte_revcom_table[b_seq[b_num_bytes - 1]] : byte_revcom_table[b_seq[b_num_bytes - 1]] >> 4;
   }
   // Here, c_seq looks either like aa aa aa aa
   //                       or like aa aa aa ab
@@ -553,8 +515,8 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c)
   {
     for (size_t i = 0; i < b_num_bytes - b_offset; i++)
     {
-      c_seq[a_num_bytes + i] = 
-                  byte_revcom_table[b_seq[b_num_bytes - i - 1 - b_offset]];
+      c_seq[a_num_bytes + i] =
+          byte_revcom_table[b_seq[b_num_bytes - i - 1 - b_offset]];
     }
     // Here, c_seq looks either like aa aa aa aa bb bb bb bb (a even and b even)
     //                       or like aa aa aa ab bb bb bb    (a odd and b odd)

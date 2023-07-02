@@ -210,7 +210,7 @@ static int bam_set1_wrapper(bam1_t *bam,
   bam->l_data = (int)data_len;
   bam->core.pos = pos;
   bam->core.tid = tid;
-  // bam->core.bin = bam_reg2bin(pos, pos + isize);
+  // bam->core.bin = bam_reg2bin(pos, pos + rlen);
   bam->core.bin = hts_reg2bin(pos, pos + isize, 14, 5);
   // above taken from htslib/cram/cram_samtools.h
   bam->core.qual = mapq;
@@ -229,7 +229,7 @@ static int bam_set1_wrapper(bam1_t *bam,
   data_iter += l_qname + qname_nuls;
 
   // std::copy_n(cigar, n_cigar * sizeof(uint32_t), data_iter);
-  std::copy_n(cigar, n_cigar, reinterpret_cast<uint32_t*>(data_iter));
+  std::copy_n(cigar, n_cigar, reinterpret_cast<uint32_t *>(data_iter));
   data_iter += n_cigar * sizeof(uint32_t);
 
   // skipping sequece assignment
@@ -628,13 +628,13 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c)
   /* after this point the cigar is set and should decide everything */
 
   const uint32_t c_seq_len = bam_cigar2qlen(c_ops, c_cig);
-  char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
-  if (!c_seq)
-    throw fr_expt("allocating sequence");
+  // char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
+  // if (!c_seq)
+  //   throw fr_expt("allocating sequence");
 
-  // copy the prefix of a into c; must be easier
-  for (size_t i = 0; i < c_seq_len; ++i)
-    c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
+  // // copy the prefix of a into c; must be easier
+  // for (size_t i = 0; i < c_seq_len; ++i)
+  //   c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
 
   // get the template length
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
@@ -642,24 +642,28 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c)
   // flag only needs to worry about strand and single-end stuff
   const uint16_t flag = a->core.flag & (BAM_FREAD1 | BAM_FREAD2 | BAM_FREVERSE);
 
-  int ret = bam_set1(c,
-                     a->core.l_qname - (a->core.l_extranul + 1),
-                     bam_get_qname(a),
-                     flag, // flags (SR and revcomp info)
-                     a->core.tid,
-                     a->core.pos,
-                     a->core.qual,
-                     c_ops,     // merged cigar ops
-                     c_cig,     // merged cigar
-                     -1,        // (no mate)
-                     -1,        // (no mate)
-                     isize,     // rlen from new cigar
-                     c_seq_len, // truncated seq length
-                     c_seq,     // truncated sequence
-                     NULL,      // no qual info
-                     8);        // enough for the 2 tags?
+  int ret = bam_set1_wrapper(c,
+                             a->core.l_qname - (a->core.l_extranul + 1),
+                             bam_get_qname(a),
+                             flag, // flags (SR and revcomp info)
+                             a->core.tid,
+                             a->core.pos,
+                             a->core.qual,
+                             c_ops,     // merged cigar ops
+                             c_cig,     // merged cigar
+                             -1,        // (no mate)
+                             -1,        // (no mate)
+                             isize,     // rlen from new cigar
+                             c_seq_len, // truncated seq length
+                                        //  c_seq,     // truncated sequence
+                                        //  NULL,      // no qual info
+                             8);        // enough for the 2 tags?
   free(c_cig);
-  free(c_seq);
+  // free(c_seq);
+  auto c_seq = bam_get_seq(c);
+  size_t num_bytes_to_copy = (c_seq_len + 1) / 2;
+  std::copy_n(bam_get_seq(a), num_bytes_to_copy, c_seq);
+
   if (ret < 0)
     throw fr_expt(ret, "bam_set1");
 

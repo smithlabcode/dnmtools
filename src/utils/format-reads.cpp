@@ -316,6 +316,8 @@ reverse(unsigned char *a, unsigned char *b) {
   }
 }
 
+
+
 // return value is the number of cigar ops that are fully consumed in
 // order to read n_ref, while "partial_oplen" is the number of bases
 // that could be taken from the next operation, which might be merged
@@ -357,16 +359,27 @@ const uint8_t byte_revcom_table[] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     15, 143, 79, 0, 47, 0, 0, 0, 31, 0, 0, 0, 0, 0, 0, 255};
 
+
+static inline void
+revcom_byte_then_reverse(unsigned char *a, unsigned char *b) {
+  unsigned char *p1, *p2;
+  for (p1 = a, p2 = b - 1; p2 > p1; ++p1, --p2) {
+    *p1 = byte_revcom_table[*p1];
+    *p2 = byte_revcom_table[*p2];
+    *p1 ^= *p2;
+    *p2 ^= *p1;
+    *p1 ^= *p2;
+  }
+  if (p1 == p2) *p1 = byte_revcom_table[*p1];
+}
+
 static void
 revcomp_seq_by_byte(bam1_t *aln) {
   const size_t l_qseq = get_qlen(aln);
   auto seq = bam_get_seq(aln);
   size_t num_bytes = ceil(l_qseq / 2.0);
   auto seq_end = seq + num_bytes;
-  for (size_t i = 0; i < num_bytes; i++) {
-    seq[i] = byte_revcom_table[seq[i]];
-  }
-  reverse(seq, seq_end);
+  revcom_byte_then_reverse(seq, seq_end);
   if (l_qseq % 2 == 1) {
     for (size_t i = 0; i < num_bytes - 1; i++) {
       seq[i] = (seq[i] << 4) | (seq[i + 1] >> 4);

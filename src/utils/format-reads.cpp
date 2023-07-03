@@ -129,7 +129,6 @@ bam_set1_wrapper(bam1_t *bam,
    * qual = Null
    */ 
 
-
   size_t qname_nuls = 4 - l_qname % 4;
   size_t data_len = l_qname + qname_nuls + n_cigar * 4 + 
                               (l_seq + 1) / 2 + l_seq;
@@ -406,7 +405,9 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   //                       or like aa aa aa a-
   if (is_a_odd) {
     c_seq[a_num_bytes - 1] &= 0xf0;
-    c_seq[a_num_bytes - 1] |= is_b_odd ? byte_revcom_table[b_seq[b_num_bytes - 1]] : byte_revcom_table[b_seq[b_num_bytes - 1]] >> 4;
+    c_seq[a_num_bytes - 1] |= is_b_odd ? 
+        byte_revcom_table[b_seq[b_num_bytes - 1]] : 
+        byte_revcom_table[b_seq[b_num_bytes - 1]] >> 4;
   }
   // Here, c_seq looks either like aa aa aa aa
   //                       or like aa aa aa ab
@@ -592,7 +593,9 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                                      bam_cigar_oplen(b_cig[0]),
                                      bam_cigar_op(b_cig[0]));
   // copy the cigar from b into c
-  memcpy(c_cig + c_cur, b_cig + merge_mid, (b_ops - merge_mid) * sizeof(uint32_t));
+  memcpy(c_cig + c_cur, 
+         b_cig + merge_mid, 
+         (b_ops - merge_mid) * sizeof(uint32_t));
   /* done with cigar string here */
 
   /* now deal with sequence */
@@ -920,7 +923,9 @@ get_max_repeat_count(const vector<string> &names, const size_t suff_len) {
   // would result in more that two reads identified mutually as mates.
   for (size_t i = 1; i < names.size() && repeat_count < 2; ++i) {
     if (names[i - 1].size() == names[i].size() &&
-        equal(begin(names[i - 1]), end(names[i - 1]) - suff_len, begin(names[i])))
+        equal(begin(names[i - 1]), 
+              end(names[i - 1]) - suff_len, 
+              begin(names[i])))
       ++tmp_repeat_count;
     else tmp_repeat_count = 0;
     repeat_count = std::max(repeat_count, tmp_repeat_count);

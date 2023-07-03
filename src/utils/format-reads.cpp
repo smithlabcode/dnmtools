@@ -306,17 +306,6 @@ reverse(char *a, char *b) {
   }
 }
 
-static inline void
-reverse(unsigned char *a, unsigned char *b) {
-  unsigned char *p1, *p2;
-  for (p1 = a, p2 = b - 1; p2 > p1; ++p1, --p2) {
-    *p1 ^= *p2;
-    *p2 ^= *p1;
-    *p1 ^= *p2;
-  }
-}
-
-
 
 // return value is the number of cigar ops that are fully consumed in
 // order to read n_ref, while "partial_oplen" is the number of bases

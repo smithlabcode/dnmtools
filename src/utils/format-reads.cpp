@@ -1064,6 +1064,7 @@ main_format(int argc, const char **argv) {
     size_t suff_len = 0;
     bool single_end = false;
     bool VERBOSE = false;
+    bool force = false;
     size_t n_threads = 1;
 
     const string description = "convert SAM/BAM mapped bs-seq reads "
@@ -1088,6 +1089,8 @@ main_format(int argc, const char **argv) {
     opt_parse.add_opt("check", 'c',
                       "check this many reads to validate read name suffix",
                       false, n_reads_to_check);
+    opt_parse.add_opt("force", 'F', "run format even with inconsistent "
+                      "pair information", false, force);
     opt_parse.add_opt("verbose", 'v', "print more information",
                       false, VERBOSE);
     opt_parse.set_show_defaults();
@@ -1135,14 +1138,15 @@ main_format(int argc, const char **argv) {
       if (suff_len == 0) {
         size_t repeat_count = 0;
         suff_len = guess_suff_len(infile, n_reads_to_check, repeat_count);
-        if (repeat_count > 1)
+        if (repeat_count > 1 && !force)
           throw fr_expt("failed to identify read name suffix length\n"
                         "verify reads are not single-end\n"
                         "specify read name suffix length directly");
         if (VERBOSE)
           cerr << "[read name suffix length guess: " << suff_len << "]" << endl;
       }
-      else if (!check_suff_len(infile, suff_len, n_reads_to_check))
+      else if (!check_suff_len(infile, suff_len, n_reads_to_check) &&
+               !force)
         throw fr_expt("wrong read name suffix length [" +
                       std::to_string(suff_len) + "] in: " + infile);
       if (!check_sorted(infile, suff_len, n_reads_to_check))

@@ -48,28 +48,13 @@
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 
+// from dnmtools
+#include "dnmt_error.hpp"
+
 using std::string;
 using std::vector;
 using std::cerr;
 using std::endl;
-
-
-struct fr_expt: public std::exception {
-  int64_t err;        // error possibly from HTSlib
-  int the_errno;      // ERRNO at time of construction
-  string msg;         // the message
-  string the_what;    // to report
-  fr_expt(const int64_t _err, const string &_msg) :
-    err{_err}, the_errno{errno}, msg{_msg} {
-    std::ostringstream oss;
-    oss << "[error: " << err << "][" << "ERRNO: " << the_errno << "]"
-        << "[" << strerror(the_errno) << "][" << msg << "]";
-    the_what = oss.str();
-  }
-  fr_expt(const string &_msg) : fr_expt(0, _msg) {}
-  const char*
-  what() const noexcept override {return the_what.c_str();}
-};
 
 
 static inline bool
@@ -96,10 +81,10 @@ fix_internal_softclip(const size_t n_cigar, uint32_t *cigar) {
   auto c_end = cigar + n_cigar;
 
   while (!eats_ref(*c_beg) && ++c_beg != c_end);
-  if (c_beg == c_end) throw fr_expt("cigar eats no ref");
+  if (c_beg == c_end) throw dnmt_error("cigar eats no ref");
 
   while (!eats_ref(*(c_end-1)) && --c_end != c_beg);
-  if (c_beg == c_end) throw fr_expt("cigar eats no ref");
+  if (c_beg == c_end) throw dnmt_error("cigar eats no ref");
 
   for (auto c_itr = c_beg; c_itr != c_end; ++c_itr)
     if (bam_cigar_op(*c_itr) == BAM_CSOFT_CLIP)
@@ -123,7 +108,7 @@ fix_external_insertion(const size_t n_cigar, uint32_t *cigar) {
   for (; !eats_ref(*c_itr) && c_itr != c_end; ++c_itr)
     *c_itr = to_softclip(*c_itr);
 
-  if (c_itr == c_end) throw fr_expt("cigar eats no ref");
+  if (c_itr == c_end) throw dnmt_error("cigar eats no ref");
 
   c_itr = cigar + n_cigar - 1;
   for (; !eats_ref(*c_itr) && c_itr != cigar; --c_itr)
@@ -298,7 +283,7 @@ flip_conversion(bam1_t *aln) {
 
   // ADS: don't like *(cv + 1) below, but no HTSlib function for it?
   uint8_t *cv = bam_aux_get(aln, "CV");
-  if (!cv) throw fr_expt("bam_aux_get failed for CV");
+  if (!cv) throw dnmt_error("bam_aux_get failed for CV");
   *(cv + 1) = 'T';
 }
 
@@ -342,7 +327,7 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
 
   const uint32_t c_seq_len = bam_cigar2qlen(c_ops, c_cig);
   char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
-  if (!c_seq) throw fr_expt("allocating sequence");
+  if (!c_seq) throw dnmt_error("allocating sequence");
 
   // copy the prefix of a into c; must be easier
   for (size_t i = 0; i < c_seq_len; ++i)
@@ -372,18 +357,18 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
                      8);         // enough for the 2 tags?
   free(c_cig);
   free(c_seq);
-  if (ret < 0) throw fr_expt(ret, "bam_set1");
+  if (ret < 0) throw dnmt_error(ret, "bam_set1");
 
   /* add the tags */
   const int64_t nm = bam_aux2i(bam_aux_get(a, "NM")); // ADS: do better here!
   // "udpate" for "int" because it determines the right size
   ret = bam_aux_update_int(c, "NM", nm);
-  if (ret < 0) throw fr_expt(ret, "bam_aux_update_int");
+  if (ret < 0) throw dnmt_error(ret, "bam_aux_update_int");
 
   const uint8_t conversion = bam_aux2A(bam_aux_get(a, "CV"));
   // "append" for "char" because there is no corresponding update
   ret = bam_aux_append(c, "CV", 'A', 1, &conversion);
-  if (ret < 0) throw fr_expt(ret, "bam_aux_append");
+  if (ret < 0) throw dnmt_error(ret, "bam_aux_append");
 
   return ret;
 }
@@ -486,18 +471,18 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                      8);               // enough for 2 tags?
   free(c_cig);
   free(c_seq);
-  if (ret < 0) throw fr_expt(ret, "bam_set1 in merge_overlap");
+  if (ret < 0) throw dnmt_error(ret, "bam_set1 in merge_overlap");
 
   // add the tag for mismatches
   const int64_t nm = (bam_aux2i(bam_aux_get(a, "NM")) +
                       bam_aux2i(bam_aux_get(b, "NM")));
   ret = bam_aux_update_int(c, "NM", nm);
-  if (ret < 0) throw fr_expt(ret, "bam_aux_update_int in merge_overlap");
+  if (ret < 0) throw dnmt_error(ret, "bam_aux_update_int in merge_overlap");
 
   // add the tag for conversion
   const uint8_t cv = bam_aux2A(bam_aux_get(a, "CV"));
   ret = bam_aux_append(c, "CV", 'A', 1, &cv);
-  if (ret < 0) throw fr_expt(ret, "bam_aux_append in merge_overlap");
+  if (ret < 0) throw dnmt_error(ret, "bam_aux_append in merge_overlap");
 
   return ret;
 }
@@ -565,19 +550,19 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
              8);               // enough for 2 tags of 1 byte value?
   free(c_cig);
   free(c_seq);
-  if (ret < 0) throw fr_expt(ret, "bam_set1 in merge_non_overlap");
+  if (ret < 0) throw dnmt_error(ret, "bam_set1 in merge_non_overlap");
 
   /* add the tags */
   const int64_t nm = (bam_aux2i(bam_aux_get(a, "NM")) +
                       bam_aux2i(bam_aux_get(b, "NM")));
   // "udpate" for "int" because it determines the right size
   ret = bam_aux_update_int(c, "NM", nm);
-  if (ret < 0) throw fr_expt(ret, "merge_non_overlap:bam_aux_update_int");
+  if (ret < 0) throw dnmt_error(ret, "merge_non_overlap:bam_aux_update_int");
 
   const uint8_t cv = bam_aux2A(bam_aux_get(a, "CV"));
   // "append" for "char" because there is no corresponding update
   ret = bam_aux_append(c, "CV", 'A', 1, &cv);
-  if (ret < 0) throw fr_expt(ret, "merge_non_overlap:bam_aux_append");
+  if (ret < 0) throw dnmt_error(ret, "merge_non_overlap:bam_aux_append");
 
   return ret;
 }
@@ -704,12 +689,12 @@ standardize_format(const string &input_format, bam1_t *aln) {
   if (input_format == "bsmap") {
     // A/T rich; get the ZS tag value
     auto zs_tag = bam_aux_get(aln, "ZS");
-    if (!zs_tag) throw fr_expt("bam_aux_get for ZS (invalid bsmap)");
+    if (!zs_tag) throw dnmt_error("bam_aux_get for ZS (invalid bsmap)");
     // ADS: test for errors on the line below
     const uint8_t cv = string(bam_aux2Z(zs_tag))[1] == '-' ? 'A' : 'T';
     // get the "mismatches" tag
     auto nm_tag = bam_aux_get(aln, "NM");
-    if (!nm_tag) throw fr_expt("bam_aux_get for NM (invalid bsmap)");
+    if (!nm_tag) throw dnmt_error("bam_aux_get for NM (invalid bsmap)");
     const int64_t nm = bam_aux2i(nm_tag);
 
     aln->l_data = bam_get_aux(aln) - aln->data; // del aux (no data resize)
@@ -718,10 +703,10 @@ standardize_format(const string &input_format, bam1_t *aln) {
     // "udpate" for "int" because it determines the right size; even
     // though we just deleted all tags, it will add it back here.
     err_code = bam_aux_update_int(aln, "NM", nm);
-    if (err_code < 0) throw fr_expt(err_code, "bam_aux_update_int");
+    if (err_code < 0) throw dnmt_error(err_code, "bam_aux_update_int");
     // "append" for "char" because there is no corresponding update
     err_code = bam_aux_append(aln, "CV", 'A', 1, &cv);
-    if (err_code < 0) throw fr_expt(err_code, "bam_aux_append");
+    if (err_code < 0) throw dnmt_error(err_code, "bam_aux_append");
 
     if (bam_is_rev(aln)) revcomp_seq(aln); // reverse complement if needed
   }
@@ -732,11 +717,11 @@ standardize_format(const string &input_format, bam1_t *aln) {
 
     // A/T rich; get the XR tag value
     auto xr_tag = bam_aux_get(aln, "XR");
-    if (!xr_tag) throw fr_expt("bam_aux_get for XR (invalid bismark)");
+    if (!xr_tag) throw dnmt_error("bam_aux_get for XR (invalid bismark)");
     const uint8_t cv = string(bam_aux2Z(xr_tag)) == "GA" ? 'A' : 'T';
     // get the "mismatches" tag
     auto nm_tag = bam_aux_get(aln, "NM");
-    if (!nm_tag) throw fr_expt("bam_aux_get for NM (invalid bismark)");
+    if (!nm_tag) throw dnmt_error("bam_aux_get for NM (invalid bismark)");
     const int64_t nm = bam_aux2i(nm_tag);
 
     aln->l_data = bam_get_aux(aln) - aln->data; // del aux (no data resize)
@@ -745,10 +730,10 @@ standardize_format(const string &input_format, bam1_t *aln) {
     // "udpate" for "int" because it determines the right size; even
     // though we just deleted all tags, it will add it back here.
     err_code = bam_aux_update_int(aln, "NM", nm);
-    if (err_code < 0) throw fr_expt(err_code, "bam_aux_update_int");
+    if (err_code < 0) throw dnmt_error(err_code, "bam_aux_update_int");
     // "append" for "char" because there is no corresponding update
     err_code = bam_aux_append(aln, "CV", 'A', 1, &cv);
-    if (err_code < 0) throw fr_expt(err_code, "bam_aux_append");
+    if (err_code < 0) throw dnmt_error(err_code, "bam_aux_append");
 
     if (bam_is_rev(aln)) revcomp_seq(aln); // reverse complement if needed
   }
@@ -764,10 +749,10 @@ standardize_format(const string &input_format, bam1_t *aln) {
 static vector<string>
 load_read_names(const string &inputfile, const size_t n_reads) {
   samFile *hts = hts_open(inputfile.c_str(), "r");
-  if (!hts) throw fr_expt("failed to open file: " + inputfile);
+  if (!hts) throw dnmt_error("failed to open file: " + inputfile);
 
   sam_hdr_t *hdr = sam_hdr_read(hts);
-  if (!hdr) throw fr_expt("failed to read header: " + inputfile);
+  if (!hdr) throw dnmt_error("failed to read header: " + inputfile);
 
   bam1_t *aln = bam_init1();
   vector<string> names;
@@ -777,12 +762,12 @@ load_read_names(const string &inputfile, const size_t n_reads) {
   while ((err_code = sam_read1(hts, hdr, aln)) >= 0 && count++ < n_reads)
     names.push_back(string(bam_get_qname(aln)));
   // err_core == -1 means EOF
-  if (err_code < -1) fr_expt(err_code, "load_read_names:sam_read1");
+  if (err_code < -1) dnmt_error(err_code, "load_read_names:sam_read1");
 
   bam_destroy1(aln);
   bam_hdr_destroy(hdr);
   err_code = hts_close(hts);
-  if (err_code < 0) throw fr_expt(err_code, "check_input_file:hts_close");
+  if (err_code < 0) throw dnmt_error(err_code, "check_input_file:hts_close");
 
   return names;
 }
@@ -818,7 +803,7 @@ check_suff_len(const string &inputfile, const size_t suff_len,
   for (auto &&i: names)
     min_name_len = std::min(min_name_len, i.size());
   if (min_name_len <= suff_len)
-    throw fr_expt("given suffix length exceeds min read name length");
+    throw dnmt_error("given suffix length exceeds min read name length");
   sort(begin(names), end(names));
   return get_max_repeat_count(names, suff_len) < 2;
 }
@@ -896,15 +881,15 @@ check_sorted(const string &inputfile, const size_t suff_len, size_t n_reads) {
 static bool
 check_input_file(const string &infile) {
   samFile* hts = hts_open(infile.c_str(), "r");
-  if (!hts || errno) throw fr_expt("error opening: " + infile);
+  if (!hts || errno) throw dnmt_error("error opening: " + infile);
   const htsFormat *fmt = hts_get_format(hts);
   if (fmt->category != sequence_data)
-    throw fr_expt("not sequence data: " + infile);
+    throw dnmt_error("not sequence data: " + infile);
   if (fmt->format != bam && fmt->format != sam)
-    throw fr_expt("not SAM/BAM format: " + infile);
+    throw dnmt_error("not SAM/BAM format: " + infile);
 
   const int err_code = hts_close(hts);
-  if (err_code < 0) throw fr_expt(err_code, "check_input_file:hts_close");
+  if (err_code < 0) throw dnmt_error(err_code, "check_input_file:hts_close");
 
   return true;
 }
@@ -913,10 +898,10 @@ check_input_file(const string &infile) {
 static bool
 check_format_in_header(const string &input_format, const string &inputfile) {
   samFile* hts = hts_open(inputfile.c_str(), "r");
-  if (!hts) throw fr_expt("error opening file: " + inputfile);
+  if (!hts) throw dnmt_error("error opening file: " + inputfile);
 
   sam_hdr_t *hdr = sam_hdr_read(hts);
-  if (!hdr) throw fr_expt("failed to read header: " + inputfile);
+  if (!hdr) throw dnmt_error("failed to read header: " + inputfile);
 
   auto begin_hdr = sam_hdr_str(hdr);
   auto end_hdr = begin_hdr + std::strlen(begin_hdr);
@@ -927,7 +912,7 @@ check_format_in_header(const string &input_format, const string &inputfile) {
                         });
   bam_hdr_destroy(hdr);
   const int err_code = hts_close(hts);
-  if (err_code < 0) throw fr_expt(err_code, "check_format_in_header:hts_close");
+  if (err_code < 0) throw dnmt_error(err_code, "check_format_in_header:hts_close");
 
   return it != end_hdr;
 }
@@ -949,7 +934,7 @@ add_pg_line(const string &cmd, sam_hdr_t *hdr) {
   int err_code =
     sam_hdr_add_line(hdr, "PG", "ID", "DNMTOOLS", "VN",
                      VERSION, "CL", cmd.c_str(), NULL);
-  if (err_code) throw fr_expt(err_code, "failed to add pg header line");
+  if (err_code) throw dnmt_error(err_code, "failed to add pg header line");
 }
 
 
@@ -968,20 +953,20 @@ format(const string &cmd, const size_t n_threads,
   // set the threads
   htsThreadPool the_thread_pool{hts_tpool_init(n_threads), 0};
   err_code = hts_set_thread_pool(hts, &the_thread_pool);
-  if (err_code < 0) throw fr_expt("error setting threads");
+  if (err_code < 0) throw dnmt_error("error setting threads");
   err_code = hts_set_thread_pool(out, &the_thread_pool);
-  if (err_code < 0) throw fr_expt("error setting threads");
+  if (err_code < 0) throw dnmt_error("error setting threads");
 
   // headers: load the input file's header, and then update to the
   // output file's header, then write it and destroy; we will only use
   // the input file header.
   sam_hdr_t *hdr = sam_hdr_read(hts);
-  if (!hdr) throw fr_expt("failed to read header");
+  if (!hdr) throw dnmt_error("failed to read header");
   sam_hdr_t *hdr_out = bam_hdr_dup(hdr);
-  if (!hdr_out) throw fr_expt("failed create header");
+  if (!hdr_out) throw dnmt_error("failed create header");
   add_pg_line(cmd, hdr_out);
   err_code = sam_hdr_write(out, hdr_out);
-  if (err_code) throw fr_expt(err_code, "failed to output header");
+  if (err_code) throw dnmt_error(err_code, "failed to output header");
 
   // now process the reads
   bam1_t *aln = bam_init1();
@@ -990,7 +975,7 @@ format(const string &cmd, const size_t n_threads,
   bool previous_was_merged = false;
 
   err_code = sam_read1(hts, hdr, aln); // for EOF, err_code == -1
-  if (err_code < -1) throw fr_expt(err_code, "format:sam_read1");
+  if (err_code < -1) throw dnmt_error(err_code, "format:sam_read1");
 
   std::swap(aln, prev_aln); // start with prev_aln being first read
 
@@ -1003,15 +988,15 @@ format(const string &cmd, const size_t n_threads,
       if (frag_len > 0 && frag_len < max_frag_len) {
         if (is_a_rich(merged)) flip_conversion(merged);
         err_code = sam_write1(out, hdr, merged);
-        if (err_code < 0) throw fr_expt(err_code, "format:sam_write1");
+        if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
       }
       else {
         if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
         err_code = sam_write1(out, hdr, prev_aln);
-        if (err_code < 0) throw fr_expt(err_code, "format:sam_write1");
+        if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
         if (is_a_rich(aln)) flip_conversion(aln);
         err_code = sam_write1(out, hdr, aln);
-        if (err_code < 0) throw fr_expt(err_code, "format:sam_write1");
+        if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
       }
       previous_was_merged = true;
     }
@@ -1019,18 +1004,18 @@ format(const string &cmd, const size_t n_threads,
       if (!previous_was_merged) {
         if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
         err_code = sam_write1(out, hdr, prev_aln);
-        if (err_code < 0) throw fr_expt(err_code, "format:sam_write1");
+        if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
       }
       previous_was_merged = false;
     }
     std::swap(prev_aln, aln);
   }
-  if (err_code < -1) throw fr_expt(err_code, "format:sam_read1");
+  if (err_code < -1) throw dnmt_error(err_code, "format:sam_read1");
 
   if (!previous_was_merged) {
     if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
     err_code = sam_write1(out, hdr, prev_aln);
-    if (err_code < 0) throw fr_expt(err_code, "format:sam_write1");
+    if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
   }
 
   // turn off the lights
@@ -1040,9 +1025,9 @@ format(const string &cmd, const size_t n_threads,
   bam_hdr_destroy(hdr);
   bam_hdr_destroy(hdr_out);
   err_code = hts_close(hts);
-  if (err_code < 0) throw fr_expt(err_code, "format:hts_close");
+  if (err_code < 0) throw dnmt_error(err_code, "format:hts_close");
   err_code = hts_close(out);
-  if (err_code < 0) throw fr_expt(err_code, "format:hts_close");
+  if (err_code < 0) throw dnmt_error(err_code, "format:hts_close");
   // do this after the files have been closed
   hts_tpool_destroy(the_thread_pool.pool);
 }
@@ -1089,8 +1074,9 @@ main_format(int argc, const char **argv) {
     opt_parse.add_opt("check", 'c',
                       "check this many reads to validate read name suffix",
                       false, n_reads_to_check);
-    opt_parse.add_opt("force", 'F', "run format even with inconsistent "
-                      "pair information", false, force);
+    opt_parse.add_opt("force", 'F', "force formatting for "
+                      "mixed single and paired reads",
+                      false, force);
     opt_parse.add_opt("verbose", 'v', "print more information",
                       false, VERBOSE);
     opt_parse.set_show_defaults();
@@ -1127,6 +1113,16 @@ main_format(int argc, const char **argv) {
     std::ostringstream cmd;
     copy(argv, argv + argc, std::ostream_iterator<const char*>(cmd, " "));
 
+    if (VERBOSE)
+      cerr << "[input file: " << infile << "]" << endl
+           << "[mapper: " << input_format << "]" << endl
+           << "[configuration: " << (single_end ? "SE" : "PE") << "]" << endl
+           << "[output file: " << outfile << "]" << endl
+           << "[output type: " << (bam_format ? "B" : "S") << "AM]" << endl
+           << "[force formatting: " << (force ? "yes" : "no") << "]" << endl
+           << "[threads requested: " << n_threads << "]" << endl
+           << "[command line: \"" << cmd.str() << "\"]" << endl;
+
     check_input_file(infile);
 
     if (VERBOSE)
@@ -1134,34 +1130,26 @@ main_format(int argc, const char **argv) {
         cerr << "[warning: input format not found in header "
              << "(" << input_format << ", " << infile << ")]" << endl;
 
-    if (!single_end) {
+    if (!single_end && !force) {
       if (suff_len == 0) {
         size_t repeat_count = 0;
         suff_len = guess_suff_len(infile, n_reads_to_check, repeat_count);
-        if (repeat_count > 1 && !force)
-          throw fr_expt("failed to identify read name suffix length\n"
+        if (repeat_count > 1)
+          throw dnmt_error("failed to identify read name suffix length\n"
                         "verify reads are not single-end\n"
                         "specify read name suffix length directly");
         if (VERBOSE)
           cerr << "[read name suffix length guess: " << suff_len << "]" << endl;
       }
-      else if (!check_suff_len(infile, suff_len, n_reads_to_check) &&
-               !force)
-        throw fr_expt("wrong read name suffix length [" +
+      else if (!check_suff_len(infile, suff_len, n_reads_to_check))
+        throw dnmt_error("wrong read name suffix length [" +
                       std::to_string(suff_len) + "] in: " + infile);
       if (!check_sorted(infile, suff_len, n_reads_to_check))
-        throw fr_expt("mates not consecutive in: " + infile);
+        throw dnmt_error("mates not consecutive in: " + infile);
     }
 
-    if (VERBOSE)
-      cerr << "[input file: " << infile << "]" << endl
-           << "[mapper: " << input_format << "]" << endl
-           << "[configuration: " << (single_end ? "SE" : "PE") << "]" << endl
-           << "[output file: " << outfile << "]" << endl
-           << "[output format: " << (bam_format ? "B" : "S") << "AM]" << endl
-           << "[threads requested: " << n_threads << "]" << endl
-           << "[command line: \"" << cmd.str() << "\"]" << endl
-           << "[readname suffix length: " << suff_len << "]" << endl;
+    if (VERBOSE && !single_end)
+      cerr << "[readname suffix length: " << suff_len << "]" << endl;
 
     format(cmd.str(), n_threads, infile, outfile,
            bam_format, input_format, suff_len, max_frag_len);

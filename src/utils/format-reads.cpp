@@ -106,6 +106,30 @@ sam_realloc_bam_data(bam1_t *b, size_t desired) {
   return 0;
 }
 
+static inline void
+bam_set1_core(bam1_core_t &core,
+              const size_t l_qname, const uint16_t flag, const int32_t tid,
+              const hts_pos_t pos, const uint8_t mapq, const size_t n_cigar, 
+              const int32_t mtid, const hts_pos_t mpos, const hts_pos_t isize, 
+              const size_t l_seq, const size_t qname_nuls) {
+
+  core.pos = pos;
+  core.tid = tid;
+  core.bin = hts_reg2bin(pos, pos + isize, 14, 5);
+  // used to be: core.bin = bam_reg2bin(pos, pos + rlen);
+  // Changed based on htslib/cram/cram_samtools.h
+  core.qual = mapq;
+  core.l_extranul = (uint8_t)(qname_nuls - 1);
+  core.flag = flag;
+  core.l_qname = (uint16_t)(l_qname + qname_nuls);
+  core.n_cigar = (uint32_t)n_cigar;
+  core.l_qseq = (int32_t)l_seq;
+  core.mtid = mtid;
+  core.mpos = mpos;
+  core.isize = isize;
+
+}
+
 static int
 bam_set1_wrapper(bam1_t *bam,
                  const size_t l_qname, const char *qname,
@@ -139,21 +163,11 @@ bam_set1_wrapper(bam1_t *bam,
     }
   }
 
+  bam_set1_core(bam->core, l_qname, flag, tid, pos, mapq, n_cigar, 
+               mtid, mpos, isize, l_seq, qname_nuls);
+
   bam->l_data = (int)data_len;
-  bam->core.pos = pos;
-  bam->core.tid = tid;
-  // bam->core.bin = bam_reg2bin(pos, pos + rlen);
-  bam->core.bin = hts_reg2bin(pos, pos + isize, 14, 5);
-  // above taken from htslib/cram/cram_samtools.h
-  bam->core.qual = mapq;
-  bam->core.l_extranul = (uint8_t)(qname_nuls - 1);
-  bam->core.flag = flag;
-  bam->core.l_qname = (uint16_t)(l_qname + qname_nuls);
-  bam->core.n_cigar = (uint32_t)n_cigar;
-  bam->core.l_qseq = (int32_t)l_seq;
-  bam->core.mtid = mtid;
-  bam->core.mpos = mpos;
-  bam->core.isize = isize;
+
 
   auto data_iter = bam->data;
   std::copy_n(qname, l_qname, data_iter);

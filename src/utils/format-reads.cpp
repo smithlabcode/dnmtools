@@ -74,6 +74,7 @@ struct fr_expt : public std::exception
 };
 
 
+
 static inline void
 roundup_to_power_of_2(uint32_t &x) {
   bool k_high_bit_set = (x >> (sizeof(uint32_t) * 8 - 1)) & 1; 
@@ -87,9 +88,7 @@ roundup_to_power_of_2(uint32_t &x) {
     x |= x >> (size * 4);
     x += !k_high_bit_set;
   }
-  else {
-    x = 0;
-  }
+  else x = 0;
 }
 
 static int
@@ -107,6 +106,22 @@ sam_realloc_bam_data(bam1_t *b, size_t desired) {
 }
 
 static inline void
+bam_copy_core(const bam1_t *a, bam1_t *b) {
+  b->core.pos = a->core.pos;
+  b->core.tid = a->core.tid;
+  b->core.bin = a->core.bin;
+  b->core.qual = a->core.qual;
+  b->core.l_extranul = a->core.l_extranul;
+  b->core.flag = a->core.flag;
+  b->core.l_qname = a->core.l_qname;
+  b->core.n_cigar = a->core.n_cigar;
+  b->core.l_qseq = a->core.l_qseq;
+  b->core.mtid = a->core.mtid;
+  b->core.mpos = a->core.mpos;
+  b->core.isize = a->core.isize;
+}
+
+static inline void
 bam_set1_core(bam1_core_t &core,
               const size_t l_qname, const uint16_t flag, const int32_t tid,
               const hts_pos_t pos, const uint8_t mapq, const size_t n_cigar, 
@@ -119,15 +134,14 @@ bam_set1_core(bam1_core_t &core,
   // used to be: core.bin = bam_reg2bin(pos, pos + rlen);
   // Changed based on htslib/cram/cram_samtools.h
   core.qual = mapq;
-  core.l_extranul = (uint8_t)(qname_nuls - 1);
+  core.l_extranul = qname_nuls - 1;
   core.flag = flag;
-  core.l_qname = (uint16_t)(l_qname + qname_nuls);
-  core.n_cigar = (uint32_t)n_cigar;
-  core.l_qseq = (int32_t)l_seq;
+  core.l_qname = l_qname + qname_nuls;
+  core.n_cigar = n_cigar;
+  core.l_qseq = l_seq;
   core.mtid = mtid;
   core.mpos = mpos;
   core.isize = isize;
-
 }
 
 static int
@@ -154,22 +168,20 @@ bam_set1_wrapper(bam1_t *bam,
    */ 
 
   size_t qname_nuls = 4 - l_qname % 4;
+  bam_set1_core(bam->core, l_qname, flag, tid, pos, mapq, n_cigar, 
+               mtid, mpos, isize, l_seq, qname_nuls);
+
   size_t data_len = l_qname + qname_nuls + n_cigar * 4 + 
                               (l_seq + 1) / 2 + l_seq;
+  bam->l_data = data_len;
   if (data_len + l_aux > bam->m_data) {
     int ret = sam_realloc_bam_data(bam, data_len + l_aux);
     if (ret < 0) {
       throw fr_expt(ret, "Failed to allocate memory for BAM record");
     }
   }
-
-  bam_set1_core(bam->core, l_qname, flag, tid, pos, mapq, n_cigar, 
-               mtid, mpos, isize, l_seq, qname_nuls);
-
-  bam->l_data = (int)data_len;
-
-
   auto data_iter = bam->data;
+
   std::copy_n(qname, l_qname, data_iter);
   std::fill_n(data_iter + l_qname, qname_nuls, '\0');
   data_iter += l_qname + qname_nuls;
@@ -341,8 +353,6 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
   return i;
 }
 
-
-
 const uint8_t byte_revcom_table[] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     8, 136, 72, 0, 40, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 248,
@@ -394,7 +404,8 @@ revcomp_seq_by_byte(bam1_t *aln) {
 // assumes 0 < c_seq_len - b_seq_len <= a_seq_len
 // also assumes that c_seq_len has been figured out
 // Also assumes the number of bytes allocated to sequence potion of c->data
-// has been set to ceil((a_seq_len + b_seq_len) / 2.0)
+// has been set to ceil((a_used_len + b_seq_len) / 2.0) where
+// a_used_len = c_seq_len - b_seq_len
 static void
 merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   const size_t b_seq_len = get_qlen(b);
@@ -407,14 +418,13 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   const size_t b_num_bytes = ceil(b_seq_len / 2.0);
   // const size_t c_num_bytes = ceil(c_seq_len / 2.0);
 
-  const size_t b_offset = (size_t)(is_b_odd);
+  const size_t b_offset = is_b_odd;
 
   const auto a_seq = bam_get_seq(a);
   const auto b_seq = bam_get_seq(b);
   auto c_seq = bam_get_seq(c);
 
   std::copy_n(a_seq, a_num_bytes, c_seq);
-
   // Here, c_seq looks either like aa aa aa aa
   //                       or like aa aa aa a-
   if (is_a_odd) {
@@ -507,15 +517,6 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
   /* after this point the cigar is set and should decide everything */
 
   const uint32_t c_seq_len = bam_cigar2qlen(c_ops, c_cig);
-  // char *c_seq = (char *)calloc(c_seq_len + 1, sizeof(char));
-  // if (!c_seq)
-  //   throw fr_expt("allocating sequence");
-
-  // // copy the prefix of a into c; must be easier
-  // for (size_t i = 0; i < c_seq_len; ++i)
-  //   c_seq[i] = seq_nt16_str[bam_seqi(bam_get_seq(a), i)];
-
-  // get the template length
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
 
   // flag only needs to worry about strand and single-end stuff
@@ -612,9 +613,6 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
          (b_ops - merge_mid) * sizeof(uint32_t));
   /* done with cigar string here */
 
-  /* now deal with sequence */
-  // allocate the right size for c's seq using the query-consuming ops
-  // corresponding to the prefix of a copied into c.
   const uint32_t c_seq_len = a_seq_len + b->core.l_qseq;
 
   // get the template length
@@ -641,7 +639,7 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                              8);           // enough for 2 tags?
   free(c_cig);
   if (ret < 0) throw fr_expt(ret, "bam_set1 in merge_overlap");
-
+  // Merge the sequences by bytes
   merge_by_byte(a, b, c);
 
   // add the tag for mismatches
@@ -676,8 +674,6 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
   memcpy(c_cig + a_ops + 1, b_cig, b_ops * sizeof(uint32_t));
   /* done with cigars */
 
-  /* now make the sequence */
-  // get info about the lengths
   const size_t a_seq_len = get_qlen(a);
   const size_t b_seq_len = get_qlen(b);
   const size_t c_seq_len = a_seq_len + b_seq_len;

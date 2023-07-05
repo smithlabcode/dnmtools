@@ -163,29 +163,44 @@ bam_set1_wrapper(bam1_t *bam,
                  const int32_t mtid, const hts_pos_t mpos,
                  const hts_pos_t isize, const size_t l_seq,
                  const size_t l_aux) {
-  /* This is a modified version of bam_set1.
-   * It assigns the attributes of bam1_t object except for the sequence.
-   * Many checks are skipped, as we assume that many quantities have
-   * been validaded.
+  /* This is based on how assignment is done in the `bam_set1`
+     function defined in `sam.c` from htslib */
+
+  /*
+   * This modification assigns variables of bam1_t struct but not the sequence.
+   *
+   * Many checks have been removed because they are checked in code
+   * that calls this function, mostly because they already come from a
+   * valid `bam1_t` struct and so the values have been individually
+   * validated.
+   *
    * Assumptions:
-   * cigar has been computed
+   * cigar has been computed and is in the right format
    * rlen = isize
    * qlen = l_seq
    * l_qname <= 254
    * HTS_POS_MAX - rlen > pos
+   *
+   * ADS: what is HTS_POS_MAX?
+   *
    * Number of bytes needed for the data is smaller than INT32_MAX
-   * qual = Null
+   *
+   * qual = NULL, because we do not keep the quality scores through
+   * formatting the reads.
    */
 
-  size_t qname_nuls = 4 - l_qname % 4;
+  // `qname_nuls` below is the number of '\0' to use to pad the qname
+  // so that the cigar has 4-byte alignment.
+  const size_t qname_nuls = 4 - l_qname % 4;
   bam_set1_core(bam->core, l_qname, flag, tid, pos, mapq, n_cigar,
-               mtid, mpos, isize, l_seq, qname_nuls);
+                mtid, mpos, isize, l_seq, qname_nuls);
 
-  size_t data_len = l_qname + qname_nuls + n_cigar * 4 +
-                              (l_seq + 1) / 2 + l_seq;
+  const size_t data_len =
+    (l_qname + qname_nuls + n_cigar*sizeof(uint32_t) + (l_seq + 1) / 2 + l_seq);
+
   bam->l_data = data_len;
   if (data_len + l_aux > bam->m_data) {
-    int ret = sam_realloc_bam_data(bam, data_len + l_aux);
+    const int ret = sam_realloc_bam_data(bam, data_len + l_aux);
     if (ret < 0) {
       throw fr_expt(ret, "Failed to allocate memory for BAM record");
     }
@@ -196,6 +211,8 @@ bam_set1_wrapper(bam1_t *bam,
   std::fill_n(data_iter + l_qname, qname_nuls, '\0');
   data_iter += l_qname + qname_nuls;
 
+  // ADS: reinterpret here because we know the cigar is originally an
+  // array of uint32_t and has been aligned for efficiency
   std::copy_n(cigar, n_cigar, reinterpret_cast<uint32_t *>(data_iter));
   data_iter += n_cigar * sizeof(uint32_t);
 
@@ -203,7 +220,10 @@ bam_set1_wrapper(bam1_t *bam,
   data_iter += (l_seq + 1) / 2;
 
   std::fill(data_iter, data_iter + l_seq, '\xff');
-  return (int)data_len;
+  // ADS: this will never return a negative value, and either should
+  // have the return type of this function changed, or change the type
+  // of `data_len` so that it can be used to signal error.
+  return static_cast<int>(data_len);
 }
 
 static inline bool
@@ -363,23 +383,26 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
   return i;
 }
 
+
+// ADS: MN the table below needs some comments
 const uint8_t byte_revcom_table[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    8, 136, 72, 0, 40, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 248,
-    4, 132, 68, 0, 36, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 244,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    2, 130, 66, 0, 34, 0, 0, 0, 18, 0, 0, 0, 0, 0, 0, 242,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    1, 129, 65, 0, 33, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 241,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    15, 143, 79, 0, 47, 0, 0, 0, 31, 0, 0, 0, 0, 0, 0, 255};
+  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
+  8, 136, 72, 0, 40, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 248,
+  4, 132, 68, 0, 36, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 244,
+  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
+  2, 130, 66, 0, 34, 0, 0, 0, 18, 0, 0, 0, 0, 0, 0, 242,
+  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
+  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
+  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
+  1, 129, 65, 0, 33, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 241,
+  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
+  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
+  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
+  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
+  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
+  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
+ 15, 143, 79, 0, 47, 0, 0, 0, 31, 0, 0, 0, 0, 0, 0, 255
+};
 
 
 static inline void
@@ -399,7 +422,7 @@ static void
 revcomp_seq_by_byte(bam1_t *aln) {
   const size_t l_qseq = get_qlen(aln);
   auto seq = bam_get_seq(aln);
-  size_t num_bytes = ceil(l_qseq / 2.0);
+  const size_t num_bytes = ceil(l_qseq / 2.0);
   auto seq_end = seq + num_bytes;
   revcom_byte_then_reverse(seq, seq_end);
   if (l_qseq % 2 == 1) {

@@ -110,7 +110,6 @@ static inline void
 bam_copy_core(const bam1_t *a, bam1_t *b) {
   /* ADS: prepared for a possibly more efficient block copy to assign
      all variables at once */
-  // ADS: confirm order of vars below matches order within the struct.
   b->core.pos = a->core.pos;
   b->core.tid = a->core.tid;
   b->core.bin = a->core.bin;
@@ -134,6 +133,8 @@ bam_set1_core(bam1_core_t &core,
   /* ADS: need to clarify what these mean. They are used in
      `hts_reg2bin` from `htslib/hts.h` and likely mean "region to bin"
      for indexing */
+  // MN: hts_reg2bin categorizes the size of the reference region.
+  //     Here, we use the numbers used in htslib/cram/cram_samtools.h
   static const int min_shift = 14;
   static const int n_lvls = 5;
 
@@ -141,8 +142,6 @@ bam_set1_core(bam1_core_t &core,
   core.tid = tid;
   /* ADS: MN I recall we migth not have needed this core.bin below */
   core.bin = hts_reg2bin(pos, pos + isize, min_shift, n_lvls);
-  // used to be: core.bin = bam_reg2bin(pos, pos + rlen);
-  // Changed based on htslib/cram/cram_samtools.h
   core.qual = mapq;
   core.l_extranul = qname_nuls - 1;
   core.flag = flag;
@@ -180,8 +179,8 @@ bam_set1_wrapper(bam1_t *bam,
    * qlen = l_seq
    * l_qname <= 254
    * HTS_POS_MAX - rlen > pos
-   *
-   * ADS: what is HTS_POS_MAX?
+   * Where HTS_POS_MAX = ((((int64_t)INT_MAX)<<32)|INT_MAX) is the highest
+   * supported position.
    *
    * Number of bytes needed for the data is smaller than INT32_MAX
    *
@@ -220,9 +219,7 @@ bam_set1_wrapper(bam1_t *bam,
   data_iter += (l_seq + 1) / 2;
 
   std::fill(data_iter, data_iter + l_seq, '\xff');
-  // ADS: this will never return a negative value, and either should
-  // have the return type of this function changed, or change the type
-  // of `data_len` so that it can be used to signal error.
+
   return static_cast<int>(data_len);
 }
 
@@ -384,7 +381,15 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
 }
 
 
-// ADS: MN the table below needs some comments
+/* This table converts 2 bases packed in a byte to their reverse
+ * complement. The input is therefore a unit8_t representing 2 bases.
+ * It is assumed that the input uint8_t value is of form "xx" or "x-", where
+ * 'x' a 4-bit number representing either A, C, G, T, or N and '-' is 0000.
+ * For example, the ouptut for "AG" is "CT". The format "x-" is often used
+ * at the end of an odd-length sequence.
+ * The output of "A-" is "-T", and the output of "C-" is "-G", and so forth. 
+ * The user must handle this case separately.
+ */
 const uint8_t byte_revcom_table[] = {
   0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
   8, 136, 72, 0, 40, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 248,

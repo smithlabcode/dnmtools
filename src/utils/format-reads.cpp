@@ -60,7 +60,7 @@ struct fr_expt : public std::exception
   int the_errno;   // ERRNO at time of construction
   string msg;      // the message
   string the_what; // to report
-  fr_expt(const int64_t _err, const string &_msg) : 
+  fr_expt(const int64_t _err, const string &_msg) :
     err{_err}, the_errno{errno}, msg{_msg} {
     std::ostringstream oss;
     oss << "[error: " << err << "]["
@@ -77,7 +77,7 @@ struct fr_expt : public std::exception
 
 static inline void
 roundup_to_power_of_2(uint32_t &x) {
-  bool k_high_bit_set = (x >> (sizeof(uint32_t) * 8 - 1)) & 1; 
+  bool k_high_bit_set = (x >> (sizeof(uint32_t) * 8 - 1)) & 1;
   if (x > 0) {
     uint8_t size = sizeof(uint32_t);
     --x;
@@ -93,13 +93,14 @@ roundup_to_power_of_2(uint32_t &x) {
 
 static int
 sam_realloc_bam_data(bam1_t *b, size_t desired) {
-  uint32_t new_m_data;
-  uint8_t *new_data;
-  new_m_data = desired;
+  /* returns flag: either 0 for success or -1 for error (unable to
+     allocate desired memory) */
+  uint32_t new_m_data = desired;
   roundup_to_power_of_2(new_m_data);
   if (new_m_data < desired)  return -1;
-  new_data = (uint8_t *)realloc(b->data, new_m_data);
+  uint8_t *new_data = (uint8_t *)realloc(b->data, new_m_data);
   if (!new_data) return -1;
+  // ADS: what would be the state of members below if -1 was returned?
   b->data = new_data;
   b->m_data = new_m_data;
   return 0;
@@ -107,6 +108,9 @@ sam_realloc_bam_data(bam1_t *b, size_t desired) {
 
 static inline void
 bam_copy_core(const bam1_t *a, bam1_t *b) {
+  /* ADS: prepared for a possibly more efficient block copy to assign
+     all variables at once */
+  // ADS: confirm order of vars below matches order within the struct.
   b->core.pos = a->core.pos;
   b->core.tid = a->core.tid;
   b->core.bin = a->core.bin;
@@ -124,8 +128,8 @@ bam_copy_core(const bam1_t *a, bam1_t *b) {
 static inline void
 bam_set1_core(bam1_core_t &core,
               const size_t l_qname, const uint16_t flag, const int32_t tid,
-              const hts_pos_t pos, const uint8_t mapq, const size_t n_cigar, 
-              const int32_t mtid, const hts_pos_t mpos, const hts_pos_t isize, 
+              const hts_pos_t pos, const uint8_t mapq, const size_t n_cigar,
+              const int32_t mtid, const hts_pos_t mpos, const hts_pos_t isize,
               const size_t l_seq, const size_t qname_nuls) {
 
   core.pos = pos;
@@ -150,13 +154,13 @@ bam_set1_wrapper(bam1_t *bam,
                  const uint16_t flag, const int32_t tid,
                  const hts_pos_t pos, const uint8_t mapq,
                  const size_t n_cigar, const uint32_t *cigar,
-                 const int32_t mtid, const hts_pos_t mpos, 
+                 const int32_t mtid, const hts_pos_t mpos,
                  const hts_pos_t isize, const size_t l_seq,
                  const size_t l_aux) {
   /* This is a modified version of bam_set1.
-   * It assigns the attributes of bam1_t object except for the sequence. 
+   * It assigns the attributes of bam1_t object except for the sequence.
    * Many checks are skipped, as we assume that many quantities have
-   * been validaded. 
+   * been validaded.
    * Assumptions:
    * cigar has been computed
    * rlen = isize
@@ -165,13 +169,13 @@ bam_set1_wrapper(bam1_t *bam,
    * HTS_POS_MAX - rlen > pos
    * Number of bytes needed for the data is smaller than INT32_MAX
    * qual = Null
-   */ 
+   */
 
   size_t qname_nuls = 4 - l_qname % 4;
-  bam_set1_core(bam->core, l_qname, flag, tid, pos, mapq, n_cigar, 
+  bam_set1_core(bam->core, l_qname, flag, tid, pos, mapq, n_cigar,
                mtid, mpos, isize, l_seq, qname_nuls);
 
-  size_t data_len = l_qname + qname_nuls + n_cigar * 4 + 
+  size_t data_len = l_qname + qname_nuls + n_cigar * 4 +
                               (l_seq + 1) / 2 + l_seq;
   bam->l_data = data_len;
   if (data_len + l_aux > bam->m_data) {
@@ -197,7 +201,7 @@ bam_set1_wrapper(bam1_t *bam,
 }
 
 static inline bool
-eats_ref(const uint32_t c) { return bam_cigar_type(bam_cigar_op(c)) & 2; } 
+eats_ref(const uint32_t c) { return bam_cigar_type(bam_cigar_op(c)) & 2; }
 
 static inline bool
 eats_query(const uint32_t c) { return bam_cigar_type(bam_cigar_op(c)) & 1; }
@@ -429,8 +433,8 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   //                       or like aa aa aa a-
   if (is_a_odd) {
     c_seq[a_num_bytes - 1] &= 0xf0;
-    c_seq[a_num_bytes - 1] |= is_b_odd ? 
-        byte_revcom_table[b_seq[b_num_bytes - 1]] : 
+    c_seq[a_num_bytes - 1] |= is_b_odd ?
+        byte_revcom_table[b_seq[b_num_bytes - 1]] :
         byte_revcom_table[b_seq[b_num_bytes - 1]] >> 4;
   }
   // Here, c_seq looks either like aa aa aa aa
@@ -520,7 +524,7 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig);
 
   // flag only needs to worry about strand and single-end stuff
-  const uint16_t flag = 
+  const uint16_t flag =
       a->core.flag & (BAM_FREAD1 | BAM_FREAD2 | BAM_FREVERSE);
 
   int ret = bam_set1_wrapper(c,
@@ -577,8 +581,8 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
 
   // check if the middle op would be the same
   const bool merge_mid =
-      (use_partial > 0 ? 
-      bam_cigar_op(a_cig[c_cur]) == bam_cigar_op(b_cig[0]) : 
+      (use_partial > 0 ?
+      bam_cigar_op(a_cig[c_cur]) == bam_cigar_op(b_cig[0]) :
       bam_cigar_op(a_cig[c_cur - 1]) == bam_cigar_op(b_cig[0]));
 
   // c_ops: include the prefix of a_cig we need; then add for the
@@ -608,8 +612,8 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                                      bam_cigar_oplen(b_cig[0]),
                                      bam_cigar_op(b_cig[0]));
   // copy the cigar from b into c
-  memcpy(c_cig + c_cur, 
-         b_cig + merge_mid, 
+  memcpy(c_cig + c_cur,
+         b_cig + merge_mid,
          (b_ops - merge_mid) * sizeof(uint32_t));
   /* done with cigar string here */
 
@@ -886,7 +890,7 @@ standardize_format(const string &input_format, bam1_t *aln) {
     err_code = bam_aux_append(aln, "CV", 'A', 1, &cv);
     if (err_code < 0) throw fr_expt(err_code, "bam_aux_append");
 
-    if (bam_is_rev(aln)) 
+    if (bam_is_rev(aln))
       revcomp_seq_by_byte(aln); // reverse complement if needed
   }
 
@@ -933,8 +937,8 @@ get_max_repeat_count(const vector<string> &names, const size_t suff_len) {
   // would result in more that two reads identified mutually as mates.
   for (size_t i = 1; i < names.size() && repeat_count < 2; ++i) {
     if (names[i - 1].size() == names[i].size() &&
-        equal(begin(names[i - 1]), 
-              end(names[i - 1]) - suff_len, 
+        equal(begin(names[i - 1]),
+              end(names[i - 1]) - suff_len,
               begin(names[i])))
       ++tmp_repeat_count;
     else tmp_repeat_count = 0;

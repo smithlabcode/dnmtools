@@ -131,10 +131,16 @@ bam_set1_core(bam1_core_t &core,
               const hts_pos_t pos, const uint8_t mapq, const size_t n_cigar,
               const int32_t mtid, const hts_pos_t mpos, const hts_pos_t isize,
               const size_t l_seq, const size_t qname_nuls) {
+  /* ADS: need to clarify what these mean. They are used in
+     `hts_reg2bin` from `htslib/hts.h` and likely mean "region to bin"
+     for indexing */
+  static const int min_shift = 14;
+  static const int n_lvls = 5;
 
   core.pos = pos;
   core.tid = tid;
-  core.bin = hts_reg2bin(pos, pos + isize, 14, 5);
+  /* ADS: MN I recall we migth not have needed this core.bin below */
+  core.bin = hts_reg2bin(pos, pos + isize, min_shift, n_lvls);
   // used to be: core.bin = bam_reg2bin(pos, pos + rlen);
   // Changed based on htslib/cram/cram_samtools.h
   core.qual = mapq;

@@ -417,7 +417,7 @@ revcomp_seq_by_byte(bam1_t *aln) {
   if (l_qseq % 2 == 1) { // for odd-length sequences
     for (size_t i = 0; i < num_bytes - 1; i++) {
       // swap 4-bit chunks within consecutive bytes like this:
-      // (aaaabbbb ccccdddd) => (....aaaa bbbbcccc dddd....)
+      // (----aaaa bbbbcccc dddd....) => (aaaabbbb ccccdddd ....)
       seq[i] = (seq[i] << 4) | (seq[i + 1] >> 4);
     }
     seq[num_bytes - 1] <<= 4;
@@ -444,7 +444,7 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   const size_t a_num_bytes = ceil(a_used_len / 2.0);
   const size_t b_num_bytes = ceil(b_seq_len / 2.0);
 
-  const size_t b_offset = is_b_odd;
+  const size_t b_offset = is_a_odd && is_b_odd;
 
   const auto a_seq = bam_get_seq(a);
   const auto b_seq = bam_get_seq(b);

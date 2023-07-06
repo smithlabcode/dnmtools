@@ -287,8 +287,7 @@ merge_cigar_ops(const size_t n_cigar, uint32_t *cigar) {
   auto c_end = c_itr1 + n_cigar;
   auto c_itr2 = c_itr1 + 1;
   auto op1 = bam_cigar_op(*c_itr1);
-  while (c_itr2 != c_end)
-  {
+  while (c_itr2 != c_end) {
     auto op2 = bam_cigar_op(*c_itr2);
     if (op1 == op2) {
       *c_itr1 = bam_cigar_gen(bam_cigar_oplen(*c_itr1) +

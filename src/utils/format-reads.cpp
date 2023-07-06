@@ -59,24 +59,6 @@ using std::endl;
 using std::string;
 using std::vector;
 
-struct fr_expt : public std::exception
-{
-  int64_t err;     // error possibly from HTSlib
-  int the_errno;   // ERRNO at time of construction
-  string msg;      // the message
-  string the_what; // to report
-  fr_expt(const int64_t _err, const string &_msg) :
-    err{_err}, the_errno{errno}, msg{_msg} {
-    std::ostringstream oss;
-    oss << "[error: " << err << "]["
-        << "ERRNO: " << the_errno << "]"
-        << "[" << strerror(the_errno) << "][" << msg << "]";
-    the_what = oss.str();
-  }
-  fr_expt(const string &_msg) : fr_expt(0, _msg) {}
-  const char *
-  what() const noexcept override { return the_what.c_str(); }
-};
 
 
 
@@ -204,7 +186,7 @@ bam_set1_wrapper(bam1_t *bam,
   if (data_len + l_aux > bam->m_data) {
     const int ret = sam_realloc_bam_data(bam, data_len + l_aux);
     if (ret < 0) {
-      throw fr_expt(ret, "Failed to allocate memory for BAM record");
+      throw dnmt_error(ret, "Failed to allocate memory for BAM record");
     }
   }
   auto data_iter = bam->data;
@@ -581,7 +563,7 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
                              isize,     // rlen from new cigar
                              c_seq_len, // truncated seq length
                              8);        // enough for the 2 tags?
-  if (ret < 0) throw fr_expt(ret, "bam_set1_wrapper");
+  if (ret < 0) throw dnmt_error(ret, "bam_set1_wrapper");
   // ADS: might it be better to fill `c->data` directly?
   free(c_cig);
 
@@ -682,7 +664,7 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                              c_seq_len,    // merged sequence length
                              8);           // enough for 2 tags?
   free(c_cig);
-  if (ret < 0) throw fr_expt(ret, "bam_set1_wrapper in merge_overlap");
+  if (ret < 0) throw dnmt_error(ret, "bam_set1_wrapper in merge_overlap");
   // Merge the sequences by bytes
   merge_by_byte(a, b, c);
 
@@ -746,7 +728,7 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
                        c_seq_len,    // merged sequence length
                        8);           // enough for 2 tags of 1 byte value?
   free(c_cig);
-  if (ret < 0) throw fr_expt(ret, "bam_set1 in merge_non_overlap");
+  if (ret < 0) throw dnmt_error(ret, "bam_set1 in merge_non_overlap");
 
   merge_by_byte(a, b, c);
 

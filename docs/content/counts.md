@@ -2,7 +2,7 @@
 
 ## Synopsis
 ```console
-$ dnmtools counts [OPTIONS] -c <chroms> <input.sam>
+$ dnmtools counts [OPTIONS] -c <chroms> <input.bam>
 ```
 
 ## Description
@@ -18,7 +18,7 @@ pluripotent mammalian cells such as embryonic stem cells. And possibly
 whatever cells you are studying. The output of `counts` serves as the
 input for many downstream analyses.
 
-The input mapped reads file (`input.sam`) is in SAM/BAM format. The
+The input mapped reads file (`input.bam`) is in SAM/BAM format. The
 reads should be sorted so those mapping to the same chromosome are
 consecutive in the file. Duplicate reads should be probably be
 [removed](../uniq) first, but that depends on your data.
@@ -40,12 +40,12 @@ $ dnmtools counts -c /path/to/genome.fa -o output.meth input.sam
 ```
 
 The argument `-c` gives the name of a FASTA file containing all
-chromosome sequences or a directory that contains one FASTA format
-file for each chromosome. By default `counts` identifies these
-chromosome files by the extension `.fa`. Importantly, the "name" line
-in each chromosome FASTA file must begin with the character `>`
-followed immediately by the same name that identifies that chromosome
-in the SAM output (the `.sam` files). An example of the output and
+chromosome sequences (as of v1.2.5, a directory of separate files is
+no longer supported). Importantly, the "name" line in each chromosome
+FASTA file must begin with the character `>` followed immediately by
+the same name that identifies that chromosome in the SAM output (the
+`.bam` files). If you use the same FASTA format file you used to map
+the reads, everything should be fine. An example of the output and
 explanation of each column follows:
 ```txt
 chr1  1869  +  CCG  0         1
@@ -141,6 +141,24 @@ which is not useful unless commands are piped.
 ```
 Reference genome file, which must be in FASTA format. This is
 required.
+
+```txt
+-t, -threads
+```
+The number of threads to use. This is only really helpful if the input
+is BAM (not very helpful for SAM), and the output is to be zipped (see
+`-z` below). These threads will help decompress the BAM input and will
+help compress the gzip format output. If only one of these conditions
+holds, using more threads can still help. Because `counts` spends most
+of its computing time processing reads sequentially, there are
+diminishing returns for specifying too many threads.
+
+```txt
+-z, -zip
+```
+The output should be zipped (in gzip format). This is not deduced by
+the filename, but specifying this argument should be accompanied by
+using a `.gz` filename suffix for the output.
 
 ```txt
 -n, -cpg-only

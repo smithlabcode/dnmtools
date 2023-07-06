@@ -42,6 +42,13 @@ $ dnmtools uniq -S duplicate-removal-stats.txt reads_sorted.bam reads_uniq.bam
 ## Options
 
 ```txt
+ -t, -threads
+```
+The number of threads to use. These threads are used for I/O, and are
+most helpful when the input and output are both BAM, where the threads
+can really speed things up.
+
+```txt
  -S, -stats
 ```
 Save statistics on duplication rates to this file. The statistics are not

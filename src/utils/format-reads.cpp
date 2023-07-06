@@ -130,17 +130,15 @@ bam_set1_core(bam1_core_t &core,
               const hts_pos_t pos, const uint8_t mapq, const size_t n_cigar,
               const int32_t mtid, const hts_pos_t mpos, const hts_pos_t isize,
               const size_t l_seq, const size_t qname_nuls) {
-  /* ADS: need to clarify what these mean. They are used in
-     `hts_reg2bin` from `htslib/hts.h` and likely mean "region to bin"
-     for indexing */
-  // MN: hts_reg2bin categorizes the size of the reference region.
-  //     Here, we use the numbers used in htslib/cram/cram_samtools.h
+  /* ADS: These are used in `hts_reg2bin` from `htslib/hts.h` and
+     likely mean "region to bin" for indexing */
+  /* MN: hts_reg2bin categorizes the size of the reference region.
+     Here, we use the numbers used in htslib/cram/cram_samtools.h */
   static const int min_shift = 14;
   static const int n_lvls = 5;
 
   core.pos = pos;
   core.tid = tid;
-  /* ADS: MN I recall we migth not have needed this core.bin below */
   core.bin = hts_reg2bin(pos, pos + isize, min_shift, n_lvls);
   core.qual = mapq;
   core.l_extranul = qname_nuls - 1;
@@ -383,12 +381,12 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
 
 /* This table converts 2 bases packed in a byte to their reverse
  * complement. The input is therefore a unit8_t representing 2 bases.
- * It is assumed that the input uint8_t value is of form "xx" or "x-", where
- * 'x' a 4-bit number representing either A, C, G, T, or N and '-' is 0000.
- * For example, the ouptut for "AG" is "CT". The format "x-" is often used
- * at the end of an odd-length sequence.
- * The output of "A-" is "-T", and the output of "C-" is "-G", and so forth. 
- * The user must handle this case separately.
+ * It is assumed that the input uint8_t value is of form "xx" or "x-",
+ * where 'x' a 4-bit number representing either A, C, G, T, or N and
+ * '-' is 0000.  For example, the ouptut for "AG" is "CT". The format
+ * "x-" is often used at the end of an odd-length sequence.  The
+ * output of "A-" is "-T", and the output of "C-" is "-G", and so
+ * forth. The user must handle this case separately.
  */
 const uint8_t byte_revcom_table[] = {
   0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
@@ -430,8 +428,10 @@ revcomp_seq_by_byte(bam1_t *aln) {
   const size_t num_bytes = ceil(l_qseq / 2.0);
   auto seq_end = seq + num_bytes;
   revcom_byte_then_reverse(seq, seq_end);
-  if (l_qseq % 2 == 1) {
+  if (l_qseq % 2 == 1) { // for odd-length sequences
     for (size_t i = 0; i < num_bytes - 1; i++) {
+      // swap 4-bit chunks within consecutive bytes like this:
+      // (aaaabbbb ccccdddd) => (....aaaa bbbbcccc dddd....)
       seq[i] = (seq[i] << 4) | (seq[i + 1] >> 4);
     }
     seq[num_bytes - 1] <<= 4;
@@ -446,15 +446,17 @@ revcomp_seq_by_byte(bam1_t *aln) {
 // a_used_len = c_seq_len - b_seq_len
 static void
 merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
+  // ADS: (todo) need some functions for int_ceil and is_odd
   const size_t b_seq_len = get_qlen(b);
   const size_t c_seq_len = get_qlen(c);
   const size_t a_used_len = c_seq_len - b_seq_len;
+
   const bool is_a_odd = a_used_len % 2 == 1;
   const bool is_b_odd = b_seq_len % 2 == 1;
   const bool is_c_odd = c_seq_len % 2 == 1;
+
   const size_t a_num_bytes = ceil(a_used_len / 2.0);
   const size_t b_num_bytes = ceil(b_seq_len / 2.0);
-  // const size_t c_num_bytes = ceil(c_seq_len / 2.0);
 
   const size_t b_offset = is_b_odd;
 
@@ -463,33 +465,33 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   auto c_seq = bam_get_seq(c);
 
   std::copy_n(a_seq, a_num_bytes, c_seq);
-  // Here, c_seq looks either like aa aa aa aa
-  //                       or like aa aa aa a-
   if (is_a_odd) {
+    // c_seq looks like either [ aa aa aa aa ]
+    //                      or [ aa aa aa a- ]
     c_seq[a_num_bytes - 1] &= 0xf0;
     c_seq[a_num_bytes - 1] |= is_b_odd ?
         byte_revcom_table[b_seq[b_num_bytes - 1]] :
         byte_revcom_table[b_seq[b_num_bytes - 1]] >> 4;
   }
-  // Here, c_seq looks either like aa aa aa aa
-  //                       or like aa aa aa ab
   if (is_c_odd) {
+    // c_seq looks like either [ aa aa aa aa ]
+    //                      or [ aa aa aa ab ]
     for (size_t i = 0; i < b_num_bytes - 1; i++) {
       c_seq[a_num_bytes + i] =
           (byte_revcom_table[b_seq[b_num_bytes - i - 1]] << 4) |
           (byte_revcom_table[b_seq[b_num_bytes - i - 2]] >> 4);
     }
     c_seq[a_num_bytes + b_num_bytes - 1] = byte_revcom_table[b_seq[0]] << 4;
-    // Here, c_seq looks either like aa aa aa aa bb bb bb b- (a even and b odd)
-    //                       or like aa aa aa ab bb bb bb b- (a odd and b odd)
+    // Here, c_seq is either [ aa aa aa aa bb bb bb b- ] (a even; b odd)
+    //                    or [ aa aa aa ab bb bb bb b- ] (a odd; b odd)
   }
   else {
     for (size_t i = 0; i < b_num_bytes - b_offset; i++) {
       c_seq[a_num_bytes + i] =
           byte_revcom_table[b_seq[b_num_bytes - i - 1 - b_offset]];
     }
-    // Here, c_seq looks either like aa aa aa aa bb bb bb bb (a even and b even)
-    //                       or like aa aa aa ab bb bb bb    (a odd and b odd)
+    // Here, c_seq is either [ aa aa aa aa bb bb bb bb ] (a even and b even)
+    //                    or [ aa aa aa ab bb bb bb    ] (a odd and b odd)
   }
 }
 
@@ -537,7 +539,7 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
 
   uint32_t part_op = 0;
   const uint32_t c_cur =
-      get_full_and_partial_ops(a_cig, a_ops, overlap, &part_op);
+    get_full_and_partial_ops(a_cig, a_ops, overlap, &part_op);
 
   // ADS: hack here because the get_full_and_partial_ops doesn't do
   // exactly what is needed for this.
@@ -575,12 +577,13 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
                              isize,     // rlen from new cigar
                              c_seq_len, // truncated seq length
                              8);        // enough for the 2 tags?
+  if (ret < 0) throw fr_expt(ret, "bam_set1_wrapper");
+  // ADS: might it be better to fill `c->data` directly?
   free(c_cig);
-  auto c_seq = bam_get_seq(c);
-  size_t num_bytes_to_copy = (c_seq_len + 1) / 2;
-  std::copy_n(bam_get_seq(a), num_bytes_to_copy, c_seq);
 
-  if (ret < 0) throw fr_expt(ret, "bam_set1");
+  auto c_seq = bam_get_seq(c);
+  size_t num_bytes_to_copy = (c_seq_len + 1)/2;
+  std::copy_n(bam_get_seq(a), num_bytes_to_copy, c_seq);
 
   /* add the tags */
   const int64_t nm = bam_aux2i(bam_aux_get(a, "NM")); // ADS: do better here!
@@ -646,9 +649,8 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                                      bam_cigar_oplen(b_cig[0]),
                                      bam_cigar_op(b_cig[0]));
   // copy the cigar from b into c
-  memcpy(c_cig + c_cur,
-         b_cig + merge_mid,
-         (b_ops - merge_mid) * sizeof(uint32_t));
+  memcpy(c_cig + c_cur, b_cig + merge_mid,
+         (b_ops - merge_mid)*sizeof(uint32_t));
   /* done with cigar string here */
 
   const uint32_t c_seq_len = a_seq_len + b->core.l_qseq;
@@ -676,7 +678,7 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
                              c_seq_len,    // merged sequence length
                              8);           // enough for 2 tags?
   free(c_cig);
-  if (ret < 0) throw fr_expt(ret, "bam_set1 in merge_overlap");
+  if (ret < 0) throw fr_expt(ret, "bam_set1_wrapper in merge_overlap");
   // Merge the sequences by bytes
   merge_by_byte(a, b, c);
 

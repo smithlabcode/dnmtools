@@ -252,7 +252,7 @@ uniq(const bool VERBOSE, const size_t n_threads,
   vector<bool> chroms_seen(hdr->n_targets, false);
   int32_t cur_chrom = get_tid(aln);
 
-  while (aln = get_read(hts, hdr)) {
+  while ((aln = get_read(hts, hdr))) {
     rs_in.update(aln);
 
     // below works because buffer reset at every new chrom

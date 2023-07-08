@@ -1,0 +1,16 @@
+58a1091d89b97572af2b6331b2d0663f  tests/reads.bsrate
+7875305b9bb324b5f888eb058ddc6625  tests/reads.counts
+bd866b5249a5b72439c6d6ca7dd43d42  tests/reads.counts.select
+9f8b86fd9ec6b8e6d735ee492290547c  tests/reads.counts.sym
+05cde361fe4ccb3e8f6a1a9296c272d1  tests/reads.fmt.sam
+f51d5ea8f80b5997cb3d4b5085578685  tests/reads.fmt.srt.sam
+5d23c1f1cb150abba17c6fa0a60d9163  tests/reads.fmt.srt.uniq.sam
+e2735d2e1f45f22394eddd60e8b08479  tests/reads.hmr
+408776b16838ef98ad2ed3379cb656ab  tests/reads.levels
+3bf209c27c99134386ea63756ff9fe2c  tests/reads.mstats
+54160d1e3b6dd8568921192b637d1b88  tests/reads.sam
+d04fe3b244013293734b596b5cc25608  tests/reads.ustats
+caf54e1a9ccfd1e659a4390b19c91014  tests/simreads_1.fq
+24b8fb2937333f69ad91f3e26f9fff48  tests/simreads_2.fq
+3ba5a1c4c420ca7a2dbd88290033c3bc  tests/tRex1.idx
+e0a3b9e71401c41efbcbf994428139fe  tests/tRex1_promoters.roi.bed

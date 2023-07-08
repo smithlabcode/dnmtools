@@ -14,7 +14,7 @@ dnl but WITHOUT ANY WARRANTY; without even the implied warranty of
 dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 dnl General Public License for more details.
 
-AC_INIT([dnmtools], [1.2.4], [andrewds@usc.edu],
+AC_INIT([dnmtools], [1.2.5], [andrewds@usc.edu],
         [dnmtools], [https://github.com/smithlabcode/dnmtools])
 dnl the config.h is #included in the sources for version info
 AC_CONFIG_HEADERS([config.h])
@@ -65,7 +65,15 @@ AC_SEARCH_LIBS([zlibVersion], [z], [], [AC_MSG_FAILURE([$zlib_fail_msg])])
 AC_SEARCH_LIBS([cblas_dgemm], [gslcblas], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 AC_SEARCH_LIBS([gsl_blas_dgemm], [gsl], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 
-AC_CONFIG_FILES([Makefile])
-dnl make the test data file available in the build tree
-AC_CONFIG_LINKS([test.fa:test/test.fa])
+AC_CONFIG_FILES([
+Makefile
+])
+dnl make the test data files available in the build tree
+AC_CONFIG_LINKS([
+tests/md5sum.txt:data/md5sum.txt
+tests/tRex1.fa:data/tRex1.fa
+tests/tRex1_promoters.bed:data/tRex1_promoters.bed
+tests/reads_1.fq.gz:data/reads_1.fq.gz
+tests/reads_2.fq.gz:data/reads_2.fq.gz
+])
 AC_OUTPUT

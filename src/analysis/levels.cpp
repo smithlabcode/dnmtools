@@ -1,31 +1,31 @@
-/*    levels: a program to compute coverage statistics, mutation rates,
- *    and three different formulas for methylation levels described in
- *    the paper:
+/* levels: a program to compute coverage statistics, mutation rates,
+ * and three different formulas for methylation levels described in
+ * the paper:
  *
- *        'Leveling' the playing field for analyses of single-base
- *         resolution DNA methylomes
- *         Schultz, Schmitz & Ecker (TIG 2012)
+ *    'Leveling' the playing field for analyses of single-base
+ *     resolution DNA methylomes
+ *     Schultz, Schmitz & Ecker (TIG 2012)
  *
- *    Note: the fractional methylation level calculated in this program
- *    is inspired but different from the paper. What we are doing here is
- *    using binomial test to determine significantly hyper/hypomethylated
- *    sites, and only use these subset of sites to calculate methylation
- *    level.
+ * Note: the fractional methylation level calculated in this program
+ * is inspired but different from the paper. What we are doing here is
+ * using binomial test to determine significantly hyper/hypomethylated
+ * sites, and only use these subset of sites to calculate methylation
+ * level.
  *
- *    Copyright (C) 2014-2022 University of Southern California and
- *                            Andrew D. Smith and Benjamin E Decato
+ * Copyright (C) 2014-2023 University of Southern California and
+ *                         Andrew D. Smith and Benjamin E Decato
  *
- *    Authors: Andrew D. Smith and Benjamin E Decato
+ * Authors: Andrew D. Smith and Benjamin E Decato
  *
- *    This program is free software: you can redistribute it and/or modify
- *    it under the terms of the GNU General Public License as published by
- *    the Free Software Foundation, either version 3 of the License, or
- *    (at your option) any later version.
+ * This program is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
  *
- *    This program is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
  */
 
 #include <string>
@@ -53,12 +53,43 @@ using std::to_string;
 using std::runtime_error;
 
 
+enum class counts_file_format {
+  ordinary,
+  asym_cpg,
+  sym_cpg
+};
+
+
+static counts_file_format
+guess_counts_file_format(const string &filename) {
+  static const size_t n_lines_to_check = 10000;
+  std::ifstream in(filename);
+  if (!in)
+    throw runtime_error("failed to open file: " + filename);
+  bool found_non_cpg = false, found_asym_cpg = false;
+  MSite prev_site;
+  string line;
+  size_t line_count;
+  while (getline(in, line) && (!found_non_cpg || !found_asym_cpg) &&
+         line_count++ < n_lines_to_check) {
+    const MSite curr_site(line);
+    found_non_cpg = found_non_cpg || !curr_site.is_cpg();
+    found_asym_cpg = found_asym_cpg ||
+      (curr_site.is_cpg() && prev_site.is_cpg());
+  }
+  return (found_non_cpg ? counts_file_format::ordinary :
+          (found_asym_cpg ? counts_file_format::asym_cpg :
+           counts_file_format::sym_cpg));
+}
+
+
 int
 main_levels(int argc, const char **argv) {
 
   try {
 
     bool VERBOSE = false;
+    bool relaxed_mode = false;
     string outfile;
 
     const string description = "compute global summary of methylation levels";
@@ -70,6 +101,9 @@ main_levels(int argc, const char **argv) {
     opt_parse.add_opt("alpha", 'a',
                       "alpha for confidence interval (default: 0.05)",
                       false, LevelsCounter::alpha);
+    opt_parse.add_opt("relaxed", '\0',
+                      "run on data that appears to have sites filtered",
+                      false, relaxed_mode);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -92,6 +126,20 @@ main_levels(int argc, const char **argv) {
     }
     const string meth_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
+
+    const counts_file_format guessed_format =
+      guess_counts_file_format(meth_file);
+    if (guessed_format != counts_file_format::ordinary) {
+      if (VERBOSE)
+        cerr << "input might be only CpG sites ("
+             << (guessed_format == counts_file_format::asym_cpg ?
+                 "not " : "")
+             << "symmetric)" << endl;
+      if (!relaxed_mode)
+        throw runtime_error(
+            "unexpected input format (consider using \"-relaxed\")"
+        );
+    }
 
     igzfstream in(meth_file);
     if (!in)

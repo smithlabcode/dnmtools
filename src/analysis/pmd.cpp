@@ -591,6 +591,7 @@ separate_regions(const bool VERBOSE, const size_t desert_size,
       reset_points.push_back(i);
     prev_cpg = bins[0][i].get_start();
   }
+  assert(reset_points.size() > 0);
   reset_points.push_back(bins[0].size());
   if (VERBOSE)
     cerr << "BINS RETAINED: " << bins[0].size() << endl
@@ -961,7 +962,7 @@ good_bins_frac(const vector<size_t> &cumulative, const size_t min_bin_size,
     passing_bins += (bin_count >= min_cov_to_pass);
   }
 
-  return static_cast<double>(passing_bins)/covered_bins;
+  return static_cast<double>(passing_bins)/std::max(1ul, covered_bins);
 }
 
 static size_t
@@ -979,6 +980,9 @@ get_min_reads_for_confidence(const double conf_level) {
   return n_reads;
 }
 
+
+// ADS: this function will return numeric_limits<size_t>::max() if the
+// fraction of "good" bins is zero for all attempted bin sizes.
 static size_t
 binsize_selection(const bool &VERBOSE, const size_t resolution,
                   const size_t min_bin_sz, const size_t max_bin_sz,
@@ -1000,7 +1004,8 @@ binsize_selection(const bool &VERBOSE, const size_t resolution,
     if (frac_passed < min_frac_passed)
       bin_size += resolution;
   }
-  return bin_size;
+  return frac_passed <= numeric_limits<double>::min() ?
+    std::numeric_limits<size_t>::max() : bin_size;
 }
 
 
@@ -1167,6 +1172,11 @@ main_pmd(int argc, const char **argv) {
 
     size_t n_replicates = cpgs_file.size();
 
+    bool insufficient_data = false; // ADS: this is used now to detect
+                                    // when the counts files have
+                                    // lines for CpG sites, but no
+                                    // counts.
+
     // Sanity checks input file format and dynamically selects bin
     // size from WGBS samples.
     if (!fixed_bin_size && !ARRAY_MODE) {
@@ -1174,13 +1184,15 @@ main_pmd(int argc, const char **argv) {
         cerr << "[DYNAMICALLY SELECTING BIN SIZE]" << endl;
       double confidence_interval = 0.80;
       double prop_accept = 0.80;
-      for (size_t i = 0; i < n_replicates; ++i) {
+      for (size_t i = 0; i < n_replicates && !insufficient_data; ++i) {
         const bool arrayData = check_if_array_data(cpgs_file[i]);
         if (!arrayData) {
           bin_size = binsize_selection(VERBOSE, resolution,
                                        min_bin_size, max_bin_size,
                                        confidence_interval, prop_accept,
                                        cpgs_file[i]);
+          if (bin_size == std::numeric_limits<size_t>::max())
+            insufficient_data = true;
           desert_size = 5*bin_size; // TODO: explore extrapolation number
         }
         else {
@@ -1198,6 +1210,15 @@ main_pmd(int argc, const char **argv) {
       desert_size = max(desert_size, bin_size);
     }
 
+    if (insufficient_data) {
+      // ADS: first check for insufficient data; another is needed if
+      // fixed bin size is used
+      if (VERBOSE) {
+        cerr << "EXITING: INSUFFICIENT DATA" << endl;
+        return EXIT_SUCCESS;
+      }
+    }
+
     if (VERBOSE)
       cerr << "[READING IN AT BIN SIZE " << bin_size << "]" << endl;
 
@@ -1207,17 +1228,30 @@ main_pmd(int argc, const char **argv) {
     vector<vector<size_t> > reads(n_replicates);
     vector<bool> array_status;
 
-    for (size_t i = 0; i < n_replicates; ++i) {
+    for (size_t i = 0; i < n_replicates && !insufficient_data; ++i) {
       if (VERBOSE)
         cerr << "[READING CPGS AND METH PROPS] from " << cpgs_file[i] << endl;
 
       load_bins(bin_size, cpgs_file[i], bins[i], meth[i],
                 reads[i], array_status);
+      const double total_observations =
+        accumulate(begin(reads[i]), end(reads[i]), 0);
+      if (total_observations <= numeric_limits<double>::min())
+        insufficient_data = true;
       if (VERBOSE)
         cerr << "TOTAL BINS: " << bins[i].size() << endl
              << "MEAN COVERAGE: "
-             << accumulate(begin(reads[i]), end(reads[i]), 0.0)/reads[i].size()
+             << total_observations/std::max(1ul, reads[i].size())
              << endl;
+    }
+
+    if (insufficient_data) {
+      // ADS: first check for insufficient data; another is needed if
+      // fixed bin size is used
+      if (VERBOSE) {
+        cerr << "EXITING: INSUFFICIENT DATA" << endl;
+        return EXIT_SUCCESS;
+      }
     }
 
     if (n_replicates > 1) {

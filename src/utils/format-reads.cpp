@@ -991,6 +991,10 @@ guess_suff_len(const string &inputfile, const size_t n_names_to_check,
 
   // ADS: assuming copy elision but should test it
   auto names(load_read_names(inputfile, n_names_to_check));
+  if (names.empty()) {
+    repeat_count = 0; // don't worry about this if data is empty
+    return 0; // minimum suffix length must be zero
+  }
 
   // get the minimum read name length
   size_t min_name_len = std::numeric_limits<size_t>::max();
@@ -1145,46 +1149,50 @@ format(const string &cmd, const size_t n_threads,
 
   err_code = sam_read1(hts, hdr, aln); // for EOF, err_code == -1
   if (err_code < -1) throw dnmt_error(err_code, "format:sam_read1");
+  const bool empty_reads_file = (err_code == -1);
+  if (!empty_reads_file) {
+  standardize_format(input_format, aln);
 
-  std::swap(aln, prev_aln); // start with prev_aln being first read
+    std::swap(aln, prev_aln); // start with prev_aln being first read
 
-  while ((err_code = sam_read1(hts, hdr, aln)) >= 0) {
-    standardize_format(input_format, aln);
-    if (same_name(prev_aln, aln, suff_len)) {
-      // below: essentially check for dovetail
-      if (!bam_is_rev(aln)) std::swap(prev_aln, aln);
-      const size_t frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
-      if (frag_len > 0 && frag_len < max_frag_len) {
-        if (is_a_rich(merged)) flip_conversion(merged);
-        err_code = sam_write1(out, hdr, merged);
-        if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
+    while ((err_code = sam_read1(hts, hdr, aln)) >= 0) {
+      standardize_format(input_format, aln);
+      if (same_name(prev_aln, aln, suff_len)) {
+        // below: essentially check for dovetail
+        if (!bam_is_rev(aln)) std::swap(prev_aln, aln);
+        const size_t frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
+        if (frag_len > 0 && frag_len < max_frag_len) {
+          if (is_a_rich(merged)) flip_conversion(merged);
+          err_code = sam_write1(out, hdr, merged);
+          if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
+        }
+        else {
+          if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
+          err_code = sam_write1(out, hdr, prev_aln);
+          if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
+          if (is_a_rich(aln)) flip_conversion(aln);
+          err_code = sam_write1(out, hdr, aln);
+          if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
+        }
+        previous_was_merged = true;
       }
       else {
-        if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
-        err_code = sam_write1(out, hdr, prev_aln);
-        if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
-        if (is_a_rich(aln)) flip_conversion(aln);
-        err_code = sam_write1(out, hdr, aln);
-        if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
+        if (!previous_was_merged) {
+          if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
+          err_code = sam_write1(out, hdr, prev_aln);
+          if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
+        }
+        previous_was_merged = false;
       }
-      previous_was_merged = true;
+      std::swap(prev_aln, aln);
     }
-    else {
-      if (!previous_was_merged) {
-        if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
-        err_code = sam_write1(out, hdr, prev_aln);
-        if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
-      }
-      previous_was_merged = false;
-    }
-    std::swap(prev_aln, aln);
-  }
-  if (err_code < -1) throw dnmt_error(err_code, "format:sam_read1");
+    if (err_code < -1) throw dnmt_error(err_code, "format:sam_read1");
 
-  if (!previous_was_merged) {
-    if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
-    err_code = sam_write1(out, hdr, prev_aln);
-    if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
+    if (!previous_was_merged) {
+      if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
+      err_code = sam_write1(out, hdr, prev_aln);
+      if (err_code < 0) throw dnmt_error(err_code, "format:sam_write1");
+    }
   }
 
   // turn off the lights
@@ -1200,6 +1208,7 @@ format(const string &cmd, const size_t n_threads,
   // do this after the files have been closed
   hts_tpool_destroy(the_thread_pool.pool);
 }
+
 
 int main_format(int argc, const char **argv) {
 

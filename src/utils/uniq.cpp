@@ -39,6 +39,8 @@
 #include "GenomicRegion.hpp"
 #include "bsutils.hpp"
 
+#include "dnmt_error.hpp"
+
 using std::string;
 using std::vector;
 using std::cerr;
@@ -227,9 +229,12 @@ uniq(const bool VERBOSE, const size_t n_threads,
      const string &statfile, const string &histfile,
      const bool bam_format, const string &outfile) {
 
+  // ADS: (below) At some point the errno here is set to 3=ESRCH ("No
+  // such process"?) when using HTSlib 1.17 on macos ventura
+  const int prev_errno = errno;
   samFile* hts = hts_open(infile.c_str(), "r");
-  if (!hts || errno)
-    throw runtime_error("bad htslib file: " + infile);
+  if (!hts || errno != prev_errno)
+    throw dnmt_error("error opening: " + infile);
 
   htsThreadPool the_thread_pool{hts_tpool_init(n_threads), 0};
   if (hts_set_thread_pool(hts, &the_thread_pool) < 0)

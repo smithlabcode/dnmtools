@@ -1057,8 +1057,13 @@ check_sorted(const string &inputfile, const size_t suff_len, size_t n_reads) {
 
 static bool
 check_input_file(const string &infile) {
+  // ADS: (below) At some point the errno here is set to 3=ESRCH ("No
+  // such process"?) when using HTSlib 1.17 on macos ventura
+  const int prev_errno = errno;
   samFile* hts = hts_open(infile.c_str(), "r");
-  if (!hts || errno) throw dnmt_error("error opening: " + infile);
+  if (!hts || errno != prev_errno)
+    throw dnmt_error("error opening: " + infile);
+
   const htsFormat *fmt = hts_get_format(hts);
   if (fmt->category != sequence_data)
     throw dnmt_error("not sequence data: " + infile);

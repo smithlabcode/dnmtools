@@ -20,6 +20,7 @@
 #include <string>
 #include <stdexcept>
 #include <cstdint> // for [u]int[0-9]+_t
+#include <random>
 
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
@@ -195,7 +196,7 @@ separate_regions(const bool VERBOSE,
 }
 
 static void
-shuffle_cpgs_rep(const size_t seed, const TwoStateHMM &hmm,
+shuffle_cpgs_rep(const size_t rng_seed, const TwoStateHMM &hmm,
                  vector<vector<pair<double, double> > > meth,
                  vector<size_t> reset_points,
                  const double f_to_b_trans, const double b_to_f_trans,
@@ -203,11 +204,9 @@ shuffle_cpgs_rep(const size_t seed, const TwoStateHMM &hmm,
                  const vector<double> &bg_alpha, const vector<double> &bg_beta,
                  vector<double> &domain_scores) {
 
-  srand(seed);
-  const size_t n_reps = meth.size();
-
-  for (size_t r = 0 ; r < n_reps; ++r)
-    random_shuffle(begin(meth[r]), end(meth[r]));
+  auto eng = std::default_random_engine(rng_seed);
+  for (size_t r = 0 ; r < meth.size(); ++r)
+    std::shuffle(begin(meth[r]), end(meth[r]), eng);
 
   vector<bool> state_ids;
   vector<double> scores;
@@ -353,7 +352,7 @@ main_hmr_rep(int argc, const char **argv) {
 
     size_t desert_size = 1000;
     size_t max_iterations = 10;
-    size_t seed = 408;
+    size_t rng_seed = 408;
 
     // run mode flags
     bool VERBOSE = false;
@@ -390,7 +389,7 @@ main_hmr_rep(int argc, const char **argv) {
                       false, params_in_files);
     opt_parse.add_opt("params-out", 'p', "write HMM parameters to this file",
                       false, params_out_file);
-    opt_parse.add_opt("seed", 's', "specify random seed", false, seed);
+    opt_parse.add_opt("seed", 's', "specify random seed", false, rng_seed);
     opt_parse.set_show_defaults();
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -490,7 +489,8 @@ main_hmr_rep(int argc, const char **argv) {
     get_domain_scores_rep(state_ids, meth, reset_points, domain_scores);
 
     vector<double> random_scores;
-    shuffle_cpgs_rep(seed, hmm, meth, reset_points, f_to_b_trans, b_to_f_trans,
+    shuffle_cpgs_rep(rng_seed, hmm, meth, reset_points,
+                     f_to_b_trans, b_to_f_trans,
                      fg_alpha, fg_beta, bg_alpha, bg_beta, random_scores);
 
     vector<double> p_values;

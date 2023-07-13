@@ -141,7 +141,7 @@ merge_amrs(const size_t gap_limit, vector<GenomicRegion> &amrs) {
 
 // static void
 // randomize_read_states(vector<epiread> &reads) {
-//   srand(time(0) + getpid());
+//   /**/srand(time(0) + getpid());
 //   const size_t total_cpgs = get_n_cpgs(reads);
 //   vector<vector<char> > state_counts;
 //   get_state_counts(reads, total_cpgs, state_counts);
@@ -359,6 +359,10 @@ main_amrfinder(int argc, const char **argv) {
     double high_prob = 0.75, low_prob = 0.25;
     size_t min_obs_per_cpg = 4;
     double critical_value = 0.01;
+
+    // ADS: below, for when the time comes
+    // auto eng = std::default_random_engine(rng_seed);
+    // std::shuffle(begin(things), end(things), eng);
 
     // bool RANDOMIZE_READS = false;
     bool use_bic = false;

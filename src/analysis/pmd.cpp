@@ -23,6 +23,7 @@
 #include <map>
 #include <stdexcept>
 #include <unordered_set>
+#include <random>
 
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
@@ -601,7 +602,8 @@ separate_regions(const bool VERBOSE, const size_t desert_size,
 
 
 static void
-shuffle_bins(const TwoStateHMM &hmm,
+shuffle_bins(const size_t rng_seed,
+             const TwoStateHMM &hmm,
              vector<vector<pair<double, double> > > meth,
              const vector<size_t> &reset_points,
              const vector<double> &start_trans,
@@ -614,8 +616,10 @@ shuffle_bins(const TwoStateHMM &hmm,
 
   size_t n_replicates = meth.size();
 
+  auto eng = std::default_random_engine(rng_seed);
   for (size_t r =0 ; r < n_replicates; ++r)
-    random_shuffle(begin(meth[r]), end(meth[r]));
+    std::shuffle(begin(meth[r]), end(meth[r]), eng);
+
   vector<bool> classes;
   vector<double> scores;
   hmm.PosteriorDecoding_rep(meth, reset_points, start_trans, trans,
@@ -1136,7 +1140,8 @@ main_pmd(int argc, const char **argv) {
                       false, posteriors_out_prefix);
     opt_parse.add_opt("params-out", 'p', "write HMM parameters to this file",
                       false, params_out_file);
-    opt_parse.add_opt("seed", 's', "specify random seed", false, rng_seed);
+    opt_parse.add_opt("seed", 's', "specify random seed",
+                      false, rng_seed);
 
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -1160,8 +1165,6 @@ main_pmd(int argc, const char **argv) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     resolution = min(bin_size, resolution);
-
-    srand(rng_seed);
 
     vector<string> cpgs_file = leftover_args;
     vector<string> params_in_file;
@@ -1346,9 +1349,9 @@ main_pmd(int argc, const char **argv) {
       cerr << "[RANDOMIZING SCORES FOR FDR]" << endl;
 
     vector<double> random_scores;
-    shuffle_bins(hmm, meth, reset_points, start_trans, trans, end_trans,
-                 reps_fg_alpha, reps_fg_beta, reps_bg_alpha, reps_bg_beta,
-                 random_scores, array_status);
+    shuffle_bins(rng_seed, hmm, meth, reset_points, start_trans, trans,
+                 end_trans, reps_fg_alpha, reps_fg_beta, reps_bg_alpha,
+                 reps_bg_beta, random_scores, array_status);
 
     vector<double> p_values;
     assign_p_values(random_scores, domain_scores, p_values);

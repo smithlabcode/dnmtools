@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2022 University of Southern California
+/* Copyright (C) 2009-2023 University of Southern California
  *                         Andrew D Smith
  *
  * Author: Andrew D. Smith, Song Qiang
@@ -22,6 +22,7 @@
 #include <stdexcept>
 #include <unordered_set>
 #include <cstdint> // for [u]int[0-9]+_t
+#include <random>
 
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
@@ -217,7 +218,7 @@ make_partial_meth(const vector<uint32_t> &reads,
 }
 
 static void
-shuffle_cpgs(const size_t seed,
+shuffle_cpgs(const size_t rng_seed,
              const TwoStateHMM &hmm,
              vector<pair<double, double> > meth,
              vector<size_t> reset_points,
@@ -225,8 +226,10 @@ shuffle_cpgs(const size_t seed,
              const double fg_alpha, const double fg_beta,
              const double bg_alpha, const double bg_beta,
              vector<double> &domain_scores) {
-  srand(seed);
-  random_shuffle(begin(meth), end(meth));
+
+  auto eng = std::default_random_engine(rng_seed);
+  std::shuffle(begin(meth), end(meth), eng);
+
   vector<bool> state_ids;
   vector<double> scores;
   hmm.PosteriorDecoding(meth, reset_points, p_fb, p_bf,
@@ -372,7 +375,7 @@ main_hmr(int argc, const char **argv) {
 
     size_t desert_size = 1000;
     size_t max_iterations = 10;
-    size_t seed = 408;
+    size_t rng_seed = 408;
 
     // run mode flags
     bool VERBOSE = false;
@@ -413,7 +416,7 @@ main_hmr(int argc, const char **argv) {
                       "(override training)", false, params_in_file);
     opt_parse.add_opt("params-out", 'p', "write HMM parameters to this "
                       "file (default: none)", false, params_out_file);
-    opt_parse.add_opt("seed", 's', "specify random seed", false, seed);
+    opt_parse.add_opt("seed", 's', "specify random seed", false, rng_seed);
     opt_parse.set_show_defaults();
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -498,7 +501,7 @@ main_hmr(int argc, const char **argv) {
     get_domain_scores(state_ids, meth, reset_points, domain_scores);
 
     vector<double> random_scores;
-    shuffle_cpgs(seed, hmm, meth, reset_points, p_fb, p_bf,
+    shuffle_cpgs(rng_seed, hmm, meth, reset_points, p_fb, p_bf,
                  fg_alpha, fg_beta, bg_alpha, bg_beta, random_scores);
 
     vector<double> p_values;

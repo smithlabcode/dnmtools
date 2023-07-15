@@ -63,13 +63,16 @@ enum class counts_file_format {
 static counts_file_format
 guess_counts_file_format(const string &filename) {
   static const size_t n_lines_to_check = 10000;
-  std::ifstream in(filename);
+
+  igzfstream in(filename);
   if (!in)
-    throw runtime_error("failed to open file: " + filename);
+    throw std::runtime_error("bad input file: " + filename);
+
   bool found_non_cpg = false, found_asym_cpg = false;
   MSite prev_site;
   string line;
-  size_t line_count;
+  size_t line_count = 0;
+
   while (getline(in, line) && (!found_non_cpg || !found_asym_cpg) &&
          line_count++ < n_lines_to_check) {
     const MSite curr_site(line);

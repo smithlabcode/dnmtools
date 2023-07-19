@@ -46,4 +46,7 @@ adjust_read_offsets(std::vector<epiread> &reads);
 size_t
 get_n_cpgs(const std::vector<epiread> &reads);
 
+bool
+validate_epiread_file(const std::string &filename);
+
 #endif

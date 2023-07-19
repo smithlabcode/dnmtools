@@ -17,6 +17,7 @@
 #include <limits>
 #include <string>
 #include <stdexcept>
+#include <fstream>
 
 #include "Epiread.hpp"
 
@@ -32,7 +33,6 @@ adjust_read_offsets(vector<epiread> &reads) {
     reads[i].pos -= first_read_offset;
   return first_read_offset;
 }
-
 
 size_t
 get_n_cpgs(const vector<epiread> &reads) {
@@ -53,8 +53,26 @@ operator>>(std::istream &in, epiread &er) {
   return in;
 }
 
-
 std::ostream&
 operator<<(std::ostream &out, const epiread &er) {
   return out << er.chr << '\t' << er.pos << '\t' << er.seq;
+}
+
+bool
+validate_epiread_file(const string &filename) {
+  const size_t max_lines_to_validate = 10000;
+  std::ifstream in(filename);
+  if (!in)
+    throw std::runtime_error("failed to open file: " + filename);
+
+  string c, s, other;
+  size_t p = 0;
+
+  size_t n_lines = 0;
+  string line;
+  while (getline(in, line) && n_lines++ < max_lines_to_validate) {
+    std::istringstream iss(line);
+    if (!(iss >> c >> p >> s) || iss >> other) return false;
+  }
+  return true;
 }

@@ -291,19 +291,10 @@ main_methstates(int argc, const char **argv) {
     const string mapped_reads_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    // vector<string> chrom_files;
-    // if (isdir(chrom_file.c_str()))
-    //   read_dir(chrom_file, fasta_suffix, chrom_files);
-    // else chrom_files.push_back(chrom_file);
-
-    // if (VERBOSE)
-    //   cerr << "n_chrom_files:\t" << chrom_files.size() << endl;
-
     /* first load in all the chromosome sequences and names, and make
        a map from chromosome name to the location of the chromosome
        itself */
-    vector<string> all_chroms;
-    vector<string> chrom_names;
+    vector<string> all_chroms, chrom_names;
     read_fasta_file_short_names(chrom_file, chrom_names, all_chroms);
     for (auto &&i: all_chroms)
       transform(begin(i), end(i), begin(i),
@@ -312,20 +303,6 @@ main_methstates(int argc, const char **argv) {
     unordered_map<string, size_t> chrom_lookup;
     for (size_t i = 0; i < chrom_names.size(); ++i)
       chrom_lookup[chrom_names[i]] = i;
-
-    // auto
-    // for (auto i(begin(chrom_files)); i != end(chrom_files); ++i) {
-    //   vector<string> tmp_chroms, tmp_names;
-    //   read_fasta_file_short_names(*i, tmp_names, tmp_chroms);
-    //   for (size_t j = 0; j < tmp_chroms.size(); ++j) {
-    //     if (chrom_lookup.find(tmp_names[j]) != end(chrom_lookup))
-    //       throw runtime_error("repeated chromosome or name: " + tmp_names[j]);
-    //     chrom_names.push_back(tmp_names[j]);
-    //     chrom_lookup[chrom_names.back()] = all_chroms.size();
-    //     all_chroms.push_back("");
-    //     all_chroms.back().swap(tmp_chroms[j]);
-    //   }
-    // }
 
     if (VERBOSE)
       cerr << "n_chroms: " << all_chroms.size() << endl;
@@ -338,7 +315,8 @@ main_methstates(int argc, const char **argv) {
     if (!outfile.empty()) of.open(outfile.c_str());
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
-    // given a chrom, get cpg location from cpg index
+    // for the current chrom, this maps cpg index to cpg position in
+    // the chrom
     unordered_map<size_t, size_t> cpgs;
 
     unordered_set<string> chroms_seen;

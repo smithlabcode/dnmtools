@@ -180,8 +180,8 @@ collect_cpgs(const string &s, unordered_map<size_t, size_t> &cpgs) {
 static void
 convert_coordinates(const unordered_map<size_t, size_t> &cpgs,
                     GenomicRegion &region)  {
-  auto start_itr = cpgs.find(region.get_start());
-  auto end_itr = cpgs.find(region.get_end());
+  const auto start_itr = cpgs.find(region.get_start());
+  const auto end_itr = cpgs.find(region.get_end());
   if (start_itr == end(cpgs) || end_itr == end(cpgs))
     throw runtime_error("could not convert:\n" + region.tostring());
   region.set_start(start_itr->second);
@@ -314,12 +314,13 @@ process_chrom(const bool VERBOSE, const bool PROGRESS,
   size_t windows_tested = 0;
   size_t start_idx = 0;
   const size_t lim = chrom_cpgs - window_size + 1;
+  vector<epiread> current_epireads;
   for (size_t i = 0; i < lim && start_idx < epireads.size(); ++i) {
 
     if (PROGRESS && progress.time_to_report(start_idx))
       progress.report(cerr, start_idx);
 
-    vector<epiread> current_epireads;
+    current_epireads.clear();
     get_current_epireads(epireads, max_epiread_len,
                          window_size, i, start_idx, current_epireads);
 
@@ -371,7 +372,7 @@ main_amrfinder(int argc, const char **argv) {
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description, "<epireads>");
-    opt_parse.add_opt("output", 'o', "output file", false, outfile);
+    opt_parse.add_opt("output", 'o', "output file", true, outfile);
     opt_parse.add_opt("chrom", 'c', "genome sequence file/directory",
                       true, chroms_dir);
     opt_parse.add_opt("itr", 'i', "max iterations", false, max_itr);
@@ -411,6 +412,9 @@ main_amrfinder(int argc, const char **argv) {
     }
     const string reads_file(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
+
+    if (!validate_epiread_file(reads_file))
+      throw runtime_error("invalid states file: " + reads_file);
 
     if (VERBOSE)
       cerr << "AMR TESTING OPTIONS: "

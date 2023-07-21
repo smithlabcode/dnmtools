@@ -278,6 +278,11 @@ main_amrtester(int argc, const char **argv) {
     if (!check_sorted(regions))
       throw runtime_error("regions not sorted in: " + regions_file);
 
+    // Give names to regions if they do not exist
+    for (size_t i = 0; i < regions.size(); ++i)
+      if (regions[i].get_name().empty())
+        regions[i].set_name("region" + std::to_string(i));
+
     size_t n_regions  = regions.size();
     if (VERBOSE)
       cerr << "NUMBER OF REGIONS: " << n_regions << endl;

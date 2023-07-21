@@ -25,6 +25,8 @@
 #include <numeric>
 #include <utility>
 #include <stdexcept>
+#include <unordered_map>
+#include <unordered_set>
 
 #include <cmath>
 #include <sstream>
@@ -34,6 +36,7 @@
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 #include "GenomicRegion.hpp"
+#include "MSite.hpp"
 
 #include "Epiread.hpp"
 
@@ -42,9 +45,8 @@ using std::vector;
 using std::cout;
 using std::cerr;
 using std::endl;
-using std::istringstream;
 using std::unordered_map;
-using std::ostringstream;
+using std::unordered_set;
 using std::max;
 using std::min;
 using std::runtime_error;
@@ -130,7 +132,7 @@ struct PairStateCounter {
 };
 
 
-template <class T> void
+template <typename T> void
 fit_states(const epiread &er, vector<PairStateCounter<T> > &counts) {
   for (size_t i = 0; i < er.length() - 1; ++i) {
     const size_t pos = er.pos + i;
@@ -140,142 +142,73 @@ fit_states(const epiread &er, vector<PairStateCounter<T> > &counts) {
   }
 }
 
-
-static void
-get_chrom_sizes(const bool VERBOSE, const string &epi_file,
-                unordered_map<string, size_t> &chrom_sizes) {
-  std::ifstream in(epi_file);
-  if (!in)
-    throw runtime_error("cannot open input file: " + epi_file);
-
-  string chrom;
-  epiread er;
-  while (in >> er) {
-    if (chrom_sizes.find(er.chr) == chrom_sizes.end())
-      chrom_sizes[er.chr] = 0;
-    chrom_sizes[er.chr] = std::max(chrom_sizes[er.chr], er.pos + er.length());
-  }
-}
-
-
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-//////////////
-//////////////  CODE FOR CONVERTING BETWEEN CPG AND BASE PAIR
-//////////////  COORDINATES BELOW HERE
-//////////////
-inline static bool
-is_cpg(const string &s, const size_t idx) {
-  return toupper(s[idx]) == 'C' && toupper(s[idx + 1]) == 'G';
-}
-
-
 static void
 collect_cpgs(const string &s, unordered_map<size_t, size_t> &cpgs) {
-  const size_t lim = s.length() - 1;
-  size_t cpg_count = 0;
-  for (size_t i = 0; i < lim; ++i)
-    if (is_cpg(s, i)) {
-      cpgs[cpg_count] = i;
-      ++cpg_count;
-    }
+  size_t cpg_idx = 0;
+  size_t nuc_idx = 0;
+  const auto lim = end(s) - (s.size() == 0 ? 0 : 1);
+  for (auto itr = begin(s); itr != lim; ++itr, ++nuc_idx)
+    if (*itr == 'C' && *(itr + 1) == 'G')
+      cpgs[cpg_idx++] = nuc_idx;
 }
-
-
-static void
-convert_coordinates(const unordered_map<size_t, size_t> &cpgs,
-                    GenomicRegion &region)  {
-
-  auto start_itr(cpgs.find(region.get_start()));
-  if (start_itr == end(cpgs))
-    throw runtime_error("could not convert:\n" + region.tostring());
-
-  region.set_start(start_itr->second);
-  region.set_end(start_itr->second + 1);
-}
-
-
-static void
-get_chrom(const bool VERBOSE, const GenomicRegion &r,
-          const unordered_map<string, string>& chrom_files,
-          GenomicRegion &chrom_region,  string &chrom) {
-  const unordered_map<string, string>::const_iterator
-    fn(chrom_files.find(r.get_chrom()));
-  if (fn == chrom_files.end())
-    throw runtime_error("could not find chrom: " + r.get_chrom());
-  chrom.clear();
-  read_fasta_file(fn->second, r.get_chrom(), chrom);
-  if (chrom.empty())
-    throw runtime_error("could not find chrom: " + r.get_chrom());
-  else {
-    chrom_region.set_chrom(r.get_chrom());
-  }
-}
-
 
 /* The "sites" in the convert_coordinates function represent pairs of
-    consecutive CpG sites */
+   consecutive CpG sites. So there would be one fewer of them than the
+   total CpGs in a chromosome. */
 static void
-convert_coordinates(const bool VERBOSE, const string chroms_dir,
-                    const string fasta_suffix, vector<GenomicRegion> &sites) {
-
-  unordered_map<string, string> chrom_files;
-  identify_and_read_chromosomes(chroms_dir, fasta_suffix, chrom_files);
-  if (VERBOSE)
-    cerr << "CHROMS:\t" << chrom_files.size() << endl;
-
+convert_coordinates(const string &chrom, vector<MSite> &sites) {
   unordered_map<size_t, size_t> cpgs;
-  string chrom;
-  GenomicRegion chrom_region("chr0", 0, 0);
+  collect_cpgs(chrom, cpgs);
   for (size_t i = 0; i < sites.size(); ++i) {
-    if (!sites[i].same_chrom(chrom_region)) {
-      get_chrom(VERBOSE, sites[i], chrom_files, chrom_region, chrom);
-      collect_cpgs(chrom, cpgs);
-      if (VERBOSE)
-        cerr << "CONVERTING: " << chrom_region.get_chrom() << endl;
-    }
-    convert_coordinates(cpgs, sites[i]);
+    const auto pos_itr = cpgs.find(sites[i].pos);
+    if (pos_itr == end(cpgs))
+      throw runtime_error("failed converting site:\n" + sites[i].tostring());
+    sites[i].pos = pos_itr->second;
   }
 }
 
 
-static void
+template <typename T>
+void
 add_cytosine(const string &chrom_name, const size_t start_cpg,
-             vector<PairStateCounter<unsigned short> > &counts,
-             vector<GenomicRegion> &cytosines) {
-  const size_t end_cpg = start_cpg + 1;
-  ostringstream s;
+             vector<PairStateCounter<T>> &counts,
+             vector<MSite> &cytosines) {
+  std::ostringstream s;
   s << counts[start_cpg].score() << "\t"
     << counts[start_cpg].total() << "\t"
     << counts[start_cpg].tostring();
   const string name(s.str());
-  cytosines.push_back(GenomicRegion(chrom_name, start_cpg, end_cpg,
-                                    name, 0, '+'));
+  cytosines.push_back(MSite(chrom_name, start_cpg, '+', name, 0, 0));
 }
 
 
-static size_t
-process_chrom(const bool VERBOSE, const string &chrom_name,
-              const vector<epiread> &epireads, vector<GenomicRegion> &cytosines,
-              vector<PairStateCounter<unsigned short> > &counts) {
-  size_t max_epiread_len = 0;
+template<typename T>
+void
+process_chrom(const string &chrom_name, const vector<epiread> &epireads,
+              vector<MSite> &cytosines, vector<PairStateCounter<T>> &counts) {
   for (size_t i = 0; i < epireads.size(); ++i)
-    max_epiread_len = std::max(max_epiread_len, epireads[i].length());
-  const size_t chrom_cpgs = get_n_cpgs(epireads);
-  if (VERBOSE)
-    cerr << "processing " << chrom_name << " "
-         << "[reads: " << epireads.size() << "] "
-         << "[cpgs: " << chrom_cpgs << "]" << endl;
-
-  for (size_t i = 0; i < epireads.size(); ++i) {
     fit_states(epireads[i], counts);
-  }
-  for (size_t i = 0; i < counts.size(); ++i) {
+  for (size_t i = 0; i < counts.size(); ++i)
     add_cytosine(chrom_name, i, counts, cytosines);
-  }
-  return 0;
+}
+
+
+static void
+update_chroms_seen(const string &chrom_name,
+                   unordered_set<string> &chroms_seen) {
+  const auto chr_itr = chroms_seen.find(chrom_name);
+  if (chr_itr != end(chroms_seen))
+    throw runtime_error("chroms out of order: " + chrom_name);
+  chroms_seen.insert(chrom_name);
+}
+
+
+static void
+verify_chroms_available(const string &chrom_name,
+                        unordered_map<string, size_t> &chrom_lookup) {
+  const auto chr_itr = chrom_lookup.find(chrom_name);
+  if (chr_itr == end(chrom_lookup))
+    throw runtime_error("chrom not found: " + chrom_name);
 }
 
 
@@ -322,11 +255,28 @@ main_allelicmeth(int argc, const char **argv) {
     const string epi_file(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    vector<string> chrom_names;
+    vector<string> chroms;
+    read_fasta_file_short_names(chroms_dir, chrom_names, chroms);
+    for (auto &&i: chroms)
+      transform(begin(i), end(i), begin(i),
+                [](const char c) { return std::toupper(c); });
+
+    // lookup to map chrom names to chrom sequences
+    unordered_map<string, size_t> chrom_lookup;
+    for (size_t i = 0; i < chrom_names.size(); ++i)
+      chrom_lookup.insert(make_pair(chrom_names[i], i));
+
     unordered_map<string, size_t> chrom_sizes;
-    get_chrom_sizes(VERBOSE, epi_file, chrom_sizes);
+    for (size_t i = 0; i < chrom_names.size(); ++i) {
+      size_t cpg_count = 0;
+      for (size_t j = 0; j < chroms[i].size() - 1; ++j)
+        cpg_count += (chroms[i][j] == 'C' && chroms[i][j+1] == 'G');
+      chrom_sizes.insert(make_pair(chrom_names[i], cpg_count));
+    }
 
     if (VERBOSE)
-      cerr << "CHROMS: " << chrom_sizes.size() << endl;
+      cerr << "number of chromosomes: " << chrom_sizes.size() << endl;
 
     std::ifstream in(epi_file);
     if (!in)
@@ -336,36 +286,45 @@ main_allelicmeth(int argc, const char **argv) {
     if (!outfile.empty()) of.open(outfile);
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
+    unordered_set<string> chroms_seen;
     string chrom;
     epiread er;
     vector<epiread> epireads;
-    vector<GenomicRegion> cytosines;
-    vector<PairStateCounter<unsigned short> > counts;
     while (in >> er) {
-      if (er.chr != chrom && !chrom.empty()) {
-        counts = vector<PairStateCounter<unsigned short> >(chrom_sizes[chrom] - 1);
-        process_chrom(VERBOSE, chrom, epireads, cytosines, counts);
-        // convert coordinates
-        convert_coordinates(VERBOSE, chroms_dir, fasta_suffix, cytosines);
-        epireads.clear();
-        for( size_t i = 0; i < cytosines.size()-1; ++i ) {
-          out << cytosines[i].get_chrom() << "\t"
-              << cytosines[i].get_start() << "\t+\tCpG\t"
-              << cytosines[i].get_name() << endl;
+      if (er.chr != chrom) {
+        update_chroms_seen(er.chr, chroms_seen);
+        verify_chroms_available(er.chr, chrom_lookup);
+
+        if (VERBOSE)
+          cerr << "[processing " << er.chr << "]" << endl;
+
+        if (!chrom.empty()) {
+          vector<PairStateCounter<uint32_t>> counts(chrom_sizes[chrom] - 1);
+          vector<MSite> cytosines;
+          process_chrom(chrom, epireads, cytosines, counts);
+          const size_t chrom_idx = chrom_lookup[chrom];
+          convert_coordinates(chroms[chrom_idx], cytosines);
+          for (size_t i = 0; i < cytosines.size()-1; ++i) {
+            out << cytosines[i].chrom << "\t"
+                << cytosines[i].pos << "\t+\tCpG\t"
+                << cytosines[i].context << endl;
+          }
         }
-        cytosines.clear();
+        epireads.clear();
       }
       epireads.push_back(er);
       chrom.swap(er.chr);
     }
     if (!chrom.empty()) {
-      counts = vector<PairStateCounter<unsigned short> >(chrom_sizes[chrom]);
-      process_chrom(VERBOSE, chrom, epireads, cytosines, counts);
-      convert_coordinates(VERBOSE, chroms_dir, fasta_suffix, cytosines);
+      vector<PairStateCounter<uint32_t>> counts(chrom_sizes[chrom] - 1);
+      vector<MSite> cytosines;
+      process_chrom(chrom, epireads, cytosines, counts);
+      const size_t chrom_idx = chrom_lookup[chrom];
+      convert_coordinates(chroms[chrom_idx], cytosines);
       for (size_t i = 0; i < cytosines.size() - 1; ++i) {
-        out << cytosines[i].get_chrom() << "\t"
-            << cytosines[i].get_start() << "\t+\tCpG\t"
-            << cytosines[i].get_name() << endl;
+        out << cytosines[i].chrom << "\t"
+            << cytosines[i].pos << "\t+\tCpG\t"
+            << cytosines[i].context << endl;
       }
     }
   }

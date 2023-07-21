@@ -256,6 +256,20 @@ has_extreme_counts(const Regression &reg) {
   return is_maximally_methylated || is_unmethylated;
 }
 
+
+static bool
+verify_multiple_levels(const Regression &full_regression,
+                       const size_t test_factor) {
+  const size_t n_samples = full_regression.design.n_samples();
+  const auto first_level = full_regression.design.matrix[0][test_factor];
+  bool test_fact_mult_levels = false;
+  for (size_t i = 1; i < n_samples; ++i)
+    if (full_regression.design.matrix[i][test_factor] != first_level)
+      test_fact_mult_levels = true;
+  return test_fact_mult_levels;
+}
+
+
 /***********************************************************************
  * Run beta-binoimial regression using the specified table with
  * proportions and design matrix
@@ -334,11 +348,19 @@ main_radmeth(int argc, const char **argv) {
     const size_t test_factor =
       distance(begin(full_regression.design.factor_names), test_fact_it);
 
+    // verify that the design includes more than one level for the
+    // test factor
+    if (!verify_multiple_levels(full_regression, test_factor)) {
+      const auto first_level = full_regression.design.matrix[0][test_factor];
+      throw runtime_error("test factor only one level: " +
+                          test_factor_name + ", " +
+                          std::to_string(first_level));
+    }
+
     Regression null_regression;
     null_regression.design = full_regression.design;
     remove_factor(null_regression.design, test_factor);
     // ADS: done setup for the model
-
 
     // ADS: open the data table file
     std::ifstream table_file(table_filename);
@@ -352,7 +374,6 @@ main_radmeth(int argc, const char **argv) {
     getline(table_file, sample_names_header);
 
     if (!consistent_sample_names(full_regression, sample_names_header))
-      // .design.sample_names != split_whitespace(sample_names_header))
       throw runtime_error("header:\n" + sample_names_header + "\n" +
                           "does not match factor names or their order in the\n"
                           "design matrix. Check that the design matrix and\n"

@@ -60,14 +60,12 @@ namespace uniq_random {
   std::default_random_engine e;
   std::uniform_int_distribution<int> di;
 
-  void
-  initialize(const size_t the_seed) {
+  void initialize(const size_t the_seed) {
     e = std::default_random_engine(the_seed);
     initialized = true;
   }
 
-  int
-  rand() {
+  int rand() {
     // ADS: should have same range as ordinary rand() by properties of
     // std::uniform_int_distribution default constructor.
     // assert(initialized);
@@ -119,13 +117,10 @@ equivalent_end_and_strand(const bam1_t *a, const bam1_t *b) {
 }
 
 struct rd_stats { // keep track of good bases/reads in and out
-  size_t bases;
-  size_t reads;
+  size_t bases{};
+  size_t reads{};
 
-  rd_stats(): bases(0), reads(0) {}
-
-  void
-  update(bam1_t *b) {
+  void update(bam1_t *b) {
     bases += qlen(b);
     ++reads;
   }
@@ -137,9 +132,9 @@ write_stats_output(const rd_stats &rs_in, const rd_stats &rs_out,
   if (!statfile.empty()) {
     const size_t reads_removed = rs_in.reads - rs_out.reads;
     const double non_dup_frac =
-        (rs_out.reads - reads_duped) / static_cast<double>(rs_in.reads);
+      (rs_out.reads - reads_duped) / static_cast<double>(rs_in.reads);
     const double dup_rate =
-        (reads_removed + reads_duped) / static_cast<double>(reads_duped);
+      (reads_removed + reads_duped) / static_cast<double>(reads_duped);
     ofstream out_stat(statfile);
     if (!out_stat) throw runtime_error("bad stats output file");
     out_stat << "total_reads: " << rs_in.reads << endl
@@ -168,12 +163,19 @@ write_hist_output(const vector<size_t> &hist, const string &histfile) {
  * that shares the same end and strand.
  */
 static void
-process_inner_buffer(const vector<bam1_t *>::const_iterator it,
+process_inner_buffer(const bool add_dup_count,
+                     const vector<bam1_t *>::const_iterator it,
                      const vector<bam1_t *>::const_iterator jt, sam_hdr_t *hdr,
                      samFile *out, rd_stats &rs_out, size_t &reads_duped,
                      vector<size_t> &hist) {
   const size_t n_reads = std::distance(it, jt);
   const size_t selected = uniq_random::rand() % n_reads;
+
+  if (add_dup_count) {
+    const int ret = bam_aux_update_int(*(it + selected), "DU", n_reads);
+    if (ret < 0) throw dnmt_error("error adding duplicate count aux field");
+  }
+
   if (sam_write1(out, hdr, *(it + selected)) < 0)
     throw runtime_error("failed writing bam record");
   if (hist.size() <= n_reads) hist.resize(n_reads + 1);
@@ -185,17 +187,20 @@ process_inner_buffer(const vector<bam1_t *>::const_iterator it,
 /* The buffer corresponds to reads sharing the same mapping chromosome
    and start position. These are gathered and then processed together. */
 static void
-process_buffer(rd_stats &rs_out, size_t &reads_duped, vector<size_t> &hist,
-               vector<bam1_t *> &buffer, sam_hdr_t *hdr, samFile *out) {
+process_buffer(const bool add_dup_count, rd_stats &rs_out, size_t &reads_duped,
+               vector<size_t> &hist, vector<bam1_t *> &buffer, sam_hdr_t *hdr,
+               samFile *out) {
   sort(begin(buffer), end(buffer), precedes_by_end_and_strand);
   auto it(begin(buffer));
   auto jt = it + 1;
   for (; jt != end(buffer); ++jt)
     if (!equivalent_end_and_strand(*it, *jt)) {
-      process_inner_buffer(it, jt, hdr, out, rs_out, reads_duped, hist);
+      process_inner_buffer(add_dup_count, it, jt, hdr, out, rs_out, reads_duped,
+                           hist);
       it = jt;
     }
-  process_inner_buffer(it, jt, hdr, out, rs_out, reads_duped, hist);
+  process_inner_buffer(add_dup_count, it, jt, hdr, out, rs_out, reads_duped,
+                       hist);
 
   // free the bam1_t pointers before clearing the buffer
   for (size_t i = 0; i < buffer.size(); ++i)
@@ -220,9 +225,9 @@ get_read(samFile *hts, sam_hdr_t *hdr) {
 }
 
 static void
-uniq(const bool VERBOSE, const size_t n_threads, const string &cmd,
-     const string &infile, const string &statfile, const string &histfile,
-     const bool bam_format, const string &outfile) {
+uniq(const bool VERBOSE, const bool add_dup_count, const size_t n_threads,
+     const string &cmd, const string &infile, const string &statfile,
+     const string &histfile, const bool bam_format, const string &outfile) {
   // ADS: (below) At some point the errno here is set to 3=ESRCH ("No
   // such process"?) when using HTSlib 1.17 on macos ventura
   int prev_errno = errno;
@@ -291,10 +296,11 @@ uniq(const bool VERBOSE, const size_t n_threads, const string &cmd,
       }
 
       if (!equivalent_chrom_and_start(buffer[0], aln))
-        process_buffer(rs_out, reads_duped, hist, buffer, hdr, out);
+        process_buffer(add_dup_count, rs_out, reads_duped, hist, buffer, hdr,
+                       out);
       buffer.push_back(aln);
     }
-    process_buffer(rs_out, reads_duped, hist, buffer, hdr, out);
+    process_buffer(add_dup_count, rs_out, reads_duped, hist, buffer, hdr, out);
   }
 
   // remember to turn off the lights
@@ -314,6 +320,7 @@ main_uniq(int argc, const char **argv) {
     bool VERBOSE = false;
 
     bool bam_format = false;
+    bool add_dup_count = false;
     bool use_stdout = false;
 
     // ADS: Not recommended to change this seed. It shouldn't matter
@@ -331,6 +338,8 @@ main_uniq(int argc, const char **argv) {
                            "<in-file> [out-file]", 2);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("stats", 'S', "statistics output file", false, statfile);
+    opt_parse.add_opt("add-count", 'a', "add duplicate counts to reads", false,
+                      add_dup_count);
     opt_parse.add_opt("hist", '\0',
                       "histogram output file for library"
                       " complexity analysis",
@@ -376,12 +385,18 @@ main_uniq(int argc, const char **argv) {
     if (VERBOSE)
       cerr << "[output file: " << outfile << "]" << endl
            << "[output format: " << (bam_format ? "B" : "S") << "AM]" << endl
+           << "[stats file: " << (statfile.empty() ? "none" : statfile) << "]"
+           << endl
+           << "[hist file: " << (histfile.empty() ? "none" : histfile) << "]"
+           << endl
+           << "[add duplicate count: " << (add_dup_count ? "yes" : "no") << "]"
+           << endl
            << "[threads requested: " << n_threads << "]" << endl
            << "[command line: \"" << cmd.str() << "\"]" << endl
            << "[random number seed: " << the_seed << "]" << endl;
 
-    uniq(VERBOSE, n_threads, cmd.str(), infile, statfile, histfile, bam_format,
-         outfile);
+    uniq(VERBOSE, add_dup_count, n_threads, cmd.str(), infile, statfile,
+         histfile, bam_format, outfile);
   }
   catch (const runtime_error &e) {
     cerr << e.what() << endl;

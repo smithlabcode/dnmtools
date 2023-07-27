@@ -82,7 +82,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS := src/smithlab_cpp src/abismal
 install installdirs: SUBDIRS := $(filter-out src/smithlab_cpp src/abismal, $(SUBDIRS))
-AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp
+AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp -I $(top_srcdir)/src/bamxx
 
 CXXFLAGS = -Wall -O3 $(OPENMP_CXXFLAGS) # default has optimization on
 
@@ -97,7 +97,7 @@ TESTS = test_scripts/test_simreads.test \
         test_scripts/test_sym.test \
         test_scripts/test_hmr.test \
         test_scripts/test_roi.test \
-        test_scripts/test_selectsites.test 
+        test_scripts/test_selectsites.test
 
 TEST_EXTENSIONS = .test
 
@@ -114,6 +114,8 @@ test_scripts/test_roi.log: test_scripts/test_sym.log
 
 noinst_LIBRARIES = libdnmtools.a
 libdnmtools_a_SOURCES = \
+	src/bamxx/bam_record.hpp \
+        src/common/bam_record_utils.cpp \
         src/common/BetaBin.cpp \
         src/common/Distro.cpp \
         src/common/EmissionDistribution.cpp \
@@ -129,6 +131,12 @@ libdnmtools_a_SOURCES = \
         src/common/numerical_utils.cpp
 
 libdnmtools_a_SOURCES += \
+	src/bamxx/bam_record.hpp \
+	src/bamxx/bam_infile.hpp \
+	src/bamxx/bam_outfile.hpp \
+	src/bamxx/bam_tpool.hpp \
+	src/bamxx/bam_header.hpp \
+	src/common/bam_record_utils.hpp \
         src/common/BetaBin.hpp \
         src/common/Distro.hpp \
         src/common/EmissionDistribution.hpp \

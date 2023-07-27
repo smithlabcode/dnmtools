@@ -50,13 +50,7 @@
 
 // from dnmtools
 #include "dnmt_error.hpp"
-
-#include "bam_record_utils.hpp"
-
-#include "bam_infile.hpp"
-#include "bam_outfile.hpp"
-#include "bam_header.hpp"
-#include "bam_tpool.hpp"
+#include "bam_record_utils.hpp"  // bring in all bam things
 
 using std::string;
 using std::vector;
@@ -64,6 +58,7 @@ using std::cerr;
 using std::endl;
 using std::string;
 using std::vector;
+using std::equal;
 
 
 static size_t
@@ -292,39 +287,33 @@ check_input_file(const string &infile) {
 
 static bool
 check_format_in_header(const string &input_format, const string &inputfile) {
-  samFile* hts = hts_open(inputfile.c_str(), "r");
+  bam_infile hts(inputfile);
   if (!hts) throw dnmt_error("error opening file: " + inputfile);
-
-  sam_hdr_t *hdr = sam_hdr_read(hts);
-  if (!hdr) throw dnmt_error("failed to read header: " + inputfile);
-
-  auto begin_hdr = sam_hdr_str(hdr);
-  auto end_hdr = begin_hdr + std::strlen(begin_hdr);
-  auto it = std::search(begin_hdr, end_hdr,
+  const bam_header bh(hts.get_hdr());
+  if (!bh) throw dnmt_error("failed to read header: " + inputfile);
+  const string entire_header(bh.tostring());
+  auto it = std::search(begin(entire_header), end(entire_header),
                         begin(input_format), end(input_format),
                         [](const unsigned char a, const unsigned char b) {
                           return std::toupper(a) == std::toupper(b);
                         });
-  bam_hdr_destroy(hdr);
-  const int err_code = hts_close(hts);
-  if (err_code < 0) throw dnmt_error(err_code, "check_format_in_header:hts_close");
-
-  return it != end_hdr;
+  return it != end(entire_header);
 }
 
 static bool
-// same_name(const bam1_t *a, const bam1_t *b, const size_t suff_len) {
 same_name(const bam_rec &a, const bam_rec &b, const size_t suff_len) {
   const uint16_t a_l = a.get_qname_length();
   const uint16_t b_l = b.get_qname_length();
   if (a_l != b_l) return false;
+  const string a_name(a.get_qname());  // ADS: extra copies made here
+  const string b_name(b.get_qname());
   assert(a_l > suff_len);
-  return !std::strncmp(bam_get_qname(a.get_ptr_const()),
-                       bam_get_qname(b.get_ptr_const()), a_l - suff_len);
+  return equal(begin(a_name), begin(a_name) + a_l - suff_len, begin(b_name));
 }
 
 static void
 add_pg_line(const string &cmd, bam_header &hdr) {
+  // ADS: (todo) use a function from bam_header.hpp
   int err_code =
     sam_hdr_add_line(hdr.h, "PG", "ID", "DNMTOOLS", "VN",
                      VERSION, "CL", cmd.c_str(), NULL);

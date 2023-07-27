@@ -1,7 +1,26 @@
+/* Copyright (C) 2020-2023 Masaru Nakajima and Andrew D. Smith
+ *
+ * Authors: Masaru Nakajima and Andrew D. Smith
+ *
+ * This program is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ */
+
 #ifndef BAM_RECORD_UTILS_HPP
 #define BAM_RECORD_UTILS_HPP
 
 #include "bam_record.hpp"
+#include "bam_header.hpp"
+#include "bam_infile.hpp"
+#include "bam_outfile.hpp"
+#include "bam_tpool.hpp"
 
 #include <string>
 

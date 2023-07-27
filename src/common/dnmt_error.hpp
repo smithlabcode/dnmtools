@@ -20,6 +20,7 @@
 #include <string>
 #include <cstring>
 #include <cstdint> // for int64_t
+#include <sstream>
 
 struct dnmt_error: public std::exception {
   int64_t err;        // error possibly from HTSlib

@@ -281,6 +281,8 @@ check_sorted(const string &inputfile, const size_t suff_len, size_t n_reads) {
 static void
 check_input_file(const string &infile) {
   const bam_infile hts(infile);
+  if (!hts)
+    throw dnmt_error("failed to open file: " + infile);
   if (!hts.is_mapped_reads_file())
     throw dnmt_error("not valid SAM/BAM format: " + infile);
 }

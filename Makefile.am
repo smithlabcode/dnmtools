@@ -112,7 +112,7 @@ test_scripts/test_sym.log: test_scripts/test_counts.log
 test_scripts/test_hmr.log: test_scripts/test_sym.log
 test_scripts/test_roi.log: test_scripts/test_sym.log
 
-noinst_LIBRARIES = libdnmtools.a libbamxx.a
+noinst_LIBRARIES = libdnmtools.a
 libdnmtools_a_SOURCES = \
         src/common/bam_record_utils.cpp \
         src/common/BetaBin.cpp \
@@ -146,15 +146,7 @@ libdnmtools_a_SOURCES += \
         src/common/numerical_utils.hpp \
         src/common/dnmt_error.hpp
 
-libbamxx_a_SOURCES = \
-	src/bamxx/bam_record.cpp \
-	src/bamxx/bam_record.hpp \
-	src/bamxx/bam_infile.hpp \
-	src/bamxx/bam_outfile.hpp \
-	src/bamxx/bam_tpool.hpp \
-	src/bamxx/bam_header.hpp
-
-LDADD = libdnmtools.a src/abismal/libabismal.a src/smithlab_cpp/libsmithlab_cpp.a libbamxx.a
+LDADD = libdnmtools.a src/abismal/libabismal.a src/smithlab_cpp/libsmithlab_cpp.a
 
 bin_PROGRAMS = dnmtools
 

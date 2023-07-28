@@ -130,6 +130,7 @@ libdnmtools_a_SOURCES = \
         src/common/numerical_utils.cpp
 
 libdnmtools_a_SOURCES += \
+	src/common/bam_record.hpp \
 	src/common/bam_record_utils.hpp \
         src/common/BetaBin.hpp \
         src/common/Distro.hpp \

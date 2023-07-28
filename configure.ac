@@ -75,5 +75,7 @@ tests/tRex1.fa:data/tRex1.fa
 tests/tRex1_promoters.bed:data/tRex1_promoters.bed
 tests/reads_1.fq.gz:data/reads_1.fq.gz
 tests/reads_2.fq.gz:data/reads_2.fq.gz
+tests/radmeth_test_table.txt:data/radmeth_test_table.txt
+tests/radmeth_test_design.txt:data/radmeth_test_design.txt
 ])
 AC_OUTPUT

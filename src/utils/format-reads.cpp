@@ -168,7 +168,7 @@ load_read_names(const string &inputfile, const size_t n_reads) {
   vector<string> names;
   size_t count = 0;
   while (hts.read(hdr, aln) && count++ < n_reads)
-    names.push_back(string(bam_get_qname(aln.b)));
+    names.push_back(bam_get_qname(aln));
 
   return names;
 }
@@ -279,7 +279,7 @@ check_sorted(const string &inputfile, const size_t suff_len, size_t n_reads) {
   return true;
 }
 
-static void
+static inline void
 check_input_file(const string &infile) {
   const bam_infile hts(infile);
   if (!hts) throw dnmt_error("failed to open file: " + infile);
@@ -303,18 +303,13 @@ check_format_in_header(const string &input_format, const string &inputfile) {
 }
 
 static inline bool
-same_name(const bam1_t *a, const bam1_t *b, const size_t suff_len) {
+same_name(const bam_rec &a, const bam_rec &b, const size_t suff_len) {
   // "+ 1" below: extranul counts *extras*; we don't want *any* nulls
-  const uint16_t a_l = a->core.l_qname - (a->core.l_extranul + 1);
-  const uint16_t b_l = b->core.l_qname - (b->core.l_extranul + 1);
+  const uint16_t a_l = a.b->core.l_qname - (a.b->core.l_extranul + 1);
+  const uint16_t b_l = b.b->core.l_qname - (b.b->core.l_extranul + 1);
   if (a_l != b_l) return false;
   assert(a_l > suff_len);
   return !std::strncmp(bam_get_qname(a), bam_get_qname(b), a_l - suff_len);
-}
-
-static inline bool
-same_name(const bam_rec &a, const bam_rec &b, const size_t suff_len) {
-  return same_name(a.b, b.b, suff_len);
 }
 
 static inline void
@@ -328,7 +323,7 @@ format(const string &cmd, const size_t n_threads,
        const bool bam_format, const string &input_format,
        const size_t suff_len, const size_t max_frag_len) {
 
-  static const dnmt_error bam_write_err("error writing bam");
+  static const dnmt_error bam_write_err{"error writing bam"};
 
   bam_tpool tpool(n_threads); // outer scope: must be destroyed last
   {
@@ -364,7 +359,7 @@ format(const string &cmd, const size_t n_threads,
         standardize_format(input_format, aln);
         if (same_name(prev_aln, aln, suff_len)) {
           // below: essentially check for dovetail
-          if (!is_rev(aln)) swap(prev_aln, aln);
+          if (!bam_is_rev(aln)) swap(prev_aln, aln);
           const size_t frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
           if (frag_len > 0 && frag_len < max_frag_len) {
             if (is_a_rich(merged)) flip_conversion(merged);

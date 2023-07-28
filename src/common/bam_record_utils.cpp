@@ -1,6 +1,21 @@
-#include "bam_record_utils.hpp"
+/* Copyright (C) 2020-2023 Masaru Nakajima and Andrew D. Smith
+ *
+ * Authors: Masaru Nakajima and Andrew D. Smith
+ *
+ * This program is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ */
 
+#include "bam_record_utils.hpp"
 #include "dnmt_error.hpp"
+
 #include <sstream>
 #include <algorithm>
 #include <string>
@@ -12,7 +27,7 @@
 using std::string;
 using std::vector;
 
-static inline void
+static void
 roundup_to_power_of_2(uint32_t &x) {
   bool k_high_bit_set = (x >> (sizeof(uint32_t) * 8 - 1)) & 1;
   if (x > 0) {
@@ -30,23 +45,51 @@ roundup_to_power_of_2(uint32_t &x) {
 
 static int
 sam_realloc_bam_data(bam1_t *b, size_t desired) {
-  /* returns flag: either 0 for success or -1 for error (unable to
-     allocate desired memory) */
   uint32_t new_m_data = desired;
   roundup_to_power_of_2(new_m_data);
-  if (new_m_data < desired)  return -1;
-  uint8_t *new_data = (uint8_t *)realloc(b->data, new_m_data);
+  if (new_m_data < desired) {
+    errno = ENOMEM; // (from sam.c) Not strictly true but we can't
+                    // store the size
+    return -1;
+  }
+  uint8_t *new_data = nullptr;
+  if ((bam_get_mempolicy(b) & BAM_USER_OWNS_DATA) == 0) {
+    new_data = static_cast<uint8_t *>(realloc(b->data, new_m_data));
+  }
+  else {
+    new_data = static_cast<uint8_t *>(malloc(new_m_data));
+    if (new_data != nullptr) {
+      if (b->l_data > 0)
+        std::copy_n(new_data, (static_cast<uint32_t>(b->l_data) < b->m_data) ?
+                    b->l_data : b->m_data, b->data);
+      bam_set_mempolicy(b, bam_get_mempolicy(b) & (~BAM_USER_OWNS_DATA));
+    }
+  }
   if (!new_data) return -1;
-  // ADS: what would be the state of members below if -1 was returned?
   b->data = new_data;
   b->m_data = new_m_data;
   return 0;
 }
 
+// static int
+// sam_realloc_bam_data(bam1_t *b, size_t desired) {
+//   /* returns flag: either 0 for success or -1 for error (unable to
+//      allocate desired memory) */
+//   uint32_t new_m_data = desired;
+//   roundup_to_power_of_2(new_m_data);
+//   if (new_m_data < desired)  return -1;
+//   uint8_t *new_data = (uint8_t *)realloc(b->data, new_m_data);
+//   if (!new_data) return -1;
+//   // ADS: what would be the state of members below if -1 was returned?
+//   b->data = new_data;
+//   b->m_data = new_m_data;
+//   return 0;
+// }
+
 static inline void
 bam_copy_core(const bam1_t *a, bam1_t *b) {
-  /* ADS: prepared for a possibly more efficient block copy to assign
-     all variables at once */
+  // ADS: prepared for a possibly more efficient block copy to assign
+  // all variables at once, like this: b->core = a->core;
   b->core.pos = a->core.pos;
   b->core.tid = a->core.tid;
   b->core.bin = a->core.bin;
@@ -61,7 +104,7 @@ bam_copy_core(const bam1_t *a, bam1_t *b) {
   b->core.isize = a->core.isize;
 }
 
-static inline void
+static  void
 bam_set1_core(bam1_core_t &core,
               const size_t l_qname, const uint16_t flag, const int32_t tid,
               const hts_pos_t pos, const uint8_t mapq, const size_t n_cigar,
@@ -167,8 +210,10 @@ eats_query(const uint32_t c) { return bam_cigar_type(bam_cigar_op(c)) & 1; }
 static inline size_t
 bam_get_n_cigar(const bam1_t *b) { return b->core.n_cigar; }
 
-static inline uint32_t
-to_insertion(const uint32_t x) { return (x & ~BAM_CIGAR_MASK) | BAM_CINS; }
+static  uint32_t
+to_insertion(const uint32_t x) {
+  return (x & ~BAM_CIGAR_MASK) | BAM_CINS;
+}
 
 static void
 fix_internal_softclip(const size_t n_cigar, uint32_t *cigar) {
@@ -188,7 +233,7 @@ fix_internal_softclip(const size_t n_cigar, uint32_t *cigar) {
       *c_itr = to_insertion(*c_itr);
 }
 
-static inline uint32_t
+static  uint32_t
 to_softclip(const uint32_t x) {
   return (x & ~BAM_CIGAR_MASK) | BAM_CSOFT_CLIP;
 }
@@ -234,7 +279,7 @@ merge_cigar_ops(const size_t n_cigar, uint32_t *cigar) {
   return std::distance(cigar, c_itr1);
 }
 
-size_t
+static inline size_t
 correct_cigar(bam1_t *b) {
   /* This function will change external insertions into soft clip
      operations. Not sure why those would be present. It will also
@@ -261,12 +306,16 @@ correct_cigar(bam1_t *b) {
   return delta;
 }
 
-static inline size_t
+size_t correct_cigar(bam_rec &b) {
+  return correct_cigar(b.b);
+}
+
+static  size_t
 get_rlen(const bam1_t *b) { // less tedious
   return bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
 }
 
-static inline size_t
+static  size_t
 get_qlen(const bam1_t *b) { // less tedious
   return b->core.l_qseq;
 }
@@ -342,7 +391,7 @@ const uint8_t byte_revcom_table[] = {
 };
 
 
-static inline void
+static  void
 revcom_byte_then_reverse(unsigned char *a, unsigned char *b) {
   unsigned char *p1, *p2;
   for (p1 = a, p2 = b - 1; p2 > p1; ++p1, --p2) {
@@ -355,7 +404,7 @@ revcom_byte_then_reverse(unsigned char *a, unsigned char *b) {
   if (p1 == p2) *p1 = byte_revcom_table[*p1];
 }
 
-void
+static inline void
 revcomp_seq_by_byte(bam1_t *aln) {
   const size_t l_qseq = get_qlen(aln);
   auto seq = bam_get_seq(aln);
@@ -429,17 +478,7 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   }
 }
 
-// bool
-// is_a_rich(const bam1_t *b) { return bam_aux2A(bam_aux_get(b, "CV")) == 'A'; }
-
-static inline bool
-format_is_bam_or_sam(htsFile *hts) {
-  const htsFormat *fmt = hts_get_format(hts);
-  return fmt->category == sequence_data &&
-         (fmt->format == bam || fmt->format == sam);
-}
-
-void
+static inline void
 flip_conversion(bam1_t *aln) {
   if (aln->core.flag & BAM_FREVERSE)
     aln->core.flag = aln->core.flag & (~BAM_FREVERSE);
@@ -454,7 +493,10 @@ flip_conversion(bam1_t *aln) {
   *(cv + 1) = 'T';
 }
 
-static bool
+void
+flip_conversion(bam_rec &aln) { flip_conversion(aln.b); }
+
+static inline bool
 are_mates(const bam1_t *one, const bam1_t *two) {
   return one->core.mtid == two->core.tid &&
          one->core.mpos == two->core.pos &&
@@ -465,7 +507,7 @@ are_mates(const bam1_t *one, const bam1_t *two) {
      two->core.mpos == one->core.pos; */
 }
 
-int
+static inline int
 truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
 
   const uint32_t *a_cig = bam_get_cigar(a);
@@ -531,6 +573,11 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
   if (ret < 0) throw dnmt_error(ret, "bam_aux_append");
 
   return ret;
+}
+
+int
+truncate_overlap(const bam_rec &a, const uint32_t overlap, bam_rec &c) {
+  return truncate_overlap(a.b, overlap, c.b);
 }
 
 int
@@ -631,6 +678,12 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
 }
 
 int
+merge_overlap(const bam_rec &a, const bam_rec &b,
+              const uint32_t head, bam_rec &c) {
+  return merge_overlap(a.b, b.b, head, c.b);
+}
+
+static inline int
 merge_non_overlap(const bam1_t *a, const bam1_t *b,
                   const uint32_t spacer, bam1_t *c) {
   /* make the cigar string */
@@ -696,6 +749,12 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
 }
 
 int
+merge_non_overlap(const bam_rec &a, const bam_rec &b,
+                  const uint32_t spacer, bam_rec &c) {
+return merge_non_overlap(a.b, b.b, spacer, c.b);
+}
+
+static inline int
 keep_better_end(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   c = bam_copy1(c, get_rlen(a) >= get_rlen(b) ? a : b);
   c->core.mtid = -1;
@@ -705,58 +764,13 @@ keep_better_end(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   return 0;
 }
 
-bool
-are_mates(const bam_rec &one, const bam_rec &two) {
-  return are_mates(one.get_ptr_const(), two.get_ptr_const());
-}
-
-int
-truncate_overlap(const bam_rec &a, const uint32_t overlap,
-                 bam_rec &c) {
-  return truncate_overlap(a.get_ptr_const(), overlap, c.get_ptr());
-}
-
-int
-merge_overlap(const bam_rec &a, const bam_rec &b,
-              const uint32_t head, bam_rec &c) {
-  return merge_overlap(a.get_ptr_const(), b.get_ptr_const(),
-                       head, c.get_ptr());
-}
-
-int
-merge_non_overlap(const bam_rec &a, const bam_rec &b,
-                  const uint32_t spacer, bam_rec &c) {
-  return merge_non_overlap(a.get_ptr_const(), b.get_ptr_const(), spacer, c.get_ptr());
-}
-
 int
 keep_better_end(const bam_rec &a, const bam_rec &b, bam_rec &c) {
-  return keep_better_end(a.get_ptr_const(), b.get_ptr_const(), c.get_ptr());
-}
-
-size_t
-correct_cigar(bam_rec &b) {
-  return correct_cigar(b.get_ptr());
-}
-
-void
-revcomp_seq_by_byte(bam_rec &aln) {
-  revcomp_seq_by_byte(aln.get_ptr());
-}
-
-inline bool
-is_a_rich(const bam1_t *b) { return bam_aux2A(bam_aux_get(b, "CV")) == 'A'; }
-
-bool
-is_a_rich(const bam_rec &b) { return is_a_rich(b.get_ptr_const()); }
-
-void
-flip_conversion(bam_rec &aln) {
-  flip_conversion(aln.get_ptr());
+  return keep_better_end(a.b, b.b, c.b);
 }
 
 // ADS: will move to using this function once it is written
-static void
+static inline void
 standardize_format(const string &input_format, bam1_t *aln) {
   int err_code = 0;
 
@@ -825,9 +839,5 @@ standardize_format(const string &input_format, bam1_t *aln) {
 
 void
 standardize_format(const string &input_format, bam_rec &aln) {
-  standardize_format(input_format, aln.get_ptr());
-}
-
-bool is_rev(const bam_rec &aln) {
-  return bam_is_rev(aln.get_ptr_const());
+  standardize_format(input_format, aln.b);
 }

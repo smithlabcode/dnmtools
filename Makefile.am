@@ -114,6 +114,7 @@ test_scripts/test_roi.log: test_scripts/test_sym.log
 
 noinst_LIBRARIES = libdnmtools.a
 libdnmtools_a_SOURCES = \
+        src/common/bam_record_utils.cpp \
         src/common/BetaBin.cpp \
         src/common/Distro.cpp \
         src/common/EmissionDistribution.cpp \
@@ -129,6 +130,8 @@ libdnmtools_a_SOURCES = \
         src/common/numerical_utils.cpp
 
 libdnmtools_a_SOURCES += \
+	src/common/bam_record.hpp \
+	src/common/bam_record_utils.hpp \
         src/common/BetaBin.hpp \
         src/common/Distro.hpp \
         src/common/EmissionDistribution.hpp \

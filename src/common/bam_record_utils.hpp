@@ -1,0 +1,184 @@
+/* Copyright (C) 2020-2023 Masaru Nakajima and Andrew D. Smith
+ *
+ * Authors: Masaru Nakajima and Andrew D. Smith
+ *
+ * This program is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ */
+
+#ifndef BAM_RECORD_UTILS_HPP
+#define BAM_RECORD_UTILS_HPP
+
+#include "bam_record.hpp"
+
+#include <string>
+
+#ifdef bam_is_rev
+#undef bam_is_rev
+#endif
+
+inline bool
+bam_is_rev(const bam_rec &b) { return (b.b->core.flag & BAM_FREVERSE) != 0; }
+
+#ifdef bam_is_mrev
+#undef bam_is_mrev
+#endif
+
+inline bool
+bam_is_mrev(const bam_rec &b) { return (b.b->core.flag & BAM_FMREVERSE) != 0; }
+
+#ifdef bam_get_qname
+#undef bam_get_qname
+#endif
+
+inline char *
+bam_get_qname(const bam_rec &b) { return reinterpret_cast<char*>(b.b->data); }
+
+#ifdef bam_get_cigar
+#undef bam_get_cigar
+#endif
+
+inline uint32_t *
+bam_get_cigar(const bam_rec &b) {
+  // start of data + bytes for query/read name
+  return reinterpret_cast<uint32_t*>(b.b->data + b.b->core.l_qname);
+}
+
+#ifdef bam_get_seq
+#undef bam_get_seq
+#endif
+
+inline uint8_t *
+bam_get_seq(const bam_rec &b) {
+  // start of data + bytes for cigar + bytes for query/read name
+  return b.b->data + b.b->core.l_qname + (b.b->core.n_cigar << 2);
+}
+
+#ifdef bam_get_qual
+#undef bam_get_qual
+#endif
+
+inline uint8_t *
+bam_get_qual(const bam_rec &b) {
+  return b.b->data +  // start of data
+    b.b->core.l_qname +  // bytes for query name
+    (b.b->core.n_cigar << 2) +  // bytes for cigar
+    ((b.b->core.l_qseq + 1) >> 1);  // bytes for packed query/read
+}
+
+#ifdef bam_get_aux
+#undef bam_get_aux
+#endif
+
+inline uint8_t *
+bam_get_aux(const bam_rec &b) {
+  return b.b->data +
+    b.b->core.l_qname +
+    (b.b->core.n_cigar << 2) +
+    ((b.b->core.l_qseq + 1) >> 1) +
+    b.b->core.l_qseq;
+}
+
+#ifdef bam_get_l_aux
+#undef bam_get_l_aux
+#endif
+
+inline int
+bam_get_l_aux(const bam_rec &b) {
+  return b.b->l_data -
+    (b.b->core.l_qname +
+     (b.b->core.n_cigar << 2) +
+     ((b.b->core.l_qseq + 1) >> 1) +
+     b.b->core.l_qseq);
+}
+
+inline bool
+bam_same_orientation(const bam_rec &a, const bam_rec &b) {
+  return ((a.b->core.flag ^ b.b->core.flag) & BAM_FREVERSE) != 0;
+}
+
+int truncate_overlap(const bam_rec &a, const uint32_t overlap, bam_rec &c);
+
+int merge_overlap(const bam_rec &a, const bam_rec &b,
+                  const uint32_t head, bam_rec &c);
+
+int merge_non_overlap(const bam_rec &a, const bam_rec &b,
+                      const uint32_t spacer, bam_rec &c);
+
+int keep_better_end(const bam_rec &a, const bam_rec &b, bam_rec &c);
+
+size_t correct_cigar(bam_rec &b);
+
+void flip_conversion(bam_rec &aln);
+
+inline bool
+is_a_rich(const bam_rec &b) { return bam_aux2A(bam_aux_get(b.b, "CV")) == 'A'; }
+
+void
+standardize_format(const std::string &input_format, bam_rec &aln);
+
+inline bool
+are_mates(const bam_rec &one, const bam_rec &two) {
+  return one.b->core.mtid == two.b->core.tid &&
+    one.b->core.mpos == two.b->core.pos &&
+    bam_same_orientation(one, two);
+  // below is a consistency check and should not be necessary
+  /* &&
+     two->core.mtid == one->core.tid &&
+     two->core.mpos == one->core.pos; */
+}
+
+inline size_t
+get_l_qseq(const bam_rec &b) { return b.b->core.l_qseq; }
+
+inline size_t
+get_n_targets(const bam_header &bh) { return bh.h->n_targets; }
+
+inline std::string
+get_qname(const bam_rec &b) { return bam_get_qname(b); }
+
+inline int32_t
+get_tid(const bam_rec &b) { return b.b->core.tid; }
+
+inline hts_pos_t
+get_pos(const bam_rec &b) { return b.b->core.pos; }
+
+inline hts_pos_t
+get_endpos(const bam_rec &b) { return bam_endpos(b.b); }
+
+inline bool
+precedes_by_start(const bam_rec &a, const bam_rec &b) {
+  // assumes a.get_tid() <= b.get_tid()
+  return get_tid(a) == get_tid(b) && get_pos(a) < get_pos(b);
+}
+
+inline bool
+precedes_by_end_and_strand(const bam_rec &a, const bam_rec &b) {
+  const auto end_a = bam_endpos(a.b);
+  const auto end_b = bam_endpos(b.b);
+  return end_a < end_b || (end_a == end_b && bam_is_rev(a) < bam_is_rev(b));
+}
+
+inline bool
+equivalent_chrom_and_start(const bam_rec &a, const bam_rec &b) {
+  return a.b->core.pos == b.b->core.pos && a.b->core.tid == b.b->core.tid;
+}
+
+inline bool
+equivalent_end_and_strand(const bam_rec &a, const bam_rec &b) {
+  return bam_endpos(a.b) == bam_endpos(b.b) && bam_is_rev(a) == bam_is_rev(b);
+}
+
+template <typename T> int
+bam_aux_update_int(bam_rec &b, const char tag[2], T val) {
+  return bam_aux_update_int(b.b, tag, val);
+}
+
+#endif

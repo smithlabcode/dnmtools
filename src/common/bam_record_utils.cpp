@@ -192,16 +192,16 @@ bam_set1_wrapper(bam1_t *bam,
   /* This is based on how assignment is done in the `bam_set1`
      function defined in `sam.c` from htslib */
 
-  /*
-   * This modification assigns variables of bam1_t struct but not the sequence.
+  /* This modification assigns variables of bam1_t struct but not the
+   * query/read sequence.
    *
-   * Many checks have been removed because they are checked in code
-   * that calls this function, mostly because they already come from a
-   * valid `bam1_t` struct and so the values have been individually
+   * many checks in bam_set1 have been removed because they are
+   * checked in code that calls this function, mostly because the
+   * values come from valid `bam1_t` instances, so have already been
    * validated.
    *
    * Assumptions:
-   * cigar has been computed and is in the right format
+   * cigar: correct format and matching length
    * rlen = isize
    * qlen = l_seq
    * l_qname <= 254
@@ -568,9 +568,9 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
   vector<uint32_t> c_cig(c_ops, 0);
 
   // ADS: replace this with a std::copy
-  auto c_cig_itr = std::copy(a_cig, a_cig + c_cur, begin(c_cig)); // , c_cig); //, a_cig, c_cur * sizeof(uint32_t));
-  // ADS: warning, if !use_partial, the amount of part_op used below
-  // would make no sense.
+  auto c_cig_itr = std::copy(a_cig, a_cig + c_cur, begin(c_cig));
+  // ADS: warning, if (use_partial==false), then the amount of part_op
+  // used below would make no sense.
   if (use_partial)
     *c_cig_itr = bam_cigar_gen(part_op, bam_cigar_op(a_cig[c_cur]));
   /* after this point the cigar is set and should decide everything */
@@ -599,18 +599,17 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
                              8);            // enough for the 2 tags?
   if (ret < 0) throw dnmt_error(ret, "bam_set1_wrapper");
 
-  auto c_seq = bam_get_seq(c);
-  size_t num_bytes_to_copy = (c_seq_len + 1)/2;
-  std::copy_n(bam_get_seq(a), num_bytes_to_copy, c_seq);
+  const size_t n_bytes_to_copy = (c_seq_len + 1)/2;  // compression
+  std::copy_n(bam_get_seq(a), n_bytes_to_copy, bam_get_seq(c));
 
   /* add the tags */
   const int64_t nm = bam_aux2i(bam_aux_get(a, "NM")); // ADS: do better here!
-  // "udpate" for "int" because it determines the right size
+  // "_udpate" for "int" because it determines the right size
   ret = bam_aux_update_int(c, "NM", nm);
   if (ret < 0) throw dnmt_error(ret, "bam_aux_update_int");
 
   const uint8_t conversion = bam_aux2A(bam_aux_get(a, "CV"));
-  // "append" for "char" because there is no corresponding update
+  // "_append" for "char" because there is no corresponding update
   ret = bam_aux_append(c, "CV", 'A', 1, &conversion);
   if (ret < 0) throw dnmt_error(ret, "bam_aux_append");
 

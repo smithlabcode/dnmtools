@@ -40,9 +40,6 @@
 
 #include <config.h>
 
-// from HTSlib
-#include <htslib/sam.h>
-
 // from smithlab
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
@@ -50,7 +47,7 @@
 
 // from dnmtools
 #include "dnmt_error.hpp"
-#include "bam_record_utils.hpp"  // bring in all bam things
+#include "bam_record_utils.hpp"
 
 using std::string;
 using std::vector;
@@ -60,7 +57,6 @@ using std::string;
 using std::vector;
 using std::equal;
 
-
 static size_t
 merge_mates(const size_t range,
             bam_rec &one, bam_rec &two, bam_rec &merged) {
@@ -68,10 +64,10 @@ merge_mates(const size_t range,
   if (!are_mates(one, two)) return -std::numeric_limits<int>::max();
 
   // arithmetic easier using base 0 so subtracting 1 from pos
-  const int one_s = one.get_pos();
-  const int one_e = one.get_endpos();
-  const int two_s = two.get_pos();
-  const int two_e = two.get_endpos();
+  const int one_s = get_pos(one);
+  const int one_e = get_endpos(one);
+  const int two_s = get_pos(two);
+  const int two_e = get_endpos(two);
   assert(one_s >= 0 && two_s >= 0);
 
   const int spacer = two_s - one_e;
@@ -158,16 +154,21 @@ merge_mates(const size_t range,
   return two_e - one_s;
 }
 
+/********Above are functions for merging pair-end reads********/
+
 static vector<string>
 load_read_names(const string &inputfile, const size_t n_reads) {
   bam_infile hts(inputfile);
   if (!hts) throw dnmt_error("failed to open BAM/SAM file: " + inputfile);
 
+  bam_header hdr(hts);
+  if (!hdr) throw dnmt_error("failed to get header: " + inputfile);
+
   bam_rec aln;
   vector<string> names;
   size_t count = 0;
-  while (get_bam(hts, aln) && count++ < n_reads)
-    names.push_back(aln.get_qname());
+  while (hts.read(hdr, aln) && count++ < n_reads)
+    names.push_back(string(bam_get_qname(aln.b)));
 
   return names;
 }
@@ -281,8 +282,7 @@ check_sorted(const string &inputfile, const size_t suff_len, size_t n_reads) {
 static void
 check_input_file(const string &infile) {
   const bam_infile hts(infile);
-  if (!hts)
-    throw dnmt_error("failed to open file: " + infile);
+  if (!hts) throw dnmt_error("failed to open file: " + infile);
   if (!hts.is_mapped_reads_file())
     throw dnmt_error("not valid SAM/BAM format: " + infile);
 }
@@ -291,7 +291,7 @@ static bool
 check_format_in_header(const string &input_format, const string &inputfile) {
   bam_infile hts(inputfile);
   if (!hts) throw dnmt_error("error opening file: " + inputfile);
-  const bam_header bh(hts.get_hdr());
+  const bam_header bh(hts);
   if (!bh) throw dnmt_error("failed to read header: " + inputfile);
   const string entire_header(bh.tostring());
   auto it = std::search(begin(entire_header), end(entire_header),
@@ -302,24 +302,24 @@ check_format_in_header(const string &input_format, const string &inputfile) {
   return it != end(entire_header);
 }
 
-static bool
-same_name(const bam_rec &a, const bam_rec &b, const size_t suff_len) {
-  const uint16_t a_l = a.get_qname_length();
-  const uint16_t b_l = b.get_qname_length();
+static inline bool
+same_name(const bam1_t *a, const bam1_t *b, const size_t suff_len) {
+  // "+ 1" below: extranul counts *extras*; we don't want *any* nulls
+  const uint16_t a_l = a->core.l_qname - (a->core.l_extranul + 1);
+  const uint16_t b_l = b->core.l_qname - (b->core.l_extranul + 1);
   if (a_l != b_l) return false;
-  const string a_name(a.get_qname());  // ADS: extra copies made here
-  const string b_name(b.get_qname());
   assert(a_l > suff_len);
-  return equal(begin(a_name), begin(a_name) + a_l - suff_len, begin(b_name));
+  return !std::strncmp(bam_get_qname(a), bam_get_qname(b), a_l - suff_len);
 }
 
-static void
-add_pg_line(const string &cmd, bam_header &hdr) {
-  // ADS: (todo) use a function from bam_header.hpp
-  int err_code =
-    sam_hdr_add_line(hdr.h, "PG", "ID", "DNMTOOLS", "VN",
-                     VERSION, "CL", cmd.c_str(), NULL);
-  if (err_code) throw dnmt_error(err_code, "failed to add pg header line");
+static inline bool
+same_name(const bam_rec &a, const bam_rec &b, const size_t suff_len) {
+  return same_name(a.b, b.b, suff_len);
+}
+
+static inline void
+swap(bam_rec &a, bam_rec &b) {
+  std::swap(a.b, b.b);
 }
 
 static void
@@ -327,59 +327,69 @@ format(const string &cmd, const size_t n_threads,
        const string &inputfile, const string &outfile,
        const bool bam_format, const string &input_format,
        const size_t suff_len, const size_t max_frag_len) {
-  // set the threads; scope outside that of the files
-  // htsThreadPool the_thread_pool{hts_tpool_init(n_threads), 0};
-  bam_tpool the_thread_pool(n_threads);
+
+  static const dnmt_error bam_write_err("error writing bam");
+
+  bam_tpool tpool(n_threads); // outer scope: must be destroyed last
   {
-    // open the hts files; assume already checked
-    bam_infile hts(inputfile);
-    bam_header bh(hts.get_hdr());
-    add_pg_line(cmd, bh);
-    bam_outfile out(outfile, bh, bam_format);
+    bam_infile hts(inputfile);  // assume already checked
+    bam_header hdr(hts);
+    if (!hdr) throw dnmt_error("failed to read header");
 
-    the_thread_pool.set_io(hts);
-    the_thread_pool.set_io(out);
+    bam_outfile out(outfile, bam_format);
+    {
+      bam_header hdr_out(hdr);
+      if (!hdr_out) throw dnmt_error("failed create header");
+      hdr_out.add_pg_line(cmd, "DNMTOOLS", VERSION);
+      if (!out.write(hdr_out)) throw dnmt_error("failed to write header");
+    }
 
-    // now process the reads
+    if (n_threads > 1) {
+      tpool.set_io(hts);
+      tpool.set_io(out);
+    }
+
     bam_rec aln, prev_aln, merged;
     bool previous_was_merged = false;
 
-    if (get_bam(hts, aln)) {  // input not empty
+    const bool empty_reads_file = !hts.read(hdr, aln);
+
+    if (!empty_reads_file) {
+
       standardize_format(input_format, aln);
 
-      std::swap(aln, prev_aln); // start with prev_aln as first read
+      swap(aln, prev_aln);  // start with prev_aln being first read
 
-      while (get_bam(hts, aln)) {
+      while (hts.read(hdr, aln)) {
         standardize_format(input_format, aln);
         if (same_name(prev_aln, aln, suff_len)) {
           // below: essentially check for dovetail
-          if (!is_rev(aln)) std::swap(prev_aln, aln);
-          const size_t frag_len =
-            merge_mates(max_frag_len, prev_aln, aln, merged);
+          if (!is_rev(aln)) swap(prev_aln, aln);
+          const size_t frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
           if (frag_len > 0 && frag_len < max_frag_len) {
             if (is_a_rich(merged)) flip_conversion(merged);
-            out.put_bam_rec(merged);
+            if (!out.write(hdr, merged)) throw bam_write_err;
           }
           else {
             if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
-            out.put_bam_rec(prev_aln);
+            if (!out.write(hdr, prev_aln)) throw bam_write_err;
             if (is_a_rich(aln)) flip_conversion(aln);
-            out.put_bam_rec(aln);
+            if (!out.write(hdr, aln)) throw bam_write_err;
           }
           previous_was_merged = true;
         }
         else {
           if (!previous_was_merged) {
             if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
-            out.put_bam_rec(prev_aln);
+            if (!out.write(hdr, prev_aln)) throw bam_write_err;
           }
           previous_was_merged = false;
         }
-        std::swap(prev_aln, aln);
+        swap(prev_aln, aln);
       }
       if (!previous_was_merged) {
         if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
-        out.put_bam_rec(prev_aln);
+        if (!out.write(hdr, prev_aln)) throw bam_write_err;
       }
     }
   }
@@ -494,7 +504,7 @@ int main_format(int argc, const char **argv) {
       }
       else if (!check_suff_len(infile, suff_len, n_reads_to_check))
         throw dnmt_error("wrong read name suffix length [" +
-                      std::to_string(suff_len) + "] in: " + infile);
+                         std::to_string(suff_len) + "] in: " + infile);
       if (!check_sorted(infile, suff_len, n_reads_to_check))
         throw dnmt_error("mates not consecutive in: " + infile);
     }

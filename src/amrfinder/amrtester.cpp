@@ -47,9 +47,14 @@ using std::end;
 
 static void
 backup_to_start_of_current_record(std::ifstream &in) {
-  while (in.tellg() > 0 && in.peek() != '\n' && in.peek() != '\r') {
+  static const size_t assumed_max_valid_line_width = 10000;
+  size_t count = 0;
+  while (in.tellg() > 0 && in.peek() != '\n' && in.peek() != '\r' &&
+         count++ < assumed_max_valid_line_width)
     in.seekg(-1, std::ios_base::cur);
-  }
+  if (count > assumed_max_valid_line_width)
+    throw runtime_error("file contains a line longer than " +
+                        std::to_string(assumed_max_valid_line_width));
 }
 
 
@@ -238,6 +243,9 @@ main_amrtester(int argc, const char **argv) {
     const string reads_file_name(leftover_args.back());
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    if (!validate_epiread_file(reads_file_name))
+      throw runtime_error("invalid states file: " + reads_file_name);
+
     vector<string> chrom_files;
     if (isdir(chrom_file.c_str()))
       read_dir(chrom_file, fasta_suffix, chrom_files);
@@ -269,6 +277,11 @@ main_amrtester(int argc, const char **argv) {
     ReadBEDFile(regions_file, regions);
     if (!check_sorted(regions))
       throw runtime_error("regions not sorted in: " + regions_file);
+
+    // Give names to regions if they do not exist
+    for (size_t i = 0; i < regions.size(); ++i)
+      if (regions[i].get_name().empty())
+        regions[i].set_name("region" + std::to_string(i));
 
     size_t n_regions  = regions.size();
     if (VERBOSE)

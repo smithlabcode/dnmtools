@@ -176,4 +176,9 @@ equivalent_end_and_strand(const bam_rec &a, const bam_rec &b) {
   return bam_endpos(a.b) == bam_endpos(b.b) && bam_is_rev(a) == bam_is_rev(b);
 }
 
+template <typename T> int
+bam_aux_update_int(bam_rec &b, const char tag[2], T val) {
+  return bam_aux_update_int(b.b, tag, val);
+}
+
 #endif

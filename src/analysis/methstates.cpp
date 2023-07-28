@@ -42,9 +42,42 @@ using std::unordered_set;
 using std::runtime_error;
 
 
+static const char b2c[] = "TNGNNNCNNNNNNNNNNNNA";
+
+template<class BidirIt, class OutputIt>
+// constexpr // since C++20
+OutputIt revcomp_copy(BidirIt first, BidirIt last, OutputIt d_first) {
+  for (; first != last; ++d_first)
+    *d_first = b2c[*(--last) - 'A'];
+  return d_first;
+}
+
+
+// template<class BidirIt>
+// constexpr // since C++20
+// void revcomp_into(BidirIt first, BidirIt last)
+// {
+//     using iter_cat = typename std::iterator_traits<BidirIt>::iterator_category;
+
+//     // Tag dispatch, e.g. calling reverse_impl(first, last, iter_cat()),
+//     // can be used in C++14 and earlier modes.
+//     if constexpr (std::is_base_of_v<std::random_access_iterator_tag, iter_cat>)
+//     {
+//         if (first == last)
+//             return;
+
+//         for (--last; first < last; (void)++first, --last)
+//             std::iter_swap(first, last);
+//     }
+//     else
+//         while (first != last && first != --last)
+//             std::iter_swap(first++, last);
+// }
+
+
 inline static bool
 is_cpg(const string &s, const size_t idx) {
-  return toupper(s[idx]) == 'C' && toupper(s[idx + 1]) == 'G';
+  return s[idx] == 'C' && s[idx + 1] == 'G';
 }
 
 
@@ -59,6 +92,42 @@ collect_cpgs(const string &s, unordered_map<size_t, size_t> &cpgs) {
 }
 
 
+// void
+// local_apply_cigar(const string &cigar, string &to_inflate,
+//             const char inflation_symbol) {
+//   std::istringstream iss(cigar);
+
+//   string inflated_seq;
+//   size_t n;
+//   char op;
+//   size_t i = 0;
+//   auto to_inflate_beg = std::begin(to_inflate);
+//   while (iss >> n >> op) {
+//     if (consumes_reference(op) && consumes_query(op)) {
+//       inflated_seq.append(to_inflate_beg + i, to_inflate_beg + i + n);
+//       i += n;
+//     }
+//     else if (consumes_query(op)) {
+//       // no addition of symbols to query
+//       i += n;
+//     }
+//     else if (consumes_reference(op)) {
+//       inflated_seq.append(n, inflation_symbol);
+//       // no increment of index within query
+//     }
+//   }
+
+//   // sum of total M/I/S/=/X/N operations must equal length of seq
+//   const size_t orig_len = to_inflate.length();
+//   if (i != orig_len)
+//     throw runtime_error("inconsistent number of qseq ops in cigar: " +
+//                         to_inflate + " "  + cigar + " " +
+//                         to_string(i) + " " +
+//                         to_string(orig_len));
+//   to_inflate.swap(inflated_seq);
+// }
+
+
 static bool
 convert_meth_states_pos(const string &chrom,
                         const unordered_map<size_t, size_t> &cpgs,
@@ -67,40 +136,39 @@ convert_meth_states_pos(const string &chrom,
   states.clear();
 
   const size_t width = cigar_rseq_ops(aln.cigar);
-  const size_t offset = aln.pos - 1;
+  const size_t offset = aln.pos - 1;  // SAM format convention
 
   string the_seq(aln.seq);
   apply_cigar(aln.cigar, the_seq);
   if (the_seq.size() != width)
     throw runtime_error("bad sam record format: " + aln.tostring());
 
-  size_t cpg_count = 0;
-  size_t first_cpg = std::numeric_limits<size_t>::max();
-  for (size_t i = 0; i < width; ++i) {
-    if (offset + i < chrom.length() && is_cpg(chrom, offset + i)) {
+  const auto beg_chrom = begin(chrom);
+  const auto end_chrom = end(chrom);
+  auto chrom_itr = beg_chrom + offset;
+  auto first_cpg = end_chrom;
 
-      if (the_seq[i] == 'C') {
-        states += 'C';
-        ++cpg_count;
-      }
-      else if (the_seq[i] == 'T') {
-        states += 'T';
-        ++cpg_count;
-      }
-      else states += 'N';
+  // ADS: below the "-1" in the std::min is to ensure dinuc exists
+  const auto beg_seq = begin(the_seq);
+  const auto seq_lim = beg_seq + std::min(width, chrom.length() - 1 - offset);
 
-      if (first_cpg == std::numeric_limits<size_t>::max())
-        first_cpg = i;
+  for (auto seq_itr = beg_seq; seq_itr != seq_lim; ++chrom_itr, ++seq_itr) {
+    if (*chrom_itr == 'C' && *(chrom_itr + 1) == 'G') {
+      const char x = *seq_itr;
+      states += (x == 'C') ? 'C' : ((x == 'T') ? 'T' : 'N');
+      if (first_cpg == end_chrom)
+        first_cpg = chrom_itr;
     }
   }
-  if (first_cpg != std::numeric_limits<size_t>::max()) {
-    auto the_cpg = cpgs.find(offset + first_cpg);
+
+  if (first_cpg != end_chrom) {
+    const auto the_cpg = cpgs.find(distance(beg_chrom, first_cpg));
     if (the_cpg == end(cpgs))
       throw runtime_error("cannot locate site on positive strand: " +
                           aln.tostring());
     start_pos = the_cpg->second;
   }
-  return cpg_count > 0;
+  return states.find_first_of("CT") != string::npos;
 }
 
 
@@ -109,43 +177,53 @@ convert_meth_states_neg(const string &chrom,
                         const unordered_map<size_t, size_t> &cpgs,
                         const sam_rec &aln,
                         size_t &start_pos, string &states) {
+  /* ADS: the "revcomp" on the read sequence is needed for the cigar
+     to be applied, since the cigar is relative to the genome
+     coordinates and not the read's sequence. But the read sequence
+     may is assumed to have been T-rich to begin with, so it becomes
+     A-rich. And the position of the C in the CpG becomes the G
+     position.
+   */
+
   states.clear();
 
   const size_t width = cigar_rseq_ops(aln.cigar);
-  const size_t offset = aln.pos - 1;
+  const size_t offset = aln.pos - 1;  // SAM format convention
 
-  string the_seq(aln.seq);
-  revcomp_inplace(the_seq);
+  string the_seq;
+  the_seq.resize(aln.seq.length());
+  revcomp_copy(begin(aln.seq), end(aln.seq), begin(the_seq));
   apply_cigar(aln.cigar, the_seq);
   if (the_seq.size() != width)
     throw runtime_error("bad sam record format: " + aln.tostring());
 
-  size_t cpg_count = 0;
-  size_t first_cpg = std::numeric_limits<size_t>::max();
-  for (size_t i = 0; i < width; ++i) {
-    if (offset + i > 0 && is_cpg(chrom, offset + i - 1)) {
-      if (the_seq[i] == 'G') {
-        states += 'C';
-        ++cpg_count;
-      }
-      else if (the_seq[i] == 'A') {
-        states += 'T';
-        ++cpg_count;
-      }
-      else states += 'N';
-      if (first_cpg == std::numeric_limits<size_t>::max()) {
-        first_cpg = i;
-      }
+  const auto beg_chrom = begin(chrom);
+  const auto end_chrom = end(chrom);
+  auto chrom_itr = beg_chrom + ((offset > 0) ? offset - 1 : 0);
+  auto first_cpg = end_chrom;
+
+  // ADS: should apply_cigar make the std::min below irrelevant?
+  const auto beg_seq = begin(the_seq);
+  const auto seq_lim = beg_seq + std::min(width, chrom.length() - offset);
+  auto seq_itr = beg_seq + ((offset > 0) ? 0 : 1);
+
+  for (; seq_itr != seq_lim; ++chrom_itr, ++seq_itr) {
+    if (*chrom_itr == 'C' && *(chrom_itr + 1) == 'G') {
+      const char x = *seq_itr;
+      states += (x == 'G') ? 'C' : ((x == 'A') ? 'T' : 'N');
+      if (first_cpg == end_chrom)
+        first_cpg = chrom_itr;
     }
   }
-  if (first_cpg != std::numeric_limits<size_t>::max()) {
-    auto the_cpg = cpgs.find(offset + first_cpg - 1);
+
+  if (first_cpg != end_chrom) {
+    const auto the_cpg = cpgs.find(distance(beg_chrom, first_cpg));
     if (the_cpg == end(cpgs))
       throw runtime_error("cannot locate site on negative strand: " +
                           aln.tostring());
     start_pos = the_cpg->second;
   }
-  return cpg_count > 0;
+  return states.find_first_of("CT") != string::npos;
 }
 
 
@@ -183,12 +261,11 @@ main_methstates(int argc, const char **argv) {
 
     string chrom_file;
     string outfile;
-    string fasta_suffix = "fa";
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0], description, "<sam-file>");
     opt_parse.add_opt("output", 'o', "output file name", false, outfile);
-    opt_parse.add_opt("chrom", 'c', "file or dir of chroms (.fa extn)",
+    opt_parse.add_opt("chrom", 'c', "fasta format reference genome file",
                       true , chrom_file);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
 
@@ -214,32 +291,18 @@ main_methstates(int argc, const char **argv) {
     const string mapped_reads_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    vector<string> chrom_files;
-    if (isdir(chrom_file.c_str()))
-      read_dir(chrom_file, fasta_suffix, chrom_files);
-    else chrom_files.push_back(chrom_file);
-
-    if (VERBOSE)
-      cerr << "n_chrom_files:\t" << chrom_files.size() << endl;
-
     /* first load in all the chromosome sequences and names, and make
        a map from chromosome name to the location of the chromosome
        itself */
-    vector<string> all_chroms;
-    vector<string> chrom_names;
+    vector<string> all_chroms, chrom_names;
+    read_fasta_file_short_names(chrom_file, chrom_names, all_chroms);
+    for (auto &&i: all_chroms)
+      transform(begin(i), end(i), begin(i),
+                [](const char c) { return std::toupper(c); });
+
     unordered_map<string, size_t> chrom_lookup;
-    for (auto i(begin(chrom_files)); i != end(chrom_files); ++i) {
-      vector<string> tmp_chroms, tmp_names;
-      read_fasta_file_short_names(*i, tmp_names, tmp_chroms);
-      for (size_t j = 0; j < tmp_chroms.size(); ++j) {
-        if (chrom_lookup.find(tmp_names[j]) != end(chrom_lookup))
-          throw runtime_error("repeated chromosome or name: " + tmp_names[j]);
-        chrom_names.push_back(tmp_names[j]);
-        chrom_lookup[chrom_names.back()] = all_chroms.size();
-        all_chroms.push_back("");
-        all_chroms.back().swap(tmp_chroms[j]);
-      }
-    }
+    for (size_t i = 0; i < chrom_names.size(); ++i)
+      chrom_lookup[chrom_names[i]] = i;
 
     if (VERBOSE)
       cerr << "n_chroms: " << all_chroms.size() << endl;
@@ -252,7 +315,8 @@ main_methstates(int argc, const char **argv) {
     if (!outfile.empty()) of.open(outfile.c_str());
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
-    // given a chrom, get cpg location from cpg index
+    // for the current chrom, this maps cpg index to cpg position in
+    // the chrom
     unordered_map<size_t, size_t> cpgs;
 
     unordered_set<string> chroms_seen;

@@ -146,7 +146,14 @@ libdnmtools_a_SOURCES += \
         src/common/numerical_utils.hpp \
         src/common/dnmt_error.hpp
 
-LDADD = libdnmtools.a src/abismal/libabismal.a src/smithlab_cpp/libsmithlab_cpp.a
+# ADS: additional radmeth sources to help isolate the parts using GSL for
+# optimization
+libdnmtools_a_SOURCES += \
+        src/radmeth/radmeth_optimize.hpp \
+        src/radmeth/radmeth_model.hpp
+
+
+LDADD = libdnmtools.a  src/abismal/libabismal.a src/smithlab_cpp/libsmithlab_cpp.a
 
 bin_PROGRAMS = dnmtools
 
@@ -182,6 +189,7 @@ dnmtools_SOURCES += src/amrfinder/amrtester.cpp
 
 dnmtools_SOURCES += src/radmeth/dmr.cpp
 dnmtools_SOURCES += src/radmeth/methdiff.cpp
+dnmtools_SOURCES += src/radmeth/radmeth_optimize.cpp
 dnmtools_SOURCES += src/radmeth/radmeth.cpp
 dnmtools_SOURCES += src/radmeth/radmeth-adjust.cpp
 dnmtools_SOURCES += src/radmeth/radmeth-merge.cpp

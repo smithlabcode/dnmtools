@@ -174,9 +174,6 @@ get_n_cigar(const bam_rec &b) { return b.b->core.n_cigar; }
 inline hts_pos_t
 get_endpos(const bam_rec &b) { return bam_endpos(b.b); }
 
-inline hts_pos_t
-get_n_cigar(const bam_rec &b) { return b.b->core.n_cigar; }
-
 inline bool
 cigar_eats_ref(const uint32_t c) {
   return bam_cigar_type(bam_cigar_op(c)) & 2;

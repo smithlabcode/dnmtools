@@ -325,67 +325,65 @@ format(const string &cmd, const size_t n_threads,
 
   static const dnmt_error bam_write_err{"error writing bam"};
 
-  bam_tpool tpool(n_threads); // outer scope: must be destroyed last
-  {
-    bam_infile hts(inputfile);  // assume already checked
-    bam_header hdr(hts);
-    if (!hdr) throw dnmt_error("failed to read header");
+  bam_tpool tp(n_threads);
 
-    bam_outfile out(outfile, bam_format);
-    {
-      bam_header hdr_out(hdr);
-      if (!hdr_out) throw dnmt_error("failed create header");
-      hdr_out.add_pg_line(cmd, "DNMTOOLS", VERSION);
-      if (!out.write(hdr_out)) throw dnmt_error("failed to write header");
-    }
+  bam_infile hts(inputfile);  // assume already checked
+  bam_header hdr(hts);
+  if (!hdr) throw dnmt_error("failed to read header");
 
-    if (n_threads > 1) {
-      tpool.set_io(hts);
-      tpool.set_io(out);
-    }
+  bam_outfile out(outfile, bam_format);
 
-    bam_rec aln, prev_aln, merged;
-    bool previous_was_merged = false;
+  bam_header hdr_out(hdr);
+  if (!hdr_out) throw dnmt_error("failed create header");
+  hdr_out.add_pg_line(cmd, "DNMTOOLS", VERSION);
+  if (!out.write(hdr_out)) throw dnmt_error("failed to write header");
 
-    const bool empty_reads_file = !hts.read(hdr, aln);
+  if (n_threads > 1) {
+    tp.set_io(hts);
+    tp.set_io(out);
+  }
 
-    if (!empty_reads_file) {
+  bam_rec aln, prev_aln, merged;
+  bool previous_was_merged = false;
 
+  const bool empty_reads_file = !hts.read(hdr, aln);
+
+  if (!empty_reads_file) {
+
+    standardize_format(input_format, aln);
+
+    swap(aln, prev_aln);  // start with prev_aln being first read
+
+    while (hts.read(hdr, aln)) {
       standardize_format(input_format, aln);
-
-      swap(aln, prev_aln);  // start with prev_aln being first read
-
-      while (hts.read(hdr, aln)) {
-        standardize_format(input_format, aln);
-        if (same_name(prev_aln, aln, suff_len)) {
-          // below: essentially check for dovetail
-          if (!bam_is_rev(aln)) swap(prev_aln, aln);
-          const size_t frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
-          if (frag_len > 0 && frag_len < max_frag_len) {
-            if (is_a_rich(merged)) flip_conversion(merged);
-            if (!out.write(hdr, merged)) throw bam_write_err;
-          }
-          else {
-            if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
-            if (!out.write(hdr, prev_aln)) throw bam_write_err;
-            if (is_a_rich(aln)) flip_conversion(aln);
-            if (!out.write(hdr, aln)) throw bam_write_err;
-          }
-          previous_was_merged = true;
+      if (same_name(prev_aln, aln, suff_len)) {
+        // below: essentially check for dovetail
+        if (!bam_is_rev(aln)) swap(prev_aln, aln);
+        const size_t frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
+        if (frag_len > 0 && frag_len < max_frag_len) {
+          if (is_a_rich(merged)) flip_conversion(merged);
+          if (!out.write(hdr, merged)) throw bam_write_err;
         }
         else {
-          if (!previous_was_merged) {
-            if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
-            if (!out.write(hdr, prev_aln)) throw bam_write_err;
-          }
-          previous_was_merged = false;
+          if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
+          if (!out.write(hdr, prev_aln)) throw bam_write_err;
+          if (is_a_rich(aln)) flip_conversion(aln);
+          if (!out.write(hdr, aln)) throw bam_write_err;
         }
-        swap(prev_aln, aln);
+        previous_was_merged = true;
       }
-      if (!previous_was_merged) {
-        if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
-        if (!out.write(hdr, prev_aln)) throw bam_write_err;
+      else {
+        if (!previous_was_merged) {
+          if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
+          if (!out.write(hdr, prev_aln)) throw bam_write_err;
+        }
+        previous_was_merged = false;
       }
+      swap(prev_aln, aln);
+    }
+    if (!previous_was_merged) {
+      if (is_a_rich(prev_aln)) flip_conversion(prev_aln);
+      if (!out.write(hdr, prev_aln)) throw bam_write_err;
     }
   }
 }

@@ -228,6 +228,7 @@ main_bsrate(int argc, const char **argv) {
     bool VERBOSE = false;
     bool INCLUDE_CPGS = false;
     bool reads_are_a_rich = false;
+    size_t n_threads = 1;
 
     string chroms_file;
     string outfile;
@@ -249,6 +250,7 @@ main_bsrate(int argc, const char **argv) {
                       seq_to_use);
     opt_parse.add_opt("a-rich", 'A', "reads are A-rich", false,
                       reads_are_a_rich);
+    opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -282,10 +284,15 @@ main_bsrate(int argc, const char **argv) {
     if (VERBOSE)
       cerr << "[n chroms in reference: " << chroms.size() << "]" << endl;
 
+    bam_tpool tp(n_threads);
+
     bam_infile hts(bam_file);
     if (!hts) throw dnmt_error("failed to open input file: " + bam_file);
     bam_header hdr(hts);
     if (!hdr) throw dnmt_error("failed to read header");
+
+    if (n_threads > 1)
+      tp.set_io(hts);
 
     // map the bam header index for each "target" to a sequence in the
     // reference genome
@@ -312,7 +319,7 @@ main_bsrate(int argc, const char **argv) {
     bam_rec aln;
     unordered_set<int32_t> chroms_seen;
 
-    while (hts.read(hdr, aln)) {  // sam_reader >> aln) {
+    while (hts.read(hdr, aln)) {
 
       if (reads_are_a_rich) flip_conversion(aln);
 

@@ -30,8 +30,10 @@
 #include <stdexcept>
 #include <string>
 
-#include <htslib/sam.h>  // from HTSlib
-#include <htslib/thread_pool.h>  // from HTSlib
+// from HTSlib
+#include <htslib/sam.h>
+#include <htslib/bgzf.h>
+#include <htslib/thread_pool.h>  
 
 struct bam_rec {
   bam_rec() : b{bam_init1()} {}
@@ -57,6 +59,7 @@ struct bam_infile {
   }
   samFile *f{};
 };
+
 
 struct bam_header {
   bam_header() = default;
@@ -85,11 +88,28 @@ struct bam_outfile {
   htsFile *f{};
 };
 
+struct bam_bgzf {
+  bam_bgzf(const std::string &fn, const std::string &mode) :
+    f{bgzf_open(fn.c_str(), mode.c_str())} {}
+  ~bam_bgzf() { if (f != nullptr) bgzf_close(f); }
+  operator bool() const { return f != nullptr; }
+  bool write(const char* const str, const size_t expected_size) {
+    ssize_t res = bgzf_write(f, str, expected_size) >= 0;
+    return (res >= 0 &&
+        static_cast<size_t>(res) == expected_size); 
+  }
+  BGZF *f{};
+};
+
 struct bam_tpool{
   bam_tpool(const size_t n_threads) : tpool{hts_tpool_init(n_threads), 0} {}
   ~bam_tpool() { hts_tpool_destroy(tpool.pool); }
   template<class T> void set_io(const T &bam_file) {
     const int ret = hts_set_thread_pool(bam_file.f, &tpool);
+    if (ret < 0) throw std::runtime_error("failed to set thread pool");
+  }
+  void set_bgzf(const bam_bgzf &bgzf) {
+    const int ret = bgzf_thread_pool(bgzf.f, tpool.pool, tpool.qsize);
     if (ret < 0) throw std::runtime_error("failed to set thread pool");
   }
   htsThreadPool tpool{};

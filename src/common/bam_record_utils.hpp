@@ -217,4 +217,12 @@ bam_aux_update_int(bam_rec &b, const char tag[2], T val) {
   return bam_aux_update_int(b.b, tag, val);
 }
 
+inline std::string
+sam_hdr_tid2name(const bam_header &hdr, const int32_t tid) {
+  return std::string(sam_hdr_tid2name(hdr.h, tid));
+}
+
+
+
+
 #endif

@@ -1,3 +1,4 @@
+86ca23015535cf3295c0da3587a95f22  tests/radmeth_test_output.txt
 4b3c619052f24b1764a7bc41f42453d8  tests/reads.bsrate
 68cc65a337d5529295c813f282665dfe  tests/reads.counts
 1f29966bbbc11985f724c8e0c0f1db2b  tests/reads.counts.select

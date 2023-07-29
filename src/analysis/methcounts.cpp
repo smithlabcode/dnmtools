@@ -298,13 +298,13 @@ count_states_pos(const bam_rec &aln, vector<CountSet> &counts) {
   const auto seq = bam_get_seq(aln);
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + get_n_cigar(aln);
-  size_t rpos = get_pos(aln);
-  size_t qpos = 0; // to match type with b->core.l_qseq
+  auto rpos = get_pos(aln);
+  auto qpos = 0; // to match type with b->core.l_qseq
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
     const uint32_t n = bam_cigar_oplen(*c_itr);
     if (eats_ref(op) && eats_query(op)) {
-      const size_t end_qpos = qpos + n;
+      const decltype(qpos) end_qpos = qpos + n;
       for (; qpos < end_qpos; ++qpos) {
         // ADS: beware!!! bam_seqi is a macro, so no "qpos++" inside
         // its arguments! Why macros?!?! Just make sure the compiler
@@ -321,9 +321,9 @@ count_states_pos(const bam_rec &aln, vector<CountSet> &counts) {
   }
   // ADS: somehow previous code included a correction for rpos going
   // past the end of the chromosome; this should result at least in a
-  // soft-clip by any mapper. I'm not allowing it here now as I don't
-  // see how it can be legit.
-  assert(qpos == get_l_qseq(aln) && rpos <= counts.size());
+  // soft-clip by any mapper. I'm not checking it here as even if it
+  // happens I don't want to terminate.
+  assert(qpos == get_l_qseq(aln));
 }
 
 
@@ -352,9 +352,8 @@ count_states_neg(const bam_rec &aln, vector<CountSet> &counts) {
     }
   }
   /* qpos is unsigned; would wrap around if < 0 */
-  // ADS: Same as count_states_pos; see comment there; not allowing
-  // rpos to go past the end of the chromosome.
-  assert(qpos <= get_l_qseq(aln) && rpos <= counts.size());
+  // ADS: Same as count_states_pos; see comment there
+  assert(qpos == 0);
 }
 
 

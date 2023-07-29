@@ -1,4 +1,4 @@
-4b3c619052f24b1764a7bc41f42453d8  tests/reads.bsrate
+86ca23015535cf3295c0da3587a95f22  tests/radmeth_test_output.txt
 68cc65a337d5529295c813f282665dfe  tests/reads.counts
 1f29966bbbc11985f724c8e0c0f1db2b  tests/reads.counts.select
 34f5eddd80d5d35131f92697d4cca896  tests/reads.counts.sym
@@ -14,3 +14,4 @@ b067a733102e611ca614ae22fc944471  tests/reads.ustats
 4ebacfec717182fafce46b037591b228  tests/simreads_2.fq
 3ba5a1c4c420ca7a2dbd88290033c3bc  tests/tRex1.idx
 b5270bb38d798741cfa74f411a0d49bf  tests/tRex1_promoters.roi.bed
+575f7daf8062c4aa3194370488794be8  tests/reads.bsrate

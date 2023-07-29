@@ -99,6 +99,24 @@ bam_get_l_aux(const bam_rec &b) {
      b.b->core.l_qseq);
 }
 
+#ifdef bam_cigar_op
+#undef bam_cigar_op
+#endif
+
+inline uint32_t
+bam_cigar_op(const uint32_t c) {
+  return c & BAM_CIGAR_MASK;
+}
+
+#ifdef bam_cigar_oplen
+#undef bam_cigar_oplen
+#endif
+
+inline uint32_t
+bam_cigar_oplen(const uint32_t c) {
+  return c >> BAM_CIGAR_SHIFT;
+}
+
 inline bool
 bam_same_orientation(const bam_rec &a, const bam_rec &b) {
   return ((a.b->core.flag ^ b.b->core.flag) & BAM_FREVERSE) != 0;
@@ -135,7 +153,7 @@ are_mates(const bam_rec &one, const bam_rec &two) {
      two->core.mpos == one->core.pos; */
 }
 
-inline size_t
+inline int32_t
 get_l_qseq(const bam_rec &b) { return b.b->core.l_qseq; }
 
 inline size_t
@@ -150,11 +168,29 @@ get_tid(const bam_rec &b) { return b.b->core.tid; }
 inline hts_pos_t
 get_pos(const bam_rec &b) { return b.b->core.pos; }
 
+inline uint32_t
+get_n_cigar(const bam_rec &b) { return b.b->core.n_cigar; }
+
 inline hts_pos_t
 get_endpos(const bam_rec &b) { return bam_endpos(b.b); }
 
 inline hts_pos_t
 get_n_cigar(const bam_rec &b) { return b.b->core.n_cigar; }
+
+inline bool
+cigar_eats_ref(const uint32_t c) {
+  return bam_cigar_type(bam_cigar_op(c)) & 2;
+}
+
+inline bool
+cigar_eats_query(const uint32_t c) {
+  return bam_cigar_type(bam_cigar_op(c)) & 1;
+}
+
+inline bool
+cigar_eats_frag(const uint32_t c) {
+  return bam_cigar_op(c) == BAM_CREF_SKIP;
+}
 
 inline bool
 precedes_by_start(const bam_rec &a, const bam_rec &b) {

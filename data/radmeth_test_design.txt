@@ -1,0 +1,9 @@
+base	sex	factor
+sample_FA1	1	1	1
+sample_FA2	1	1	1
+sample_FB1	1	1	0
+sample_FB2	1	1	0
+sample_MA1	1	0	1
+sample_MA2	1	0	1
+sample_MB1	1	0	0
+sample_MB2	1	0	0

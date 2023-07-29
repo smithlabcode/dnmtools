@@ -241,7 +241,7 @@ tag_with_mut(const uint32_t tag, const bool mut) {
 
 
 static void
-write_output(const bam_header &hdr, BGZF *out,
+write_output(const bam_header &hdr, bam_bgzf &out,
              const int32_t tid, const string &chrom,
              const vector<CountSet> &counts, bool CPG_ONLY) {
 
@@ -270,10 +270,8 @@ write_output(const bam_header &hdr, BGZF *out,
           << (n_reads > 0 ? unconverted/n_reads : 0.0) << '\t'
           << n_reads << '\n';
       const size_t expected_size = buf.tellp();
-      const ssize_t err_code = bgzf_write(out, buf.c_str(), expected_size);
-      if (err_code < 0 ||
-          static_cast<size_t>(err_code) != expected_size)
-        throw dnmt_error(err_code, "error writing output");
+      if (out.write(buf.c_str(), expected_size))
+        throw dnmt_error("error writing output");
     }
   }
 }
@@ -363,8 +361,6 @@ process_reads(const bool VERBOSE,
               const string &infile, const string &outfile,
               const string &chroms_file, const bool CPG_ONLY) {
 
-  int err_code = 0;
-
   vector<string> chroms, names;
   read_fasta_file_short_names(chroms_file, names, chroms);
   for (auto &&i: chroms)
@@ -404,16 +400,13 @@ process_reads(const bool VERBOSE,
 
   // open the output file
   const string output_mode = compress_output ? "w" : "wu";
-  BGZF *out = bgzf_open(outfile.c_str(), output_mode.c_str());
+  bam_bgzf out(outfile, output_mode);
   if (!out) throw dnmt_error("error opening output file: " + outfile);
 
   /* set the threads for the input file decompression */
   if (n_threads > 1) {
     tp.set_io(hts);
-
-    /* set threads for the output file compression */
-    err_code = bgzf_thread_pool(out, tp.tpool.pool, tp.tpool.qsize);
-    if (err_code) throw dnmt_error(err_code, "error setting bgzf threads");
+    tp.set_bgzf(out);
   }
 
   /* now iterate over the reads, switching chromosomes and writing
@@ -467,10 +460,6 @@ process_reads(const bool VERBOSE,
   if (!counts.empty())
     write_output(hdr, out, prev_tid, *chrom_itr, counts, CPG_ONLY);
 
-  // turn off the lights
-  err_code = bgzf_close(out);
-  if (err_code) throw dnmt_error(err_code, "process_reads:bgzf_close");
-  // do this after the files have been closed
 }
 
 

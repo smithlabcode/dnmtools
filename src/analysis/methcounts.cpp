@@ -241,7 +241,7 @@ tag_with_mut(const uint32_t tag, const bool mut) {
 
 
 static void
-write_output(bam_header hdr, BGZF *out,
+write_output(const bam_header &hdr, BGZF *out,
              const int32_t tid, const string &chrom,
              const vector<CountSet> &counts, bool CPG_ONLY) {
 
@@ -263,7 +263,7 @@ write_output(bam_header hdr, BGZF *out,
       const size_t n_reads = unconverted + converted;
       buf.clear();
       // ADS: here is where we make an MSite, but not using MSite
-      buf << sam_hdr_tid2name(hdr.h, tid) << '\t'
+      buf << sam_hdr_tid2name(hdr, tid) << '\t'
           << i << '\t'
           << (is_c ? '+' : '-') << '\t'
           << tag_values[tag_with_mut(the_tag, mut)] << '\t'
@@ -401,8 +401,6 @@ process_reads(const bool VERBOSE,
     tid_to_idx[i] = name_itr->second;
   }
   //// ADS: really should cross-check the chromosome sizes
-  // copy(begin(chrom_sizes), end(chrom_sizes),
-  // std::ostream_iterator<size_t>(cout, "\n"));
 
   // open the output file
   const string output_mode = compress_output ? "w" : "wu";
@@ -447,10 +445,10 @@ process_reads(const bool VERBOSE,
       auto chrom_idx(tid_to_idx.find(tid));
       if (chrom_idx == end(tid_to_idx))
         throw dnmt_error("chromosome not found: " +
-                         string(sam_hdr_tid2name(hdr.h, tid)));
+                         string(sam_hdr_tid2name(hdr, tid)));
 
       if (VERBOSE)
-        cerr << "processing " << sam_hdr_tid2name(hdr.h, tid) << endl;
+        cerr << "processing " << sam_hdr_tid2name(hdr, tid) << endl;
 
       prev_tid = tid;
       chrom_itr = begin(chroms) + chrom_idx->second;

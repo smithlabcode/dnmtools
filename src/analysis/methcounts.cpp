@@ -35,11 +35,13 @@
 // #include "MSite.hpp"
 #include "bsutils.hpp"
 #include "dnmt_error.hpp"
+#include "bam_record_utils.hpp"
 
 /* HTSlib */
 #include <htslib/sam.h>
 #include <htslib/bgzf.h>
 #include <htslib/thread_pool.h>
+
 
 using std::string;
 using std::vector;
@@ -239,7 +241,7 @@ tag_with_mut(const uint32_t tag, const bool mut) {
 
 
 static void
-write_output(sam_hdr_t *hdr, BGZF *out,
+write_output(bam_header hdr, BGZF *out,
              const int32_t tid, const string &chrom,
              const vector<CountSet> &counts, bool CPG_ONLY) {
 
@@ -261,7 +263,7 @@ write_output(sam_hdr_t *hdr, BGZF *out,
       const size_t n_reads = unconverted + converted;
       buf.clear();
       // ADS: here is where we make an MSite, but not using MSite
-      buf << sam_hdr_tid2name(hdr, tid) << '\t'
+      buf << sam_hdr_tid2name(hdr.h, tid) << '\t'
           << i << '\t'
           << (is_c ? '+' : '-') << '\t'
           << tag_values[tag_with_mut(the_tag, mut)] << '\t'
@@ -284,38 +286,25 @@ write_output(sam_hdr_t *hdr, BGZF *out,
 // #define get_qlen(b) ((b)->core.l_qseq)
 
 
-static inline int32_t
-get_tid(const bam1_t *b) {return b->core.tid;}
 
 
-static inline hts_pos_t
-get_rlen(const bam1_t *b) {
-  return bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
-}
 
-
-static inline hts_pos_t
-get_pos(const bam1_t *b) {return b->core.pos;}
-
-
-static inline int32_t
-get_qlen(const bam1_t *b) {return b->core.l_qseq;}
 
 
 static void
-count_states_pos(const bam1_t *aln, vector<CountSet> &counts) {
+count_states_pos(const bam_rec &aln, vector<CountSet> &counts) {
   /* Move through cigar, reference and read positions without
      inflating cigar or read sequence */
   const auto seq = bam_get_seq(aln);
   const auto beg_cig = bam_get_cigar(aln);
-  const auto end_cig = beg_cig + aln->core.n_cigar;
+  const auto end_cig = beg_cig + get_n_cigar(aln);
   size_t rpos = get_pos(aln);
-  int32_t qpos = 0; // to match type with b->core.l_qseq
+  size_t qpos = 0; // to match type with b->core.l_qseq
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
     const uint32_t n = bam_cigar_oplen(*c_itr);
     if (eats_ref(op) && eats_query(op)) {
-      const int32_t end_qpos = qpos + n;
+      const size_t end_qpos = qpos + n;
       for (; qpos < end_qpos; ++qpos) {
         // ADS: beware!!! bam_seqi is a macro, so no "qpos++" inside
         // its arguments! Why macros?!?! Just make sure the compiler
@@ -334,24 +323,24 @@ count_states_pos(const bam1_t *aln, vector<CountSet> &counts) {
   // past the end of the chromosome; this should result at least in a
   // soft-clip by any mapper. I'm not allowing it here now as I don't
   // see how it can be legit.
-  assert(qpos == get_qlen(aln) && rpos <= counts.size());
+  assert(qpos == get_l_qseq(aln) && rpos <= counts.size());
 }
 
 
 static void
-count_states_neg(const bam1_t *aln, vector<CountSet> &counts) {
+count_states_neg(const bam_rec &aln, vector<CountSet> &counts) {
   /* Move through cigar, reference and (*backward*) through read
      positions without inflating cigar or read sequence */
   const auto seq = bam_get_seq(aln);
   const auto beg_cig = bam_get_cigar(aln);
-  const auto end_cig = beg_cig + aln->core.n_cigar;
+  const auto end_cig = beg_cig + get_n_cigar(aln);
   size_t rpos = get_pos(aln);
-  int32_t qpos = get_qlen(aln); // to match type with b->core.l_qseq
+  size_t qpos = get_l_qseq(aln); // to match type with b->core.l_qseq
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
     const uint32_t n = bam_cigar_oplen(*c_itr);
     if (eats_ref(op) && eats_query(op)) {
-      const int32_t end_qpos = qpos - n; // to match type with qpos
+      const size_t end_qpos = qpos - n; // to match type with qpos
       for (; qpos > end_qpos; --qpos) // beware ++ in macro below!!!
         counts[rpos++].add_count_neg(seq_nt16_str[bam_seqi(seq, qpos-1)]);
     }
@@ -365,7 +354,7 @@ count_states_neg(const bam1_t *aln, vector<CountSet> &counts) {
   /* qpos is unsigned; would wrap around if < 0 */
   // ADS: Same as count_states_pos; see comment there; not allowing
   // rpos to go past the end of the chromosome.
-  assert(qpos <= get_qlen(aln) && rpos <= counts.size());
+  assert(qpos <= get_l_qseq(aln) && rpos <= counts.size());
 }
 
 
@@ -392,18 +381,21 @@ process_reads(const bool VERBOSE,
     chrom_sizes[i] = chroms[i].size();
   }
 
+  bam_tpool tp(n_threads); // Must be destroyed after hts
+
+
   // open the hts SAM/BAM input file and get the header
-  samFile *hts = hts_open(infile.c_str(), "r");
+  bam_infile hts(infile);
   if (!hts) throw dnmt_error("failed to open input file");
   // load the input file's header
-  sam_hdr_t *hdr = sam_hdr_read(hts);
+  bam_header hdr(hts);
   if (!hdr) throw dnmt_error("failed to read header");
 
   unordered_map<int32_t, size_t> tid_to_idx;
-  for (int32_t i = 0; i < hdr->n_targets; ++i) {
+  for (int32_t i = 0; i < hdr.h->n_targets; ++i) {
     // "curr_name" gives a "tid_to_name" mapping allowing to jump
     // through "name_to_idx" and get "tid_to_idx"
-    const string curr_name(hdr->target_name[i]);
+    const string curr_name(hdr.h->target_name[i]);
     const auto name_itr(name_to_idx.find(curr_name));
     if (name_itr == end(name_to_idx))
       throw dnmt_error("failed to find chrom: " + curr_name);
@@ -419,20 +411,17 @@ process_reads(const bool VERBOSE,
   if (!out) throw dnmt_error("error opening output file: " + outfile);
 
   /* set the threads for the input file decompression */
-  htsThreadPool tp;
   if (n_threads > 1) {
-    tp = {hts_tpool_init(n_threads - 1), 0};
-    err_code = hts_set_thread_pool(hts, &tp);
-    if (err_code < 0) throw dnmt_error(err_code, "error setting threads");
+    tp.set_io(hts);
 
     /* set threads for the output file compression */
-    err_code = bgzf_thread_pool(out, tp.pool, tp.qsize);
+    err_code = bgzf_thread_pool(out, tp.tpool.pool, tp.tpool.qsize);
     if (err_code) throw dnmt_error(err_code, "error setting bgzf threads");
   }
 
   /* now iterate over the reads, switching chromosomes and writing
      output as needed */
-  bam1_t *aln = bam_init1();
+  bam_rec aln;
   int32_t prev_tid = -1;
 
   // this is where all the counts are accumulated
@@ -440,7 +429,7 @@ process_reads(const bool VERBOSE,
 
   unordered_set<int32_t> chroms_seen;
   vector<string>::const_iterator chrom_itr;
-  while ((err_code = sam_read1(hts, hdr, aln)) >= 0) {
+  while (hts.read(hdr, aln)) {
 
     // if chrom changes, output results, get the next one
     const int32_t tid = get_tid(aln);
@@ -459,10 +448,10 @@ process_reads(const bool VERBOSE,
       auto chrom_idx(tid_to_idx.find(tid));
       if (chrom_idx == end(tid_to_idx))
         throw dnmt_error("chromosome not found: " +
-                         string(sam_hdr_tid2name(hdr, tid)));
+                         string(sam_hdr_tid2name(hdr.h, tid)));
 
       if (VERBOSE)
-        cerr << "processing " << sam_hdr_tid2name(hdr, tid) << endl;
+        cerr << "processing " << sam_hdr_tid2name(hdr.h, tid) << endl;
 
       prev_tid = tid;
       chrom_itr = begin(chroms) + chrom_idx->second;
@@ -482,14 +471,9 @@ process_reads(const bool VERBOSE,
     write_output(hdr, out, prev_tid, *chrom_itr, counts, CPG_ONLY);
 
   // turn off the lights
-  bam_destroy1(aln);
-  bam_hdr_destroy(hdr);
-  err_code = hts_close(hts);
-  if (err_code < 0) throw dnmt_error(err_code, "process_reads:hts_close");
   err_code = bgzf_close(out);
   if (err_code) throw dnmt_error(err_code, "process_reads:bgzf_close");
   // do this after the files have been closed
-  if (n_threads > 1) hts_tpool_destroy(tp.pool);
 }
 
 

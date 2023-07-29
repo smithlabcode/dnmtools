@@ -153,6 +153,9 @@ get_pos(const bam_rec &b) { return b.b->core.pos; }
 inline hts_pos_t
 get_endpos(const bam_rec &b) { return bam_endpos(b.b); }
 
+inline hts_pos_t
+get_n_cigar(const bam_rec &b) { return b.b->core.n_cigar; }
+
 inline bool
 precedes_by_start(const bam_rec &a, const bam_rec &b) {
   // assumes a.get_tid() <= b.get_tid()

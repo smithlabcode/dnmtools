@@ -17,140 +17,126 @@
  * General Public License for more details.
  */
 
-
-#include "OptionParser.hpp"
-#include "smithlab_utils.hpp"
-#include "smithlab_os.hpp"
-#include "GenomicRegion.hpp"
-#include "zlib_wrapper.hpp"
-#include "bsutils.hpp"
-#include "cigar_utils.hpp"
-#include "htslib_wrapper.hpp"
-#include "sam_record.hpp"
-
-#include <string>
-#include <vector>
-#include <iostream>
-#include <fstream>
 #include <algorithm>
+#include <fstream>
+#include <iostream>
 #include <numeric>
 #include <stdexcept>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
-using std::string;
-using std::vector;
-using std::cout;
+#include "OptionParser.hpp"
+#include "bam_record_utils.hpp"
+#include "bsutils.hpp"
+#include "dnmt_error.hpp"
+#include "smithlab_utils.hpp"
+
+using std::accumulate;
 using std::cerr;
+using std::cout;
 using std::endl;
 using std::max;
-using std::accumulate;
-using std::to_string;
+using std::numeric_limits;
+using std::runtime_error;
+using std::string;
 using std::unordered_map;
 using std::unordered_set;
-using std::runtime_error;
-
-inline bool
-is_rc(const sam_rec &aln) {
-  return check_flag(aln, samflags::read_rc);
-}
-
-static void
-flip_strand(sam_rec &aln) {
-  if (check_flag(aln, samflags::read_rc))
-    unset_flag(aln, samflags::read_rc);
-  else
-    set_flag(aln, samflags::read_rc);
-}
-
-static void
-revcomp(sam_rec &aln) {
-  flip_strand(aln); // set strand to opposite of current value
-  revcomp_inplace(aln.seq); // reverse complement sequence
-  std::reverse(begin(aln.qual), end(aln.qual)); // and quality scores
-}
-
+using std::vector;
 
 static void
 count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
-                 const sam_rec &aln,
-                 vector<size_t> &unconv, vector<size_t> &conv,
-                 vector<size_t> &err, size_t &hanging) {
+                 const bam_rec &aln, vector<size_t> &unconv,
+                 vector<size_t> &conv, vector<size_t> &err, size_t &hanging) {
+  /* iterate through reference, query/read and fragment */
+  const auto seq = bam_get_seq(aln);
+  const auto beg_cig = bam_get_cigar(aln);
+  const auto end_cig = beg_cig + get_n_cigar(aln);
+  auto rpos = get_pos(aln);
+  auto qpos = 0;
+  auto fpos = 0;
 
-  const size_t width = cigar_rseq_ops(aln.cigar);
-  const size_t offset = aln.pos - 1;
+  const decltype(rpos) chrom_lim = chrom.size() - 1;
 
-  string seq(aln.seq);
-  apply_cigar(aln.cigar, seq);
-
-  assert(seq.size() == width);
-
-  size_t position = offset;
-  if (chrom.length() < offset) // at least one bp of read on chr
-    throw runtime_error("read mapped off chrom:\n" +
-                        to_string(chrom.length()));
-  for (size_t i = 0; i < width; ++i, ++position) {
-    if (position >= chrom.length()) // some overhang
-      ++hanging;
-
-    if (is_cytosine(chrom[position]) &&
-        (!is_guanine(chrom[position+1]) ||
-         position == chrom.length() ||
-         INCLUDE_CPGS)) {
-
-      if (is_cytosine(seq[i])) ++unconv[i];
-      else if (is_thymine(seq[i])) ++conv[i];
-      else if (toupper(seq[i]) != 'N')
-        ++err[i];
+  for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
+    const auto op = bam_cigar_op(*c_itr);
+    const auto n = bam_cigar_oplen(*c_itr);
+    if (cigar_eats_ref(op) && cigar_eats_query(op)) {
+      const decltype(qpos) end_qpos = qpos + n;
+      for (; qpos < end_qpos; ++qpos, ++rpos, ++fpos) {
+        if (rpos > chrom_lim) ++hanging;
+        if (is_cytosine(chrom[rpos]) &&
+            (rpos >= chrom_lim || !is_guanine(chrom[rpos + 1]) ||
+             INCLUDE_CPGS)) {
+          const auto qc = seq_nt16_str[bam_seqi(seq, qpos)];
+          if (qc == 'C')
+            ++unconv[fpos];
+          else if (qc == 'T')
+            ++conv[fpos];
+          else if (qc != 'N')
+            ++err[fpos];
+        }
+      }
+    }
+    else {
+      if (cigar_eats_query(op)) qpos += n;
+      if (cigar_eats_ref(op)) rpos += n;
+      if (cigar_eats_frag(op)) fpos += n;
     }
   }
-}
 
+  assert(qpos == get_l_qseq(aln));
+}
 
 static void
 count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
-                 const sam_rec &aln,
-                 vector<size_t> &unconv, vector<size_t> &conv,
-                 vector<size_t> &err, size_t &hanging) {
+                 const bam_rec &aln, vector<size_t> &unconv,
+                 vector<size_t> &conv, vector<size_t> &err, size_t &hanging) {
+  /* iterate backward over query/read positions but forward over
+     reference and fragment positions */
+  const auto seq = bam_get_seq(aln);
+  const auto beg_cig = bam_get_cigar(aln);
+  const auto end_cig = beg_cig + get_n_cigar(aln);
+  auto rpos = get_pos(aln);
+  auto qpos = get_l_qseq(aln);
+  auto fpos = 0;
 
-  const size_t width = cigar_rseq_ops(aln.cigar);
-  const size_t offset = aln.pos - 1;
+  const decltype(rpos) chrom_lim = chrom.size() - 1;
 
-  // ADS: reverse complement twice because the cigar is applied
-  // starting relative to the reference.
-  string seq(aln.seq);
-  revcomp_inplace(seq);
-  apply_cigar(aln.cigar, seq);
-  revcomp_inplace(seq);
-
-  assert(seq.size() == width);
-
-  size_t position = offset + width - 1;
-  assert(offset < chrom.length()); // at least one bp of read on chr
-  for (size_t i = 0; i < width; ++i, --position) {
-    if (position >= chrom.length())
-      ++hanging;
-    if (is_guanine(chrom[position]) &&
-        (position == 0 ||
-         !is_cytosine(chrom[position-1]) ||
-         INCLUDE_CPGS)) {
-
-      if (is_cytosine(seq[i])) ++unconv[i];
-      else if (is_thymine(seq[i])) ++conv[i];
-      else if (toupper(seq[i]) != 'N')
-        ++err[i];
+  for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
+    const auto op = bam_cigar_op(*c_itr);
+    const auto n = bam_cigar_oplen(*c_itr);
+    if (cigar_eats_ref(op) && cigar_eats_query(op)) {
+      const decltype(qpos) end_qpos = qpos - n;
+      for (; qpos > end_qpos; --qpos, ++rpos, ++fpos) {
+        if (rpos > chrom_lim) ++hanging;
+        if (is_guanine(chrom[rpos]) &&
+            (rpos == 0 || !is_cytosine(chrom[rpos - 1]) || INCLUDE_CPGS)) {
+          const auto qc = seq_nt16_str[bam_seqi(seq, qpos - 1)];
+          if (qc == 'C')
+            ++unconv[fpos];
+          else if (qc == 'T')
+            ++conv[fpos];
+          else if (qc != 'N')
+            ++err[fpos];
+        }
+      }
+    }
+    else {
+      if (cigar_eats_query(op)) qpos -= n;
+      if (cigar_eats_ref(op)) rpos += n;
+      if (cigar_eats_frag(op)) fpos += n;
     }
   }
+  assert(qpos == 0);
 }
 
-
 static void
-write_output(const string &outfile,
-             const vector<size_t> &ucvt_count_p,
+write_output(const string &outfile, const vector<size_t> &ucvt_count_p,
              const vector<size_t> &cvt_count_p,
              const vector<size_t> &ucvt_count_n,
-             const vector<size_t> &cvt_count_n,
-             const vector<size_t> &err_p, const vector<size_t> &err_n) {
-
+             const vector<size_t> &cvt_count_n, const vector<size_t> &err_p,
+             const vector<size_t> &err_n) {
   // Get some totals first
   const size_t pos_cvt = accumulate(begin(cvt_count_p), end(cvt_count_p), 0ul);
   const size_t neg_cvt = accumulate(begin(cvt_count_n), end(cvt_count_n), 0ul);
@@ -165,16 +151,18 @@ write_output(const string &outfile,
   std::ofstream of;
   if (!outfile.empty()) of.open(outfile.c_str());
   std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
+  if (!out) throw dnmt_error("failed to open output file");
 
   out << "OVERALL CONVERSION RATE = "
-      << static_cast<double>(total_cvt)/(total_cvt + total_ucvt) << endl
+      << static_cast<double>(total_cvt) / (total_cvt + total_ucvt) << endl
       << "POS CONVERSION RATE = "
-      << static_cast<double>(pos_cvt)/(pos_cvt + pos_ucvt) << '\t'
+      << static_cast<double>(pos_cvt) / (pos_cvt + pos_ucvt) << '\t'
       << std::fixed << static_cast<size_t>(pos_cvt + pos_ucvt) << endl
       << "NEG CONVERSION RATE = "
-      << static_cast<double>(neg_cvt)/(neg_cvt + neg_ucvt) << '\t'
+      << static_cast<double>(neg_cvt) / (neg_cvt + neg_ucvt) << '\t'
       << std::fixed << static_cast<size_t>(neg_cvt + neg_ucvt) << endl;
 
+  // clang-format off
   out << "BASE" << '\t'
       << "PTOT" << '\t'
       << "PCONV" << '\t'
@@ -188,20 +176,20 @@ write_output(const string &outfile,
       << "ERR" << '\t'
       << "ALL" << '\t'
       << "ERRRATE"  << endl;
+  // clang-format on
 
   // Figure out how many positions to print in the output, capped at 1000
-  size_t output_len =
-    (ucvt_count_p.size() > 1000) ? 1000 : ucvt_count_p.size();
+  size_t output_len = (ucvt_count_p.size() > 1000) ? 1000 : ucvt_count_p.size();
 
   while (output_len > 0 &&
-         (ucvt_count_p[output_len-1] + cvt_count_p[output_len-1] +
-          ucvt_count_n[output_len-1] + cvt_count_n[output_len-1] == 0))
+         (ucvt_count_p[output_len - 1] + cvt_count_p[output_len - 1] +
+            ucvt_count_n[output_len - 1] + cvt_count_n[output_len - 1] ==
+          0))
     --output_len;
 
   // Now actually output the results
   static const size_t precision_val = 5;
   for (size_t i = 0; i < output_len; ++i) {
-
     const size_t total_p = ucvt_count_p[i] + cvt_count_p[i];
     const size_t total_n = ucvt_count_n[i] + cvt_count_n[i];
     const size_t total_valid = total_p + total_n;
@@ -209,34 +197,31 @@ write_output(const string &outfile,
 
     out.precision(precision_val);
     out << total_p << '\t' << cvt_count_p[i] << '\t'
-        << static_cast<double>(cvt_count_p[i])/max(size_t(1ul), total_p)
+        << static_cast<double>(cvt_count_p[i]) / max(size_t(1ul), total_p)
         << '\t';
 
     out.precision(precision_val);
     out << total_n << '\t' << cvt_count_n[i] << '\t'
-        << static_cast<double>(cvt_count_n[i])/max(size_t(1ul), total_n)
+        << static_cast<double>(cvt_count_n[i]) / max(size_t(1ul), total_n)
         << '\t';
 
     const double total_cvt = cvt_count_p[i] + cvt_count_n[i];
     out.precision(precision_val);
-    out << static_cast<size_t>(total_valid)
-        << '\t' << cvt_count_p[i] + cvt_count_n[i] << '\t'
-        << total_cvt/max(1ul, total_valid) << '\t';
+    out << static_cast<size_t>(total_valid) << '\t'
+        << cvt_count_p[i] + cvt_count_n[i] << '\t'
+        << total_cvt / max(1ul, total_valid) << '\t';
 
     const double total_err = err_p[i] + err_n[i];
     out.precision(precision_val);
     const size_t total = total_valid + err_p[i] + err_n[i];
     out << err_p[i] + err_n[i] << '\t' << static_cast<size_t>(total) << '\t'
-        << total_err/max(1ul, total) << endl;
+        << total_err / max(1ul, total) << endl;
   }
 }
 
-
 int
 main_bsrate(int argc, const char **argv) {
-
   try {
-
     // ASSUMED MAXIMUM LENGTH OF A FRAGMENT
     static const size_t output_size = 10000;
 
@@ -246,11 +231,11 @@ main_bsrate(int argc, const char **argv) {
 
     string chroms_file;
     string outfile;
-    string seq_to_use; // use only this chrom/sequence in the analysis
-
+    string seq_to_use;  // use only this chrom/sequence in the analysis
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), "Program to compute the "
+    OptionParser opt_parse(strip_path(argv[0]),
+                           "Program to compute the "
                            "BS conversion rate from BS-seq "
                            "reads mapped to a genome",
                            "-c <chroms> <mapped-reads>");
@@ -258,12 +243,12 @@ main_bsrate(int argc, const char **argv) {
                       false, outfile);
     opt_parse.add_opt("chrom", 'c', "File of chromosome sequences (FASTA)",
                       true, chroms_file);
-    opt_parse.add_opt("all", 'N', "count all Cs (including CpGs)",
-                      false , INCLUDE_CPGS);
-    opt_parse.add_opt("seq", '\0', "use only this sequence (e.g. chrM)",
-                      false , seq_to_use);
-    opt_parse.add_opt("a-rich", 'A', "reads are A-rich",
-                      false, reads_are_a_rich);
+    opt_parse.add_opt("all", 'N', "count all Cs (including CpGs)", false,
+                      INCLUDE_CPGS);
+    opt_parse.add_opt("seq", '\0', "use only this sequence (e.g. chrM)", false,
+                      seq_to_use);
+    opt_parse.add_opt("a-rich", 'A', "reads are A-rich", false,
+                      reads_are_a_rich);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -284,22 +269,32 @@ main_bsrate(int argc, const char **argv) {
       cerr << opt_parse.help_message() << endl;
       return EXIT_SUCCESS;
     }
-    const string mapped_reads_file = leftover_args.front();
+    const string bam_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
     vector<string> chroms;
     vector<string> names;
     read_fasta_file_short_names(chroms_file, names, chroms);
-    unordered_map<string, size_t> chrom_lookup;
-    for (size_t i = 0; i < chroms.size(); ++i)
-      chrom_lookup[names[i]] = i;
+    for (auto &&chrom : chroms)
+      std::for_each(begin(chrom), end(chrom),
+                    [](const char c) { return std::toupper(c); });
 
     if (VERBOSE)
       cerr << "[n chroms in reference: " << chroms.size() << "]" << endl;
 
-    igzfstream in(mapped_reads_file);
-    if (!in)
-      throw runtime_error("cannot open file: " + mapped_reads_file);
+    bam_infile hts(bam_file);
+    if (!hts) throw dnmt_error("failed to open input file: " + bam_file);
+    bam_header hdr(hts);
+    if (!hdr) throw dnmt_error("failed to read header");
+
+    // map the bam header index for each "target" to a sequence in the
+    // reference genome
+    unordered_map<int32_t, size_t> chrom_lookup;
+    size_t chrom_idx_to_use = numeric_limits<size_t>::max();
+    for (size_t i = 0; i < chroms.size(); ++i) {
+      if (names[i] == seq_to_use) chrom_idx_to_use = i;
+      chrom_lookup.insert({sam_hdr_name2tid(hdr.h, names[i].data()), i});
+    }
 
     vector<size_t> unconv_count_pos(output_size, 0ul);
     vector<size_t> conv_count_pos(output_size, 0ul);
@@ -308,44 +303,44 @@ main_bsrate(int argc, const char **argv) {
     vector<size_t> err_pos(output_size, 0ul);
     vector<size_t> err_neg(output_size, 0ul);
 
-    size_t chrom_idx = 0;
-    string chrom_name;
+    int32_t current_tid = -1;
+    size_t chrom_idx = numeric_limits<size_t>::max();
     size_t hanging = 0;
 
     bool use_this_chrom = seq_to_use.empty();
 
-    SAMReader sam_reader(mapped_reads_file);
-    sam_rec aln;
+    bam_rec aln;
+    unordered_set<int32_t> chroms_seen;
 
-    unordered_set<string> chroms_seen;
-    while (sam_reader >> aln) {
+    while (hts.read(hdr, aln)) {  // sam_reader >> aln) {
 
-      if (reads_are_a_rich)
-        revcomp(aln);
+      if (reads_are_a_rich) flip_conversion(aln);
 
       // get the correct chrom if it has changed
-      if (aln.rname != chrom_name) {
+      if (get_tid(aln) != current_tid) {
+        const int32_t the_tid = get_tid(aln);
+
         // make sure all reads from same chrom are contiguous in the file
-        if (chroms_seen.find(aln.rname) != end(chroms_seen))
+        if (chroms_seen.find(the_tid) != end(chroms_seen)) {
+          cerr << the_tid << '\t' << current_tid << endl;
           throw runtime_error("chroms out of order in mapped reads file");
+        }
+        current_tid = the_tid;
+        if (VERBOSE) cerr << "processing " << the_tid << endl;
 
-        if (VERBOSE)
-          cerr << "processing " << aln.rname << endl;
+        chroms_seen.insert(the_tid);
 
-        chroms_seen.insert(aln.rname);
-
-        auto chrom_itr = chrom_lookup.find(aln.rname);
+        auto chrom_itr = chrom_lookup.find(the_tid);
         if (chrom_itr == end(chrom_lookup))
-          throw runtime_error("could not find chrom: " + aln.rname);
+          throw runtime_error("could not find chrom: " + the_tid);
 
         chrom_idx = chrom_itr->second;
-        chrom_name = aln.rname;
-        use_this_chrom = seq_to_use.empty() || chrom_name == seq_to_use;
+        use_this_chrom = seq_to_use.empty() || chrom_idx == chrom_idx_to_use;
       }
 
       if (use_this_chrom) {
         // do the work for this mapped read
-        if (is_rc(aln))
+        if (bam_is_rev(aln))
           count_states_neg(INCLUDE_CPGS, chroms[chrom_idx], aln,
                            unconv_count_neg, conv_count_neg, err_neg, hanging);
         else
@@ -353,13 +348,12 @@ main_bsrate(int argc, const char **argv) {
                            unconv_count_pos, conv_count_pos, err_pos, hanging);
       }
     }
-    write_output(outfile, unconv_count_pos,
-                 conv_count_pos, unconv_count_neg,
+    write_output(outfile, unconv_count_pos, conv_count_pos, unconv_count_neg,
                  conv_count_neg, err_pos, err_neg);
 
-    if (hanging > 0) // some overhanging reads
+    if (hanging > 0)  // some overhanging reads
       cerr << "Warning: hanging reads detected at chrom ends "
-           << "(N=" << hanging<< ")" << endl
+           << "(N=" << hanging << ")" << endl
            << "High numbers of hanging reads suggest mismatch "
            << "between assembly provided here and that used for mapping"
            << endl;

@@ -42,6 +42,7 @@ using std::endl;
 using std::unordered_map;
 using std::unordered_set;
 using std::runtime_error;
+using std::lower_bound;
 
 
 static const char b2c[] = "TNGNNNCNNNNNNNNNNNNA";
@@ -82,7 +83,6 @@ is_cpg(const string &s, const size_t idx) {
   return s[idx] == 'C' && s[idx + 1] == 'G';
 }
 
-
 static void
 collect_cpgs(const string &s, unordered_map<size_t, size_t> &cpgs) {
   cpgs.clear();
@@ -93,6 +93,16 @@ collect_cpgs(const string &s, unordered_map<size_t, size_t> &cpgs) {
       cpgs[i] = cpg_count++;
 }
 
+static void
+collect_cpgs(const string &s, 
+             vector<size_t> &cpgs) {
+  cpgs.clear();
+  const size_t lim = s.length() - 1;
+  for (size_t i = 0; i < lim; ++i) {
+    if (is_cpg(s, i)) 
+      cpgs.push_back(i);
+  }
+}
 
 // void
 // local_apply_cigar(const string &cigar, string &to_inflate,
@@ -128,6 +138,48 @@ collect_cpgs(const string &s, unordered_map<size_t, size_t> &cpgs) {
 //                         to_string(orig_len));
 //   to_inflate.swap(inflated_seq);
 // }
+
+static bool
+convert_meth_states_pos(const string &chrom,
+                        const vector<size_t> &cpgs,
+                        const bam_header &hdr, 
+                        const bam_rec &aln,
+                        size_t &first_cpg_index, string &states) {
+
+  states.clear();
+
+  const size_t seq_start = get_pos(aln);  
+  const size_t width = rlen_from_cigar(aln);
+  const size_t seq_end = seq_start + width;   
+
+  string seq_str;
+  get_seq_str(aln, seq_str);
+  apply_cigar(aln, seq_str, 'N');
+  if (seq_str.size() != width) {
+    throw runtime_error("bad sam record format: " + to_string(hdr, aln));
+  }
+
+  // get the first cpg site equal to or large than seq_start
+  auto cpg_itr = lower_bound(begin(cpgs), end(cpgs), seq_start);
+  auto first_cpg_itr = end(cpgs);
+
+  if (cpg_itr == end(cpgs)) {
+    return false;
+  } else {
+    for (; cpg_itr != end(cpgs) && *cpg_itr < seq_end; cpg_itr++) {
+      const char x = seq_str[*cpg_itr - seq_start];
+      states += (x == 'C') ? 'C' : ((x == 'T') ? 'T' : 'N');
+      if (first_cpg_itr == end(cpgs))
+        first_cpg_itr = cpg_itr;
+    }
+  }
+
+  if (first_cpg_itr != end(cpgs)) {
+    first_cpg_index = distance(begin(cpgs), first_cpg_itr);
+  }
+
+  return states.find_first_of("CT") != string::npos;
+}
 
 
 static bool
@@ -177,6 +229,61 @@ convert_meth_states_pos(const string &chrom,
   return states.find_first_of("CT") != string::npos;
 }
 
+
+static bool
+convert_meth_states_neg(const string &chrom,
+                        const vector<size_t> &cpgs,
+                        const bam_header &hdr,
+                        const bam_rec &aln,
+                        size_t &first_cpg_index, string &states) {
+  /* ADS: the "revcomp" on the read sequence is needed for the cigar
+     to be applied, since the cigar is relative to the genome
+     coordinates and not the read's sequence. But the read sequence
+     may is assumed to have been T-rich to begin with, so it becomes
+     A-rich. And the position of the C in the CpG becomes the G
+     position.
+   */
+
+  states.clear();
+
+  const size_t seq_start = get_pos(aln);  
+  const size_t width = rlen_from_cigar(aln);
+  const size_t seq_end = seq_start + width;   
+
+  string orig_seq;
+  get_seq_str(aln, orig_seq);
+  string seq_str;
+  seq_str.resize(orig_seq.size());
+  revcomp_copy(begin(orig_seq), end(orig_seq), begin(seq_str));
+  apply_cigar(aln, seq_str, 'N');
+  if (seq_str.size() != width) {
+    throw runtime_error("bad sam record format: " + to_string(hdr, aln));
+  }
+
+  // get the first cpg site equal to or large than seq_start - 1
+  // the -1 is because we look for G in the read corresponding to a 
+  // CpG in chromosome, which are indexed in cpgs based on the position of C 
+  auto cpg_itr = lower_bound(begin(cpgs), end(cpgs), 
+                             seq_start > 0 ? seq_start - 1 : 0);
+  auto first_cpg_itr = end(cpgs);
+
+  if (cpg_itr == end(cpgs)) {
+    return false;
+  } else {
+    for (; cpg_itr != end(cpgs) && *cpg_itr < seq_end - 1; cpg_itr++) {
+      const char x = seq_str[*cpg_itr - seq_start + 1];
+      states += (x == 'G') ? 'C' : ((x == 'A') ? 'T' : 'N');
+      if (first_cpg_itr == end(cpgs))
+        first_cpg_itr = cpg_itr;
+    }
+  }
+
+  if (first_cpg_itr != end(cpgs)) {
+    first_cpg_index = distance(begin(cpgs), first_cpg_itr);
+  }
+
+  return states.find_first_of("CT") != string::npos;
+}
 
 static bool
 convert_meth_states_neg(const string &chrom,
@@ -330,7 +437,8 @@ main_methstates(int argc, const char **argv) {
 
     // for the current chrom, this maps cpg index to cpg position in
     // the chrom
-    unordered_map<size_t, size_t> cpgs;
+    //unordered_map<size_t, size_t> cpgs;
+    vector<size_t> cpgs;
 
     unordered_set<string> chroms_seen;
     string chrom_name;
@@ -356,16 +464,16 @@ main_methstates(int argc, const char **argv) {
         collect_cpgs(chrom, cpgs);
       }
 
-      size_t start_pos = std::numeric_limits<size_t>::max();
+      size_t first_cpg_index = std::numeric_limits<size_t>::max();
       string seq;
 
       const bool has_cpgs = bam_is_rev(aln) ?
-        convert_meth_states_neg(chrom, cpgs, hdr, aln, start_pos, seq) :
-        convert_meth_states_pos(chrom, cpgs, hdr, aln, start_pos, seq);
+        convert_meth_states_neg(chrom, cpgs, hdr, aln, first_cpg_index, seq) :
+        convert_meth_states_pos(chrom, cpgs, hdr, aln, first_cpg_index, seq);
 
       if (has_cpgs)
         out << sam_hdr_tid2name(hdr, aln) << '\t'
-            << start_pos << '\t'
+            << first_cpg_index << '\t'
             << seq << '\n';
     }
   }

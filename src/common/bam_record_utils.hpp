@@ -142,6 +142,16 @@ is_a_rich(const bam_rec &b) { return bam_aux2A(bam_aux_get(b.b, "CV")) == 'A'; }
 void
 standardize_format(const std::string &input_format, bam_rec &aln);
 
+
+void
+apply_cigar(const bam_rec &aln, std::string &to_inflate,
+            const char inflation_symbol);
+
+
+void
+get_seq_str(const bam_rec & aln, std::string &seq_str);
+
+
 inline bool
 are_mates(const bam_rec &one, const bam_rec &two) {
   return one.b->core.mtid == two.b->core.tid &&
@@ -222,7 +232,17 @@ sam_hdr_tid2name(const bam_header &hdr, const int32_t tid) {
   return std::string(sam_hdr_tid2name(hdr.h, tid));
 }
 
+inline std::string
+sam_hdr_tid2name(const bam_header &hdr, const bam_rec &aln) {
+  return std::string(sam_hdr_tid2name(hdr.h, aln.b->core.tid));
+}
 
+std::string
+to_string(const bam_header &hdr, const bam_rec &aln);
+
+inline size_t rlen_from_cigar(const bam_rec &aln) {
+  return bam_cigar2rlen(get_n_cigar(aln), bam_get_cigar(aln));
+}
 
 
 #endif

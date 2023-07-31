@@ -19,6 +19,7 @@
 #include <sstream>
 #include <algorithm>
 #include <string>
+#include <stdexcept>
 
 #include <htslib/sam.h>
 
@@ -26,6 +27,10 @@
 
 using std::string;
 using std::vector;
+using std::stringstream;
+using std::runtime_error;
+using std::to_string;
+
 
 /// functions in place of undefd macro
 static inline bool
@@ -249,11 +254,6 @@ bam_set1_wrapper(bam1_t *bam,
   return static_cast<int>(data_len);
 }
 
-static inline bool
-eats_ref(const uint32_t c) { return bam_cigar_type(bam_cigar_op(c)) & 2; }
-
-static inline bool
-eats_query(const uint32_t c) { return bam_cigar_type(bam_cigar_op(c)) & 1; }
 
 static inline size_t
 bam_get_n_cigar(const bam1_t *b) { return b->core.n_cigar; }
@@ -270,10 +270,10 @@ fix_internal_softclip(const size_t n_cigar, uint32_t *cigar) {
   auto c_beg = cigar;
   auto c_end = cigar + n_cigar;
 
-  while (!eats_ref(*c_beg) && ++c_beg != c_end);
+  while (!cigar_eats_ref(*c_beg) && ++c_beg != c_end);
   if (c_beg == c_end) throw dnmt_error("cigar eats no ref");
 
-  while (!eats_ref(*(c_end-1)) && --c_end != c_beg);
+  while (!cigar_eats_ref(*(c_end-1)) && --c_end != c_beg);
   if (c_beg == c_end) throw dnmt_error("cigar eats no ref");
 
   for (auto c_itr = c_beg; c_itr != c_end; ++c_itr)
@@ -293,13 +293,13 @@ fix_external_insertion(const size_t n_cigar, uint32_t *cigar) {
   auto c_itr = cigar;
   const auto c_end = c_itr + n_cigar;
 
-  for (; !eats_ref(*c_itr) && c_itr != c_end; ++c_itr)
+  for (; !cigar_eats_ref(*c_itr) && c_itr != c_end; ++c_itr)
     *c_itr = to_softclip(*c_itr);
 
   if (c_itr == c_end) throw dnmt_error("cigar eats no ref");
 
   c_itr = cigar + n_cigar - 1;
-  for (; !eats_ref(*c_itr) && c_itr != cigar; --c_itr)
+  for (; !cigar_eats_ref(*c_itr) && c_itr != cigar; --c_itr)
     *c_itr = to_softclip(*c_itr);
 }
 
@@ -396,7 +396,7 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
   size_t rlen = 0;
   uint32_t i = 0;
   for (i = 0; i < in_ops; ++i) {
-    if (eats_ref(cig_in[i])) {
+    if (cigar_eats_ref(cig_in[i])) {
       if (rlen + bam_cigar_oplen(cig_in[i]) > n_ref_full)
         break;
       rlen += bam_cigar_oplen(cig_in[i]);
@@ -883,3 +883,67 @@ void
 standardize_format(const string &input_format, bam_rec &aln) {
   standardize_format(input_format, aln.b);
 }
+
+// used in methstates
+void
+apply_cigar(const bam_rec &aln, string &to_inflate,
+            const char inflation_symbol) {
+
+  string inflated_seq;
+  stringstream ss_cigar;
+  size_t i = 0;
+  auto to_inflate_beg = std::begin(to_inflate);
+
+  const auto beg_cig = bam_get_cigar(aln);
+  const auto end_cig = beg_cig + get_n_cigar(aln);
+
+  for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
+    const auto op = bam_cigar_op(*c_itr);
+    const auto n = bam_cigar_oplen(*c_itr);
+    ss_cigar << n << op;
+
+    if (cigar_eats_ref(op) && cigar_eats_query(op)) {
+      inflated_seq.append(to_inflate_beg + i, to_inflate_beg + i + n);
+      i += n;
+    }
+    else if (cigar_eats_query(op)) {
+      // no addition of symbols to query
+      i += n;
+    }
+    else if (cigar_eats_ref(op)) {
+      inflated_seq.append(n, inflation_symbol);
+      // no increment of index within query
+    }
+  }
+
+  // sum of total M/I/S/=/X/N operations must equal length of seq
+  const size_t orig_len = to_inflate.length();
+  if (i != orig_len)
+    throw runtime_error("inconsistent number of qseq ops in cigar: " +
+                        to_inflate + " "  + ss_cigar.str() + " " +
+                        to_string(i) + " " +
+                        to_string(orig_len));
+  to_inflate.swap(inflated_seq);
+}
+
+void
+get_seq_str(const bam_rec & aln, string &seq_str) {
+  size_t qlen = static_cast<size_t>(get_l_qseq(aln));
+  seq_str.resize(qlen);
+  auto seq = bam_get_seq(aln);
+  for (size_t i = 0; i < qlen ; i++) {
+    seq_str[i] = seq_nt16_str[bam_seqi(seq, i)];
+  }
+}
+
+string
+to_string(const bam_header &hdr, const bam_rec &aln) {
+  kstring_t ks = { 0, 0, NULL };
+  int ret = sam_format1(hdr.h, aln.b, &ks);
+  if (ret < 0) {
+    runtime_error("Can't format record: " + to_string(hdr, aln));
+  }
+
+  return string(ks.s);
+}
+

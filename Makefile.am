@@ -224,4 +224,5 @@ CLEANFILES = \
     tests/tRex1.idx \
     tests/tRex1_promoters.roi.bed \
     tests/reads.counts.select \
-    tests/radmeth_test_output.txt
+    tests/radmeth_test_output.txt \
+    tests/reads.epiread

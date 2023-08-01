@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+infile1=tests/reads.fmt.srt.uniq.sam
+infile2=tests/tRex1.fa
+outfile=tests/reads.epiread
+if [[ -e "${infile1}" && -e "${infile2}" ]]; then
+    ./dnmtools states -v -o ${outfile} -c ${infile2} ${infile1}
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile}:" | cut -d ' ' -f 2)
+    if [[ "${x}" != "OK" ]]; then
+        exit 1;
+    fi
+elif [[ -e "${infile1}" ]]; then
+    echo "${infile1} not found; skipping remaining tests";
+    exit 77;
+else # if [[ -e "${infile2}" ]]
+    echo "${infile2} not found; skipping remaining tests";
+    exit 77;
+fi

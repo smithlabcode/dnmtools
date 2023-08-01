@@ -16,9 +16,9 @@ the format used by `amrfinder` and `amrtester`.
 
 The epiread format consists of three columns. The first column is the
 chromosome name for the mapped read, the second is the "index" of the
-first CpG in the read. This index is a number (starting with 0) to
-indicate which CpG sites in the chromosome corresponds to the first
-CpG site in the read. These are not nucleotide positions in the
+first CpG in the read. The index `x` indicates that the first CpG site
+in the read corresponds to the `x`'th (starting from 0) CpG site in
+the chromosome.  Therefore, these are not nucleotide positions in the
 genome. The final column in the epiread format is the sequence of
 methylation states within the read. This sequence of states is
 composed of 3 possible letters: C if the corresponding letter at that

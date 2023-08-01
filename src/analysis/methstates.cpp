@@ -32,6 +32,8 @@
 #include "sam_record.hpp"
 #include "cigar_utils.hpp"
 
+#include "bam_record_utils.hpp"
+
 using std::string;
 using std::vector;
 using std::cout;
@@ -40,6 +42,7 @@ using std::endl;
 using std::unordered_map;
 using std::unordered_set;
 using std::runtime_error;
+using std::lower_bound;
 
 
 static const char b2c[] = "TNGNNNCNNNNNNNNNNNNA";
@@ -80,17 +83,16 @@ is_cpg(const string &s, const size_t idx) {
   return s[idx] == 'C' && s[idx + 1] == 'G';
 }
 
-
 static void
-collect_cpgs(const string &s, unordered_map<size_t, size_t> &cpgs) {
+collect_cpgs(const string &s, 
+             vector<size_t> &cpgs) {
   cpgs.clear();
   const size_t lim = s.length() - 1;
-  size_t cpg_count = 0;
-  for (size_t i = 0; i < lim; ++i)
-    if (is_cpg(s, i))
-      cpgs[i] = cpg_count++;
+  for (size_t i = 0; i < lim; ++i) {
+    if (is_cpg(s, i)) 
+      cpgs.push_back(i);
+  }
 }
-
 
 // void
 // local_apply_cigar(const string &cigar, string &to_inflate,
@@ -127,56 +129,54 @@ collect_cpgs(const string &s, unordered_map<size_t, size_t> &cpgs) {
 //   to_inflate.swap(inflated_seq);
 // }
 
-
 static bool
-convert_meth_states_pos(const string &chrom,
-                        const unordered_map<size_t, size_t> &cpgs,
-                        const sam_rec &aln,
-                        size_t &start_pos, string &states) {
+convert_meth_states_pos(const vector<size_t> &cpgs,
+                        const bam_header &hdr, 
+                        const bam_rec &aln,
+                        size_t &first_cpg_index, string &states) {
+
   states.clear();
 
-  const size_t width = cigar_rseq_ops(aln.cigar);
-  const size_t offset = aln.pos - 1;  // SAM format convention
+  const size_t seq_start = get_pos(aln);  
+  const size_t width = rlen_from_cigar(aln);
+  const size_t seq_end = seq_start + width;   
 
-  string the_seq(aln.seq);
-  apply_cigar(aln.cigar, the_seq);
-  if (the_seq.size() != width)
-    throw runtime_error("bad sam record format: " + aln.tostring());
+  string seq_str;
+  get_seq_str(aln, seq_str);
+  apply_cigar(aln, seq_str, 'N');
 
-  const auto beg_chrom = begin(chrom);
-  const auto end_chrom = end(chrom);
-  auto chrom_itr = beg_chrom + offset;
-  auto first_cpg = end_chrom;
+  if (seq_str.size() != width) {
+    throw runtime_error("bad sam record format: " + to_string(hdr, aln));
+  }
 
-  // ADS: below the "-1" in the std::min is to ensure dinuc exists
-  const auto beg_seq = begin(the_seq);
-  const auto seq_lim = beg_seq + std::min(width, chrom.length() - 1 - offset);
+  // get the first cpg site equal to or large than seq_start
+  auto cpg_itr = lower_bound(begin(cpgs), end(cpgs), seq_start);
+  auto first_cpg_itr = end(cpgs);
 
-  for (auto seq_itr = beg_seq; seq_itr != seq_lim; ++chrom_itr, ++seq_itr) {
-    if (*chrom_itr == 'C' && *(chrom_itr + 1) == 'G') {
-      const char x = *seq_itr;
+  if (cpg_itr == end(cpgs)) {
+    return false;
+  } else {
+    for (; cpg_itr != end(cpgs) && *cpg_itr < seq_end; cpg_itr++) {
+      const char x = seq_str[*cpg_itr - seq_start];
       states += (x == 'C') ? 'C' : ((x == 'T') ? 'T' : 'N');
-      if (first_cpg == end_chrom)
-        first_cpg = chrom_itr;
+      if (first_cpg_itr == end(cpgs))
+        first_cpg_itr = cpg_itr;
     }
   }
 
-  if (first_cpg != end_chrom) {
-    const auto the_cpg = cpgs.find(distance(beg_chrom, first_cpg));
-    if (the_cpg == end(cpgs))
-      throw runtime_error("cannot locate site on positive strand: " +
-                          aln.tostring());
-    start_pos = the_cpg->second;
+  if (first_cpg_itr != end(cpgs)) {
+    first_cpg_index = distance(begin(cpgs), first_cpg_itr);
   }
+
   return states.find_first_of("CT") != string::npos;
 }
 
 
 static bool
-convert_meth_states_neg(const string &chrom,
-                        const unordered_map<size_t, size_t> &cpgs,
-                        const sam_rec &aln,
-                        size_t &start_pos, string &states) {
+convert_meth_states_neg(const vector<size_t> &cpgs,
+                        const bam_header &hdr,
+                        const bam_rec &aln,
+                        size_t &first_cpg_index, string &states) {
   /* ADS: the "revcomp" on the read sequence is needed for the cigar
      to be applied, since the cigar is relative to the genome
      coordinates and not the read's sequence. But the read sequence
@@ -187,45 +187,46 @@ convert_meth_states_neg(const string &chrom,
 
   states.clear();
 
-  const size_t width = cigar_rseq_ops(aln.cigar);
-  const size_t offset = aln.pos - 1;  // SAM format convention
+  const size_t seq_start = get_pos(aln);  
+  const size_t width = rlen_from_cigar(aln);
+  const size_t seq_end = seq_start + width;   
 
-  string the_seq;
-  the_seq.resize(aln.seq.length());
-  revcomp_copy(begin(aln.seq), end(aln.seq), begin(the_seq));
-  apply_cigar(aln.cigar, the_seq);
-  if (the_seq.size() != width)
-    throw runtime_error("bad sam record format: " + aln.tostring());
+  string orig_seq;
+  get_seq_str(aln, orig_seq);
 
-  const auto beg_chrom = begin(chrom);
-  const auto end_chrom = end(chrom);
-  auto chrom_itr = beg_chrom + ((offset > 0) ? offset - 1 : 0);
-  auto first_cpg = end_chrom;
+  string seq_str;
+  seq_str.resize(orig_seq.size());
+  revcomp_copy(begin(orig_seq), end(orig_seq), begin(seq_str));
+  apply_cigar(aln, seq_str, 'N');
 
-  // ADS: should apply_cigar make the std::min below irrelevant?
-  const auto beg_seq = begin(the_seq);
-  const auto seq_lim = beg_seq + std::min(width, chrom.length() - offset);
-  auto seq_itr = beg_seq + ((offset > 0) ? 0 : 1);
+  if (seq_str.size() != width) {
+    throw runtime_error("bad sam record format: " + to_string(hdr, aln));
+  }
 
-  for (; seq_itr != seq_lim; ++chrom_itr, ++seq_itr) {
-    if (*chrom_itr == 'C' && *(chrom_itr + 1) == 'G') {
-      const char x = *seq_itr;
+  // get the first cpg site equal to or large than seq_start - 1
+  // the -1 is because we look for G in the read corresponding to a 
+  // CpG in chromosome, which are indexed in cpgs based on the position of C 
+  auto cpg_itr = lower_bound(begin(cpgs), end(cpgs), 
+                             seq_start > 0 ? seq_start - 1 : 0);
+  auto first_cpg_itr = end(cpgs);
+
+  if (cpg_itr == end(cpgs)) {
+    return false;
+  } else {
+    for (; cpg_itr != end(cpgs) && *cpg_itr < seq_end - 1; cpg_itr++) {
+      const char x = seq_str[*cpg_itr - seq_start + 1];
       states += (x == 'G') ? 'C' : ((x == 'A') ? 'T' : 'N');
-      if (first_cpg == end_chrom)
-        first_cpg = chrom_itr;
+      if (first_cpg_itr == end(cpgs))
+        first_cpg_itr = cpg_itr;
     }
   }
 
-  if (first_cpg != end_chrom) {
-    const auto the_cpg = cpgs.find(distance(beg_chrom, first_cpg));
-    if (the_cpg == end(cpgs))
-      throw runtime_error("cannot locate site on negative strand: " +
-                          aln.tostring());
-    start_pos = the_cpg->second;
+  if (first_cpg_itr != end(cpgs)) {
+    first_cpg_index = distance(begin(cpgs), first_cpg_itr);
   }
+
   return states.find_first_of("CT") != string::npos;
 }
-
 
 static void
 get_chrom(const string &chrom_name,
@@ -307,9 +308,12 @@ main_methstates(int argc, const char **argv) {
     if (VERBOSE)
       cerr << "n_chroms: " << all_chroms.size() << endl;
 
-    SAMReader in(mapped_reads_file);
+    bam_infile in(mapped_reads_file);
     if (!in)
       throw runtime_error("cannot open input file " + mapped_reads_file);
+    bam_header hdr(in);
+    if (!hdr)
+      throw runtime_error("cannot read heade" + mapped_reads_file);
 
     std::ofstream of;
     if (!outfile.empty()) of.open(outfile.c_str());
@@ -317,7 +321,8 @@ main_methstates(int argc, const char **argv) {
 
     // for the current chrom, this maps cpg index to cpg position in
     // the chrom
-    unordered_map<size_t, size_t> cpgs;
+    //unordered_map<size_t, size_t> cpgs;
+    vector<size_t> cpgs;
 
     unordered_set<string> chroms_seen;
     string chrom_name;
@@ -325,16 +330,17 @@ main_methstates(int argc, const char **argv) {
 
     // iterate over records/reads in the SAM file, sequentially
     // processing each before considering the next
-    sam_rec aln;
-    while (in >> aln) {
+    bam_rec aln;
+    while (in.read(hdr, aln)) {
 
       // get the correct chrom if it has changed
-      if (aln.rname != chrom_name) {
+      if (string(sam_hdr_tid2name(hdr, aln)) != chrom_name) {
+        chrom_name = sam_hdr_tid2name(hdr, aln);
+
         // make sure all reads from same chrom are contiguous in the file
-        if (chroms_seen.find(aln.rname) != end(chroms_seen))
+        if (chroms_seen.find(chrom_name) != end(chroms_seen))
           throw runtime_error("chroms out of order (check SAM file sorted)");
 
-        chrom_name = aln.rname;
         if (VERBOSE)
           cerr << "processing " << chrom_name << endl;
 
@@ -342,16 +348,16 @@ main_methstates(int argc, const char **argv) {
         collect_cpgs(chrom, cpgs);
       }
 
-      size_t start_pos = std::numeric_limits<size_t>::max();
+      size_t first_cpg_index = std::numeric_limits<size_t>::max();
       string seq;
 
-      const bool has_cpgs = check_flag(aln, samflags::read_rc) ?
-        convert_meth_states_neg(chrom, cpgs, aln, start_pos, seq) :
-        convert_meth_states_pos(chrom, cpgs, aln, start_pos, seq);
+      const bool has_cpgs = bam_is_rev(aln) ?
+        convert_meth_states_neg(cpgs, hdr, aln, first_cpg_index, seq) :
+        convert_meth_states_pos(cpgs, hdr, aln, first_cpg_index, seq);
 
       if (has_cpgs)
-        out << aln.rname << '\t'
-            << start_pos << '\t'
+        out << sam_hdr_tid2name(hdr, aln) << '\t'
+            << first_cpg_index << '\t'
             << seq << '\n';
     }
   }

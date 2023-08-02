@@ -45,6 +45,8 @@ using std::string;
 using std::to_string;
 using std::vector;
 
+using bamxx::bam_rec;
+
 namespace uniq_random {
   // ADS: I made this namespace and functions because different
   // implementations of rand() on different OS meant that even with
@@ -113,8 +115,8 @@ write_hist_output(const vector<size_t> &hist, const string &histfile) {
 static void
 process_inner_buffer(const bool add_dup_count,
                      const vector<bam_rec>::iterator it,
-                     const vector<bam_rec>::iterator jt, bam_header &hdr,
-                     bam_outfile &out, rd_stats &rs_out, size_t &reads_duped,
+                     const vector<bam_rec>::iterator jt, bamxx::bam_header &hdr,
+                     bamxx::bam_out &out, rd_stats &rs_out, size_t &reads_duped,
                      vector<size_t> &hist) {
   constexpr char du_tag[2] = {'D', 'U'};
   const size_t n_reads = std::distance(it, jt);
@@ -137,8 +139,8 @@ process_inner_buffer(const bool add_dup_count,
    and start position. These are gathered and then processed together. */
 static void
 process_buffer(const bool add_dup_count, rd_stats &rs_out, size_t &reads_duped,
-               vector<size_t> &hist, vector<bam_rec> &buffer, bam_header &hdr,
-               bam_outfile &out) {
+               vector<size_t> &hist, vector<bam_rec> &buffer, bamxx::bam_header &hdr,
+               bamxx::bam_out &out) {
   sort(begin(buffer), end(buffer), precedes_by_end_and_strand);
   auto it(begin(buffer));
   auto jt = it + 1;
@@ -162,59 +164,58 @@ uniq(const bool VERBOSE, const bool add_dup_count, const size_t n_threads,
   size_t reads_duped = 0;
   vector<size_t> hist;
 
-  bam_tpool tpool(n_threads);  // outer scope: must be destroyed last
+  bamxx::bam_tpool tpool(n_threads);  // outer scope: must be destroyed last
+
+  bamxx::bam_in hts(infile);
+  if (!hts) throw dnmt_error("failed to open input file: " + infile);
+  bamxx::bam_header hdr(hts);
+  if (!hdr) throw dnmt_error("failed to read header");
+
+  bamxx::bam_out out(outfile, bam_format);
   {
-    bam_infile hts(infile);
-    bam_header hdr(hts);
-    if (!hdr) throw dnmt_error("failed to read header");
+    bamxx::bam_header hdr_out(hdr);
+    if (!hdr_out) throw dnmt_error("failed create header");
+    hdr_out.add_pg_line(cmd, "DNMTOOLS", VERSION);
+    if (!out.write(hdr_out)) throw dnmt_error("failed to write header");
+  }
 
-    bam_outfile out(outfile, bam_format);
-    {
-      bam_header hdr_out(hdr);
-      if (!hdr_out) throw dnmt_error("failed create header");
-      hdr_out.add_pg_line(cmd, "DNMTOOLS", VERSION);
-      if (!out.write(hdr_out)) throw dnmt_error("failed to write header");
-    }
+  if (n_threads > 1) {
+    tpool.set_io(hts);
+    tpool.set_io(out);
+  }
 
-    if (n_threads > 1) {
-      tpool.set_io(hts);
-      tpool.set_io(out);
-    }
+  bam_rec aln;
+  if (hts.read(hdr, aln)) {  // valid SAM/BAM can have 0 reads
 
-    bam_rec aln;
-    if (hts.read(hdr, aln)) {  // valid SAM/BAM can have 0 reads
+    rs_in.update(aln);  // update stats for input we just got
 
-      rs_in.update(aln);  // update stats for input we just got
+    vector<bam_rec> buffer(1, aln);  // select output from this buffer
 
-      vector<bam_rec> buffer(1, aln);  // select output from this buffer
+    // to check that reads are sorted properly
+    vector<bool> chroms_seen(get_n_targets(hdr), false);
+    int32_t cur_chrom = get_tid(aln);
 
-      // to check that reads are sorted properly
-      vector<bool> chroms_seen(get_n_targets(hdr), false);
-      int32_t cur_chrom = get_tid(aln);
+    while (hts.read(hdr, aln)) {
+      rs_in.update(aln);
 
-      while (hts.read(hdr, aln)) {
-        rs_in.update(aln);
+      // below works because buffer reset at every new chrom
+      if (precedes_by_start(aln, buffer[0]))
+        throw runtime_error("not sorted: " + get_qname(buffer[0]) + " " +
+                            get_qname(aln));
 
-        // below works because buffer reset at every new chrom
-        if (precedes_by_start(aln, buffer[0]))
-          throw runtime_error("not sorted: " + get_qname(buffer[0]) + " " +
-                              get_qname(aln));
-
-        const int32_t chrom = get_tid(aln);
-        if (chrom != cur_chrom) {
-          if (chroms_seen[chrom]) throw runtime_error("input not sorted");
-          chroms_seen[chrom] = true;
-          cur_chrom = chrom;
-        }
-
-        if (!equivalent_chrom_and_start(buffer[0], aln))
-          process_buffer(add_dup_count, rs_out, reads_duped, hist, buffer, hdr,
-                         out);
-        buffer.push_back(aln);
+      const int32_t chrom = get_tid(aln);
+      if (chrom != cur_chrom) {
+        if (chroms_seen[chrom]) throw runtime_error("input not sorted");
+        chroms_seen[chrom] = true;
+        cur_chrom = chrom;
       }
-      process_buffer(add_dup_count, rs_out, reads_duped, hist, buffer, hdr,
-                     out);
+
+      if (!equivalent_chrom_and_start(buffer[0], aln))
+        process_buffer(add_dup_count, rs_out, reads_duped, hist, buffer, hdr,
+                       out);
+      buffer.push_back(aln);
     }
+    process_buffer(add_dup_count, rs_out, reads_duped, hist, buffer, hdr, out);
   }
   // write any additional output requested
   write_stats_output(rs_in, rs_out, reads_duped, statfile);
@@ -240,8 +241,8 @@ main_uniq(int argc, const char **argv) {
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]),
-                           "program to remove "
-                           "duplicate reads from sorted mapped reads",
+                           "program to remove duplicate reads from "
+                           "sorted mapped reads",
                            "<in-file> [out-file]", 2);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("stats", 'S', "statistics output file", false, statfile);

@@ -16,7 +16,18 @@
 #ifndef BAM_RECORD_UTILS_HPP
 #define BAM_RECORD_UTILS_HPP
 
-#include "bam_record.hpp"
+/* ADS: need to control all the macros from HTSlib pollution. For
+   functions maybe:
+
+   $ gcc -dM -E sam.h | grep "define [a-z]" | awk '{print $2}' |\
+       grep "[(]" | awk -v FS="(" '{print "#undef",$1}'
+
+   This gives about 65 symbols that need to be deleted. For the others
+   I don't know what to do because some of them have "#define _" which
+   means they should be system symbols.
+*/
+
+#include "bamxx.hpp"
 
 #include <string>
 

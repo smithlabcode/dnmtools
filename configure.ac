@@ -68,6 +68,7 @@ AC_SEARCH_LIBS([gsl_blas_dgemm], [gsl], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 AC_CONFIG_FILES([
 Makefile
 ])
+
 dnl make the test data files available in the build tree
 AC_CONFIG_LINKS([
 tests/md5sum.txt:data/md5sum.txt
@@ -77,5 +78,7 @@ tests/reads_1.fq.gz:data/reads_1.fq.gz
 tests/reads_2.fq.gz:data/reads_2.fq.gz
 tests/radmeth_test_table.txt:data/radmeth_test_table.txt
 tests/radmeth_test_design.txt:data/radmeth_test_design.txt
+tests/two_epialleles.states:data/two_epialleles.states
 ])
+
 AC_OUTPUT

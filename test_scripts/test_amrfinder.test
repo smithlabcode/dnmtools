@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+infile1=tests/two_epialleles.states
+infile2=tests/tRex1.fa
+outfile=tests/two_epialleles.amr
+if [[ -e "${infile1}" && -e "${infile2}" ]]; then
+    ./dnmtools amrfinder -v -c ${infile2} -o ${outfile} ${infile1}
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile}:" | cut -d ' ' -f 2)
+    if [[ "${x}" != "OK" ]]; then
+        exit 1;
+    fi
+else
+    echo "amrfinder input file(s) not found; skipping test";
+    exit 77;
+fi

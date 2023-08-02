@@ -27,40 +27,38 @@
  * A-rich and then changing that format to indicate T-rich.
  */
 
-#include <string>
-#include <vector>
-#include <iostream>
-#include <fstream>
-#include <unordered_map>
-#include <stdexcept>
-#include <sstream>
-#include <cstring>
-#include <cstdint> // for [u]int[0-9]+_t
-#include <algorithm>
-
 #include <config.h>
+
+#include <algorithm>
+#include <cstdint>  // for [u]int[0-9]+_t
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 // from smithlab
 #include "OptionParser.hpp"
-#include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
 
 // from dnmtools
-#include "dnmt_error.hpp"
 #include "bam_record_utils.hpp"
+#include "dnmt_error.hpp"
 
-using std::string;
-using std::vector;
 using std::cerr;
 using std::endl;
+using std::equal;
 using std::string;
 using std::vector;
-using std::equal;
+
+using bamxx::bam_rec;
 
 static size_t
-merge_mates(const size_t range,
-            bam_rec &one, bam_rec &two, bam_rec &merged) {
-
+merge_mates(const size_t range, bam_rec &one, bam_rec &two, bam_rec &merged) {
   if (!are_mates(one, two)) return -std::numeric_limits<int>::max();
 
   // arithmetic easier using base 0 so subtracting 1 from pos
@@ -106,9 +104,7 @@ merge_mates(const size_t range,
        * one_s              two_s      one_e              two_e
        * [------------end1------[======]------end2------------]
        */
-      if (head > 0) {
-        merge_overlap(one, two, head, merged);
-      }
+      if (head > 0) { merge_overlap(one, two, head, merged); }
       /* CASE 2: head == 0
        *
        * CASE 2A: one_e < two_e
@@ -125,7 +121,7 @@ merge_mates(const size_t range,
        *
        */
       // *** ELSE ***
-      if (head == 0) { // keep the end with more ref bases
+      if (head == 0) {  // keep the end with more ref bases
         keep_better_end(one, two, merged);
       }
     }
@@ -142,9 +138,7 @@ merge_mates(const size_t range,
        * [--end2---------[==============]---------end1--]
        */
       const int overlap = two_e - one_s;
-      if (overlap > 0) {
-        truncate_overlap(one, overlap, merged);
-      }
+      if (overlap > 0) { truncate_overlap(one, overlap, merged); }
     }
   }
 
@@ -158,10 +152,10 @@ merge_mates(const size_t range,
 
 static vector<string>
 load_read_names(const string &inputfile, const size_t n_reads) {
-  bam_infile hts(inputfile);
+  bamxx::bam_in hts(inputfile);
   if (!hts) throw dnmt_error("failed to open BAM/SAM file: " + inputfile);
 
-  bam_header hdr(hts);
+  bamxx::bam_header hdr(hts);
   if (!hdr) throw dnmt_error("failed to get header: " + inputfile);
 
   bam_rec aln;
@@ -183,11 +177,11 @@ get_max_repeat_count(const vector<string> &names, const size_t suff_len) {
   // would result in more that two reads identified mutually as mates.
   for (size_t i = 1; i < names.size() && repeat_count < 2; ++i) {
     if (names[i - 1].size() == names[i].size() &&
-        equal(begin(names[i - 1]),
-              end(names[i - 1]) - suff_len,
+        equal(begin(names[i - 1]), end(names[i - 1]) - suff_len,
               begin(names[i])))
       ++tmp_repeat_count;
-    else tmp_repeat_count = 0;
+    else
+      tmp_repeat_count = 0;
     repeat_count = std::max(repeat_count, tmp_repeat_count);
   }
   return repeat_count;
@@ -201,8 +195,7 @@ check_suff_len(const string &inputfile, const size_t suff_len,
   auto names(load_read_names(inputfile, n_names_to_check));
   // get the minimum read name length
   size_t min_name_len = std::numeric_limits<size_t>::max();
-  for (auto &&i : names)
-    min_name_len = std::min(min_name_len, i.size());
+  for (auto &&i : names) min_name_len = std::min(min_name_len, i.size());
   if (min_name_len <= suff_len)
     throw dnmt_error("given suffix length exceeds min read name length");
   sort(begin(names), end(names));
@@ -212,18 +205,16 @@ check_suff_len(const string &inputfile, const size_t suff_len,
 static size_t
 guess_suff_len(const string &inputfile, const size_t n_names_to_check,
                size_t &repeat_count) {
-
   // ADS: assuming copy elision but should test it
   auto names(load_read_names(inputfile, n_names_to_check));
   if (names.empty()) {
-    repeat_count = 0; // don't worry about this if data is empty
-    return 0; // minimum suffix length must be zero
+    repeat_count = 0;  // don't worry about this if data is empty
+    return 0;          // minimum suffix length must be zero
   }
 
   // get the minimum read name length
   size_t min_name_len = std::numeric_limits<size_t>::max();
-  for (auto &&i : names)
-    min_name_len = std::min(min_name_len, i.size());
+  for (auto &&i : names) min_name_len = std::min(min_name_len, i.size());
   assert(min_name_len > 0);
 
   sort(begin(names), end(names));
@@ -240,8 +231,7 @@ guess_suff_len(const string &inputfile, const size_t n_names_to_check,
     // check current suffix length guess
     repeat_count = get_max_repeat_count(names, suff_len);
     // we want to lag by one iteration
-    if (repeat_count == 0)
-      ++suff_len;
+    if (repeat_count == 0) ++suff_len;
   }
   // repeat_count should be equal to the greatest value of
   // tmp_repeat_count over all inner iterations above. If this value
@@ -264,13 +254,12 @@ check_sorted(const string &inputfile, const size_t suff_len, size_t n_reads) {
   // given end has a mate and that mate is not adjacent. This requires
   // storing previous reads, not simply checking for adjacent pairs.
   auto names(load_read_names(inputfile, n_reads));
-  for (auto &&i : names)
-    i = remove_suff(i, suff_len);
+  for (auto &&i : names) i = remove_suff(i, suff_len);
 
   std::unordered_map<string, size_t> mate_lookup;
   for (size_t i = 0; i < names.size(); ++i) {
     auto the_mate = mate_lookup.find(names[i]);
-    if (the_mate == end(mate_lookup)) // 1st time seeing this one
+    if (the_mate == end(mate_lookup))  // 1st time seeing this one
       mate_lookup[names[i]] = i;
     else if (the_mate->second != i - 1)
       return false;
@@ -281,7 +270,7 @@ check_sorted(const string &inputfile, const size_t suff_len, size_t n_reads) {
 
 static inline void
 check_input_file(const string &infile) {
-  const bam_infile hts(infile);
+  const bamxx::bam_in hts(infile);
   if (!hts) throw dnmt_error("failed to open file: " + infile);
   if (!hts.is_mapped_reads_file())
     throw dnmt_error("not valid SAM/BAM format: " + infile);
@@ -289,9 +278,9 @@ check_input_file(const string &infile) {
 
 static bool
 check_format_in_header(const string &input_format, const string &inputfile) {
-  bam_infile hts(inputfile);
+  bamxx::bam_in hts(inputfile);
   if (!hts) throw dnmt_error("error opening file: " + inputfile);
-  const bam_header bh(hts);
+  const bamxx::bam_header bh(hts);
   if (!bh) throw dnmt_error("failed to read header: " + inputfile);
   const string entire_header(bh.tostring());
   auto it = std::search(begin(entire_header), end(entire_header),
@@ -303,7 +292,7 @@ check_format_in_header(const string &input_format, const string &inputfile) {
 }
 
 static inline bool
-same_name(const bam_rec &a, const bam_rec &b, const size_t suff_len) {
+same_name(const bamxx::bam_rec &a, const bam_rec &b, const size_t suff_len) {
   // "+ 1" below: extranul counts *extras*; we don't want *any* nulls
   const uint16_t a_l = a.b->core.l_qname - (a.b->core.l_extranul + 1);
   const uint16_t b_l = b.b->core.l_qname - (b.b->core.l_extranul + 1);
@@ -318,22 +307,20 @@ swap(bam_rec &a, bam_rec &b) {
 }
 
 static void
-format(const string &cmd, const size_t n_threads,
-       const string &inputfile, const string &outfile,
-       const bool bam_format, const string &input_format,
+format(const string &cmd, const size_t n_threads, const string &inputfile,
+       const string &outfile, const bool bam_format, const string &input_format,
        const size_t suff_len, const size_t max_frag_len) {
-
   static const dnmt_error bam_write_err{"error writing bam"};
 
-  bam_tpool tp(n_threads);
+  bamxx::bam_tpool tp(n_threads);
 
-  bam_infile hts(inputfile);  // assume already checked
-  bam_header hdr(hts);
+  bamxx::bam_in hts(inputfile);  // assume already checked
+  bamxx::bam_header hdr(hts);
   if (!hdr) throw dnmt_error("failed to read header");
 
-  bam_outfile out(outfile, bam_format);
+  bamxx::bam_out out(outfile, bam_format);
 
-  bam_header hdr_out(hdr);
+  bamxx::bam_header hdr_out(hdr);
   if (!hdr_out) throw dnmt_error("failed create header");
   hdr_out.add_pg_line(cmd, "DNMTOOLS", VERSION);
   if (!out.write(hdr_out)) throw dnmt_error("failed to write header");
@@ -349,7 +336,6 @@ format(const string &cmd, const size_t n_threads,
   const bool empty_reads_file = !hts.read(hdr, aln);
 
   if (!empty_reads_file) {
-
     standardize_format(input_format, aln);
 
     swap(aln, prev_aln);  // start with prev_aln being first read
@@ -359,7 +345,8 @@ format(const string &cmd, const size_t n_threads,
       if (same_name(prev_aln, aln, suff_len)) {
         // below: essentially check for dovetail
         if (!bam_is_rev(aln)) swap(prev_aln, aln);
-        const size_t frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
+        const size_t frag_len =
+          merge_mates(max_frag_len, prev_aln, aln, merged);
         if (frag_len > 0 && frag_len < max_frag_len) {
           if (is_a_rich(merged)) flip_conversion(merged);
           if (!out.write(hdr, merged)) throw bam_write_err;
@@ -388,10 +375,9 @@ format(const string &cmd, const size_t n_threads,
   }
 }
 
-int main_format(int argc, const char **argv) {
-
+int
+main_format(int argc, const char **argv) {
   try {
-
     size_t n_reads_to_check = 1000000;
 
     bool bam_format = false;
@@ -406,33 +392,33 @@ int main_format(int argc, const char **argv) {
     bool force = false;
     size_t n_threads = 1;
 
-    const string description = "convert SAM/BAM mapped bs-seq reads "
-                               "to standard dnmtools format";
+    const string description =
+      "convert SAM/BAM mapped bs-seq reads "
+      "to standard dnmtools format";
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description,
                            "<sam/bam-file> [out-file]", 2);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("bam", 'B', "output in BAM format", false, bam_format);
-    opt_parse.add_opt("stdout", '\0',
-                      "write to standard output", false, use_stdout);
+    opt_parse.add_opt("stdout", '\0', "write to standard output", false,
+                      use_stdout);
     opt_parse.add_opt("format", 'f', "input format {abismal, bsmap, bismark}",
                       false, input_format);
-    opt_parse.add_opt("suff", 's', "read name suffix length",
-                      false, suff_len);
+    opt_parse.add_opt("suff", 's', "read name suffix length", false, suff_len);
     opt_parse.add_opt("single-end", '\0',
-                      "assume single-end [do not use with -suff]",
-                      false, single_end);
-    opt_parse.add_opt("max-frag", 'L', "maximum allowed insert size",
-                      false, max_frag_len);
+                      "assume single-end [do not use with -suff]", false,
+                      single_end);
+    opt_parse.add_opt("max-frag", 'L', "maximum allowed insert size", false,
+                      max_frag_len);
     opt_parse.add_opt("check", 'c',
                       "check this many reads to validate read name suffix",
                       false, n_reads_to_check);
-    opt_parse.add_opt("force", 'F', "force formatting for "
+    opt_parse.add_opt("force", 'F',
+                      "force formatting for "
                       "mixed single and paired reads",
                       false, force);
-    opt_parse.add_opt("verbose", 'v', "print more information",
-                      false, VERBOSE);
+    opt_parse.add_opt("verbose", 'v', "print more information", false, VERBOSE);
     opt_parse.set_show_defaults();
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -461,7 +447,7 @@ int main_format(int argc, const char **argv) {
     if (leftover_args.size() == 2 && !use_stdout)
       outfile = leftover_args.back();
     else
-      outfile = string("-"); // so htslib can write to stdout
+      outfile = string("-");  // so htslib can write to stdout
     /****************** END COMMAND LINE OPTIONS *****************/
 
     std::ostringstream cmd;
@@ -489,9 +475,10 @@ int main_format(int argc, const char **argv) {
         size_t repeat_count = 0;
         suff_len = guess_suff_len(infile, n_reads_to_check, repeat_count);
         if (repeat_count > 1)
-          throw dnmt_error("failed to identify read name suffix length\n"
-                        "verify reads are not single-end\n"
-                        "specify read name suffix length directly");
+          throw dnmt_error(
+            "failed to identify read name suffix length\n"
+            "verify reads are not single-end\n"
+            "specify read name suffix length directly");
         if (VERBOSE)
           cerr << "[read name suffix length guess: " << suff_len << "]" << endl;
       }
@@ -505,8 +492,8 @@ int main_format(int argc, const char **argv) {
     if (VERBOSE && !single_end)
       cerr << "[readname suffix length: " << suff_len << "]" << endl;
 
-    format(cmd.str(), n_threads, infile, outfile,
-           bam_format, input_format, suff_len, max_frag_len);
+    format(cmd.str(), n_threads, infile, outfile, bam_format, input_format,
+           suff_len, max_frag_len);
   }
   catch (const std::exception &e) {
     cerr << e.what() << endl;

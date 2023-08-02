@@ -32,6 +32,8 @@
 #include "dnmt_error.hpp"
 #include "smithlab_utils.hpp"
 
+#include <bamxx.hpp>
+
 using std::accumulate;
 using std::cerr;
 using std::cout;
@@ -43,6 +45,8 @@ using std::string;
 using std::unordered_map;
 using std::unordered_set;
 using std::vector;
+
+using bamxx::bam_rec;
 
 static void
 count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
@@ -284,11 +288,11 @@ main_bsrate(int argc, const char **argv) {
     if (VERBOSE)
       cerr << "[n chroms in reference: " << chroms.size() << "]" << endl;
 
-    bam_tpool tp(n_threads);
+    bamxx::bam_tpool tp(n_threads);
 
-    bam_infile hts(bam_file);
+    bamxx::bam_in hts(bam_file);
     if (!hts) throw dnmt_error("failed to open input file: " + bam_file);
-    bam_header hdr(hts);
+    bamxx::bam_header hdr(hts);
     if (!hdr) throw dnmt_error("failed to read header");
 
     if (n_threads > 1)

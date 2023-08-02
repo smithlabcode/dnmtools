@@ -85,7 +85,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS := src/smithlab_cpp src/abismal
 install installdirs: SUBDIRS := $(filter-out src/smithlab_cpp src/abismal, $(SUBDIRS))
-AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp
+AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp -I $(top_srcdir)/src/bamxx
 
 CXXFLAGS = -Wall -O3 $(OPENMP_CXXFLAGS) # default has optimization on
 
@@ -137,7 +137,7 @@ libdnmtools_a_SOURCES = \
         src/common/numerical_utils.cpp
 
 libdnmtools_a_SOURCES += \
-	src/common/bam_record.hpp \
+	src/bamxx/bamxx.hpp \
 	src/common/bam_record_utils.hpp \
         src/common/BetaBin.hpp \
         src/common/Distro.hpp \

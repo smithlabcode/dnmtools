@@ -6,3 +6,7 @@
 	path = src/abismal
 	url = ../abismal.git
 	ignore = dirty
+[submodule "src/bamxx"]
+	path = src/bamxx
+	url = ../bamxx.git
+	ignore = dirty

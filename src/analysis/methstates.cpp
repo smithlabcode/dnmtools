@@ -44,6 +44,7 @@ using std::unordered_set;
 using std::runtime_error;
 using std::lower_bound;
 
+using bamxx::bam_rec;
 
 static const char b2c[] = "TNGNNNCNNNNNNNNNNNNA";
 
@@ -55,91 +56,33 @@ OutputIt revcomp_copy(BidirIt first, BidirIt last, OutputIt d_first) {
   return d_first;
 }
 
-
-// template<class BidirIt>
-// constexpr // since C++20
-// void revcomp_into(BidirIt first, BidirIt last)
-// {
-//     using iter_cat = typename std::iterator_traits<BidirIt>::iterator_category;
-
-//     // Tag dispatch, e.g. calling reverse_impl(first, last, iter_cat()),
-//     // can be used in C++14 and earlier modes.
-//     if constexpr (std::is_base_of_v<std::random_access_iterator_tag, iter_cat>)
-//     {
-//         if (first == last)
-//             return;
-
-//         for (--last; first < last; (void)++first, --last)
-//             std::iter_swap(first, last);
-//     }
-//     else
-//         while (first != last && first != --last)
-//             std::iter_swap(first++, last);
-// }
-
-
 inline static bool
 is_cpg(const string &s, const size_t idx) {
   return s[idx] == 'C' && s[idx + 1] == 'G';
 }
 
 static void
-collect_cpgs(const string &s, 
+collect_cpgs(const string &s,
              vector<size_t> &cpgs) {
   cpgs.clear();
   const size_t lim = s.length() - 1;
   for (size_t i = 0; i < lim; ++i) {
-    if (is_cpg(s, i)) 
+    if (is_cpg(s, i))
       cpgs.push_back(i);
   }
 }
 
-// void
-// local_apply_cigar(const string &cigar, string &to_inflate,
-//             const char inflation_symbol) {
-//   std::istringstream iss(cigar);
-
-//   string inflated_seq;
-//   size_t n;
-//   char op;
-//   size_t i = 0;
-//   auto to_inflate_beg = std::begin(to_inflate);
-//   while (iss >> n >> op) {
-//     if (consumes_reference(op) && consumes_query(op)) {
-//       inflated_seq.append(to_inflate_beg + i, to_inflate_beg + i + n);
-//       i += n;
-//     }
-//     else if (consumes_query(op)) {
-//       // no addition of symbols to query
-//       i += n;
-//     }
-//     else if (consumes_reference(op)) {
-//       inflated_seq.append(n, inflation_symbol);
-//       // no increment of index within query
-//     }
-//   }
-
-//   // sum of total M/I/S/=/X/N operations must equal length of seq
-//   const size_t orig_len = to_inflate.length();
-//   if (i != orig_len)
-//     throw runtime_error("inconsistent number of qseq ops in cigar: " +
-//                         to_inflate + " "  + cigar + " " +
-//                         to_string(i) + " " +
-//                         to_string(orig_len));
-//   to_inflate.swap(inflated_seq);
-// }
-
 static bool
 convert_meth_states_pos(const vector<size_t> &cpgs,
-                        const bam_header &hdr, 
+                        const bamxx::bam_header &hdr,
                         const bam_rec &aln,
                         size_t &first_cpg_index, string &states) {
 
   states.clear();
 
-  const size_t seq_start = get_pos(aln);  
+  const size_t seq_start = get_pos(aln);
   const size_t width = rlen_from_cigar(aln);
-  const size_t seq_end = seq_start + width;   
+  const size_t seq_end = seq_start + width;
 
   string seq_str;
   get_seq_str(aln, seq_str);
@@ -174,7 +117,7 @@ convert_meth_states_pos(const vector<size_t> &cpgs,
 
 static bool
 convert_meth_states_neg(const vector<size_t> &cpgs,
-                        const bam_header &hdr,
+                        const bamxx::bam_header &hdr,
                         const bam_rec &aln,
                         size_t &first_cpg_index, string &states) {
   /* ADS: the "revcomp" on the read sequence is needed for the cigar
@@ -187,9 +130,9 @@ convert_meth_states_neg(const vector<size_t> &cpgs,
 
   states.clear();
 
-  const size_t seq_start = get_pos(aln);  
+  const size_t seq_start = get_pos(aln);
   const size_t width = rlen_from_cigar(aln);
-  const size_t seq_end = seq_start + width;   
+  const size_t seq_end = seq_start + width;
 
   string orig_seq;
   get_seq_str(aln, orig_seq);
@@ -204,9 +147,9 @@ convert_meth_states_neg(const vector<size_t> &cpgs,
   }
 
   // get the first cpg site equal to or large than seq_start - 1
-  // the -1 is because we look for G in the read corresponding to a 
-  // CpG in chromosome, which are indexed in cpgs based on the position of C 
-  auto cpg_itr = lower_bound(begin(cpgs), end(cpgs), 
+  // the -1 is because we look for G in the read corresponding to a
+  // CpG in chromosome, which are indexed in cpgs based on the position of C
+  auto cpg_itr = lower_bound(begin(cpgs), end(cpgs),
                              seq_start > 0 ? seq_start - 1 : 0);
   auto first_cpg_itr = end(cpgs);
 
@@ -308,10 +251,10 @@ main_methstates(int argc, const char **argv) {
     if (VERBOSE)
       cerr << "n_chroms: " << all_chroms.size() << endl;
 
-    bam_infile in(mapped_reads_file);
+    bamxx::bam_in in(mapped_reads_file);
     if (!in)
       throw runtime_error("cannot open input file " + mapped_reads_file);
-    bam_header hdr(in);
+    bamxx::bam_header hdr(in);
     if (!hdr)
       throw runtime_error("cannot read heade" + mapped_reads_file);
 

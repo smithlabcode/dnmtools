@@ -27,7 +27,7 @@
    means they should be system symbols.
 */
 
-#include "bamxx.hpp"
+#include <bamxx.hpp>
 
 #include <string>
 
@@ -36,30 +36,36 @@
 #endif
 
 inline bool
-bam_is_rev(const bam_rec &b) { return (b.b->core.flag & BAM_FREVERSE) != 0; }
+bam_is_rev(const bamxx::bam_rec &b) {
+  return (b.b->core.flag & BAM_FREVERSE) != 0;
+}
 
 #ifdef bam_is_mrev
 #undef bam_is_mrev
 #endif
 
 inline bool
-bam_is_mrev(const bam_rec &b) { return (b.b->core.flag & BAM_FMREVERSE) != 0; }
+bam_is_mrev(const bamxx::bam_rec &b) {
+  return (b.b->core.flag & BAM_FMREVERSE) != 0;
+}
 
 #ifdef bam_get_qname
 #undef bam_get_qname
 #endif
 
 inline char *
-bam_get_qname(const bam_rec &b) { return reinterpret_cast<char*>(b.b->data); }
+bam_get_qname(const bamxx::bam_rec &b) {
+  return reinterpret_cast<char *>(b.b->data);
+}
 
 #ifdef bam_get_cigar
 #undef bam_get_cigar
 #endif
 
 inline uint32_t *
-bam_get_cigar(const bam_rec &b) {
+bam_get_cigar(const bamxx::bam_rec &b) {
   // start of data + bytes for query/read name
-  return reinterpret_cast<uint32_t*>(b.b->data + b.b->core.l_qname);
+  return reinterpret_cast<uint32_t *>(b.b->data + b.b->core.l_qname);
 }
 
 #ifdef bam_get_seq
@@ -67,7 +73,7 @@ bam_get_cigar(const bam_rec &b) {
 #endif
 
 inline uint8_t *
-bam_get_seq(const bam_rec &b) {
+bam_get_seq(const bamxx::bam_rec &b) {
   // start of data + bytes for cigar + bytes for query/read name
   return b.b->data + b.b->core.l_qname + (b.b->core.n_cigar << 2);
 }
@@ -77,11 +83,11 @@ bam_get_seq(const bam_rec &b) {
 #endif
 
 inline uint8_t *
-bam_get_qual(const bam_rec &b) {
-  return b.b->data +  // start of data
-    b.b->core.l_qname +  // bytes for query name
-    (b.b->core.n_cigar << 2) +  // bytes for cigar
-    ((b.b->core.l_qseq + 1) >> 1);  // bytes for packed query/read
+bam_get_qual(const bamxx::bam_rec &b) {
+  return b.b->data +                     // start of data
+         b.b->core.l_qname +             // bytes for query name
+         (b.b->core.n_cigar << 2) +      // bytes for cigar
+         ((b.b->core.l_qseq + 1) >> 1);  // bytes for packed query/read
 }
 
 #ifdef bam_get_aux
@@ -89,12 +95,9 @@ bam_get_qual(const bam_rec &b) {
 #endif
 
 inline uint8_t *
-bam_get_aux(const bam_rec &b) {
-  return b.b->data +
-    b.b->core.l_qname +
-    (b.b->core.n_cigar << 2) +
-    ((b.b->core.l_qseq + 1) >> 1) +
-    b.b->core.l_qseq;
+bam_get_aux(const bamxx::bam_rec &b) {
+  return b.b->data + b.b->core.l_qname + (b.b->core.n_cigar << 2) +
+         ((b.b->core.l_qseq + 1) >> 1) + b.b->core.l_qseq;
 }
 
 #ifdef bam_get_l_aux
@@ -102,12 +105,9 @@ bam_get_aux(const bam_rec &b) {
 #endif
 
 inline int
-bam_get_l_aux(const bam_rec &b) {
-  return b.b->l_data -
-    (b.b->core.l_qname +
-     (b.b->core.n_cigar << 2) +
-     ((b.b->core.l_qseq + 1) >> 1) +
-     b.b->core.l_qseq);
+bam_get_l_aux(const bamxx::bam_rec &b) {
+  return b.b->l_data - (b.b->core.l_qname + (b.b->core.n_cigar << 2) +
+                        ((b.b->core.l_qseq + 1) >> 1) + b.b->core.l_qseq);
 }
 
 #ifdef bam_cigar_op
@@ -129,45 +129,51 @@ bam_cigar_oplen(const uint32_t c) {
 }
 
 inline bool
-bam_same_orientation(const bam_rec &a, const bam_rec &b) {
+bam_same_orientation(const bamxx::bam_rec &a, const bamxx::bam_rec &b) {
   return ((a.b->core.flag ^ b.b->core.flag) & BAM_FREVERSE) != 0;
 }
 
-int truncate_overlap(const bam_rec &a, const uint32_t overlap, bam_rec &c);
+int
+truncate_overlap(const bamxx::bam_rec &a, const uint32_t overlap,
+                 bamxx::bam_rec &c);
 
-int merge_overlap(const bam_rec &a, const bam_rec &b,
-                  const uint32_t head, bam_rec &c);
+int
+merge_overlap(const bamxx::bam_rec &a, const bamxx::bam_rec &b,
+              const uint32_t head, bamxx::bam_rec &c);
 
-int merge_non_overlap(const bam_rec &a, const bam_rec &b,
-                      const uint32_t spacer, bam_rec &c);
+int
+merge_non_overlap(const bamxx::bam_rec &a, const bamxx::bam_rec &b,
+                  const uint32_t spacer, bamxx::bam_rec &c);
 
-int keep_better_end(const bam_rec &a, const bam_rec &b, bam_rec &c);
+int
+keep_better_end(const bamxx::bam_rec &a, const bamxx::bam_rec &b,
+                bamxx::bam_rec &c);
 
-size_t correct_cigar(bam_rec &b);
+size_t
+correct_cigar(bamxx::bam_rec &b);
 
-void flip_conversion(bam_rec &aln);
+void
+flip_conversion(bamxx::bam_rec &aln);
 
 inline bool
-is_a_rich(const bam_rec &b) { return bam_aux2A(bam_aux_get(b.b, "CV")) == 'A'; }
+is_a_rich(const bamxx::bam_rec &b) {
+  return bam_aux2A(bam_aux_get(b.b, "CV")) == 'A';
+}
 
 void
-standardize_format(const std::string &input_format, bam_rec &aln);
-
+standardize_format(const std::string &input_format, bamxx::bam_rec &aln);
 
 void
-apply_cigar(const bam_rec &aln, std::string &to_inflate,
+apply_cigar(const bamxx::bam_rec &aln, std::string &to_inflate,
             const char inflation_symbol);
 
-
 void
-get_seq_str(const bam_rec & aln, std::string &seq_str);
-
+get_seq_str(const bamxx::bam_rec &aln, std::string &seq_str);
 
 inline bool
-are_mates(const bam_rec &one, const bam_rec &two) {
+are_mates(const bamxx::bam_rec &one, const bamxx::bam_rec &two) {
   return one.b->core.mtid == two.b->core.tid &&
-    one.b->core.mpos == two.b->core.pos &&
-    bam_same_orientation(one, two);
+         one.b->core.mpos == two.b->core.pos && bam_same_orientation(one, two);
   // below is a consistency check and should not be necessary
   /* &&
      two->core.mtid == one->core.tid &&
@@ -175,25 +181,39 @@ are_mates(const bam_rec &one, const bam_rec &two) {
 }
 
 inline int32_t
-get_l_qseq(const bam_rec &b) { return b.b->core.l_qseq; }
+get_l_qseq(const bamxx::bam_rec &b) {
+  return b.b->core.l_qseq;
+}
 
 inline size_t
-get_n_targets(const bam_header &bh) { return bh.h->n_targets; }
+get_n_targets(const bamxx::bam_header &bh) {
+  return bh.h->n_targets;
+}
 
 inline std::string
-get_qname(const bam_rec &b) { return bam_get_qname(b); }
+get_qname(const bamxx::bam_rec &b) {
+  return bam_get_qname(b);
+}
 
 inline int32_t
-get_tid(const bam_rec &b) { return b.b->core.tid; }
+get_tid(const bamxx::bam_rec &b) {
+  return b.b->core.tid;
+}
 
 inline hts_pos_t
-get_pos(const bam_rec &b) { return b.b->core.pos; }
+get_pos(const bamxx::bam_rec &b) {
+  return b.b->core.pos;
+}
 
 inline uint32_t
-get_n_cigar(const bam_rec &b) { return b.b->core.n_cigar; }
+get_n_cigar(const bamxx::bam_rec &b) {
+  return b.b->core.n_cigar;
+}
 
 inline hts_pos_t
-get_endpos(const bam_rec &b) { return bam_endpos(b.b); }
+get_endpos(const bamxx::bam_rec &b) {
+  return bam_endpos(b.b);
+}
 
 inline bool
 cigar_eats_ref(const uint32_t c) {
@@ -211,49 +231,49 @@ cigar_eats_frag(const uint32_t c) {
 }
 
 inline bool
-precedes_by_start(const bam_rec &a, const bam_rec &b) {
+precedes_by_start(const bamxx::bam_rec &a, const bamxx::bam_rec &b) {
   // assumes a.get_tid() <= b.get_tid()
   return get_tid(a) == get_tid(b) && get_pos(a) < get_pos(b);
 }
 
 inline bool
-precedes_by_end_and_strand(const bam_rec &a, const bam_rec &b) {
+precedes_by_end_and_strand(const bamxx::bam_rec &a, const bamxx::bam_rec &b) {
   const auto end_a = bam_endpos(a.b);
   const auto end_b = bam_endpos(b.b);
   return end_a < end_b || (end_a == end_b && bam_is_rev(a) < bam_is_rev(b));
 }
 
 inline bool
-equivalent_chrom_and_start(const bam_rec &a, const bam_rec &b) {
+equivalent_chrom_and_start(const bamxx::bam_rec &a, const bamxx::bam_rec &b) {
   return a.b->core.pos == b.b->core.pos && a.b->core.tid == b.b->core.tid;
 }
 
 inline bool
-equivalent_end_and_strand(const bam_rec &a, const bam_rec &b) {
+equivalent_end_and_strand(const bamxx::bam_rec &a, const bamxx::bam_rec &b) {
   return bam_endpos(a.b) == bam_endpos(b.b) && bam_is_rev(a) == bam_is_rev(b);
 }
 
-template <typename T> int
-bam_aux_update_int(bam_rec &b, const char tag[2], T val) {
+template<typename T> int
+bam_aux_update_int(bamxx::bam_rec &b, const char tag[2], T val) {
   return bam_aux_update_int(b.b, tag, val);
 }
 
 inline std::string
-sam_hdr_tid2name(const bam_header &hdr, const int32_t tid) {
+sam_hdr_tid2name(const bamxx::bam_header &hdr, const int32_t tid) {
   return std::string(sam_hdr_tid2name(hdr.h, tid));
 }
 
 inline std::string
-sam_hdr_tid2name(const bam_header &hdr, const bam_rec &aln) {
+sam_hdr_tid2name(const bamxx::bam_header &hdr, const bamxx::bam_rec &aln) {
   return std::string(sam_hdr_tid2name(hdr.h, aln.b->core.tid));
 }
 
 std::string
-to_string(const bam_header &hdr, const bam_rec &aln);
+to_string(const bamxx::bam_header &hdr, const bamxx::bam_rec &aln);
 
-inline size_t rlen_from_cigar(const bam_rec &aln) {
+inline size_t
+rlen_from_cigar(const bamxx::bam_rec &aln) {
   return bam_cigar2rlen(get_n_cigar(aln), bam_get_cigar(aln));
 }
-
 
 #endif

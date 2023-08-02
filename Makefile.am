@@ -84,7 +84,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS := src/smithlab_cpp src/abismal
 install installdirs: SUBDIRS := $(filter-out src/smithlab_cpp src/abismal, $(SUBDIRS))
-AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp
+AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp -I $(top_srcdir)/src/bamxx
 
 CXXFLAGS = -Wall -O3 $(OPENMP_CXXFLAGS) # default has optimization on
 
@@ -157,7 +157,6 @@ libdnmtools_a_SOURCES += \
 libdnmtools_a_SOURCES += \
         src/radmeth/radmeth_optimize.hpp \
         src/radmeth/radmeth_model.hpp
-
 
 LDADD = libdnmtools.a src/abismal/libabismal.a src/smithlab_cpp/libsmithlab_cpp.a
 

@@ -61,6 +61,7 @@ int main_merge_bsrate(int argc, const char **argv);
 int main_merge_methcounts(int argc, const char **argv);
 int main_selectsites(int argc, const char **argv);
 int main_symmetric_cpgs(int argc, const char **argv);
+int main_simulate(int argc, const char **argv);
 
 void
 print_help() {
@@ -159,6 +160,7 @@ main(int argc, const char **argv) {
   else if (strcmp(argv[1], "merge") == 0) ret = main_merge_methcounts(argc - 1, argv + 1);
   else if (strcmp(argv[1], "selectsites") == 0) ret = main_selectsites(argc - 1, argv + 1);
   else if (strcmp(argv[1], "sym") == 0) ret = main_symmetric_cpgs(argc - 1, argv + 1);
+  else if (strcmp(argv[1], "sim") == 0) ret = main_simulate(argc - 1, argv + 1);
 
   else {
     cerr << "command not found: " << argv[1] << endl;

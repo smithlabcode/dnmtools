@@ -17,3 +17,4 @@ b5270bb38d798741cfa74f411a0d49bf  tests/tRex1_promoters.roi.bed
 575f7daf8062c4aa3194370488794be8  tests/reads.bsrate
 5f6bd7100470c5306b41b6a56fe6690e  tests/reads.epiread
 e7e9590475a7f9b1ae41701d81892e57  tests/two_epialleles.amr
+ae05a28de5643a512386e767b3aa963a  tests/araTha1_simulated.hypermr

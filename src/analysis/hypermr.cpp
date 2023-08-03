@@ -20,22 +20,24 @@
  * 02110-1301 USA
  */
 
+#include <bamxx.hpp>
+
 #include <cmath>
 #include <fstream>
 #include <numeric>
 #include <stdexcept>
 
 #include "GenomicRegion.hpp"
+#include "MSite.hpp"
 #include "OptionParser.hpp"
+#include "ThreeStateHMM.hpp"
 #include "smithlab_os.hpp"
 #include "smithlab_utils.hpp"
-#include "zlib_wrapper.hpp"
 
-#include "MSite.hpp"
-#include "ThreeStateHMM.hpp"
-
+using std::begin;
 using std::cerr;
 using std::cout;
+using std::end;
 using std::endl;
 using std::istream_iterator;
 using std::make_pair;
@@ -59,11 +61,12 @@ as_gen_rgn(const MSite &s) {
 static void
 load_cpgs(const string &cpgs_file, vector<MSite> &cpgs,
           vector<pair<double, double>> &meth) {
-  igzfstream in(cpgs_file);
+  bamxx::bam_bgzf in(cpgs_file, "r");
   if (!in) throw runtime_error("failed opening file: " + cpgs_file);
 
   MSite the_site;
-  while (in >> the_site) cpgs.push_back(the_site);
+  string line;
+  while (in.getline(line)) cpgs.push_back(MSite(line));
 
   meth.resize(cpgs.size());
   for (size_t i = 0; i < cpgs.size(); ++i)
@@ -132,8 +135,8 @@ write_params_file(const string &params_file, const betabin &hypo_emission,
   out << hypo_emission.tostring() << endl
       << HYPER_emission.tostring() << endl
       << HYPO_emission.tostring() << endl;
-  for (size_t i = 0; i < trans.size(); ++i) {
-    for (size_t j = 0; j < trans[i].size(); ++j) out << trans[i][j] << "\t";
+  for (auto &i : trans) {
+    copy(begin(i), end(i), ostream_iterator<double>(out, "\t"));
     out << endl;
   }
 }
@@ -282,7 +285,7 @@ main_hypermr(int argc, const char **argv) {
     const size_t n_sites = cpgs.size();
 
     double mean_cov = 0.0;
-    for (auto &&c: cpgs) mean_cov += c.n_reads;
+    for (auto &&c : cpgs) mean_cov += c.n_reads;
     mean_cov /= n_sites;
 
     if (VERBOSE)
@@ -366,7 +369,7 @@ main_hypermr(int argc, const char **argv) {
           score_out << "hypo\n" << scores[i].hypo << endl;
         else if (classes[i] == HYPER)
           score_out << "HYPER\n" << scores[i].HYPER << endl;
-        else // if (classes[i] == HYPO)
+        else  // if (classes[i] == HYPO)
           score_out << "HYPO\n" << scores[i].HYPO << endl;
       }
     }

@@ -31,6 +31,7 @@
 #include "htslib_wrapper.hpp"
 #include "sam_record.hpp"
 #include "cigar_utils.hpp"
+#include "dnmt_error.hpp"
 
 #include "bam_record_utils.hpp"
 
@@ -205,12 +206,15 @@ main_methstates(int argc, const char **argv) {
 
     string chrom_file;
     string outfile;
+    int n_threads = 1;
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0], description, "<sam-file>");
     opt_parse.add_opt("output", 'o', "output file name", false, outfile);
     opt_parse.add_opt("chrom", 'c', "fasta format reference genome file",
                       true , chrom_file);
+    opt_parse.add_opt("threads", 't', "threads to use for reading input",
+                      false, n_threads);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
 
     vector<string> leftover_args;
@@ -235,6 +239,9 @@ main_methstates(int argc, const char **argv) {
     const string mapped_reads_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    if (n_threads < 0)
+      throw dnmt_error("thread count cannot be negative");
+
     /* first load in all the chromosome sequences and names, and make
        a map from chromosome name to the location of the chromosome
        itself */
@@ -251,12 +258,16 @@ main_methstates(int argc, const char **argv) {
     if (VERBOSE)
       cerr << "n_chroms: " << all_chroms.size() << endl;
 
+    bamxx::bam_tpool tp(n_threads);  // declared first; destroyed last
+
     bamxx::bam_in in(mapped_reads_file);
-    if (!in)
-      throw runtime_error("cannot open input file " + mapped_reads_file);
+    if (!in) throw dnmt_error("cannot open input file " + mapped_reads_file);
     bamxx::bam_header hdr(in);
-    if (!hdr)
-      throw runtime_error("cannot read heade" + mapped_reads_file);
+    if (!hdr) throw dnmt_error("cannot read heade" + mapped_reads_file);
+
+    /* set the threads for the input file decompression */
+    if (n_threads > 1)
+      tp.set_io(in);
 
     std::ofstream of;
     if (!outfile.empty()) of.open(outfile.c_str());

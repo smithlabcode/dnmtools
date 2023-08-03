@@ -27,7 +27,6 @@
 #include "smithlab_os.hpp"
 #include "MSite.hpp"
 
-#include <gsl/gsl_sf_gamma.h>
 #include <gsl/gsl_cdf.h>
 
 using std::string;
@@ -88,11 +87,21 @@ binom_null(const double alpha, const double n,
 //////////////////////////
 /// All 3 input files ////
 //////////////////////////
+
+static inline double
+lnchoose(const unsigned int n, unsigned int m) {
+  if (m == n || m == 0)
+    return 0;
+  if (m*2 > n) m = n - m;
+  using std::lgamma;
+  return lgamma(n + 1.0) - lgamma(m + 1.0) - lgamma((n - m) + 1.0);
+}
+
 static double
 log_L(const size_t h, const size_t g, const size_t m, const size_t l,
       const size_t u, const size_t t, const double p_h, const double p_m) {
-  double log_lkhd = gsl_sf_lnchoose(h+g, h) + gsl_sf_lnchoose(m+l, m) +
-    gsl_sf_lnchoose(u+t, u);
+
+  double log_lkhd = lnchoose(h+g, h) + lnchoose(m+l, m) + lnchoose(u+t, u);
 
   if (p_h > 0) log_lkhd += h*log(p_h);
   if (p_h < 1) log_lkhd += g*log(1-p_h);
@@ -138,12 +147,12 @@ expectation(const size_t a, const size_t x,
 
   vector<double> a_c_j;
   for (size_t j = 0; j <= a; ++j) {
-    a_c_j.push_back(gsl_sf_lnchoose(a, j) + log_q*(a - j) + log_p*j - log_p_q*a);
+    a_c_j.push_back(lnchoose(a, j) + log_q*(a - j) + log_p*j - log_p_q*a);
   }
 
   for (size_t k = 0; k <= x; ++k) {
     const double x_c_k =
-      gsl_sf_lnchoose(x, k) + log_p*k + log_1mpq*(x - k) - log_1mq*x;
+      lnchoose(x, k) + log_p*k + log_1mpq*(x - k) - log_1mq*x;
     for (size_t j = 0; j <= a; ++j)
       coeff[k][j] = exp(a_c_j[j] + x_c_k);
   }
@@ -229,7 +238,7 @@ log_L(const size_t x, const size_t y,
       const size_t z, const size_t w,
       const double p, const double q) {
   assert(p+q <= 1);
-  double log_lkhd = gsl_sf_lnchoose(x+y, x) + gsl_sf_lnchoose(z+w, z);
+  double log_lkhd = lnchoose(x+y, x) + lnchoose(z+w, z);
   if (p > 0) log_lkhd += x*log(p);
   if (p < 1) log_lkhd += y*log(1-p);
 
@@ -266,7 +275,7 @@ expectation(const size_t y,
   const double log_q = log(q);
   const double log_1mp = log(1.0 - p);
   for (size_t j = 0; j <= y; ++j)
-    coeff.push_back(exp(gsl_sf_lnchoose(y, j) + log_q*j
+    coeff.push_back(exp(lnchoose(y, j) + log_q*j
                         + log_1mpq*(y-j) - log_1mp*y));
 }
 

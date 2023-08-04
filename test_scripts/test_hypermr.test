@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+infile=tests/araTha1_simulated.counts.gz
+outfile=tests/araTha1_simulated.hypermr
+if [[ -e "${infile}" ]]; then
+    ./dnmtools hypermr -o ${outfile} ${infile}
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile}:" | cut -d ' ' -f 2)
+    if [[ "${x}" != "OK" ]]; then
+        exit 1;
+    fi
+else
+    echo "${infile} not found; skipping test";
+    exit 77;
+fi

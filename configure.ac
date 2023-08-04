@@ -79,6 +79,7 @@ tests/reads_2.fq.gz:data/reads_2.fq.gz
 tests/radmeth_test_table.txt:data/radmeth_test_table.txt
 tests/radmeth_test_design.txt:data/radmeth_test_design.txt
 tests/two_epialleles.states:data/two_epialleles.states
+tests/araTha1_simulated.counts.gz:data/araTha1_simulated.counts.gz
 ])
 
 AC_OUTPUT

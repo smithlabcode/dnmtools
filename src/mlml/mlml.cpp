@@ -381,7 +381,13 @@ process_three_types(const double alpha,
   ifstream o_in(oxbs_file);
   if (!o_in) throw dnmt_error("failed to open input file: " + oxbs_file);
 
-  ofstream out(outfile);
+  ofstream of;
+  if (!outfile.empty()) {
+    of.open(outfile);
+    if (!of) throw dnmt_error("failed to open output file: " + outfile);
+  }
+  std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
+
   ofstream out_m, out_h;
   if (!out_methcount_pseudo_m.empty()) {
     out_m.open(out_methcount_pseudo_m);
@@ -557,7 +563,13 @@ process_two_types(const double alpha,
                   size_t &conflict_sites) {
   constexpr auto max_read_count = 500;
 
-  ofstream out(outfile);
+  ofstream of;
+  if (!outfile.empty()) {
+    of.open(outfile);
+    if (!of) throw dnmt_error("failed to open output file: " + outfile);
+  }
+  std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
+
   ofstream out_m, out_h;
   if (!out_methcount_pseudo_m.empty()) {
     out_m.open(out_methcount_pseudo_m);

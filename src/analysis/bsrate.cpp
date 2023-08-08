@@ -332,12 +332,10 @@ main_bsrate(int argc, const char **argv) {
         const int32_t the_tid = get_tid(aln);
 
         // make sure all reads from same chrom are contiguous in the file
-        if (chroms_seen.find(the_tid) != end(chroms_seen)) {
-          cerr << the_tid << '\t' << current_tid << endl;
+        if (chroms_seen.find(the_tid) != end(chroms_seen))
           throw runtime_error("chroms out of order in mapped reads file");
-        }
+
         current_tid = the_tid;
-        if (VERBOSE) cerr << "processing " << the_tid << endl;
 
         chroms_seen.insert(the_tid);
 
@@ -346,6 +344,9 @@ main_bsrate(int argc, const char **argv) {
           throw runtime_error("could not find chrom: " + the_tid);
 
         chrom_idx = chrom_itr->second;
+
+        if (VERBOSE) cerr << "processing " << names[chrom_idx] << endl;
+
         use_this_chrom = seq_to_use.empty() || chrom_idx == chrom_idx_to_use;
       }
 

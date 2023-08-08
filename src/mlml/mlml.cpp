@@ -139,7 +139,7 @@ get_start_point(const size_t t, const size_t u,
 static void
 expectation(const size_t a, const size_t x,
             const double p, const double q,
-            vector<vector<double> > &coeff) {
+            vector<vector<double>> &coeff) {
   assert(p > 0.0 && q > 0.0);
   assert(p + q <= 1.0);
 
@@ -149,11 +149,12 @@ expectation(const size_t a, const size_t x,
   const double log_1mq = log(1.0 - q);
   const double log_p_q = log(p + q);
 
-  vector<double> a_c_j(a);
+  vector<double> a_c_j(a + 1, 0.0);
   for (size_t j = 0; j <= a; ++j)
     a_c_j[j] = lnchoose(a, j) + log_q*(a - j) + log_p*j - log_p_q*a;
 
-  coeff = vector<vector<double>>(x + 1, vector<double>(a + 1));
+  coeff = vector<vector<double>>(x + 1, vector<double>(a + 1, 0.0));
+
   for (size_t k = 0; k <= x; ++k) {
     const double x_c_k =
       lnchoose(x, k) + log_p*k + log_1mpq*(x - k) - log_1mq*x;
@@ -805,9 +806,15 @@ main_mlml(int argc, const char **argv) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (VERBOSE)
-      cerr << "Output format:" << endl
-           << "chrom position strand pm ph pu"
-           << "#_of_conflict" << endl;
+      cerr << "output columns:" << endl
+           << "1. chrom" << endl
+           << "2. position" << endl
+           << "3. strand" << endl
+           << "4. label" << endl
+           << "5. probability of 5mC" << endl
+           << "6. probability of 5hmC" << endl
+           << "7. probability of neither" << endl
+           << "8. number of conflicting sites" << endl;
 
     size_t total_sites = 0;
     size_t overshoot_sites = 0;

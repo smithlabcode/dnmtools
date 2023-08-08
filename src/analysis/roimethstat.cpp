@@ -24,6 +24,7 @@
 #include <numeric>
 #include <utility>
 #include <stdexcept>
+#include <regex>
 
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
@@ -47,6 +48,7 @@ using std::runtime_error;
 using std::ifstream;
 using std::isfinite;
 using std::is_sorted;
+using std::regex_match;
 
 static pair<bool, bool>
 meth_unmeth_calls(const size_t n_meth, const size_t n_unmeth) {
@@ -360,6 +362,59 @@ process_with_cpgs_on_disk(const bool PRINT_NUMERIC_ONLY,
 ///
 ////////////////////////////////////////////////////////////////////////
 
+static inline bool
+is_float(const string &str) {
+  try {
+    size_t pos;
+    std::stof(str, &pos);
+    return pos == str.size(); // Check if entire string was consumed
+  } catch (const std::invalid_argument &) {
+    return false; // Conversion failed due to invalid argument
+  } catch (const std::out_of_range &) {
+    return false; // Conversion failed due to out of range
+  }
+}
+
+static inline bool 
+is_integer(const string &str) {
+	try {
+		size_t pos;
+		std::stoi(str, &pos);
+		return pos == str.size(); // Check if entire string was consumed
+	} catch (const std::invalid_argument &) {
+		return false; // Conversion failed due to invalid argument
+	} catch (const std::out_of_range &) {
+		return false; // Conversion failed due to out of range
+	}
+}
+
+
+static bool
+is_methylation_file(const string &file) {
+  ifstream in(file);
+  if (!in)
+    throw runtime_error("cannot open file: " + file);
+
+  string line;
+  getline(in, line);
+
+  std::istringstream iss(line);
+  string token;
+
+  vector<string> tokens;
+  while(iss >> token) {
+    tokens.push_back(token);
+  }
+
+  std::regex pattern("^C[pHWX][GH]$");
+
+  return tokens.size() == 6 && 
+         is_integer(tokens[1]) && 
+         (tokens[2] == "+" || tokens[2] == "-") && 
+         regex_match(tokens[3], pattern) && 
+         is_float(tokens[4]) && 
+         is_integer(tokens[5]);
+}
 
 static size_t
 check_bed_format(const string &regions_file) {
@@ -474,6 +529,16 @@ Columns (beyond the first 6) in the BED format output:
     // bed format
     if (n_columns != 3 && n_columns < 6)
       throw runtime_error("format must be 3 or 6+ column bed: " + regions_file);
+    if (is_methylation_file(regions_file)) {
+      cerr << opt_parse.help_message() << endl;
+      throw runtime_error("The file seems to be a methylation file: " + 
+          regions_file + "\nCheck the order of the input arguments");
+    }
+    if (!is_methylation_file(cpgs_file)) {
+      cerr << opt_parse.help_message() << endl;
+      throw runtime_error("The file is not a methylation file: " + cpgs_file);
+    }
+
 
     vector<GenomicRegion> regions;
     ReadBEDFile(regions_file, regions);

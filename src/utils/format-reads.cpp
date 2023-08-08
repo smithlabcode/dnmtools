@@ -57,9 +57,9 @@ using std::vector;
 
 using bamxx::bam_rec;
 
-static size_t
+static int32_t
 merge_mates(const size_t range, bam_rec &one, bam_rec &two, bam_rec &merged) {
-  if (!are_mates(one, two)) return -std::numeric_limits<int>::max();
+  if (!are_mates(one, two)) return -std::numeric_limits<int32_t>::max();
 
   // arithmetic easier using base 0 so subtracting 1 from pos
   const int one_s = get_pos(one);

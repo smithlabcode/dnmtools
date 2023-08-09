@@ -24,6 +24,7 @@
 #include <numeric>
 #include <utility>
 #include <stdexcept>
+#include <regex>
 
 #include <bamxx.hpp>
 
@@ -48,6 +49,7 @@ using std::runtime_error;
 using std::ifstream;
 using std::isfinite;
 using std::is_sorted;
+using std::regex_match;
 
 using bgzf_file = bamxx::bam_bgzf;
 
@@ -476,6 +478,16 @@ Columns (beyond the first 6) in the BED format output:
     // bed format
     if (n_columns != 3 && n_columns < 6)
       throw runtime_error("format must be 3 or 6+ column bed: " + regions_file);
+    if (is_msite_file(regions_file)) {
+      cerr << opt_parse.help_message() << endl;
+      throw runtime_error("The file seems to be a methylation file: " + 
+          regions_file + "\nCheck the order of the input arguments");
+    }
+    if (!is_msite_file(cpgs_file)) {
+      cerr << opt_parse.help_message() << endl;
+      throw runtime_error("The file is not a methylation file: " + cpgs_file);
+    }
+
 
     vector<GenomicRegion> regions;
     ReadBEDFile(regions_file, regions);
@@ -521,3 +533,6 @@ Columns (beyond the first 6) in the BED format output:
   }
   return EXIT_SUCCESS;
 }
+
+
+

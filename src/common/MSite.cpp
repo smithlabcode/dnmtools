@@ -20,11 +20,13 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <regex>
 
 #include "smithlab_utils.hpp"
 
 using std::string;
 using std::runtime_error;
+using std::regex_match;
 
 MSite::MSite(const string &line) {
   /* GS: this is faster but seems to be genenerating issues when
@@ -152,3 +154,45 @@ find_offset_for_msite(const std::string &chr,
     move_to_start_of_line(site_in);
   }
 }
+
+
+
+bool
+is_msite_file(const string &file) {
+  ifstream in(file);
+  if (!in)
+    throw runtime_error("cannot open file: " + file);
+
+  string line;
+  if(!getline(in, line)) return false;
+
+  std::istringstream iss(line);
+
+  string chrom;
+  if (!(iss >> chrom)) return false;
+  
+  long int pos = 0;
+  if (!(iss >> pos)) return false;
+
+  string strand;
+  if (!(iss >> strand) || 
+      (strand.size() != 1) || 
+      ((strand != "+") && (strand != "-")) ) 
+    return false;
+
+  string context;
+  std::regex pattern("^C[pHWX][GH]$");
+  if (!(iss >> context) || !regex_match(context, pattern)) return false;
+
+  double level = 0.0;
+  if (!(iss >> level) || level < 0 || level > 1) return false;
+
+  long int n_reads = 0;
+  if (!(iss >> n_reads)) return false;
+
+  string temp;
+  if (iss >> temp) return false;
+  else return true;
+
+}
+

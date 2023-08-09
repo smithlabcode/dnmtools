@@ -57,9 +57,9 @@ using std::vector;
 
 using bamxx::bam_rec;
 
-static size_t
+static int32_t
 merge_mates(const size_t range, bam_rec &one, bam_rec &two, bam_rec &merged) {
-  if (!are_mates(one, two)) return -std::numeric_limits<int>::max();
+  if (!are_mates(one, two)) return -std::numeric_limits<int32_t>::max();
 
   // arithmetic easier using base 0 so subtracting 1 from pos
   const int one_s = get_pos(one);
@@ -309,7 +309,7 @@ swap(bam_rec &a, bam_rec &b) {
 static void
 format(const string &cmd, const size_t n_threads, const string &inputfile,
        const string &outfile, const bool bam_format, const string &input_format,
-       const size_t suff_len, const size_t max_frag_len) {
+       const size_t suff_len, const int32_t max_frag_len) {
   static const dnmt_error bam_write_err{"error writing bam"};
 
   bamxx::bam_tpool tp(n_threads);
@@ -345,8 +345,7 @@ format(const string &cmd, const size_t n_threads, const string &inputfile,
       if (same_name(prev_aln, aln, suff_len)) {
         // below: essentially check for dovetail
         if (!bam_is_rev(aln)) swap(prev_aln, aln);
-        const size_t frag_len =
-          merge_mates(max_frag_len, prev_aln, aln, merged);
+        const auto frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
         if (frag_len > 0 && frag_len < max_frag_len) {
           if (is_a_rich(merged)) flip_conversion(merged);
           if (!out.write(hdr, merged)) throw bam_write_err;
@@ -385,7 +384,7 @@ main_format(int argc, const char **argv) {
 
     string input_format;
     string outfile;
-    int max_frag_len = std::numeric_limits<int>::max();
+    int32_t max_frag_len = 10000;
     size_t suff_len = 0;
     bool single_end = false;
     bool VERBOSE = false;
@@ -409,7 +408,7 @@ main_format(int argc, const char **argv) {
     opt_parse.add_opt("single-end", '\0',
                       "assume single-end [do not use with -suff]", false,
                       single_end);
-    opt_parse.add_opt("max-frag", 'L', "maximum allowed insert size", false,
+    opt_parse.add_opt("max-frag", 'L', "max allowed insert size", false,
                       max_frag_len);
     opt_parse.add_opt("check", 'c',
                       "check this many reads to validate read name suffix",
@@ -440,6 +439,12 @@ main_format(int argc, const char **argv) {
     if ((leftover_args.size() == 1 && !use_stdout) ||
         (leftover_args.size() == 2 && use_stdout)) {
       cerr << opt_parse.help_message() << endl
+           << opt_parse.about_message() << endl;
+      return EXIT_FAILURE;
+    }
+    if (max_frag_len <= 0) {
+      cerr << "specified maximum fragment size: " << max_frag_len << endl
+           << opt_parse.help_message() << endl
            << opt_parse.about_message() << endl;
       return EXIT_FAILURE;
     }

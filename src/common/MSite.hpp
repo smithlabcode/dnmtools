@@ -169,4 +169,7 @@ read_site(bamxx::bam_bgzf &f, MSite &s) {
   return f;
 }
 
+bool
+is_msite_file(const std::string &file);
+
 #endif

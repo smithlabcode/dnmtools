@@ -18,3 +18,4 @@ b5270bb38d798741cfa74f411a0d49bf  tests/tRex1_promoters.roi.bed
 34f5eddd80d5d35131f92697d4cca896  tests/reads.counts.sym
 5d1ecf8d4c8a62b274f5d07e7de7d01c  tests/reads.fmt.srt.uniq.sam
 b067a733102e611ca614ae22fc944471  tests/reads.ustats
+0048de3fc412cb12ec2e070c8151f86f  tests/methylome_ab.diff

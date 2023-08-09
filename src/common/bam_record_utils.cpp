@@ -527,15 +527,12 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
 
 static inline void
 flip_conversion(bam1_t *aln) {
-  if (aln->core.flag & BAM_FREVERSE)
-    aln->core.flag = aln->core.flag & (~BAM_FREVERSE);
-  else
-    aln->core.flag = aln->core.flag | BAM_FREVERSE;
+  aln->core.flag ^= BAM_FREVERSE;  // ADS: flip the "reverse" bit
 
   revcomp_seq_by_byte(aln);
 
   // ADS: don't like *(cv + 1) below, but no HTSlib function for it?
-  uint8_t *cv = bam_aux_get(aln, "CV");
+  auto cv = bam_aux_get(aln, "CV");
   if (!cv) throw dnmt_error("bam_aux_get failed for CV");
   *(cv + 1) = 'T';
 }
@@ -812,31 +809,40 @@ standardize_format(const string &input_format, bam1_t *aln) {
   if (input_format == "abismal" || input_format == "walt") return;
 
   if (input_format == "bsmap") {
-    // A/T rich; get the ZS tag value
-    auto zs_tag = bam_aux_get(aln, "ZS");
+    // A/T rich: get the ZS tag value
+    const auto zs_tag = bam_aux_get(aln, "ZS");
     if (!zs_tag) throw dnmt_error("bam_aux_get for ZS (invalid bsmap)");
     // ADS: test for errors on the line below
-    const uint8_t cv = string(bam_aux2Z(zs_tag))[1] == '-' ? 'A' : 'T';
+    const auto zs_tag_value = string(bam_aux2Z(zs_tag));
+    if (zs_tag_value.empty()) throw dnmt_error("empty ZS tag in bsmap format");
+    if (zs_tag_value[0] != '-' && zs_tag_value[0] != '+')
+      throw dnmt_error("invalid ZS tag in bsmap format");
+    const uint8_t cv = zs_tag_value[1] == '-' ? 'A' : 'T';
     // get the "mismatches" tag
-    auto nm_tag = bam_aux_get(aln, "NM");
-    if (!nm_tag) throw dnmt_error("bam_aux_get for NM (invalid bsmap)");
+    const auto nm_tag = bam_aux_get(aln, "NM");
+    if (!nm_tag) throw dnmt_error("invalid NM tag in bsmap format");
     const int64_t nm = bam_aux2i(nm_tag);
 
-    aln->l_data = bam_get_aux(aln) - aln->data;  // del aux (no data resize)
+    // ADS: this should delete the aux data by truncating the used
+    // range within the bam1_t while avoiding resizing memory
+    aln->l_data = bam_get_aux(aln) - aln->data;
 
     /* add the tags we want */
     // "udpate" for "int" because it determines the right size; even
-    // though we just deleted all tags, it will add it back here.
+    // though we just deleted all tags, it will add it back here
     err_code = bam_aux_update_int(aln, "NM", nm);
-    if (err_code < 0) throw dnmt_error(err_code, "bam_aux_update_int");
+    if (err_code < 0)
+      throw dnmt_error(err_code, "error setting NM in bsmap format");
+
     // "append" for "char" because there is no corresponding update
     err_code = bam_aux_append(aln, "CV", 'A', 1, &cv);
-    if (err_code < 0) throw dnmt_error(err_code, "bam_aux_append");
+    if (err_code < 0)
+      throw dnmt_error(err_code, "error setting conversion in bsmap format");
 
-    if (bam_is_rev(aln))
-      revcomp_seq_by_byte(aln);  // reverse complement if needed
+    // reverse complement if needed
+    if (bam_is_rev(aln)) revcomp_seq_by_byte(aln);
   }
-  if (input_format == "bismark") {
+  else if (input_format == "bismark") {
     // ADS: Previously we modified the read names at the first
     // underscore. Even if the names are still that way, it should no
     // longer be needed since we compare names up to a learned suffix.
@@ -864,6 +870,9 @@ standardize_format(const string &input_format, bam1_t *aln) {
     if (bam_is_rev(aln))
       revcomp_seq_by_byte(aln);  // reverse complement if needed
   }
+  // ADS: the condition below should be checked much earlier, ideally
+  // before the output file is created
+  else throw runtime_error("incorrect format specified: " + input_format);
 
   // Be sure this doesn't depend on mapper! Removes the "qual" part of
   // the data in a bam1_t struct but does not change its uncompressed

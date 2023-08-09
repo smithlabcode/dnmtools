@@ -52,7 +52,7 @@ using std::ostream;
 using std::ofstream;
 using std::to_string;
 
-using bgzf_file = bamxx::bam_bgzf;
+using bamxx::bgzf_file;
 
 static void
 get_adjacent_distances(const vector<GenomicRegion> &pmds,
@@ -739,7 +739,7 @@ check_if_array_data(const string &infile) {
   if (!in) throw std::runtime_error("bad file: " + infile);
 
   std::string line;
-  in.getline(line);
+  getline(in, line);
   std::istringstream iss(line);
   std::string chrom, pos, strand, seq, meth, cov;
   iss >> chrom >> pos >> strand >> seq >> meth;

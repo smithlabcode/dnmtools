@@ -44,7 +44,7 @@ using std::runtime_error;
 using std::ifstream;
 using std::unordered_map;
 
-using bgzf_file = bamxx::bam_bgzf;
+using bamxx::bgzf_file;
 
 static void
 collapsebed(vector<GenomicRegion> &regions) {

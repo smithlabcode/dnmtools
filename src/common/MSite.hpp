@@ -138,4 +138,9 @@ find_offset_for_msite(const std::string &chrom,
                       const size_t start_pos,
                       std::ifstream &site_in);
 
+
+bool
+is_msite_file(const std::string &file);
+
+
 #endif

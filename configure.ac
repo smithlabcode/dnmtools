@@ -38,7 +38,8 @@ ADS_OPENMP([], [AC_MSG_FAILURE([OpenMP must be installed to build dnmtools])])
 
 dnl recursively configure abismal and smithlab_cpp
 AC_CONFIG_SUBDIRS([src/abismal])
-AX_SUBDIRS_CONFIGURE([src/smithlab_cpp], [--enable-hts])
+AC_CONFIG_SUBDIRS([src/smithlab_cpp])
+dnl AX_SUBDIRS_CONFIGURE([src/smithlab_cpp], [--enable-hts])
 
 dnl check for HTSLib if requested
 hts_fail_msg="
@@ -53,15 +54,8 @@ system. Please use the LDFLAGS and CPPFLAGS variables to specify the
 directories where the GSL library and headers can be found.
 "
 
-zlib_fail_msg="
-Failed to locate the ZLib on your system. Please use the LDFLAGS and
-CPPFLAGS variables to specify the directories where the ZLib library
-and headers can be found.
-"
-
 dnl check for required libraries
 AC_SEARCH_LIBS([hts_version], [hts], [], [AC_MSG_FAILURE([$hts_fail_msg])])
-AC_SEARCH_LIBS([zlibVersion], [z], [], [AC_MSG_FAILURE([$zlib_fail_msg])])
 AC_SEARCH_LIBS([cblas_dgemm], [gslcblas], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 AC_SEARCH_LIBS([gsl_blas_dgemm], [gsl], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 
@@ -80,6 +74,8 @@ tests/radmeth_test_table.txt:data/radmeth_test_table.txt
 tests/radmeth_test_design.txt:data/radmeth_test_design.txt
 tests/two_epialleles.states:data/two_epialleles.states
 tests/araTha1_simulated.counts.gz:data/araTha1_simulated.counts.gz
+tests/methylome_a.counts.sym:data/methylome_a.counts.sym
+tests/methylome_b.counts.sym:data/methylome_b.counts.sym
 ])
 
 AC_OUTPUT

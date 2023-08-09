@@ -237,4 +237,4 @@ CLEANFILES = \
     tests/reads.epiread \
     tests/two_epialleles.amr \
     tests/araTha1_simulated.hypermr \
-    tests/methylomes_ab.diff
+    tests/methylome_ab.diff

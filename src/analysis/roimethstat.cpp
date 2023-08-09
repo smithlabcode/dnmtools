@@ -26,11 +26,12 @@
 #include <stdexcept>
 #include <regex>
 
+#include <bamxx.hpp>
+
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 #include "GenomicRegion.hpp"
-#include "zlib_wrapper.hpp"
 
 #include "MSite.hpp"
 
@@ -49,6 +50,8 @@ using std::ifstream;
 using std::isfinite;
 using std::is_sorted;
 using std::regex_match;
+
+using bgzf_file = bamxx::bam_bgzf;
 
 static pair<bool, bool>
 meth_unmeth_calls(const size_t n_meth, const size_t n_unmeth) {
@@ -136,13 +139,12 @@ process_with_cpgs_loaded(const bool VERBOSE,
                          vector<GenomicRegion> &regions,
                          std::ostream &out) {
 
-  igzfstream in(cpgs_file);
-  if (!in)
-    throw runtime_error("cannot open file: " + cpgs_file);
+  bgzf_file in(cpgs_file, "r");
+  if (!in) throw runtime_error("cannot open file: " + cpgs_file);
 
   vector<MSite> cpgs;
   MSite the_cpg;
-  while (in >> the_cpg)
+  while (read_site(in, the_cpg))
     cpgs.push_back(the_cpg);
 
   if (!is_sorted(begin(cpgs), end(cpgs))) {

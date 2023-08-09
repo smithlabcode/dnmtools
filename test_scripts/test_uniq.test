@@ -11,6 +11,6 @@ if [[ -e "${infile}" ]]; then
         exit 1;
     fi
 else
-    echo "${infile} not found; skipping remaining tests";
+    echo "${infile} not found; skipping dependent tests";
     exit 77;
 fi

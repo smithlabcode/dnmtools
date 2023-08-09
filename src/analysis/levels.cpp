@@ -52,7 +52,7 @@ using std::string;
 using std::to_string;
 using std::vector;
 
-using bgzf_file = bamxx::bam_bgzf;
+using bamxx::bgzf_file;
 
 enum class counts_file_format { ordinary, asym_cpg, sym_cpg };
 

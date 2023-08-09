@@ -37,7 +37,7 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-using bgzf_file = bamxx::bam_bgzf;
+using bamxx::bgzf_file;
 
 inline bool
 found_symmetric(const MSite &prev_cpg, const MSite &curr_cpg) {

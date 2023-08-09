@@ -51,7 +51,7 @@ using std::isfinite;
 using std::is_sorted;
 using std::regex_match;
 
-using bgzf_file = bamxx::bam_bgzf;
+using bamxx::bgzf_file;
 
 static pair<bool, bool>
 meth_unmeth_calls(const size_t n_meth, const size_t n_unmeth) {
@@ -480,7 +480,7 @@ Columns (beyond the first 6) in the BED format output:
       throw runtime_error("format must be 3 or 6+ column bed: " + regions_file);
     if (is_msite_file(regions_file)) {
       cerr << opt_parse.help_message() << endl;
-      throw runtime_error("The file seems to be a methylation file: " + 
+      throw runtime_error("The file seems to be a methylation file: " +
           regions_file + "\nCheck the order of the input arguments");
     }
     if (!is_msite_file(cpgs_file)) {
@@ -533,6 +533,3 @@ Columns (beyond the first 6) in the BED format output:
   }
   return EXIT_SUCCESS;
 }
-
-
-

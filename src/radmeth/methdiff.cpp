@@ -42,7 +42,7 @@ using std::vector;
 using std::ofstream;
 using std::ostream_iterator;
 
-using bgzf_file = bamxx::bam_bgzf;
+using bamxx::bgzf_file;
 
 static inline double
 log_sum_log(const double p, const double q) {
@@ -113,7 +113,7 @@ write_methdiff_site(bgzf_file &out, const MSite &a, const MSite &b,
       << b.n_meth() << '\t'
       << b.n_unmeth() << '\n';
   // clang-format on
-  out.write(oss.str().c_str(), oss.str().size());
+  out.write(oss.str());
   return out;
 }
 

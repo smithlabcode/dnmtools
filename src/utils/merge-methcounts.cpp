@@ -46,7 +46,7 @@ using std::numeric_limits;
 using std::unordered_set;
 using std::unordered_map;
 
-using bgzf_file = bamxx::bam_bgzf;
+using bamxx::bgzf_file;
 
 static void
 set_invalid(MSite &s) {s.pos = numeric_limits<size_t>::max();}
@@ -251,7 +251,7 @@ get_orders_by_file(const string &filename, vector<string> &chroms_order) {
   string line;
   string prev_chrom;
 
-  while (in.getline(line)) {
+  while (getline(in, line)) {
     line.resize(line.find_first_of(" \t"));
     if (line != prev_chrom) {
       if (chroms_seen.find(line) != end(chroms_seen))

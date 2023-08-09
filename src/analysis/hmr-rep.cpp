@@ -47,7 +47,7 @@ using std::to_string;
 using std::begin;
 using std::end;
 
-using bgzf_file = bamxx::bam_bgzf;
+using bamxx::bgzf_file;
 
 static GenomicRegion
 as_gen_rgn(const MSite &s) {

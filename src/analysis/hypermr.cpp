@@ -61,12 +61,12 @@ as_gen_rgn(const MSite &s) {
 static void
 load_cpgs(const string &cpgs_file, vector<MSite> &cpgs,
           vector<pair<double, double>> &meth) {
-  bamxx::bam_bgzf in(cpgs_file, "r");
+  bamxx::bgzf_file in(cpgs_file, "r");
   if (!in) throw runtime_error("failed opening file: " + cpgs_file);
 
   MSite the_site;
   string line;
-  while (in.getline(line)) cpgs.push_back(MSite(line));
+  while (getline(in, line)) cpgs.push_back(MSite(line));
 
   meth.resize(cpgs.size());
   for (size_t i = 0; i < cpgs.size(); ++i)

@@ -239,7 +239,7 @@ tag_with_mut(const uint32_t tag, const bool mut) {
 
 
 static void
-write_output(const bamxx::bam_header &hdr, bamxx::bam_bgzf &out,
+write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
              const int32_t tid, const string &chrom,
              const vector<CountSet> &counts, bool CPG_ONLY) {
 
@@ -267,8 +267,7 @@ write_output(const bamxx::bam_header &hdr, bamxx::bam_bgzf &out,
           << tag_values[tag_with_mut(the_tag, mut)] << '\t'
           << (n_reads > 0 ? unconverted/n_reads : 0.0) << '\t'
           << n_reads << '\n';
-      const size_t expected_size = buf.tellp();
-      if (out.write(buf.c_str(), expected_size))
+      if (!out.write(buf.c_str(), buf.tellp()))
         throw dnmt_error("error writing output");
     }
   }
@@ -397,7 +396,7 @@ process_reads(const bool VERBOSE,
 
   // open the output file
   const string output_mode = compress_output ? "w" : "wu";
-  bamxx::bam_bgzf out(outfile, output_mode);
+  bamxx::bgzf_file out(outfile, output_mode);
   if (!out) throw dnmt_error("error opening output file: " + outfile);
 
   /* set the threads for the input file decompression */

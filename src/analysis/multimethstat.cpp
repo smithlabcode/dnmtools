@@ -49,7 +49,7 @@ using std::ifstream;
 using std::isfinite;
 using std::is_sorted;
 
-using bgzf_file = bamxx::bam_bgzf;
+using bamxx::bgzf_file;
 
 static pair<bool, bool>
 meth_unmeth_calls(const size_t n_meth, const size_t n_unmeth) {
@@ -174,7 +174,7 @@ process_with_cpgs_loaded(const bool VERBOSE,
   if (!in) throw runtime_error("cannot open file: " + cpgs_file);
 
   string header;
-  in.getline(header);
+  getline(in, header);
 
   std::istringstream iss(header);
   string col_name;
@@ -197,7 +197,7 @@ process_with_cpgs_loaded(const bool VERBOSE,
   vector<vector<double> > values;
   MSite the_cpg;
   string line;
-  while (in.getline(line)) {
+  while (getline(in, line)) {
     values.push_back(vector<double>());
     get_site_and_values(line, the_cpg, values.back());
     cpgs.push_back(the_cpg);

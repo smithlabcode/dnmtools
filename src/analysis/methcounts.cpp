@@ -267,7 +267,7 @@ write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
           << tag_values[tag_with_mut(the_tag, mut)] << '\t'
           << (n_reads > 0 ? unconverted/n_reads : 0.0) << '\t'
           << n_reads << '\n';
-      if (out.write(buf.c_str(), buf.tellp()))
+      if (!out.write(buf.c_str(), buf.tellp()))
         throw dnmt_error("error writing output");
     }
   }

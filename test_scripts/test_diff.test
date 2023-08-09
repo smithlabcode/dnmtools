@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+infile1=tests/methylome_a.counts.sym
+infile2=tests/methylome_b.counts.sym
+outfile=tests/methylome_ab.diff
+if [[ -e "${infile1}" || -e "${infile2}" ]]; then
+    ./dnmtools diff -o ${outfile} ${infile1} ${infile2}
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile}:" | cut -d ' ' -f 2)
+    if [[ "${x}" != "OK" ]]; then
+        exit 1;
+    fi
+else
+    echo "input missing; skipping test";
+    exit 77;
+fi

@@ -129,9 +129,9 @@ test_scripts/test_roi.log: test_scripts/test_sym.log
 
 noinst_LIBRARIES = libdnmtools.a
 libdnmtools_a_SOURCES = \
+        src/common/dnmtools_gaussinv.cpp \
         src/common/bam_record_utils.cpp \
         src/common/BetaBin.cpp \
-        src/common/Distro.cpp \
         src/common/EmissionDistribution.cpp \
         src/common/Epiread.cpp \
         src/common/EpireadStats.cpp \
@@ -146,9 +146,9 @@ libdnmtools_a_SOURCES = \
 
 libdnmtools_a_SOURCES += \
 	src/bamxx/bamxx.hpp \
+        src/common/dnmtools_gaussinv.hpp \
 	src/common/bam_record_utils.hpp \
         src/common/BetaBin.hpp \
-        src/common/Distro.hpp \
         src/common/EmissionDistribution.hpp \
         src/common/Epiread.hpp \
         src/common/EpireadStats.hpp \

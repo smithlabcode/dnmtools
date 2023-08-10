@@ -44,7 +44,7 @@ RUN apk add build-base
 RUN apk add bash
 RUN apk add autoconf 
 RUN apk add automake 
-RUN apk add gsl-dev zlib-dev bzip2-dev xz-dev wget
+RUN apk add gsl-dev zlib-dev bzip2-dev xz-dev wget gzip
 
 COPY --from=build_sam_hts /app/htslib/${HTSDIR}/lib/. /usr/lib
 COPY --from=build_sam_hts /app/htslib/${HTSDIR}/include/. /usr/include

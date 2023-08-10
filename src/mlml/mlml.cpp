@@ -30,7 +30,7 @@
 #include "MSite.hpp"
 #include "dnmt_error.hpp"
 
-#include <gsl/gsl_cdf.h>
+#include "dnmtools_gaussinv.hpp"
 
 using std::string;
 using std::vector;
@@ -47,7 +47,7 @@ using std::runtime_error;
 static void
 wilson_ci_for_binomial(const double alpha, const double n,
                        const double p_hat, double &lower, double &upper) {
-  const double z = gsl_cdf_ugaussian_Pinv(1 - alpha/2);
+  const double z = dnmt_gsl_cdf_ugaussian_Pinv(1 - alpha/2);
   const double denom = 1 + z*z/n;
   const double first_term = p_hat + z*z/(2*n);
   const double discriminant = p_hat*(1 - p_hat)/n + z*z/(4*n*n);

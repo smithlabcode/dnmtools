@@ -24,11 +24,9 @@
 #include <stdexcept>
 #include <cmath>
 #include <algorithm>
+#include <numeric>
 
-// GSL headers
-#include <gsl/gsl_cdf.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_statistics.h>
+#include "dnmtools_gaussinv.hpp"
 
 // smithlab headers
 #include "OptionParser.hpp"
@@ -112,7 +110,7 @@ to_zscore(double pval) {
   else if (pval < local_epsilon)
     pval = local_epsilon;
 
-  return gsl_cdf_ugaussian_Pinv(1.0 - pval);
+  return dnmt_gsl_cdf_ugaussian_Pinv(1.0 - pval);
 }
 
 static double
@@ -130,7 +128,7 @@ stouffer_liptak(const vector<vector<double> > &corr_mat, vector<double> &pvals) 
   const double test_stat =
     sum/sqrt(static_cast<double>(pvals.size()) + 2.0*correction);
 
-  return 1.0 - gsl_cdf_gaussian_P(test_stat, 1.0);
+  return 1.0 - dnmt_gsl_cdf_gaussian_P(test_stat, 1.0);
 }
 
 static bool
@@ -299,17 +297,26 @@ DistanceCorrelation::bin(const vector<PvalLocus> &loci) {
 double
 DistanceCorrelation::correlation(const vector<double> &x,
                                  const vector<double> &y) {
-  //Correlation is 0 when all bins are empty.
-  if (x.size() <= 1)
-    return 0;
+  // correlation is 0 when all bins are empty
+  if (x.size() <= 1) return 0.0;
 
-  gsl_vector_const_view gsl_x = gsl_vector_const_view_array(&x[0], x.size());
-  gsl_vector_const_view gsl_y = gsl_vector_const_view_array(&y[0], y.size());
-  const size_t stride = 1;
-  double corr = gsl_stats_correlation( gsl_x.vector.data, stride,
-                                       gsl_y.vector.data, stride,
-                                       x.size());
-  return corr;
+  using std::inner_product;
+  const auto X = accumulate(begin(x), end(x), 0.0);
+  const auto Y = accumulate(begin(y), end(y), 0.0);
+  const auto XX = inner_product(begin(x), end(x), begin(x), 0.0);
+  const auto YY = inner_product(begin(y), end(y), begin(y), 0.0);
+  const auto XY = inner_product(begin(x), end(x), begin(y), 0.0);
+  const auto N = x.size();
+
+  // Sum XY - N.mu(X).mu(Y) = Sum XY - Sum(X)Sum(Y)/N
+  const auto covXY = XY - (X*Y)/N;
+  // sqrt[SSX - N.mu(X).mu(X)]
+  const auto sdX = std::sqrt(XX - (X*X)/N);
+  // sqrt[SSY - N.mu(Y).mu(Y)]
+  const auto sdY = std::sqrt(YY - (Y*Y)/N);
+
+  // Pearson correlation
+  return covXY/(sdX*sdY);
 }
 
 
@@ -321,11 +328,9 @@ DistanceCorrelation::correlation_table(const vector<PvalLocus> &loci) {
   bin(loci);
   vector<double> correlation_table;
 
-  for (size_t bin = 0; bin < num_bins; ++bin) {
-    const double corr = correlation(x_pvals_for_bin_[bin],
-                                    y_pvals_for_bin_[bin]);
-    correlation_table.push_back(corr);
-  }
+  for (size_t bin = 0; bin < num_bins; ++bin)
+    correlation_table.push_back(
+      correlation(x_pvals_for_bin_[bin], y_pvals_for_bin_[bin]));
 
   return correlation_table;
 }

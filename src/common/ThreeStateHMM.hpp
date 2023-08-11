@@ -26,7 +26,6 @@
 #include <vector>
 
 #include "smithlab_utils.hpp"
-#include "Distro.hpp"
 #include "BetaBin.hpp"
 
 enum STATE_LABELS {hypo, HYPER, HYPO};

@@ -30,7 +30,6 @@
 
 #include <cmath>
 #include <sstream>
-#include <gsl/gsl_sf_gamma.h>
 
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
@@ -55,26 +54,29 @@ static inline double
 log_sum_log(const double p, const double q) {
   if (p == 0) {return q;}
   else if (q == 0) {return p;}
-  const double larger = (p > q) ? p : q;
-  const double smaller = (p > q) ? q : p;
-  return larger + log(1.0 + exp(smaller - larger));
+  return p > q ? p + log(1.0 + exp(q - p)) : q + log(1.0 + exp(p - q));
 }
 
+static inline double
+lnchoose(const unsigned int n, unsigned int m) {
+  if (m == n || m == 0) return 0;
+  if (m * 2 > n) m = n - m;
+  using std::lgamma;
+  return lgamma(n + 1.0) - lgamma(m + 1.0) - lgamma((n - m) + 1.0);
+}
 
 // p(k) =  C(n1, k) C(n2, t - k) / C(n1 + n2, t)
 static double
 log_hyper_g(const size_t k, const size_t n1, const size_t n2, const size_t t) {
-  return (gsl_sf_lnfact(n1) - gsl_sf_lnfact(k) - gsl_sf_lnfact(n1 - k) +
-          gsl_sf_lnfact(n2) - gsl_sf_lnfact(t - k) - gsl_sf_lnfact(n2 - (t - k)) -
-          (gsl_sf_lnfact(n1 + n2) - gsl_sf_lnfact(t) - gsl_sf_lnfact(n1 + n2 - t)));
+  return lnchoose(n1, k) + lnchoose(n2, t - k) - lnchoose(n1 + n2, t);
 }
-
 
 static double
 fishers_exact(size_t a, size_t b, size_t c, size_t d) {
   const size_t m = a + c; // sum of first column
   const size_t n = b + d; // sum of second column
   const size_t k = a + b; // sum of first row
+  // ADS: want more extreme than "observed"
   const double observed = log_hyper_g(a, m, n, k);
   double p = 0.0;
   for (size_t i = (n > k ? 0ul : k - n); i <= std::min(k, m); ++i) {
@@ -84,7 +86,6 @@ fishers_exact(size_t a, size_t b, size_t c, size_t d) {
   }
   return exp(p);
 }
-
 
 static size_t
 state_pair_to_index(const string &s, const size_t idx) {
@@ -104,7 +105,6 @@ state_pair_to_index(const string &s, const size_t idx) {
   }
   return 4;
 }
-
 
 template <class T>
 struct PairStateCounter {

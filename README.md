@@ -183,6 +183,34 @@ docker run -v ./:/app -w /app \
   reads/reads_1.fq reads/reads_1.fq
 ```
 
+### Testing the install and use of docker image
+
+Run the following commands to test the installation and usage of the docker
+image of `dnmtools`.
+```console
+docker pull ghcr.io/smithlabcode/dnmtools:latest
+docker tag ghcr.io/smithlabcode/dnmtools:latest dnmtools:latest
+
+# Clone the repo to access test data
+git clone git@github.com:smithlabcode/dnmtools.git
+cd dnmtools
+
+# Run containers and save outputs in artifacts directory
+
+mkdir artifacts
+
+docker run -v ./:/app -w /app \
+  dnmtools abismalidx -v -t 1 data/tRex1.fa artifacts/tRex1.idx
+
+docker run -v ./:/app -w /app \
+  dnmtools simreads -seed 1 -o artifacts/simreads -n 10000 \
+  -m 0.01 -b 0.98 data/tRex1.fa
+
+docker run -v ./:/app -w /app \
+  dnmtools abismal -v -t 1 -i artifacts/tRex1.idx artifacts/simreads_{1,2}.fq
+```
+
+
 ## Contacts and bug reports
 
 Andrew D. Smith

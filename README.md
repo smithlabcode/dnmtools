@@ -110,6 +110,78 @@ This functionality will probably be removed soon, and if you want to
 build the code this way, you should know what you are doing any be
 able to make it work yourself.
 
+## Installing and running `dnmtools` docker images
+
+The docker images of `dnmtools` are accessible through GitHub Container
+registry. These are light-weight (~30 MB) images that let you run `dnmtools`
+without worrying about the dependencies.
+
+### Installation  
+
+To pull the image for the latest version, run:
+```console
+docker pull ghcr.io/smithlabcode/dnmtools
+```
+To test the image installation, run:
+```console
+docker run ghcr.io/smithlabcode/dnmtools
+```
+You should see the help page of `dnmtools`.  
+
+For simpler reference, you can
+re-tag the installed image as follows, but note that you would have to re-tag
+the image whenever you pull an image for a new version.
+```console
+docker tag ghcr.io/smithlabcode/dnmtools:latest dnmtools:latest
+```
+
+You can also install the image for a particular vertion by running
+```console
+docker pull ghcr.io/smithlabcode/dnmtools:v[VERSION NUMBER] #(e.g. v1.3.0) 
+```
+
+
+### Running the docker image
+
+To run the image, you can run (assuming you tagged the image as above)
+```console
+docker run -v /path/to/data:/data -w /data \
+  dnmtools [DNMTOOLS COMMAND] [OPTIONS] [ARGUMENTS]
+```
+In the above command, replace `/path/to/data` with the path to the directory you
+want to mount, and it will be mounted as the `/data` directory in the container.
+For example, if your genome data `genome.fa` is located in `./genome_data`, you
+can execute `abismalidx` by running:
+```console
+docker run -v ./genome_data:/data -w /data \
+  dnmtools abismalidx -v -t 4 genome.fa genome.idx
+```
+In the above command, `-w /data` specifies the working directory in the
+container, so the output `genome.idx` is saved in the `/data` directory, 
+which corresponds to the `./genome_data` directory in the host
+machine. If you want to specify the output directory, use a command like below.
+```console
+docker run -v ./genome_data:/data -w /data \
+  -v ./genome_index:/output \
+  dnmtools abismalidx -v -t 4 genome.fa /output/genome.idx
+```
+When you need to access multiple directories, it might be useful to use the
+option `-v ./:/app -w /app`, which mounts the current directory
+to the `/app` directory in the container, which is alo set as the working
+directory. You can then specify the directories in the same way you do from the
+working directory in the host machine. For example:
+```console
+docker run -v ./:/app -w /app \
+  dnmtools abismal -i genome_index/genome.idx -v -t 4 \
+  -o mapped_reads/output.sam \
+  reads/reads_1.fq reads/reads_1.fq
+```
+
+
+
+
+
+
 ## Usage
 
 Read the [documentation](https://dnmtools.readthedocs.io) for usage of

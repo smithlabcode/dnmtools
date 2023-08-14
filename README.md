@@ -110,6 +110,11 @@ This functionality will probably be removed soon, and if you want to
 build the code this way, you should know what you are doing any be
 able to make it work yourself.
 
+## Usage
+
+Read the [documentation](https://dnmtools.readthedocs.io) for usage of
+individual tools within DNMTools.
+
 ## Installing and running `dnmtools` docker images
 
 The docker images of `dnmtools` are accessible through GitHub Container
@@ -139,7 +144,8 @@ You can also install the image for a particular vertion by running
 ```console
 docker pull ghcr.io/smithlabcode/dnmtools:v[VERSION NUMBER] #(e.g. v1.3.0) 
 ```
-
+Not all versions have corresponding images; you can find available images
+[here](https://github.com/smithlabcode/dnmtools/pkgs/container/dnmtools).
 
 ### Running the docker image
 
@@ -168,7 +174,7 @@ docker run -v ./genome_data:/data -w /data \
 When you need to access multiple directories, it might be useful to use the
 option `-v ./:/app -w /app`, which mounts the current directory
 to the `/app` directory in the container, which is alo set as the working
-directory. You can then specify the directories in the same way you do from the
+directory. You can specify the paths in the same way you would from the
 working directory in the host machine. For example:
 ```console
 docker run -v ./:/app -w /app \
@@ -176,16 +182,6 @@ docker run -v ./:/app -w /app \
   -o mapped_reads/output.sam \
   reads/reads_1.fq reads/reads_1.fq
 ```
-
-
-
-
-
-
-## Usage
-
-Read the [documentation](https://dnmtools.readthedocs.io) for usage of
-individual tools within DNMTools.
 
 ## Contacts and bug reports
 

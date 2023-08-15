@@ -31,8 +31,7 @@ name: Docker image build
 
 on: 
   workflow_dispatch:
-    branches:
-      - main
+    branches: ['main']
     inputs:
       build_option:
         description: 'Build/push option'
@@ -70,6 +69,13 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0 # Needed to get tags information
+
+      # Copy Dockerfile in case the commit to be used does not have it 
+      # This is to be used to build older versions that didn't have Dockerfile.
+      # This temporary Dockerfile should not be needed for new versions.
+      - name: Copy Dockerfile to Temporary File
+        run: |
+          cp Dockerfile /tmp/Dockerfile 
           
       - name: 'Get latest version'
         run: |
@@ -136,11 +142,19 @@ jobs:
             echo "IMAGE_TAGS=${{ env.IMAGE_TAGS }}" >> $GITHUB_ENV
           fi
 
-      - name: 'Build Docker image (push: ${{ env.PUSH }})'
+      - name: Use temp.Dockerfile if Dockerfile doesn't exist
+        run: |
+          if [ -f Dockerfile ]; then
+            echo "DOCKERFILE=./Dockerfile" >> $GITHUB_ENV
+          else
+            echo "DOCKERFILE=/tmp/Dockerfile" >> $GITHUB_ENV
+          fi
+
+      - name: 'Build Docker image (push: ${{ env.PUSH }}, dockerfile: ${{ env.DOCKERFILE }})'
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: ./Dockerfile
+          file: ${{ env.DOCKERFILE }}
           push: ${{ env.PUSH }}
           tags: |
             ${{ env.IMAGE_TAGS }}

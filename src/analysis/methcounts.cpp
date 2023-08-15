@@ -4,7 +4,7 @@
  * Copyright (C) 2011-2023 University of Southern California and
  *                         Andrew D. Smith
  *
- * Authors: Andrew D. Smith and Song Qiang and Guilherme Sena
+ * Authors: Andrew D. Smith, Song Qiang, Guilherme Sena, and Masaru Nakajima
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as

@@ -16,6 +16,7 @@
 
 EXTRA_DIST = \
              README.md \
+             code_of_conduct.md \
              LICENSE \
              docs/README.md \
              docs/mkdocs.yml \

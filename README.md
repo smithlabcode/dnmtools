@@ -23,19 +23,14 @@ all the formatting.
 ### Required libraries
 
 * A recent compiler. Most users will be building and installing this
-  software with GCC. We require a compiler that fully supports C++11,
-  so we recommend using at least GCC 5.8. There are still many systems
-  that install a very old version of GCC by default, so if you have
-  problems with building this software, that might be the first thing
-  to check.
+  software with GCC. We require a compiler that supports C++17, so we
+  recommend using at least GCC 8 (released in 2018). There are still
+  many systems that install a very old version of GCC by default, so
+  if you have problems with building this software, that might be the
+  first thing to check.
 * The GNU Scientific Library. It can be installed using apt on Linux
   (Ubuntu, Debian), using brew on macOS, or from source available
   [here](http://www.gnu.org/software/gsl).
-* The Zlib compression library. Most likely you already have this
-  installed on your system. If not, it can be installed using apt on
-  Linux (Ubuntu, Debian) through the package `zlib1g-dev`. On macOS,
-  Zlib can be installed with brew (I have not needed to install this
-  separately on any macOS).
 * The HTSlib library. This can be installed through brew on macOS,
   through apt on Linux (Ubuntu, Debian), or from source downloadable
   [here](https://github.com/samtools/htslib).
@@ -121,7 +116,7 @@ The docker images of `dnmtools` are accessible through GitHub Container
 registry. These are light-weight (~30 MB) images that let you run `dnmtools`
 without worrying about the dependencies.
 
-### Installation  
+### Installation
 
 To pull the image for the latest version, run:
 ```console
@@ -131,7 +126,7 @@ To test the image installation, run:
 ```console
 docker run ghcr.io/smithlabcode/dnmtools
 ```
-You should see the help page of `dnmtools`.  
+You should see the help page of `dnmtools`.
 
 For simpler reference, you can
 re-tag the installed image as follows, but note that you would have to re-tag
@@ -142,7 +137,7 @@ docker tag ghcr.io/smithlabcode/dnmtools:latest dnmtools:latest
 
 You can also install the image for a particular vertion by running
 ```console
-docker pull ghcr.io/smithlabcode/dnmtools:v[VERSION NUMBER] #(e.g. v1.3.0) 
+docker pull ghcr.io/smithlabcode/dnmtools:v[VERSION NUMBER] #(e.g. v1.3.0)
 ```
 Not all versions have corresponding images; you can find available images
 [here](https://github.com/smithlabcode/dnmtools/pkgs/container/dnmtools).
@@ -163,7 +158,7 @@ docker run -v ./genome_data:/data -w /data \
   dnmtools abismalidx -v -t 4 genome.fa genome.idx
 ```
 In the above command, `-w /data` specifies the working directory in the
-container, so the output `genome.idx` is saved in the `/data` directory, 
+container, so the output `genome.idx` is saved in the `/data` directory,
 which corresponds to the `./genome_data` directory in the host
 machine. If you want to specify the output directory, use a command like below.
 ```console

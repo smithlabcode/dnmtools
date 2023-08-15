@@ -48,6 +48,7 @@ on:
         required: false
 
   push:
+    branches: ['main']
     tags:
       - 'v*.*.*'
 

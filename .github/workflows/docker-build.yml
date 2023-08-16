@@ -48,7 +48,6 @@ on:
         required: false
 
   push:
-    branches: ['master']
     tags:
       - 'v*.*.*'
 

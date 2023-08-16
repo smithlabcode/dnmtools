@@ -1,6 +1,6 @@
 /*
   Copyright (C) 2015-2022 University of Southern California
-  Authors: Andrew D. Smith
+  Authors: Andrew D. Smith and Masaru Nakajima
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by

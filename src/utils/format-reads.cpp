@@ -4,7 +4,7 @@
  * Copyright (C) 2020-2023 University of Southern California and
  *                         Andrew D. Smith
  *
- * Authors: Andrew Smith and Guilherme Sena
+ * Authors: Andrew Smith, Guilherme Sena, and Masaru Nakajima
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as

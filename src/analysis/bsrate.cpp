@@ -17,6 +17,8 @@
  * General Public License for more details.
  */
 
+#include <bamxx.hpp>
+
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -32,20 +34,18 @@
 #include "dnmt_error.hpp"
 #include "smithlab_utils.hpp"
 
-#include <bamxx.hpp>
-
 using std::accumulate;
 using std::cerr;
 using std::cout;
 using std::endl;
 using std::max;
 using std::numeric_limits;
+using std::pair;
 using std::runtime_error;
 using std::string;
 using std::unordered_map;
 using std::unordered_set;
 using std::vector;
-using std::pair;
 
 using bamxx::bam_rec;
 
@@ -53,8 +53,7 @@ static pair<uint32_t, uint32_t>
 count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
                  const bam_rec &aln, vector<size_t> &unconv,
                  vector<size_t> &conv, vector<size_t> &err, size_t &hanging) {
-  uint32_t n_conv = 0;
-  uint32_t n_uconv = 0;
+  uint32_t n_conv = 0, n_uconv = 0;
 
   /* iterate through reference, query/read and fragment */
   const auto seq = bam_get_seq(aln);
@@ -105,8 +104,7 @@ static pair<uint32_t, uint32_t>
 count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
                  const bam_rec &aln, vector<size_t> &unconv,
                  vector<size_t> &conv, vector<size_t> &err, size_t &hanging) {
-  uint32_t n_conv = 0;
-  uint32_t n_uconv = 0;
+  uint32_t n_conv = 0, n_uconv = 0;
 
   /* iterate backward over query/read positions but forward over
      reference and fragment positions */
@@ -244,8 +242,8 @@ static inline void
 update_histogram(const pair<uint32_t, uint32_t> &x, vector<double> &hist) {
   constexpr auto epsilon = 1e-6;
   if (const double denom = x.second + epsilon; denom > 1.0) {
-    const double frac = x.first/denom;
-    const auto bin_id = std::floor(frac*hist.size());
+    const double frac = x.first / denom;
+    const auto bin_id = std::floor(frac * hist.size());
     assert(bin_id < hist.size());
     ++hist[bin_id];
   }
@@ -324,8 +322,7 @@ main_bsrate(int argc, const char **argv) {
     bamxx::bam_header hdr(hts);
     if (!hdr) throw dnmt_error("failed to read header");
 
-    if (n_threads > 1)
-      tp.set_io(hts);
+    if (n_threads > 1) tp.set_io(hts);
 
     // map the bam header index for each "target" to a sequence in the
     // reference genome
@@ -355,7 +352,6 @@ main_bsrate(int argc, const char **argv) {
     unordered_set<int32_t> chroms_seen;
 
     while (hts.read(hdr, aln)) {
-
       if (reads_are_a_rich) flip_conversion(aln);
 
       // get the correct chrom if it has changed
@@ -384,14 +380,14 @@ main_bsrate(int argc, const char **argv) {
       if (use_this_chrom) {
         const auto conv_result =
           // do the work for this mapped read
-          (bam_is_rev(aln)) ?
-          count_states_neg(INCLUDE_CPGS, chroms[chrom_idx], aln,
-                           unconv_count_neg, conv_count_neg, err_neg, hanging) :
-          count_states_pos(INCLUDE_CPGS, chroms[chrom_idx], aln,
-                           unconv_count_pos, conv_count_pos, err_pos, hanging);
+          (bam_is_rev(aln))
+            ? count_states_neg(INCLUDE_CPGS, chroms[chrom_idx], aln,
+                               unconv_count_neg, conv_count_neg, err_neg,
+                               hanging)
+            : count_states_pos(INCLUDE_CPGS, chroms[chrom_idx], aln,
+                               unconv_count_pos, conv_count_pos, err_pos,
+                               hanging);
         update_histogram(conv_result, hist);
-        // cerr << conv_result.first << '\t'
-        //      << conv_result.second << endl;
       }
     }
     write_output(outfile, unconv_count_pos, conv_count_pos, unconv_count_neg,
@@ -405,7 +401,7 @@ main_bsrate(int argc, const char **argv) {
            << endl;
 
     for (auto i = 0.0; i < hist.size(); ++i) {
-      cout << i/hist.size() << '\t' << hist[i] << endl;
+      cout << i / hist.size() << '\t' << hist[i] << endl;
     }
   }
   catch (const runtime_error &e) {

@@ -45,13 +45,17 @@ using std::string;
 using std::unordered_map;
 using std::unordered_set;
 using std::vector;
+using std::pair;
 
 using bamxx::bam_rec;
 
-static void
+static pair<uint32_t, uint32_t>
 count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
                  const bam_rec &aln, vector<size_t> &unconv,
                  vector<size_t> &conv, vector<size_t> &err, size_t &hanging) {
+  uint32_t n_conv = 0;
+  uint32_t n_uconv = 0;
+
   /* iterate through reference, query/read and fragment */
   const auto seq = bam_get_seq(aln);
   const auto beg_cig = bam_get_cigar(aln);
@@ -73,10 +77,14 @@ count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
             (rpos >= chrom_lim || !is_guanine(chrom[rpos + 1]) ||
              INCLUDE_CPGS)) {
           const auto qc = seq_nt16_str[bam_seqi(seq, qpos)];
-          if (qc == 'C')
+          if (qc == 'C') {
             ++unconv[fpos];
-          else if (qc == 'T')
+            ++n_uconv;
+          }
+          else if (qc == 'T') {
             ++conv[fpos];
+            ++n_conv;
+          }
           else if (qc != 'N')
             ++err[fpos];
         }
@@ -90,12 +98,16 @@ count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
   }
 
   assert(qpos == get_l_qseq(aln));
+  return {n_conv, n_conv + n_uconv};
 }
 
-static void
+static pair<uint32_t, uint32_t>
 count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
                  const bam_rec &aln, vector<size_t> &unconv,
                  vector<size_t> &conv, vector<size_t> &err, size_t &hanging) {
+  uint32_t n_conv = 0;
+  uint32_t n_uconv = 0;
+
   /* iterate backward over query/read positions but forward over
      reference and fragment positions */
   const auto seq = bam_get_seq(aln);
@@ -117,10 +129,14 @@ count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
         if (is_guanine(chrom[rpos]) &&
             (rpos == 0 || !is_cytosine(chrom[rpos - 1]) || INCLUDE_CPGS)) {
           const auto qc = seq_nt16_str[bam_seqi(seq, qpos - 1)];
-          if (qc == 'C')
+          if (qc == 'C') {
             ++unconv[fpos];
-          else if (qc == 'T')
+            ++n_uconv;
+          }
+          else if (qc == 'T') {
             ++conv[fpos];
+            ++n_conv;
+          }
           else if (qc != 'N')
             ++err[fpos];
         }
@@ -133,6 +149,7 @@ count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
     }
   }
   assert(qpos == 0);
+  return {n_conv, n_conv + n_uconv};
 }
 
 static void
@@ -223,11 +240,23 @@ write_output(const string &outfile, const vector<size_t> &ucvt_count_p,
   }
 }
 
+static inline void
+update_histogram(const pair<uint32_t, uint32_t> &x, vector<double> &hist) {
+  constexpr auto epsilon = 1e-6;
+  if (const double denom = x.second + epsilon; denom > 1.0) {
+    const double frac = x.first/denom;
+    const auto bin_id = std::floor(frac*hist.size());
+    assert(bin_id < hist.size());
+    ++hist[bin_id];
+  }
+}
+
 int
 main_bsrate(int argc, const char **argv) {
   try {
     // ASSUMED MAXIMUM LENGTH OF A FRAGMENT
     static const size_t output_size = 10000;
+    constexpr auto n_hist_bins = 20;
 
     bool VERBOSE = false;
     bool INCLUDE_CPGS = false;
@@ -307,6 +336,8 @@ main_bsrate(int argc, const char **argv) {
       chrom_lookup.insert({sam_hdr_name2tid(hdr.h, names[i].data()), i});
     }
 
+    vector<double> hist(n_hist_bins, 0);
+
     vector<size_t> unconv_count_pos(output_size, 0ul);
     vector<size_t> conv_count_pos(output_size, 0ul);
     vector<size_t> unconv_count_neg(output_size, 0ul);
@@ -351,13 +382,16 @@ main_bsrate(int argc, const char **argv) {
       }
 
       if (use_this_chrom) {
-        // do the work for this mapped read
-        if (bam_is_rev(aln))
+        const auto conv_result =
+          // do the work for this mapped read
+          (bam_is_rev(aln)) ?
           count_states_neg(INCLUDE_CPGS, chroms[chrom_idx], aln,
-                           unconv_count_neg, conv_count_neg, err_neg, hanging);
-        else
+                           unconv_count_neg, conv_count_neg, err_neg, hanging) :
           count_states_pos(INCLUDE_CPGS, chroms[chrom_idx], aln,
                            unconv_count_pos, conv_count_pos, err_pos, hanging);
+        update_histogram(conv_result, hist);
+        // cerr << conv_result.first << '\t'
+        //      << conv_result.second << endl;
       }
     }
     write_output(outfile, unconv_count_pos, conv_count_pos, unconv_count_neg,
@@ -369,6 +403,10 @@ main_bsrate(int argc, const char **argv) {
            << "High numbers of hanging reads suggest mismatch "
            << "between assembly provided here and that used for mapping"
            << endl;
+
+    for (auto i = 0.0; i < hist.size(); ++i) {
+      cout << i/hist.size() << '\t' << hist[i] << endl;
+    }
   }
   catch (const runtime_error &e) {
     cerr << e.what() << endl;

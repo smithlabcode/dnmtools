@@ -238,28 +238,65 @@ write_output(const string &outfile, const vector<size_t> &ucvt_count_p,
   }
 }
 
-static inline void
-update_histogram(const pair<uint32_t, uint32_t> &x, vector<double> &hist) {
+template<typename T> static inline void
+update_per_read_stats(const pair<T, T> &x, vector<vector<T>> &tab) {
+  if (x.second < tab.size()) ++tab[x.second][x.first];
+}
+
+static inline vector<double>
+format_histogram(const vector<vector<uint32_t>> &tab,
+                 const size_t n_hist_bins) {
   constexpr auto epsilon = 1e-6;
-  if (const double denom = x.second + epsilon; denom > 1.0) {
-    const double frac = x.first / denom;
-    const auto bin_id = std::floor(frac * hist.size());
-    assert(bin_id < hist.size());
-    ++hist[bin_id];
+  vector<double> hist(n_hist_bins, 0.0);
+  for (size_t i = 1; i < tab.size(); ++i) {
+    const double denom = i + epsilon;
+    for (size_t j = 0; j <= i; ++j) {
+      const double frac = j / denom;
+      const auto bin_id = std::floor(frac * n_hist_bins);
+      assert(bin_id < hist.size());
+      hist[bin_id] += tab[i][j];
+    }
   }
+  return hist;
+}
+
+static void
+write_hanging_read_message(std::ostream &out, const size_t n_hanging) {
+  out << "Warning: hanging reads detected at chromosome ends "
+      << "(N=" << n_hanging << ")." << endl
+      << "High numbers of hanging reads suggest inconsistent " << endl
+      << "reference genomes between stages of analysis." << endl
+      << "This is likely to result in analysis errors." << endl;
+}
+
+template<typename T> static void
+write_per_read_histogram(const vector<vector<T>> &tab, const size_t n_hist_bins,
+                         std::ostream &out) {
+  const auto hist = format_histogram(tab, n_hist_bins);
+  out << std::fixed;
+  for (auto i = 0.0; i < hist.size(); ++i)
+    out << std::setprecision(3) << i / hist.size() << '\t'
+        << std::setprecision(3) << (i + 1) / hist.size() << '\t'
+        << std::setprecision(0) << hist[i] << endl;
 }
 
 int
 main_bsrate(int argc, const char **argv) {
   try {
-    // ASSUMED MAXIMUM LENGTH OF A FRAGMENT
-    static const size_t output_size = 10000;
-    constexpr auto n_hist_bins = 20;
+    // assumed maximum length of a fragment
+    constexpr const size_t output_size = 10000;
+
+    // Assumed maximum cytosines per fragment. Currently the per-read
+    // information is collected as counts in a 2D array, so that later
+    // features may be able to fit distributions based these counts.
+    constexpr const size_t max_cytosine_per_frag = 1000;
 
     bool VERBOSE = false;
     bool INCLUDE_CPGS = false;
     bool reads_are_a_rich = false;
+    bool report_per_read = false;
     size_t n_threads = 1;
+    size_t n_hist_bins = 20;
 
     string chroms_file;
     string outfile;
@@ -281,6 +318,10 @@ main_bsrate(int argc, const char **argv) {
                       seq_to_use);
     opt_parse.add_opt("a-rich", 'A', "reads are A-rich", false,
                       reads_are_a_rich);
+    opt_parse.add_opt("per-read", 'p', "report per-read conversion to terminal",
+                      false, report_per_read);
+    opt_parse.add_opt("bins", 'b', "number of bins for per-read", false,
+                      n_hist_bins);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
@@ -333,7 +374,8 @@ main_bsrate(int argc, const char **argv) {
       chrom_lookup.insert({sam_hdr_name2tid(hdr.h, names[i].data()), i});
     }
 
-    vector<double> hist(n_hist_bins, 0);
+    vector<vector<uint32_t>> per_read_counts(
+      max_cytosine_per_frag, vector<uint32_t>(max_cytosine_per_frag, 0));
 
     vector<size_t> unconv_count_pos(output_size, 0ul);
     vector<size_t> conv_count_pos(output_size, 0ul);
@@ -378,31 +420,25 @@ main_bsrate(int argc, const char **argv) {
       }
 
       if (use_this_chrom) {
+        // do the work for the current mapped read
         const auto conv_result =
-          // do the work for this mapped read
-          (bam_is_rev(aln))
-            ? count_states_neg(INCLUDE_CPGS, chroms[chrom_idx], aln,
-                               unconv_count_neg, conv_count_neg, err_neg,
-                               hanging)
-            : count_states_pos(INCLUDE_CPGS, chroms[chrom_idx], aln,
-                               unconv_count_pos, conv_count_pos, err_pos,
-                               hanging);
-        update_histogram(conv_result, hist);
+          bam_is_rev(aln) ? count_states_neg(INCLUDE_CPGS, chroms[chrom_idx],
+                                             aln, unconv_count_neg,
+                                             conv_count_neg, err_neg, hanging)
+                          : count_states_pos(INCLUDE_CPGS, chroms[chrom_idx],
+                                             aln, unconv_count_pos,
+                                             conv_count_pos, err_pos, hanging);
+        if (report_per_read)
+          update_per_read_stats(conv_result, per_read_counts);
       }
     }
     write_output(outfile, unconv_count_pos, conv_count_pos, unconv_count_neg,
                  conv_count_neg, err_pos, err_neg);
 
-    if (hanging > 0)  // some overhanging reads
-      cerr << "Warning: hanging reads detected at chrom ends "
-           << "(N=" << hanging << ")" << endl
-           << "High numbers of hanging reads suggest mismatch "
-           << "between assembly provided here and that used for mapping"
-           << endl;
+    if (hanging > 0) write_hanging_read_message(cerr, hanging);
 
-    for (auto i = 0.0; i < hist.size(); ++i) {
-      cout << i / hist.size() << '\t' << hist[i] << endl;
-    }
+    if (report_per_read)
+      write_per_read_histogram(per_read_counts, n_hist_bins, cout);
   }
   catch (const runtime_error &e) {
     cerr << e.what() << endl;

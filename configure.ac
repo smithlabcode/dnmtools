@@ -23,7 +23,7 @@ AM_INIT_AUTOMAKE([subdir-objects foreign])
 AC_CONFIG_MACRO_DIR([m4])
 AC_LANG(C++)
 AC_PROG_CXX
-AX_CXX_COMPILE_STDCXX_11([noext], [mandatory])
+AX_CXX_COMPILE_STDCXX_17([noext], [mandatory])
 AC_PROG_RANLIB
 
 dnl OpenMP happens here
@@ -39,7 +39,6 @@ ADS_OPENMP([], [AC_MSG_FAILURE([OpenMP must be installed to build dnmtools])])
 dnl recursively configure abismal and smithlab_cpp
 AC_CONFIG_SUBDIRS([src/abismal])
 AC_CONFIG_SUBDIRS([src/smithlab_cpp])
-dnl AX_SUBDIRS_CONFIGURE([src/smithlab_cpp], [--enable-hts])
 
 dnl check for HTSLib if requested
 hts_fail_msg="

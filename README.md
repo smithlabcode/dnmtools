@@ -120,11 +120,11 @@ without worrying about the dependencies.
 
 To pull the image for the latest version, run:
 ```console
-docker pull ghcr.io/smithlabcode/dnmtools
+docker pull ghcr.io/smithlabcode/dnmtools:latest
 ```
 To test the image installation, run:
 ```console
-docker run ghcr.io/smithlabcode/dnmtools
+docker run ghcr.io/smithlabcode/dnmtools:latest
 ```
 You should see the help page of `dnmtools`.
 
@@ -144,7 +144,7 @@ Not all versions have corresponding images; you can find available images
 
 ### Running the docker image
 
-To run the image, you can run (assuming you tagged the image as above)
+To run the image, you can run (assuming you re-tagged the image as above)
 ```console
 docker run -v /path/to/data:/data -w /data \
   dnmtools [DNMTOOLS COMMAND] [OPTIONS] [ARGUMENTS]

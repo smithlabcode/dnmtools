@@ -1,0 +1,17 @@
+_dnmtools()
+{
+  local cur prev opts
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+  opts=`dnmtools | grep "^    " | awk '{print $1}' | tr -d ':'`
+
+  case $prev in
+      dnmtools)
+          COMPREPLY=( $(compgen -f -W "${opts}" -- "$cur") )
+          ;;
+  esac
+  return 0
+}
+complete -F _dnmtools -o default dnmtools

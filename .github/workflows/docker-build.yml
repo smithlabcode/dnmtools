@@ -1,0 +1,161 @@
+
+# This workflow is for building and possibly pushing the docker image for
+# a commit tagged by a version number.  It is triggered either manually or by
+# a tag event of type "v*.*.*", which is intended for new releases. Currently,
+# pushing to ghcr.io can happen only to commits tagged by a version number. This
+# is intended to associate every docker image with a version number. This means
+# that there is no option to push the image for the latest commit, even though
+# we can build the image for testing purposes. 
+#
+# Manual trigger
+#   In Actions, go to "Docker image build" and click
+#   "Run workflow" and choose from the following options.
+#   Options:
+#    - 'Build latest commit': for testing for the latest commit
+#    - 'Build existing version': for testing a particular version 
+#    - 'Build + push existing version': for publishing a particular version
+#
+# Tag event
+#   In a tag event of type "v*.*.*", such as new release or retagging, this work
+#   flow is triggered to build and publish the image for the tagged version
+#   number.
+#
+# The image can be pulled by one of the following commands.
+#
+# docker pull ghcr.io/smithlabcode/dnmtools:latest
+# docker pull ghcr.io/smithlabcode/dnmtools:<7-DIGIT SHA>
+# docker pull ghcr.io/smithlabcode/dnmtools:v<VERSION NUMBER> (e.g. v1.3.0)
+
+
+name: Docker image build
+
+on: 
+  workflow_dispatch:
+    branches: ['master']
+    inputs:
+      build_option:
+        description: 'Build/push option'
+        required: true
+        default: 'Build latest commit'
+        type: choice
+        options:
+        - 'Build latest commit'
+        - 'Build existing version'
+        - 'Build + push existing version'
+      version:
+        description: 'Version number: "v*.*.*" 
+                      (latest version if not specified)'
+        required: false
+
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+
+      - name: Checkout current repository to get latest version
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Needed to get tags information
+
+      # Copy Dockerfile in case the commit to be used does not have it 
+      # This is to be used to build older versions that didn't have Dockerfile.
+      # This temporary Dockerfile should not be needed for new versions.
+      - name: Copy Dockerfile to Temporary File
+        run: |
+          cp Dockerfile /tmp/Dockerfile 
+          
+      - name: 'Get latest version'
+        run: |
+          echo "LATEST_VERSION=$(git describe --abbrev=0 --tags)" >> $GITHUB_ENV
+          
+      - name: Set version for manual trigger
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ "${{ github.event.inputs.version }}" == "" ]]; then
+            echo "VERSION=${{env.LATEST_VERSION}}" >> $GITHUB_ENV
+          else
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          fi
+
+      - name: Set version for tag trigger 
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV 
+
+      - name: "Set commit hash"
+        run: |
+          if [[ "${{ github.event.inputs.build_option }}" == \
+                                        "Build latest commit" ]]; then
+            COMMIT_HASH=${{ github.sha }}
+          else
+            # for specified version in manual trigger or tag event
+            COMMIT_HASH=$(git rev-parse ${{ env.VERSION }})
+          fi
+          SHA=$(git rev-parse --short "${COMMIT_HASH}")
+          echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV 
+          echo "SHA=${SHA}" >> $GITHUB_ENV
+
+      - name: "Checkout the commit: ${{ env.SHA }}"
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ env.COMMIT_HASH }}
+          submodules: 'recursive'
+          
+      - name: Log in to the Container registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide whether to push the image to ghcr.io
+        run: |
+          if [[ "${{ github.event.inputs.build_option }}" == \
+                          "Build + push existing version" ]] || 
+             [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "PUSH=true" >> $GITHUB_ENV 
+          else
+            echo "PUSH=false" >> $GITHUB_ENV
+          fi
+
+      # The default tags are the SHA hash and the version number.
+      # Below command adds the "latest" tag if the version number is the latest.
+      - name: Determine image tags
+        env: 
+          IMAGE_TAGS: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SHA }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}"
+        run: |
+          if [ "${{ env.VERSION }}" == "${{ env.LATEST_VERSION }}" ]; then
+            echo "IMAGE_TAGS=${{ env.IMAGE_TAGS }},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_ENV
+          else
+            echo "IMAGE_TAGS=${{ env.IMAGE_TAGS }}" >> $GITHUB_ENV
+          fi
+
+      - name: Use temp.Dockerfile if Dockerfile doesn't exist
+        run: |
+          if [ -f Dockerfile ]; then
+            echo "DOCKERFILE=./Dockerfile" >> $GITHUB_ENV
+          else
+            echo "DOCKERFILE=/tmp/Dockerfile" >> $GITHUB_ENV
+          fi
+
+      - name: 'Build Docker image (push: ${{ env.PUSH }}, dockerfile: ${{ env.DOCKERFILE }})'
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          push: ${{ env.PUSH }}
+          tags: |
+            ${{ env.IMAGE_TAGS }}
+

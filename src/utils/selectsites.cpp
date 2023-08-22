@@ -16,6 +16,7 @@
  * GNU General Public License for more details.
  */
 
+#include <unistd.h>
 #include <string>
 #include <vector>
 #include <iostream>
@@ -25,12 +26,13 @@
 #include <numeric>
 #include <unordered_map>
 
+#include <bamxx.hpp>
+
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 #include "GenomicRegion.hpp"
 #include "MSite.hpp"
-#include "zlib_wrapper.hpp"
 
 using std::string;
 using std::vector;
@@ -42,6 +44,7 @@ using std::runtime_error;
 using std::ifstream;
 using std::unordered_map;
 
+using bamxx::bgzf_file;
 
 static void
 collapsebed(vector<GenomicRegion> &regions) {
@@ -80,14 +83,13 @@ process_all_sites(const bool VERBOSE,
                   const unordered_map<string, vector<GenomicRegion>> &regions,
                   T &out) {
 
-  igzfstream in(sites_file);
-  if (!in)
-    throw runtime_error("cannot open file: " + sites_file);
+  bgzf_file in(sites_file, "r");
+  if (!in) throw runtime_error("cannot open file: " + sites_file);
 
   MSite the_site, prev_site;
   vector<GenomicRegion>::const_iterator i, i_lim;
   bool chrom_is_relevant = false;
-  while (in >> the_site) {
+  while (read_site(in, the_site)) {
     if (the_site.chrom != prev_site.chrom) {
       if (VERBOSE)
         cerr << "processing " << the_site.chrom << endl;
@@ -103,7 +105,7 @@ process_all_sites(const bool VERBOSE,
         ++i;
 
       if (contains(*i, the_site))
-        out << the_site << "\n";
+        write_site(out, the_site);
     }
     std::swap(prev_site, the_site);
   }
@@ -112,7 +114,7 @@ process_all_sites(const bool VERBOSE,
 
 static void
 get_sites_in_region(ifstream &site_in, const GenomicRegion &region,
-                   std::ostream &out) {
+                    std::ostream &out) {
 
   string chrom(region.get_chrom());
   const size_t start_pos = region.get_start();
@@ -132,8 +134,8 @@ get_sites_in_region(ifstream &site_in, const GenomicRegion &region,
 
 static void
 process_with_sites_on_disk(const string &sites_file,
-                          vector<GenomicRegion> &regions,
-                          std::ostream &out) {
+                           vector<GenomicRegion> &regions,
+                           std::ostream &out) {
 
   ifstream in(sites_file);
   if (!in)
@@ -242,7 +244,7 @@ main_selectsites(int argc, const char **argv) {
     }
     else {
       // not supporting search on disk for gz file
-      ogzfstream out(outfile);
+      bgzf_file out(outfile, "w");
       process_all_sites(VERBOSE, sites_file, regions_lookup, out);
     }
   }

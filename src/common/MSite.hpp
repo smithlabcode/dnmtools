@@ -138,4 +138,38 @@ find_offset_for_msite(const std::string &chrom,
                       const size_t start_pos,
                       std::ifstream &site_in);
 
+// ADS: using the functions below for now for static polymorphism
+// because I don't want to have insertion and extraction operators
+// hanging around for MSite with bamxx::bgzf_file. The reason is that
+// if we are going to use them, we need to be aware of which functions
+// we are calling, and not just do it unconsciously.
+
+#include <bamxx.hpp>
+#include <sstream>
+
+inline bamxx::bgzf_file &
+write_site(bamxx::bgzf_file &f, const MSite &s) {
+  // ADS: to slow??
+  std::ostringstream oss;
+  oss << s.tostring() << '\n';
+  f.write(oss.str());
+  return f;
+}
+
+inline std::ostream &
+write_site(std::ostream &out, const MSite &s) {
+  return out << s << '\n';
+}
+
+inline bamxx::bgzf_file &
+read_site(bamxx::bgzf_file &f, MSite &s) {
+  std::string line;
+  if (getline(f, line))
+    s = MSite(line);
+  return f;
+}
+
+bool
+is_msite_file(const std::string &file);
+
 #endif

@@ -1,0 +1,26 @@
+name: DNMTools builds on macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+
+    runs-on: macos-13
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: Update Homebrew
+      run: brew update
+    - name: Install autotools
+      run: brew install autoconf automake libtool
+    - name: Install dependencies
+      run: brew install htslib gsl
+    - name: Generate configure script
+      run: ./autogen.sh
+    - name: configure with g++-12
+      run: ./configure CXX="g++-12" CPPFLAGS="-I$(brew --prefix)/include" LDFLAGS="-L$(brew --prefix)/lib"
+    - name: make
+      run: make

@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2014-2022 Andrew D. Smith
  *
- * Authors: Andrew D. Smith
+ * Authors: Andrew D. Smith and Masaru Nakajima
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -24,12 +24,14 @@
 #include <numeric>
 #include <utility>
 #include <stdexcept>
+#include <regex>
+
+#include <bamxx.hpp>
 
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 #include "GenomicRegion.hpp"
-#include "zlib_wrapper.hpp"
 
 #include "MSite.hpp"
 
@@ -47,6 +49,9 @@ using std::runtime_error;
 using std::ifstream;
 using std::isfinite;
 using std::is_sorted;
+using std::regex_match;
+
+using bamxx::bgzf_file;
 
 static pair<bool, bool>
 meth_unmeth_calls(const size_t n_meth, const size_t n_unmeth) {
@@ -134,13 +139,12 @@ process_with_cpgs_loaded(const bool VERBOSE,
                          vector<GenomicRegion> &regions,
                          std::ostream &out) {
 
-  igzfstream in(cpgs_file);
-  if (!in)
-    throw runtime_error("cannot open file: " + cpgs_file);
+  bgzf_file in(cpgs_file, "r");
+  if (!in) throw runtime_error("cannot open file: " + cpgs_file);
 
   vector<MSite> cpgs;
   MSite the_cpg;
-  while (in >> the_cpg)
+  while (read_site(in, the_cpg))
     cpgs.push_back(the_cpg);
 
   if (!is_sorted(begin(cpgs), end(cpgs))) {
@@ -474,6 +478,16 @@ Columns (beyond the first 6) in the BED format output:
     // bed format
     if (n_columns != 3 && n_columns < 6)
       throw runtime_error("format must be 3 or 6+ column bed: " + regions_file);
+    if (is_msite_file(regions_file)) {
+      cerr << opt_parse.help_message() << endl;
+      throw runtime_error("The file seems to be a methylation file: " +
+          regions_file + "\nCheck the order of the input arguments");
+    }
+    if (!is_msite_file(cpgs_file)) {
+      cerr << opt_parse.help_message() << endl;
+      throw runtime_error("The file is not a methylation file: " + cpgs_file);
+    }
+
 
     vector<GenomicRegion> regions;
     ReadBEDFile(regions_file, regions);

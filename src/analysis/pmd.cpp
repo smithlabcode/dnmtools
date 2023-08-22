@@ -16,6 +16,8 @@
 
 #include <gsl/gsl_sf.h>
 
+#include <bamxx.hpp>
+
 #include <numeric>
 #include <cmath>
 #include <fstream>
@@ -29,7 +31,6 @@
 #include "smithlab_os.hpp"
 #include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
-#include "zlib_wrapper.hpp"
 #include "bsutils.hpp"
 
 #include "TwoStateHMM_PMD.hpp"
@@ -51,6 +52,7 @@ using std::ostream;
 using std::ofstream;
 using std::to_string;
 
+using bamxx::bgzf_file;
 
 static void
 get_adjacent_distances(const vector<GenomicRegion> &pmds,
@@ -193,7 +195,6 @@ get_boundary_positions(vector<GenomicRegion> &bounds,
   }
 }
 
-
 static void
 get_optimized_boundary_likelihoods(const vector<string> &cpgs_file,
                                    vector<GenomicRegion> &bounds,
@@ -208,9 +209,9 @@ get_optimized_boundary_likelihoods(const vector<string> &cpgs_file,
   // CONTRIBUTION TO BOUNDARY OBSERVATIONS
   static const double array_coverage_constant = 10;
 
-  vector<igzfstream*> in(cpgs_file.size());
+  vector<bgzf_file*> in(cpgs_file.size());
   for (size_t i = 0; i < cpgs_file.size(); ++i)
-    in[i] = new igzfstream(cpgs_file[i]);
+    in[i] = new bgzf_file(cpgs_file[i], "r");
 
   std::map<size_t, pair<size_t, size_t> > pos_meth_tot;
   size_t n_meth = 0ul, n_reads = 0ul;
@@ -220,7 +221,7 @@ get_optimized_boundary_likelihoods(const vector<string> &cpgs_file,
       // get totals for all CpGs overlapping that boundary
 
       MSite site;
-      while (*in[i] >> site &&
+      while (read_site(*in[i], site) &&
              !succeeds(site.chrom, site.pos, bounds[bound_idx])) {
 
         if (array_status[i])
@@ -294,8 +295,8 @@ get_optimized_boundary_likelihoods(const vector<string> &cpgs_file,
     pos_meth_tot.clear();
   }
 
-  for (size_t i = 0; i < cpgs_file.size(); ++i)
-    delete in[i];
+  for (auto &&fp : in)
+    delete fp;
 }
 
 
@@ -312,9 +313,9 @@ find_exact_boundaries(const vector<string> &cpgs_file,
   // CONTRIBUTION TO BOUNDARY OBSERVATIONS
   static const double array_coverage_constant = 10;
 
-  vector<igzfstream*> in(cpgs_file.size());
+  vector<bgzf_file*> in(cpgs_file.size());
   for (size_t i = 0; i < cpgs_file.size(); ++i)
-    in[i] = new igzfstream(cpgs_file[i]);
+    in[i] = new bgzf_file(cpgs_file[i], "r");
 
   std::map<size_t, pair<size_t, size_t> > pos_meth_tot;
   size_t n_meth = 0ul, n_reads = 0ul;
@@ -324,7 +325,7 @@ find_exact_boundaries(const vector<string> &cpgs_file,
       // get totals for all CpGs overlapping that boundary
 
       MSite site;
-      while (*in[i] >> site &&
+      while (read_site(*in[i], site) &&
              !succeeds(site.chrom, site.pos, bounds[bound_idx])) {
 
         if (array_status[i])
@@ -733,9 +734,9 @@ write_params_file(const string &outfile,
 
 static bool
 check_if_array_data(const string &infile) {
-  igzfstream in(infile);
-  if (!in)
-    throw std::runtime_error("bad file: " + infile);
+
+  bgzf_file in(infile, "r");
+  if (!in) throw std::runtime_error("bad file: " + infile);
 
   std::string line;
   getline(in, line);
@@ -755,14 +756,15 @@ load_array_data(const size_t bin_size,
   // MAGIC. GS: minimum value for array?
   static const double meth_min = 1.0e-2;
 
-  igzfstream in(cpgs_file);
+  bgzf_file in(cpgs_file, "r");
+  if (!in) throw std::runtime_error("bad sites file: " + cpgs_file);
   string curr_chrom;
   size_t prev_pos = 0ul, curr_pos = 0ul;
   double array_meth_bin = 0.0;
   double num_probes_in_bin = 0.0;
 
   MSite site;
-  while (in >> site) {
+  while (read_site(in, site)) {
     if (site.n_reads > 0) { // its covered by a probe
       ++num_probes_in_bin;
       if (site.meth < meth_min)
@@ -842,16 +844,15 @@ load_wgbs_data(const size_t bin_size, const string &cpgs_file,
   bins.clear();
 
   // ADS: loading data each iteration should be put outside loop
-  igzfstream in(cpgs_file);
-  if (!in)
-    throw runtime_error("bad methcounts file: " + cpgs_file);
+  bgzf_file in(cpgs_file, "r");
+  if (!in) throw runtime_error("bad sites file: " + cpgs_file);
 
   // keep track of the chroms we've seen
   string curr_chrom;
   std::unordered_set<string> chroms_seen;
 
   MSite site;
-  while (in >> site) {
+  while (read_site(in, site)) {
     if (curr_chrom != site.chrom) { // handle change of chrom
       if (chroms_seen.find(site.chrom) != end(chroms_seen))
         throw runtime_error("sites not sorted");
@@ -909,9 +910,8 @@ load_read_counts(const string &cpgs_file, const size_t bin_size,
   reads.clear(); // for safety
 
   // ADS: loading data each iteration should be put outside loop
-  igzfstream in(cpgs_file);
-  if (!in)
-    throw runtime_error("bad methcounts file: " + cpgs_file);
+  bgzf_file in(cpgs_file, "r");
+  if (!in) throw runtime_error("bad methcounts file: " + cpgs_file);
 
   // keep track of where we are and what we've seen
   size_t bin_start = 0ul;
@@ -919,7 +919,7 @@ load_read_counts(const string &cpgs_file, const size_t bin_size,
   std::unordered_set<string> chroms_seen;
 
   MSite site;
-  while (in >> site) {
+  while (read_site(in, site)) {
     if (curr_chrom != site.chrom) { // handle change of chrom
       if (chroms_seen.find(site.chrom) != end(chroms_seen))
         throw runtime_error("sites not sorted");

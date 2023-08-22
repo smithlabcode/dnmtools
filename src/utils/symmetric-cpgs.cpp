@@ -23,11 +23,12 @@
 #include <fstream>
 #include <stdexcept>
 
+#include <bamxx.hpp>
+
 // from smithlab_cpp
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
-#include "zlib_wrapper.hpp"
 
 #include "MSite.hpp"
 
@@ -36,6 +37,7 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
+using bamxx::bgzf_file;
 
 inline bool
 found_symmetric(const MSite &prev_cpg, const MSite &curr_cpg) {
@@ -47,19 +49,19 @@ found_symmetric(const MSite &prev_cpg, const MSite &curr_cpg) {
 
 template <class T>
 static void
-process_sites(igzfstream &in, T &out) {
+process_sites(bgzf_file &in, T &out) {
 
   MSite prev_site, curr_site;
   bool prev_is_cpg = false;
-  if (in >> prev_site)
+  if (read_site(in, prev_site))
     if (prev_site.is_cpg())
       prev_is_cpg = true;
 
-  while (in >> curr_site) {
+  while (read_site(in, curr_site)) {
     if (curr_site.is_cpg()) {
       if (prev_is_cpg && found_symmetric(prev_site, curr_site)) {
         prev_site.add(curr_site);
-        out << prev_site << '\n';
+        write_site(out, prev_site);
       }
       prev_is_cpg = true;
     }
@@ -108,10 +110,8 @@ main_symmetric_cpgs(int argc, const char **argv) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     const bool show_progress = VERBOSE && isatty(fileno(stderr));
-
-    igzfstream in(filename);
-    if (!in)
-      throw std::runtime_error("could not open file: " + filename);
+    bgzf_file in(filename, "r");
+    if (!in) throw std::runtime_error("could not open file: " + filename);
 
     if (outfile.empty() || !has_gz_ext(outfile)) {
       std::ofstream of;
@@ -120,7 +120,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
       process_sites(in, out);
     }
     else {
-      ogzfstream out(outfile);
+      bgzf_file out(outfile, "w");
       process_sites(in, out);
     }
   }

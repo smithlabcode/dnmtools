@@ -29,11 +29,12 @@
 #include <unordered_map>
 #include <queue>
 
+#include <bamxx.hpp>
+
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 #include "MSite.hpp"
-#include "zlib_wrapper.hpp"
 
 using std::string;
 using std::vector;
@@ -45,6 +46,8 @@ using std::numeric_limits;
 using std::unordered_set;
 using std::unordered_map;
 
+using bamxx::bgzf_file;
+
 static void
 set_invalid(MSite &s) {s.pos = numeric_limits<size_t>::max();}
 
@@ -53,7 +56,7 @@ is_valid(const MSite &s) {return s.pos != numeric_limits<size_t>::max();}
 
 static bool
 any_sites_unprocessed(const vector<string> &filenames,
-                      const vector<igzfstream*> &infiles,
+                      const vector<bgzf_file*> &infiles,
                       vector<bool> &outdated, vector<MSite> &sites) {
 
   const size_t n_files = sites.size();
@@ -63,7 +66,7 @@ any_sites_unprocessed(const vector<string> &filenames,
     if (outdated[i]) {
       outdated[i] = false;
       MSite tmp_site;
-      if ((*infiles[i]) >> tmp_site) {
+      if (read_site(*infiles[i], tmp_site)) {
         // ADS: chrom order within a file already tested
         if (tmp_site.pos <= sites[i].pos && tmp_site.chrom == sites[i].chrom)
           throw runtime_error("sites not sorted in " + filenames[i]);
@@ -240,9 +243,8 @@ remove_suffix(const string &suffix, const std::string &filename) {
 static void
 get_orders_by_file(const string &filename, vector<string> &chroms_order) {
 
-  igzfstream in(filename);
-  if (!in)
-    throw runtime_error("bad file: " + filename);
+  bgzf_file in(filename, "r");
+  if (!in) throw runtime_error("bad file: " + filename);
   chroms_order.clear();
 
   unordered_set<string> chroms_seen;
@@ -441,9 +443,9 @@ main_merge_methcounts(int argc, const char **argv) {
 
     const size_t n_files = meth_files.size();
 
-    vector<igzfstream*> infiles(n_files);
+    vector<bgzf_file*> infiles(n_files);
     for (size_t i = 0; i < n_files; ++i) {
-      infiles[i] = new igzfstream(meth_files[i]);
+      infiles[i] = new bgzf_file(meth_files[i], "r");
       if (!(*infiles[i]))
         throw runtime_error("cannot open file: " + meth_files[i]);
     }
@@ -482,7 +484,7 @@ main_merge_methcounts(int argc, const char **argv) {
     vector<MSite> sites(n_files);
     vector<bool> outdated(n_files, true);
     vector<bool> sites_to_print; // declared here to keep allocation
-    vector<unordered_set<string> > chroms_seen(n_files);
+    vector<unordered_set<string>> chroms_seen(n_files);
 
     while (any_sites_unprocessed(meth_files, infiles, outdated, sites)) {
 
@@ -504,8 +506,8 @@ main_merge_methcounts(int argc, const char **argv) {
       swap(outdated, sites_to_print);
     }
 
-    for (size_t i = 0; i < n_files; ++i)
-      delete infiles[i];
+    for (auto &&f : infiles)
+      delete f;
   }
   catch (const runtime_error &e)  {
     cerr << e.what() << endl;

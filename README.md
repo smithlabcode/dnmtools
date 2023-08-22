@@ -12,7 +12,7 @@ sequencing (RRBS). These tools focus on overcoming the computing
 challenges imposed by the scale of genome-wide DNA methylation data,
 which is usually the early parts of data analysis.
 
-## Installing release 1.2.5
+## Installing release 1.3.0
 
 The documentation for DNMTools can be found
 [here](https://dnmtools.readthedocs.io). But if you want to install
@@ -23,19 +23,14 @@ all the formatting.
 ### Required libraries
 
 * A recent compiler. Most users will be building and installing this
-  software with GCC. We require a compiler that fully supports C++11,
-  so we recommend using at least GCC 5.8. There are still many systems
-  that install a very old version of GCC by default, so if you have
-  problems with building this software, that might be the first thing
-  to check.
+  software with GCC. We require a compiler that supports C++17, so we
+  recommend using at least GCC 8 (released in 2018). There are still
+  many systems that install a very old version of GCC by default, so
+  if you have problems with building this software, that might be the
+  first thing to check.
 * The GNU Scientific Library. It can be installed using apt on Linux
   (Ubuntu, Debian), using brew on macOS, or from source available
   [here](http://www.gnu.org/software/gsl).
-* The Zlib compression library. Most likely you already have this
-  installed on your system. If not, it can be installed using apt on
-  Linux (Ubuntu, Debian) through the package `zlib1g-dev`. On macOS,
-  Zlib can be installed with brew (I have not needed to install this
-  separately on any macOS).
 * The HTSlib library. This can be installed through brew on macOS,
   through apt on Linux (Ubuntu, Debian), or from source downloadable
   [here](https://github.com/samtools/htslib).
@@ -46,14 +41,14 @@ repo, it is easiest if all dependencies are available through conda.
 
 ### Configuration
 
-* Download [dnmtools-1.2.5.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.2.5/dnmtools-1.2.5.tar.gz).
+* Download [dnmtools-1.3.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.3.0/dnmtools-1.3.0.tar.gz).
 * Unpack the archive:
 ```console
-tar -zxvf dnmtools-1.2.5.tar.gz
+tar -zxvf dnmtools-1.3.0.tar.gz
 ```
 * Move into the dnmtools directory and create a build directory:
 ```console
-cd dnmtools-1.2.5 && mkdir build && cd build
+cd dnmtools-1.3.0 && mkdir build && cd build
 ```
 * Run the configuration script:
 ```console
@@ -114,6 +109,102 @@ able to make it work yourself.
 
 Read the [documentation](https://dnmtools.readthedocs.io) for usage of
 individual tools within DNMTools.
+
+## Installing and running `dnmtools` docker images
+
+The docker images of `dnmtools` are accessible through GitHub Container
+registry. These are light-weight (~30 MB) images that let you run `dnmtools`
+without worrying about the dependencies.
+
+### Installation
+
+To pull the image for the latest version, run:
+```console
+docker pull ghcr.io/smithlabcode/dnmtools
+```
+To test the image installation, run:
+```console
+docker run ghcr.io/smithlabcode/dnmtools
+```
+You should see the help page of `dnmtools`.
+
+For simpler reference, you can
+re-tag the installed image as follows, but note that you would have to re-tag
+the image whenever you pull an image for a new version.
+```console
+docker tag ghcr.io/smithlabcode/dnmtools:latest dnmtools:latest
+```
+
+You can also install the image for a particular vertion by running
+```console
+docker pull ghcr.io/smithlabcode/dnmtools:v[VERSION NUMBER] #(e.g. v1.3.0)
+```
+Not all versions have corresponding images; you can find available images
+[here](https://github.com/smithlabcode/dnmtools/pkgs/container/dnmtools).
+
+### Running the docker image
+
+To run the image, you can run (assuming you tagged the image as above)
+```console
+docker run -v /path/to/data:/data -w /data \
+  dnmtools [DNMTOOLS COMMAND] [OPTIONS] [ARGUMENTS]
+```
+In the above command, replace `/path/to/data` with the path to the directory you
+want to mount, and it will be mounted as the `/data` directory in the container.
+For example, if your genome data `genome.fa` is located in `./genome_data`, you
+can execute `abismalidx` by running:
+```console
+docker run -v ./genome_data:/data -w /data \
+  dnmtools abismalidx -v -t 4 genome.fa genome.idx
+```
+In the above command, `-w /data` specifies the working directory in the
+container, so the output `genome.idx` is saved in the `/data` directory,
+which corresponds to the `./genome_data` directory in the host
+machine. If you want to specify the output directory, use a command like below.
+```console
+docker run -v ./genome_data:/data -w /data \
+  -v ./genome_index:/output \
+  dnmtools abismalidx -v -t 4 genome.fa /output/genome.idx
+```
+When you need to access multiple directories, it might be useful to use the
+option `-v ./:/app -w /app`, which mounts the current directory
+to the `/app` directory in the container, which is alo set as the working
+directory. You can specify the paths in the same way you would from the
+working directory in the host machine. For example:
+```console
+docker run -v ./:/app -w /app \
+  dnmtools abismal -i genome_index/genome.idx -v -t 4 \
+  -o mapped_reads/output.sam \
+  reads/reads_1.fq reads/reads_1.fq
+```
+
+### Testing the install and use of docker image
+
+Run the following commands to test the installation and usage of the docker
+image of `dnmtools`.
+```console
+docker pull ghcr.io/smithlabcode/dnmtools:latest
+docker tag ghcr.io/smithlabcode/dnmtools:latest dnmtools:latest
+
+# Clone the repo to access test data
+git clone git@github.com:smithlabcode/dnmtools.git
+cd dnmtools
+
+# Run containers and save outputs in artifacts directory
+
+mkdir artifacts
+
+docker run -v ./:/app -w /app \
+  dnmtools abismalidx -v -t 1 data/tRex1.fa artifacts/tRex1.idx
+
+docker run -v ./:/app -w /app \
+  dnmtools simreads -seed 1 -o artifacts/simreads -n 10000 \
+  -m 0.01 -b 0.98 data/tRex1.fa
+
+docker run -v ./:/app -w /app \
+  dnmtools abismal -v -t 1 -i artifacts/tRex1.idx artifacts/simreads_{1,2}.fq
+```
+
 
 ## Contacts and bug reports
 

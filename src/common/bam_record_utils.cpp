@@ -14,29 +14,40 @@
  */
 
 #include "bam_record_utils.hpp"
-#include "dnmt_error.hpp"
-
-#include <sstream>
-#include <algorithm>
-#include <string>
 
 #include <htslib/sam.h>
 
+#include <algorithm>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+
+#include "dnmt_error.hpp"
 #include "smithlab_utils.hpp"
 
+using std::runtime_error;
 using std::string;
+using std::stringstream;
+using std::to_string;
 using std::vector;
+
+using bamxx::bam_header;
+using bamxx::bam_rec;
 
 /// functions in place of undefd macro
 static inline bool
-bam_is_rev(const bam1_t *b) { return (b->core.flag & BAM_FREVERSE) != 0; }
+bam_is_rev(const bam1_t *b) {
+  return (b->core.flag & BAM_FREVERSE) != 0;
+}
 
 static inline char *
-bam_get_qname(const bam1_t *b) { return reinterpret_cast<char*>(b->data); }
+bam_get_qname(const bam1_t *b) {
+  return reinterpret_cast<char *>(b->data);
+}
 
 static inline uint32_t *
 bam_get_cigar(const bam1_t *b) {
-  return reinterpret_cast<uint32_t*>(b->data + b->core.l_qname);
+  return reinterpret_cast<uint32_t *>(b->data + b->core.l_qname);
 }
 
 static inline uint8_t *
@@ -47,28 +58,22 @@ bam_get_seq(const bam1_t *b) {
 
 static inline uint8_t *
 bam_get_qual(const bam1_t *b) {
-  return b->data +  // start of data
-    b->core.l_qname +  // bytes for query name
-    (b->core.n_cigar << 2) +  // bytes for cigar
-    ((b->core.l_qseq + 1) >> 1);  // bytes for packed query/read
+  return b->data +                     // start of data
+         b->core.l_qname +             // bytes for query name
+         (b->core.n_cigar << 2) +      // bytes for cigar
+         ((b->core.l_qseq + 1) >> 1);  // bytes for packed query/read
 }
 
 static inline uint8_t *
 bam_get_aux(const bam1_t *b) {
-  return b->data +
-    b->core.l_qname +
-    (b->core.n_cigar << 2) +
-    ((b->core.l_qseq + 1) >> 1) +
-    b->core.l_qseq;
+  return b->data + b->core.l_qname + (b->core.n_cigar << 2) +
+         ((b->core.l_qseq + 1) >> 1) + b->core.l_qseq;
 }
 
 static inline int
 bam_get_l_aux(const bam1_t *b) {
-  return b->l_data -
-    (b->core.l_qname +
-     (b->core.n_cigar << 2) +
-     ((b->core.l_qseq + 1) >> 1) +
-     b->core.l_qseq);
+  return b->l_data - (b->core.l_qname + (b->core.n_cigar << 2) +
+                      ((b->core.l_qseq + 1) >> 1) + b->core.l_qseq);
 }
 
 static inline bool
@@ -89,7 +94,8 @@ roundup_to_power_of_2(uint32_t &x) {
     x |= x >> (size * 4);
     x += !k_high_bit_set;
   }
-  else x = 0;
+  else
+    x = 0;
 }
 
 static int
@@ -97,8 +103,8 @@ sam_realloc_bam_data(bam1_t *b, size_t desired) {
   uint32_t new_m_data = desired;
   roundup_to_power_of_2(new_m_data);
   if (new_m_data < desired) {
-    errno = ENOMEM; // (from sam.c) Not strictly true but we can't
-                    // store the size
+    errno = ENOMEM;  // (from sam.c) Not strictly true but we can't
+                     // store the size
     return -1;
   }
   uint8_t *new_data = nullptr;
@@ -109,8 +115,10 @@ sam_realloc_bam_data(bam1_t *b, size_t desired) {
     new_data = static_cast<uint8_t *>(malloc(new_m_data));
     if (new_data != nullptr) {
       if (b->l_data > 0)
-        std::copy_n(new_data, (static_cast<uint32_t>(b->l_data) < b->m_data) ?
-                    b->l_data : b->m_data, b->data);
+        std::copy_n(new_data,
+                    (static_cast<uint32_t>(b->l_data) < b->m_data) ? b->l_data
+                                                                   : b->m_data,
+                    b->data);
       bam_set_mempolicy(b, bam_get_mempolicy(b) & (~BAM_USER_OWNS_DATA));
     }
   }
@@ -154,11 +162,11 @@ sam_realloc_bam_data(bam1_t *b, size_t desired) {
 // }
 
 static inline void
-bam_set1_core(bam1_core_t &core,
-              const size_t l_qname, const uint16_t flag, const int32_t tid,
-              const hts_pos_t pos, const uint8_t mapq, const size_t n_cigar,
-              const int32_t mtid, const hts_pos_t mpos, const hts_pos_t isize,
-              const size_t l_seq, const size_t qname_nuls) {
+bam_set1_core(bam1_core_t &core, const size_t l_qname, const uint16_t flag,
+              const int32_t tid, const hts_pos_t pos, const uint8_t mapq,
+              const size_t n_cigar, const int32_t mtid, const hts_pos_t mpos,
+              const hts_pos_t isize, const size_t l_seq,
+              const size_t qname_nuls) {
   /* ADS: These are used in `hts_reg2bin` from `htslib/hts.h` and
      likely mean "region to bin" for indexing */
   /* MN: hts_reg2bin categorizes the size of the reference region.
@@ -181,14 +189,12 @@ bam_set1_core(bam1_core_t &core,
 }
 
 static inline int
-bam_set1_wrapper(bam1_t *bam,
-                 const size_t l_qname, const char *qname,
-                 const uint16_t flag, const int32_t tid,
-                 const hts_pos_t pos, const uint8_t mapq,
-                 const size_t n_cigar, const uint32_t *cigar,
-                 const int32_t mtid, const hts_pos_t mpos,
-                 const hts_pos_t isize, const size_t l_seq,
-                 const size_t l_aux) {
+bam_set1_wrapper(bam1_t *bam, const size_t l_qname, const char *qname,
+                 const uint16_t flag, const int32_t tid, const hts_pos_t pos,
+                 const uint8_t mapq, const size_t n_cigar,
+                 const uint32_t *cigar, const int32_t mtid,
+                 const hts_pos_t mpos, const hts_pos_t isize,
+                 const size_t l_seq, const size_t l_aux) {
   /* This is based on how assignment is done in the `bam_set1`
      function defined in `sam.c` from htslib */
 
@@ -218,11 +224,11 @@ bam_set1_wrapper(bam1_t *bam,
   // `qname_nuls` below is the number of '\0' to use to pad the qname
   // so that the cigar has 4-byte alignment.
   const size_t qname_nuls = 4 - l_qname % 4;
-  bam_set1_core(bam->core, l_qname, flag, tid, pos, mapq, n_cigar,
-                mtid, mpos, isize, l_seq, qname_nuls);
+  bam_set1_core(bam->core, l_qname, flag, tid, pos, mapq, n_cigar, mtid, mpos,
+                isize, l_seq, qname_nuls);
 
-  const size_t data_len =
-    (l_qname + qname_nuls + n_cigar*sizeof(uint32_t) + (l_seq + 1) / 2 + l_seq);
+  const size_t data_len = (l_qname + qname_nuls + n_cigar * sizeof(uint32_t) +
+                           (l_seq + 1) / 2 + l_seq);
 
   bam->l_data = data_len;
   if (data_len + l_aux > bam->m_data) {
@@ -238,8 +244,8 @@ bam_set1_wrapper(bam1_t *bam,
 
   // ADS: reinterpret here because we know the cigar is originally an
   // array of uint32_t and has been aligned for efficiency
-  std::copy_n(cigar, n_cigar, reinterpret_cast<uint32_t*>(data_iter));
-  data_iter += n_cigar*sizeof(uint32_t);
+  std::copy_n(cigar, n_cigar, reinterpret_cast<uint32_t *>(data_iter));
+  data_iter += n_cigar * sizeof(uint32_t);
 
   // skipping sequece assignment
   data_iter += (l_seq + 1) / 2;
@@ -249,14 +255,10 @@ bam_set1_wrapper(bam1_t *bam,
   return static_cast<int>(data_len);
 }
 
-static inline bool
-eats_ref(const uint32_t c) { return bam_cigar_type(bam_cigar_op(c)) & 2; }
-
-static inline bool
-eats_query(const uint32_t c) { return bam_cigar_type(bam_cigar_op(c)) & 1; }
-
 static inline size_t
-bam_get_n_cigar(const bam1_t *b) { return b->core.n_cigar; }
+bam_get_n_cigar(const bam1_t *b) {
+  return b->core.n_cigar;
+}
 
 static inline uint32_t
 to_insertion(const uint32_t x) {
@@ -270,15 +272,16 @@ fix_internal_softclip(const size_t n_cigar, uint32_t *cigar) {
   auto c_beg = cigar;
   auto c_end = cigar + n_cigar;
 
-  while (!eats_ref(*c_beg) && ++c_beg != c_end);
+  while (!cigar_eats_ref(*c_beg) && ++c_beg != c_end)
+    ;
   if (c_beg == c_end) throw dnmt_error("cigar eats no ref");
 
-  while (!eats_ref(*(c_end-1)) && --c_end != c_beg);
+  while (!cigar_eats_ref(*(c_end - 1)) && --c_end != c_beg)
+    ;
   if (c_beg == c_end) throw dnmt_error("cigar eats no ref");
 
   for (auto c_itr = c_beg; c_itr != c_end; ++c_itr)
-    if (bam_cigar_op(*c_itr) == BAM_CSOFT_CLIP)
-      *c_itr = to_insertion(*c_itr);
+    if (bam_cigar_op(*c_itr) == BAM_CSOFT_CLIP) *c_itr = to_insertion(*c_itr);
 }
 
 static inline uint32_t
@@ -293,13 +296,13 @@ fix_external_insertion(const size_t n_cigar, uint32_t *cigar) {
   auto c_itr = cigar;
   const auto c_end = c_itr + n_cigar;
 
-  for (; !eats_ref(*c_itr) && c_itr != c_end; ++c_itr)
+  for (; !cigar_eats_ref(*c_itr) && c_itr != c_end; ++c_itr)
     *c_itr = to_softclip(*c_itr);
 
   if (c_itr == c_end) throw dnmt_error("cigar eats no ref");
 
   c_itr = cigar + n_cigar - 1;
-  for (; !eats_ref(*c_itr) && c_itr != cigar; --c_itr)
+  for (; !cigar_eats_ref(*c_itr) && c_itr != cigar; --c_itr)
     *c_itr = to_softclip(*c_itr);
 }
 
@@ -313,8 +316,8 @@ merge_cigar_ops(const size_t n_cigar, uint32_t *cigar) {
   while (c_itr2 != c_end) {
     auto op2 = bam_cigar_op(*c_itr2);
     if (op1 == op2) {
-      *c_itr1 = bam_cigar_gen(bam_cigar_oplen(*c_itr1) +
-                                  bam_cigar_oplen(*c_itr2), op1);
+      *c_itr1 =
+        bam_cigar_gen(bam_cigar_oplen(*c_itr1) + bam_cigar_oplen(*c_itr2), op1);
     }
     else {
       *(++c_itr1) = *c_itr2;
@@ -346,25 +349,29 @@ correct_cigar(bam1_t *b) {
   n_cigar = merge_cigar_ops(n_cigar, cigar);
   // difference in bytes to shift the internal data
   const size_t delta = (b->core.n_cigar - n_cigar) * sizeof(uint32_t);
-  if (delta > 0) { // if there is a difference; do the shift
-    const auto data_end = b->data + b->l_data; // bam_get_aux(b) + bam_get_l_aux(b);
+  if (delta > 0) {  // if there is a difference; do the shift
+    const auto data_end =
+      b->data + b->l_data;  // bam_get_aux(b) + bam_get_l_aux(b);
     std::copy(bam_get_seq(b), data_end, bam_get_seq(b) - delta);
-    b->core.n_cigar = n_cigar; // and update number of cigar ops
+    b->core.n_cigar = n_cigar;  // and update number of cigar ops
   }
   return delta;
 }
 
-size_t correct_cigar(bam_rec &b) {
-  return correct_cigar(b.b);
+size_t
+correct_cigar(bam_rec &b) {
+  return (b.b) ? correct_cigar(b.b) : 0ul;
 }
 
 static inline hts_pos_t
-get_rlen(const bam1_t *b) { // less tedious
+get_rlen(const bam1_t *b) {  // less tedious
   return bam_cigar2rlen(b->core.n_cigar, bam_get_cigar(b));
 }
 
 static inline size_t
-get_l_qseq(const bam1_t *b) { return b->core.l_qseq; }
+get_l_qseq(const bam1_t *b) {
+  return b->core.l_qseq;
+}
 
 static inline void
 complement_seq(char *first, char *last) {
@@ -396,9 +403,8 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
   size_t rlen = 0;
   uint32_t i = 0;
   for (i = 0; i < in_ops; ++i) {
-    if (eats_ref(cig_in[i])) {
-      if (rlen + bam_cigar_oplen(cig_in[i]) > n_ref_full)
-        break;
+    if (cigar_eats_ref(cig_in[i])) {
+      if (rlen + bam_cigar_oplen(cig_in[i]) > n_ref_full) break;
       rlen += bam_cigar_oplen(cig_in[i]);
     }
   }
@@ -416,23 +422,21 @@ get_full_and_partial_ops(const uint32_t *cig_in, const uint32_t in_ops,
  * forth. The user must handle this case separately.
  */
 const uint8_t byte_revcom_table[] = {
-  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
-  8, 136, 72, 0, 40, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 248,
-  4, 132, 68, 0, 36, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 244,
-  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
-  2, 130, 66, 0, 34, 0, 0, 0, 18, 0, 0, 0, 0, 0, 0, 242,
-  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
-  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
-  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
-  1, 129, 65, 0, 33, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 241,
-  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
-  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
-  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
-  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
-  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
-  0,   0,  0, 0,  0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0,   0,
- 15, 143, 79, 0, 47, 0, 0, 0, 31, 0, 0, 0, 0, 0, 0, 255
-};
+  0,  0, 0,  0,   0,  0, 0,  0,   0,  0, 0,  0,   0,  0,   0,  0,   8,  136,
+  72, 0, 40, 0,   0,  0, 24, 0,   0,  0, 0,  0,   0,  248, 4,  132, 68, 0,
+  36, 0, 0,  0,   20, 0, 0,  0,   0,  0, 0,  244, 0,  0,   0,  0,   0,  0,
+  0,  0, 0,  0,   0,  0, 0,  0,   0,  0, 2,  130, 66, 0,   34, 0,   0,  0,
+  18, 0, 0,  0,   0,  0, 0,  242, 0,  0, 0,  0,   0,  0,   0,  0,   0,  0,
+  0,  0, 0,  0,   0,  0, 0,  0,   0,  0, 0,  0,   0,  0,   0,  0,   0,  0,
+  0,  0, 0,  0,   0,  0, 0,  0,   0,  0, 0,  0,   0,  0,   0,  0,   0,  0,
+  0,  0, 1,  129, 65, 0, 33, 0,   0,  0, 17, 0,   0,  0,   0,  0,   0,  241,
+  0,  0, 0,  0,   0,  0, 0,  0,   0,  0, 0,  0,   0,  0,   0,  0,   0,  0,
+  0,  0, 0,  0,   0,  0, 0,  0,   0,  0, 0,  0,   0,  0,   0,  0,   0,  0,
+  0,  0, 0,  0,   0,  0, 0,  0,   0,  0, 0,  0,   0,  0,   0,  0,   0,  0,
+  0,  0, 0,  0,   0,  0, 0,  0,   0,  0, 0,  0,   0,  0,   0,  0,   0,  0,
+  0,  0, 0,  0,   0,  0, 0,  0,   0,  0, 0,  0,   0,  0,   0,  0,   0,  0,
+  0,  0, 0,  0,   0,  0, 15, 143, 79, 0, 47, 0,   0,  0,   31, 0,   0,  0,
+  0,  0, 0,  255};
 
 static inline void
 revcom_byte_then_reverse(unsigned char *a, unsigned char *b) {
@@ -454,7 +458,7 @@ revcomp_seq_by_byte(bam1_t *aln) {
   const size_t num_bytes = ceil(l_qseq / 2.0);
   auto seq_end = seq + num_bytes;
   revcom_byte_then_reverse(seq, seq_end);
-  if (l_qseq % 2 == 1) { // for odd-length sequences
+  if (l_qseq % 2 == 1) {  // for odd-length sequences
     for (size_t i = 0; i < num_bytes - 1; i++) {
       // swap 4-bit chunks within consecutive bytes like this:
       // (----aaaa bbbbcccc dddd....) => (aaaabbbb ccccdddd ....)
@@ -495,17 +499,17 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
     // c_seq looks like either [ aa aa aa aa ]
     //                      or [ aa aa aa a- ]
     c_seq[a_num_bytes - 1] &= 0xf0;
-    c_seq[a_num_bytes - 1] |= is_b_odd ?
-        byte_revcom_table[b_seq[b_num_bytes - 1]] :
-        byte_revcom_table[b_seq[b_num_bytes - 1]] >> 4;
+    c_seq[a_num_bytes - 1] |=
+      is_b_odd ? byte_revcom_table[b_seq[b_num_bytes - 1]]
+               : byte_revcom_table[b_seq[b_num_bytes - 1]] >> 4;
   }
   if (is_c_odd) {
     // c_seq looks like either [ aa aa aa aa ]
     //                      or [ aa aa aa ab ]
     for (size_t i = 0; i < b_num_bytes - 1; i++) {
       c_seq[a_num_bytes + i] =
-          (byte_revcom_table[b_seq[b_num_bytes - i - 1]] << 4) |
-          (byte_revcom_table[b_seq[b_num_bytes - i - 2]] >> 4);
+        (byte_revcom_table[b_seq[b_num_bytes - i - 1]] << 4) |
+        (byte_revcom_table[b_seq[b_num_bytes - i - 2]] >> 4);
     }
     c_seq[a_num_bytes + b_num_bytes - 1] = byte_revcom_table[b_seq[0]] << 4;
     // Here, c_seq is either [ aa aa aa aa bb bb bb b- ] (a even; b odd)
@@ -514,7 +518,7 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
   else {
     for (size_t i = 0; i < b_num_bytes - b_offset; i++) {
       c_seq[a_num_bytes + i] =
-          byte_revcom_table[b_seq[b_num_bytes - i - 1 - b_offset]];
+        byte_revcom_table[b_seq[b_num_bytes - i - 1 - b_offset]];
     }
     // Here, c_seq is either [ aa aa aa aa bb bb bb bb ] (a even and b even)
     //                    or [ aa aa aa ab bb bb bb    ] (a odd and b odd)
@@ -523,27 +527,25 @@ merge_by_byte(const bam1_t *a, const bam1_t *b, bam1_t *c) {
 
 static inline void
 flip_conversion(bam1_t *aln) {
-  if (aln->core.flag & BAM_FREVERSE)
-    aln->core.flag = aln->core.flag & (~BAM_FREVERSE);
-  else
-    aln->core.flag = aln->core.flag | BAM_FREVERSE;
+  aln->core.flag ^= BAM_FREVERSE;  // ADS: flip the "reverse" bit
 
   revcomp_seq_by_byte(aln);
 
   // ADS: don't like *(cv + 1) below, but no HTSlib function for it?
-  uint8_t *cv = bam_aux_get(aln, "CV");
+  auto cv = bam_aux_get(aln, "CV");
   if (!cv) throw dnmt_error("bam_aux_get failed for CV");
   *(cv + 1) = 'T';
 }
 
 void
-flip_conversion(bam_rec &aln) { flip_conversion(aln.b); }
+flip_conversion(bam_rec &aln) {
+  flip_conversion(aln.b);
+}
 
 static inline bool
 are_mates(const bam1_t *one, const bam1_t *two) {
-  return one->core.mtid == two->core.tid &&
-    one->core.mpos == two->core.pos &&
-    (one->core.flag & BAM_FREVERSE) != (one->core.flag & BAM_FREVERSE);
+  return one->core.mtid == two->core.tid && one->core.mpos == two->core.pos &&
+         (one->core.flag & BAM_FREVERSE) != (one->core.flag & BAM_FREVERSE);
   // below is a consistency check and should not be necessary
   /* &&
      two->core.mtid == one->core.tid &&
@@ -552,7 +554,6 @@ are_mates(const bam1_t *one, const bam1_t *two) {
 
 static inline int
 truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
-
   const uint32_t *a_cig = bam_get_cigar(a);
   const uint32_t a_ops = a->core.n_cigar;
 
@@ -579,17 +580,12 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig.data());
 
   // flag only needs to worry about strand and single-end stuff
-  const uint16_t flag =
-      a->core.flag & (BAM_FREAD1 | BAM_FREAD2 | BAM_FREVERSE);
+  const uint16_t flag = a->core.flag & (BAM_FREAD1 | BAM_FREAD2 | BAM_FREVERSE);
 
   const size_t a_qname_len = a->core.l_qname - (a->core.l_extranul + 1);
-  int ret = bam_set1_wrapper(c,
-                             a_qname_len,
-                             bam_get_qname(a),
-                             flag, // flags (SR and revcomp info)
-                             a->core.tid,
-                             a->core.pos,
-                             a->core.qual,
+  int ret = bam_set1_wrapper(c, a_qname_len, bam_get_qname(a),
+                             flag,  // flags (SR and revcomp info)
+                             a->core.tid, a->core.pos, a->core.qual,
                              c_ops,         // merged cigar ops
                              c_cig.data(),  // merged cigar
                              -1,            // (no mate)
@@ -599,11 +595,11 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
                              8);            // enough for the 2 tags?
   if (ret < 0) throw dnmt_error(ret, "bam_set1_wrapper");
 
-  const size_t n_bytes_to_copy = (c_seq_len + 1)/2;  // compression
+  const size_t n_bytes_to_copy = (c_seq_len + 1) / 2;  // compression
   std::copy_n(bam_get_seq(a), n_bytes_to_copy, bam_get_seq(c));
 
   /* add the tags */
-  const int64_t nm = bam_aux2i(bam_aux_get(a, "NM")); // ADS: do better here!
+  const int64_t nm = bam_aux2i(bam_aux_get(a, "NM"));  // ADS: do better here!
   // "_udpate" for "int" because it determines the right size
   ret = bam_aux_update_int(c, "NM", nm);
   if (ret < 0) throw dnmt_error(ret, "bam_aux_update_int");
@@ -618,12 +614,13 @@ truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {
 
 int
 truncate_overlap(const bam_rec &a, const uint32_t overlap, bam_rec &c) {
+  if (c.b == nullptr) c.b = bam_init1();
   return truncate_overlap(a.b, overlap, c.b);
 }
 
 int
-merge_overlap(const bam1_t *a, const bam1_t *b,
-              const uint32_t head, bam1_t *c) {
+merge_overlap(const bam1_t *a, const bam1_t *b, const uint32_t head,
+              bam1_t *c) {
   assert(head > 0);
 
   const uint32_t *a_cig = bam_get_cigar(a);
@@ -640,9 +637,9 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
 
   // check if the middle op would be the same
   const bool merge_mid =
-      (use_partial > 0 ?
-      bam_cigar_op(a_cig[c_cur]) == bam_cigar_op(b_cig[0]) :
-      bam_cigar_op(a_cig[c_cur - 1]) == bam_cigar_op(b_cig[0]));
+    (use_partial > 0
+       ? bam_cigar_op(a_cig[c_cur]) == bam_cigar_op(b_cig[0])
+       : bam_cigar_op(a_cig[c_cur - 1]) == bam_cigar_op(b_cig[0]));
 
   // c_ops: include the prefix of a_cig we need; then add for the
   // partial op; subtract for the identical op in the middle; finally
@@ -653,7 +650,7 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
 
   if (use_partial) {
     c_cig[c_cur] = bam_cigar_gen(part_op, bam_cigar_op(a_cig[c_cur]));
-    c_cur++; // index of dest for copying b_cig; faciltates corner case
+    c_cur++;  // index of dest for copying b_cig; faciltates corner case
   }
   // Here we get the length of a's sequence part contribution to c's
   // sequence before the possibility of merging the last entry with
@@ -664,9 +661,9 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
      according to the source as of 05/2023 it cannot become
      negative; no possible error code returned */
 
-  if (merge_mid) // update the middle op if it's the same
+  if (merge_mid)  // update the middle op if it's the same
     c_cig[c_cur - 1] = bam_cigar_gen(bam_cigar_oplen(c_cig[c_cur - 1]) +
-                                     bam_cigar_oplen(b_cig[0]),
+                                       bam_cigar_oplen(b_cig[0]),
                                      bam_cigar_op(b_cig[0]));
   // copy the cigar from b into c
   std::copy(b_cig + merge_mid, b_cig + b_ops, begin(c_cig) + c_cur);
@@ -678,32 +675,27 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig.data());
 
   // flag only needs to worry about strand and single-end stuff
-  const uint16_t flag = a->core.flag & (BAM_FREAD1 |
-                                        BAM_FREAD2 |
-                                        BAM_FREVERSE);
+  const uint16_t flag = a->core.flag & (BAM_FREAD1 | BAM_FREAD2 | BAM_FREVERSE);
 
   const size_t a_qname_len = a->core.l_qname - (a->core.l_extranul + 1);
-  int ret = bam_set1_wrapper(c,
-                             a_qname_len,
-                             bam_get_qname(a),
-                             flag, // (no PE; revcomp info)
-                             a->core.tid,
-                             a->core.pos,
-                             a->core.qual, // mapq from "a" (consider update)
-                             c_ops,        // merged cigar ops
-                             c_cig.data(), // merged cigar
-                             -1,           // (no mate)
-                             -1,           // (no mate)
-                             isize,        // updated
-                             c_seq_len,    // merged sequence length
-                             8);           // enough for 2 tags?
+  int ret = bam_set1_wrapper(c, a_qname_len, bam_get_qname(a),
+                             flag,  // (no PE; revcomp info)
+                             a->core.tid, a->core.pos,
+                             a->core.qual,  // mapq from "a" (consider update)
+                             c_ops,         // merged cigar ops
+                             c_cig.data(),  // merged cigar
+                             -1,            // (no mate)
+                             -1,            // (no mate)
+                             isize,         // updated
+                             c_seq_len,     // merged sequence length
+                             8);            // enough for 2 tags?
   if (ret < 0) throw dnmt_error(ret, "bam_set1_wrapper in merge_overlap");
   // Merge the sequences by bytes
   merge_by_byte(a, b, c);
 
   // add the tag for mismatches
-  const int64_t nm = (bam_aux2i(bam_aux_get(a, "NM")) +
-                      bam_aux2i(bam_aux_get(b, "NM")));
+  const int64_t nm =
+    (bam_aux2i(bam_aux_get(a, "NM")) + bam_aux2i(bam_aux_get(b, "NM")));
   ret = bam_aux_update_int(c, "NM", nm);
   if (ret < 0) throw dnmt_error(ret, "bam_aux_update_int in merge_overlap");
 
@@ -716,14 +708,15 @@ merge_overlap(const bam1_t *a, const bam1_t *b,
 }
 
 int
-merge_overlap(const bam_rec &a, const bam_rec &b,
-              const uint32_t head, bam_rec &c) {
+merge_overlap(const bam_rec &a, const bam_rec &b, const uint32_t head,
+              bam_rec &c) {
+  if (c.b == nullptr) c.b = bam_init1();
   return merge_overlap(a.b, b.b, head, c.b);
 }
 
 static inline int
-merge_non_overlap(const bam1_t *a, const bam1_t *b,
-                  const uint32_t spacer, bam1_t *c) {
+merge_non_overlap(const bam1_t *a, const bam1_t *b, const uint32_t spacer,
+                  bam1_t *c) {
   /* make the cigar string */
   // collect info about the cigar strings
   const uint32_t *a_cig = bam_get_cigar(a);
@@ -749,32 +742,27 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
   const hts_pos_t isize = bam_cigar2rlen(c_ops, c_cig.data());
 
   // flag: only need to keep strand and single-end info
-  const uint16_t flag = a->core.flag & (BAM_FREAD1 |
-                                        BAM_FREAD2 |
-                                        BAM_FREVERSE);
+  const uint16_t flag = a->core.flag & (BAM_FREAD1 | BAM_FREAD2 | BAM_FREVERSE);
 
   const size_t a_qname_len = a->core.l_qname - (a->core.l_extranul + 1);
-  int ret = bam_set1_wrapper(c,
-                             a_qname_len,
-                             bam_get_qname(a),
-                             flag, // flags (no PE; revcomp info)
-                             a->core.tid,
-                             a->core.pos,
-                             a->core.qual, // mapq from a (consider update)
-                             c_ops,        // merged cigar ops
-                             c_cig.data(), // merged cigar
-                             -1,           // (no mate)
-                             -1,           // (no mate)
-                             isize,        // TLEN (relative to reference; SAM docs)
-                             c_seq_len,    // merged sequence length
-                             8);           // enough for 2 tags of 1 byte value?
+  int ret = bam_set1_wrapper(c, a_qname_len, bam_get_qname(a),
+                             flag,  // flags (no PE; revcomp info)
+                             a->core.tid, a->core.pos,
+                             a->core.qual,  // mapq from a (consider update)
+                             c_ops,         // merged cigar ops
+                             c_cig.data(),  // merged cigar
+                             -1,            // (no mate)
+                             -1,            // (no mate)
+                             isize,  // TLEN (relative to reference; SAM docs)
+                             c_seq_len,  // merged sequence length
+                             8);         // enough for 2 tags of 1 byte value?
   if (ret < 0) throw dnmt_error(ret, "bam_set1 in merge_non_overlap");
 
   merge_by_byte(a, b, c);
 
   /* add the tags */
-  const int64_t nm = (bam_aux2i(bam_aux_get(a, "NM")) +
-                      bam_aux2i(bam_aux_get(b, "NM")));
+  const int64_t nm =
+    (bam_aux2i(bam_aux_get(a, "NM")) + bam_aux2i(bam_aux_get(b, "NM")));
   // "udpate" for "int" because it determines the right size
   ret = bam_aux_update_int(c, "NM", nm);
   if (ret < 0) throw dnmt_error(ret, "merge_non_overlap:bam_aux_update_int");
@@ -788,8 +776,9 @@ merge_non_overlap(const bam1_t *a, const bam1_t *b,
 }
 
 int
-merge_non_overlap(const bam_rec &a, const bam_rec &b,
-                  const uint32_t spacer, bam_rec &c) {
+merge_non_overlap(const bam_rec &a, const bam_rec &b, const uint32_t spacer,
+                  bam_rec &c) {
+  if (c.b == nullptr) c.b = bam_init1();
   return merge_non_overlap(a.b, b.b, spacer, c.b);
 }
 
@@ -808,6 +797,7 @@ keep_better_end(const bam1_t *a, const bam1_t *b, bam1_t *c) {
 
 int
 keep_better_end(const bam_rec &a, const bam_rec &b, bam_rec &c) {
+  if (c.b == nullptr) c.b = bam_init1();
   return keep_better_end(a.b, b.b, c.b);
 }
 
@@ -819,31 +809,40 @@ standardize_format(const string &input_format, bam1_t *aln) {
   if (input_format == "abismal" || input_format == "walt") return;
 
   if (input_format == "bsmap") {
-    // A/T rich; get the ZS tag value
-    auto zs_tag = bam_aux_get(aln, "ZS");
+    // A/T rich: get the ZS tag value
+    const auto zs_tag = bam_aux_get(aln, "ZS");
     if (!zs_tag) throw dnmt_error("bam_aux_get for ZS (invalid bsmap)");
     // ADS: test for errors on the line below
-    const uint8_t cv = string(bam_aux2Z(zs_tag))[1] == '-' ? 'A' : 'T';
+    const auto zs_tag_value = string(bam_aux2Z(zs_tag));
+    if (zs_tag_value.empty()) throw dnmt_error("empty ZS tag in bsmap format");
+    if (zs_tag_value[0] != '-' && zs_tag_value[0] != '+')
+      throw dnmt_error("invalid ZS tag in bsmap format");
+    const uint8_t cv = zs_tag_value[1] == '-' ? 'A' : 'T';
     // get the "mismatches" tag
-    auto nm_tag = bam_aux_get(aln, "NM");
-    if (!nm_tag) throw dnmt_error("bam_aux_get for NM (invalid bsmap)");
+    const auto nm_tag = bam_aux_get(aln, "NM");
+    if (!nm_tag) throw dnmt_error("invalid NM tag in bsmap format");
     const int64_t nm = bam_aux2i(nm_tag);
 
-    aln->l_data = bam_get_aux(aln) - aln->data; // del aux (no data resize)
+    // ADS: this should delete the aux data by truncating the used
+    // range within the bam1_t while avoiding resizing memory
+    aln->l_data = bam_get_aux(aln) - aln->data;
 
     /* add the tags we want */
     // "udpate" for "int" because it determines the right size; even
-    // though we just deleted all tags, it will add it back here.
+    // though we just deleted all tags, it will add it back here
     err_code = bam_aux_update_int(aln, "NM", nm);
-    if (err_code < 0) throw dnmt_error(err_code, "bam_aux_update_int");
+    if (err_code < 0)
+      throw dnmt_error(err_code, "error setting NM in bsmap format");
+
     // "append" for "char" because there is no corresponding update
     err_code = bam_aux_append(aln, "CV", 'A', 1, &cv);
-    if (err_code < 0) throw dnmt_error(err_code, "bam_aux_append");
+    if (err_code < 0)
+      throw dnmt_error(err_code, "error setting conversion in bsmap format");
 
-    if (bam_is_rev(aln))
-      revcomp_seq_by_byte(aln); // reverse complement if needed
+    // reverse complement if needed
+    if (bam_is_rev(aln)) revcomp_seq_by_byte(aln);
   }
-  if (input_format == "bismark") {
+  else if (input_format == "bismark") {
     // ADS: Previously we modified the read names at the first
     // underscore. Even if the names are still that way, it should no
     // longer be needed since we compare names up to a learned suffix.
@@ -857,7 +856,7 @@ standardize_format(const string &input_format, bam1_t *aln) {
     if (!nm_tag) throw dnmt_error("bam_aux_get for NM (invalid bismark)");
     const int64_t nm = bam_aux2i(nm_tag);
 
-    aln->l_data = bam_get_aux(aln) - aln->data; // del aux (no data resize)
+    aln->l_data = bam_get_aux(aln) - aln->data;  // del aux (no data resize)
 
     /* add the tags we want */
     // "udpate" for "int" because it determines the right size; even
@@ -869,17 +868,79 @@ standardize_format(const string &input_format, bam1_t *aln) {
     if (err_code < 0) throw dnmt_error(err_code, "bam_aux_append");
 
     if (bam_is_rev(aln))
-      revcomp_seq_by_byte(aln); // reverse complement if needed
+      revcomp_seq_by_byte(aln);  // reverse complement if needed
   }
+  // ADS: the condition below should be checked much earlier, ideally
+  // before the output file is created
+  else throw runtime_error("incorrect format specified: " + input_format);
 
   // Be sure this doesn't depend on mapper! Removes the "qual" part of
   // the data in a bam1_t struct but does not change its uncompressed
   // size.
   const auto qs = bam_get_qual(aln);
-  std::fill(qs, qs + aln->core.l_qseq, '\xff'); // overwrites qseq
+  std::fill(qs, qs + aln->core.l_qseq, '\xff');  // overwrites qseq
 }
 
 void
 standardize_format(const string &input_format, bam_rec &aln) {
   standardize_format(input_format, aln.b);
+}
+
+// used in methstates
+void
+apply_cigar(const bam_rec &aln, string &to_inflate,
+            const char inflation_symbol) {
+  string inflated_seq;
+  stringstream ss_cigar;
+  size_t i = 0;
+  auto to_inflate_beg = std::begin(to_inflate);
+
+  const auto beg_cig = bam_get_cigar(aln);
+  const auto end_cig = beg_cig + get_n_cigar(aln);
+
+  for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
+    const auto op = bam_cigar_op(*c_itr);
+    const auto n = bam_cigar_oplen(*c_itr);
+    ss_cigar << n << op;
+
+    if (cigar_eats_ref(op) && cigar_eats_query(op)) {
+      inflated_seq.append(to_inflate_beg + i, to_inflate_beg + i + n);
+      i += n;
+    }
+    else if (cigar_eats_query(op)) {
+      // no addition of symbols to query
+      i += n;
+    }
+    else if (cigar_eats_ref(op)) {
+      inflated_seq.append(n, inflation_symbol);
+      // no increment of index within query
+    }
+  }
+
+  // sum of total M/I/S/=/X/N operations must equal length of seq
+  const size_t orig_len = to_inflate.length();
+  if (i != orig_len)
+    throw runtime_error(
+      "inconsistent number of qseq ops in cigar: " + to_inflate + " " +
+      ss_cigar.str() + " " + to_string(i) + " " + to_string(orig_len));
+  to_inflate.swap(inflated_seq);
+}
+
+void
+get_seq_str(const bam_rec &aln, string &seq_str) {
+  size_t qlen = static_cast<size_t>(get_l_qseq(aln));
+  seq_str.resize(qlen);
+  auto seq = bam_get_seq(aln);
+  for (size_t i = 0; i < qlen; i++) {
+    seq_str[i] = seq_nt16_str[bam_seqi(seq, i)];
+  }
+}
+
+string
+to_string(const bam_header &hdr, const bam_rec &aln) {
+  kstring_t ks = {0, 0, NULL};
+  int ret = sam_format1(hdr.h, aln.b, &ks);
+  if (ret < 0) { runtime_error("Can't format record: " + to_string(hdr, aln)); }
+
+  return string(ks.s);
 }

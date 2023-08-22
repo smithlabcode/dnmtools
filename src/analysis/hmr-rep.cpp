@@ -22,11 +22,12 @@
 #include <cstdint> // for [u]int[0-9]+_t
 #include <random>
 
+#include <bamxx.hpp>
+
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 #include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
-#include "zlib_wrapper.hpp"
 
 #include "TwoStateHMM.hpp"
 #include "MSite.hpp"
@@ -45,6 +46,8 @@ using std::runtime_error;
 using std::to_string;
 using std::begin;
 using std::end;
+
+using bamxx::bgzf_file;
 
 static GenomicRegion
 as_gen_rgn(const MSite &s) {
@@ -297,12 +300,11 @@ load_cpgs(const string &cpgs_file, vector<MSite> &cpgs,
           vector<pair<double, double> > &meth,
           vector<uint32_t> &reads) {
 
-  igzfstream in(cpgs_file);
-  if (!in)
-    throw runtime_error("failed opening file: " + cpgs_file);
+  bgzf_file in(cpgs_file, "r");
+  if (!in) throw runtime_error("failed opening file: " + cpgs_file);
 
   MSite the_site;
-  while (in >> the_site) {
+  while (read_site(in, the_site)) {
     cpgs.push_back(the_site);
     reads.push_back(the_site.n_reads);
     meth.push_back(make_pair(the_site.n_meth(), the_site.n_unmeth()));

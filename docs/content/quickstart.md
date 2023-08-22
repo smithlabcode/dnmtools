@@ -60,14 +60,14 @@ would need to be activated when you want to use dnmtools.
 
 ### Configuration
 
-* Download [dnmtools-1.2.5.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.2.5/dnmtools-1.2.5.tar.gz).
+* Download [dnmtools-1.3.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.3.0/dnmtools-1.3.0.tar.gz).
 * Unpack the archive:
 ```console
-$ tar -zxvf dnmtools-1.2.5.tar.gz
+$ tar -zxvf dnmtools-1.3.0.tar.gz
 ```
 * Move into the dnmtools directory and create a build directory:
 ```console
-$ cd dnmtools-1.2.5
+$ cd dnmtools-1.3.0
 $ mkdir build && cd build
 ```
 * Run the configuration script:

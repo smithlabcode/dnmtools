@@ -23,11 +23,11 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <bamxx.hpp>
 
 #include "OptionParser.hpp"
 #include "smithlab_os.hpp"
 #include "smithlab_utils.hpp"
-#include "zlib_wrapper.hpp"
 
 #include "MSite.hpp"
 
@@ -41,6 +41,8 @@ using std::vector;
 
 using std::ofstream;
 using std::ostream_iterator;
+
+using bamxx::bgzf_file;
 
 static inline double
 log_sum_log(const double p, const double q) {
@@ -96,6 +98,25 @@ write_methdiff_site(T &out, const MSite &a, const MSite &b,
   return out << oss.str();
 }
 
+bgzf_file &
+write_methdiff_site(bgzf_file &out, const MSite &a, const MSite &b,
+                    const double diffscore) {
+  std::ostringstream oss;
+  // clang-format off
+  oss << a.chrom << '\t'
+      << a.pos << '\t'
+      << a.strand << '\t'
+      << a.context << '\t'
+      << diffscore << '\t'
+      << a.n_meth() << '\t'
+      << a.n_unmeth() << '\t'
+      << b.n_meth() << '\t'
+      << b.n_unmeth() << '\n';
+  // clang-format on
+  out.write(oss.str());
+  return out;
+}
+
 static bool
 site_precedes(const size_t lhs_chrom_idx, const size_t lhs_pos,
               const size_t rhs_chrom_idx, const size_t rhs_pos) {
@@ -138,7 +159,7 @@ bad_order(const std::unordered_map<string, size_t> &chrom_order,
 }
 
 template<class T> static void
-process_sites(const bool VERBOSE, igzfstream &in_a, igzfstream &in_b,
+process_sites(const bool VERBOSE, bgzf_file &in_a, bgzf_file &in_b,
               const bool allow_uncovered, const double pseudocount, T &out) {
   // chromosome order in the files
   std::unordered_map<string, size_t> chrom_order;
@@ -150,7 +171,8 @@ process_sites(const bool VERBOSE, igzfstream &in_a, igzfstream &in_b,
   size_t prev_chrom_id_a = 0, prev_chrom_id_b = 0;
   size_t prev_pos_a = 0, prev_pos_b = 0;
 
-  while (in_a >> a) {
+  string line;
+  while (read_site(in_a, a)) {
     if (prev_chrom_a.compare(a.chrom) != 0) {
       prev_chrom_id_a = chrom_id_a;
       chrom_id_a = get_chrom_id(chrom_order, chroms_seen_a, a);
@@ -162,7 +184,7 @@ process_sites(const bool VERBOSE, igzfstream &in_a, igzfstream &in_b,
         bad_order(chrom_order, prev_chrom_a, prev_pos_a, a.chrom, a.pos));
 
     bool advance_b = true;
-    while (advance_b && in_b >> b) {
+    while (advance_b && read_site(in_b, b)) {
       if (prev_chrom_b.compare(b.chrom) != 0) {
         prev_chrom_id_b = chrom_id_b;
         chrom_id_b = get_chrom_id(chrom_order, chroms_seen_b, b);
@@ -239,12 +261,12 @@ main_methdiff(int argc, const char **argv) {
 
     if (VERBOSE)
       cerr << "[opening methcounts file: " << cpgs_file_a << "]" << endl;
-    igzfstream in_a(cpgs_file_a);
+    bgzf_file in_a(cpgs_file_a, "r");
     if (!in_a) throw runtime_error("cannot open file: " + cpgs_file_a);
 
     if (VERBOSE)
       cerr << "[opening methcounts file: " << cpgs_file_b << "]" << endl;
-    igzfstream in_b(cpgs_file_b);
+    bgzf_file in_b(cpgs_file_b, "r");
     if (!in_b) throw runtime_error("cannot open file: " + cpgs_file_b);
 
     if (outfile.empty() || !has_gz_ext(outfile)) {
@@ -255,16 +277,12 @@ main_methdiff(int argc, const char **argv) {
       process_sites(VERBOSE, in_a, in_b, allow_uncovered, pseudocount, out);
     }
     else {
-      ogzfstream out(outfile);
+      bgzf_file out(outfile, "w");
       process_sites(VERBOSE, in_a, in_b, allow_uncovered, pseudocount, out);
     }
   }
-  catch (runtime_error &e) {
-    cerr << "ERROR:\t" << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
+  catch (const runtime_error &e) {
+    cerr << e.what() << endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

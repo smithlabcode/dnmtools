@@ -24,11 +24,12 @@
 #include <cstdint> // for [u]int[0-9]+_t
 #include <random>
 
+#include <bamxx.hpp>
+
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 #include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
-#include "zlib_wrapper.hpp"
 
 #include "TwoStateHMM.hpp"
 #include "MSite.hpp"
@@ -46,6 +47,8 @@ using std::make_pair;
 using std::runtime_error;
 using std::to_string;
 using std::unordered_set;
+
+using bamxx::bgzf_file;
 
 static GenomicRegion
 as_gen_rgn(const MSite &s) {
@@ -308,12 +311,11 @@ load_cpgs(const string &cpgs_file, vector<MSite> &cpgs,
           vector<pair<double, double> > &meth,
           vector<uint32_t> &reads) {
 
-  igzfstream in(cpgs_file);
-  if (!in)
-    throw runtime_error("failed opening file: " + cpgs_file);
+  bgzf_file in(cpgs_file, "r");
+  if (!in) throw runtime_error("failed opening file: " + cpgs_file);
 
   MSite prev_site, the_site;
-  while (in >> the_site) {
+  while (read_site(in, the_site)) {
     if (!the_site.is_cpg() || distance(prev_site, the_site) < 2)
       throw runtime_error("error: input is not symmetric-CpGs: " + cpgs_file);
     cpgs.push_back(the_site);

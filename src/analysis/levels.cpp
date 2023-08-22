@@ -28,69 +28,59 @@
  * General Public License for more details.
  */
 
-#include <string>
-#include <vector>
-#include <iostream>
-#include <fstream>
-#include <numeric>
 #include <cmath>
 #include <exception>
+#include <fstream>
+#include <iostream>
+#include <numeric>
+#include <string>
+#include <vector>
 
-#include "OptionParser.hpp"
-#include "smithlab_utils.hpp"
-#include "smithlab_os.hpp"
-#include "MSite.hpp"
+#include <bamxx.hpp>
 #include "LevelsCounter.hpp"
-#include "zlib_wrapper.hpp"
+#include "MSite.hpp"
+#include "OptionParser.hpp"
 #include "bsutils.hpp"
+#include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
 
-using std::string;
-using std::vector;
-using std::cout;
 using std::cerr;
+using std::cout;
 using std::endl;
-using std::to_string;
 using std::runtime_error;
+using std::string;
+using std::to_string;
+using std::vector;
 
+using bamxx::bgzf_file;
 
-enum class counts_file_format {
-  ordinary,
-  asym_cpg,
-  sym_cpg
-};
-
+enum class counts_file_format { ordinary, asym_cpg, sym_cpg };
 
 static counts_file_format
 guess_counts_file_format(const string &filename) {
   static const size_t n_lines_to_check = 10000;
 
-  igzfstream in(filename);
-  if (!in)
-    throw std::runtime_error("bad input file: " + filename);
+  bgzf_file in(filename, "r");
+  if (!in) throw std::runtime_error("bad input file: " + filename);
 
   bool found_non_cpg = false, found_asym_cpg = false;
-  MSite prev_site;
-  string line;
+  MSite curr_site, prev_site;
   size_t line_count = 0;
 
-  while (getline(in, line) && (!found_non_cpg || !found_asym_cpg) &&
+  while (read_site(in, curr_site) && (!found_non_cpg || !found_asym_cpg) &&
          line_count++ < n_lines_to_check) {
-    const MSite curr_site(line);
     found_non_cpg = found_non_cpg || !curr_site.is_cpg();
-    found_asym_cpg = found_asym_cpg ||
-      (curr_site.is_cpg() && prev_site.is_cpg());
+    found_asym_cpg =
+      found_asym_cpg || (curr_site.is_cpg() && prev_site.is_cpg());
   }
-  return (found_non_cpg ? counts_file_format::ordinary :
-          (found_asym_cpg ? counts_file_format::asym_cpg :
-           counts_file_format::sym_cpg));
+  return (found_non_cpg ? counts_file_format::ordinary
+                        : (found_asym_cpg ? counts_file_format::asym_cpg
+                                          : counts_file_format::sym_cpg));
 }
-
 
 int
 main_levels(int argc, const char **argv) {
-
   try {
-
     bool VERBOSE = false;
     bool relaxed_mode = false;
     string outfile;
@@ -99,14 +89,14 @@ main_levels(int argc, const char **argv) {
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description, "<counts-file>");
-    opt_parse.add_opt("output", 'o', "output file (default: stdout)",
-                      false, outfile);
+    opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
+                      outfile);
     opt_parse.add_opt("alpha", 'a',
-                      "alpha for confidence interval (default: 0.05)",
-                      false, LevelsCounter::alpha);
+                      "alpha for confidence interval (default: 0.05)", false,
+                      LevelsCounter::alpha);
     opt_parse.add_opt("relaxed", '\0',
-                      "run on data that appears to have sites filtered",
-                      false, relaxed_mode);
+                      "run on data that appears to have sites filtered", false,
+                      relaxed_mode);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -135,18 +125,15 @@ main_levels(int argc, const char **argv) {
     if (guessed_format != counts_file_format::ordinary) {
       if (VERBOSE)
         cerr << "input might be only CpG sites ("
-             << (guessed_format == counts_file_format::asym_cpg ?
-                 "not " : "")
+             << (guessed_format == counts_file_format::asym_cpg ? "not " : "")
              << "symmetric)" << endl;
       if (!relaxed_mode)
         throw runtime_error(
-            "unexpected input format (consider using \"-relaxed\")"
-        );
+          "unexpected input format (consider using \"-relaxed\")");
     }
 
-    igzfstream in(meth_file);
-    if (!in)
-      throw std::runtime_error("bad input file: " + meth_file);
+    bgzf_file in(meth_file, "r");
+    if (!in) throw std::runtime_error("bad input file: " + meth_file);
 
     LevelsCounter cpg("cpg");
     LevelsCounter cpg_symmetric("cpg_symmetric");
@@ -158,12 +145,10 @@ main_levels(int argc, const char **argv) {
     MSite site, prev_site;
     size_t chrom_count = 0;
 
-    while (in >> site) {
-
+    while (read_site(in, site)) {
       if (site.chrom != prev_site.chrom) {
         ++chrom_count;
-        if (VERBOSE)
-          cerr << "processing " << site.chrom << endl;
+        if (VERBOSE) cerr << "processing " << site.chrom << endl;
       }
 
       cytosines.update(site);
@@ -186,8 +171,7 @@ main_levels(int argc, const char **argv) {
     std::ofstream of;
     if (!outfile.empty()) {
       of.open(outfile);
-      if (!of)
-        throw runtime_error("bad output file: " + outfile);
+      if (!of) throw runtime_error("bad output file: " + outfile);
     }
     std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 

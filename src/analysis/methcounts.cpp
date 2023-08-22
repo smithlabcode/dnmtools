@@ -4,7 +4,7 @@
  * Copyright (C) 2011-2023 University of Southern California and
  *                         Andrew D. Smith
  *
- * Authors: Andrew D. Smith and Song Qiang and Guilherme Sena
+ * Authors: Andrew D. Smith, Song Qiang, Guilherme Sena, and Masaru Nakajima
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -39,9 +39,6 @@
 
 /* HTSlib */
 #include <htslib/sam.h>
-#include <htslib/bgzf.h>
-#include <htslib/thread_pool.h>
-
 
 using std::string;
 using std::vector;
@@ -50,6 +47,7 @@ using std::endl;
 using std::unordered_set;
 using std::unordered_map;
 
+using bamxx::bam_rec;
 
 struct quick_buf : public std::ostringstream,
                    public std::basic_stringbuf<char> {
@@ -241,7 +239,7 @@ tag_with_mut(const uint32_t tag, const bool mut) {
 
 
 static void
-write_output(const bam_header &hdr, bam_bgzf &out,
+write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
              const int32_t tid, const string &chrom,
              const vector<CountSet> &counts, bool CPG_ONLY) {
 
@@ -269,8 +267,7 @@ write_output(const bam_header &hdr, bam_bgzf &out,
           << tag_values[tag_with_mut(the_tag, mut)] << '\t'
           << (n_reads > 0 ? unconverted/n_reads : 0.0) << '\t'
           << n_reads << '\n';
-      const size_t expected_size = buf.tellp();
-      if (out.write(buf.c_str(), expected_size))
+      if (!out.write(buf.c_str(), buf.tellp()))
         throw dnmt_error("error writing output");
     }
   }
@@ -376,14 +373,13 @@ process_reads(const bool VERBOSE,
     chrom_sizes[i] = chroms[i].size();
   }
 
-  bam_tpool tp(n_threads); // Must be destroyed after hts
-
+  bamxx::bam_tpool tp(n_threads); // Must be destroyed after hts
 
   // open the hts SAM/BAM input file and get the header
-  bam_infile hts(infile);
+  bamxx::bam_in hts(infile);
   if (!hts) throw dnmt_error("failed to open input file");
   // load the input file's header
-  bam_header hdr(hts);
+  bamxx::bam_header hdr(hts);
   if (!hdr) throw dnmt_error("failed to read header");
 
   unordered_map<int32_t, size_t> tid_to_idx;
@@ -400,13 +396,13 @@ process_reads(const bool VERBOSE,
 
   // open the output file
   const string output_mode = compress_output ? "w" : "wu";
-  bam_bgzf out(outfile, output_mode);
+  bamxx::bgzf_file out(outfile, output_mode);
   if (!out) throw dnmt_error("error opening output file: " + outfile);
 
   /* set the threads for the input file decompression */
   if (n_threads > 1) {
     tp.set_io(hts);
-    tp.set_bgzf(out);
+    tp.set_io(out);
   }
 
   /* now iterate over the reads, switching chromosomes and writing

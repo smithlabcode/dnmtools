@@ -1,4 +1,4 @@
-name: C/C++ CI
+name: DNMTools distribution check on Ubuntu
 
 on:
   workflow_dispatch:
@@ -18,17 +18,11 @@ jobs:
         submodules: recursive
     - name: Update packages
       run: sudo apt-get update
-    - name: Install autotools
-      run: sudo apt-get install -y autoconf automake libtool
     - name: Install dependencies
       run: sudo apt-get install -y libhts-dev libgsl-dev samtools
     - name: Generate configure script
-      run: autoreconf -i src/abismal/src/smithlab_cpp src/abismal src/smithlab_cpp .
+      run: ./autogen.sh
     - name: configure
       run: ./configure
-    - name: make
-      run: make
-    - name: make check
-      run: make check
     - name: make distcheck
       run: make distcheck

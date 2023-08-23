@@ -109,7 +109,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
     const string filename(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    const bool show_progress = VERBOSE && isatty(fileno(stderr));
+//     const bool show_progress = VERBOSE && isatty(fileno(stderr));
     bgzf_file in(filename, "r");
     if (!in) throw std::runtime_error("could not open file: " + filename);
 

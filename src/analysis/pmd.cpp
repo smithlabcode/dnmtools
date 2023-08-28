@@ -1173,7 +1173,10 @@ main_pmd(int argc, const char **argv) {
       assert(cpgs_file.size() == params_in_file.size());
     }
 
-    size_t n_replicates = cpgs_file.size();
+    const size_t n_replicates = cpgs_file.size();
+    for (auto &filename : cpgs_file)
+      if (!is_msite_file(filename))
+        throw runtime_error("malformed counts file: " + filename);
 
     bool insufficient_data = false; // ADS: this is used now to detect
                                     // when the counts files have

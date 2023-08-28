@@ -470,6 +470,9 @@ Columns (beyond the first 6) in the BED format output:
     const string cpgs_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    if (!is_msite_file(cpgs_file))
+      throw runtime_error("malformed counts file: " + cpgs_file);
+
     if (VERBOSE)
       cerr << "loading regions" << endl;
 

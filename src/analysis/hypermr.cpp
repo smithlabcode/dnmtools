@@ -278,6 +278,9 @@ main_hypermr(int argc, const char **argv) {
     const string cpgs_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    if (!is_msite_file(cpgs_file))
+      throw runtime_error("malformed counts file: " + cpgs_file);
+
     if (VERBOSE) cerr << "[loading_data]" << endl;
     vector<MSite> cpgs;
     vector<pair<double, double>> meth;

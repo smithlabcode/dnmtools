@@ -156,28 +156,21 @@ find_offset_for_msite(const std::string &chr,
 }
 
 
-
 bool
-is_msite_file(const string &file) {
-  ifstream in(file);
-  if (!in)
-    throw runtime_error("cannot open file: " + file);
-
-  string line;
-  if(!getline(in, line)) return false;
+is_msite_line(const string &line) {
 
   std::istringstream iss(line);
 
   string chrom;
   if (!(iss >> chrom)) return false;
-  
+
   long int pos = 0;
   if (!(iss >> pos)) return false;
 
   string strand;
-  if (!(iss >> strand) || 
-      (strand.size() != 1) || 
-      ((strand != "+") && (strand != "-")) ) 
+  if (!(iss >> strand) ||
+      (strand.size() != 1) ||
+      ((strand != "+") && (strand != "-")) )
     return false;
 
   string context;
@@ -185,10 +178,10 @@ is_msite_file(const string &file) {
   if (!(iss >> context) || !regex_match(context, pattern)) return false;
 
   double level = 0.0;
-  if (!(iss >> level) || level < 0 || level > 1) return false;
+  if (!(iss >> level) || level < 0.0 || level > 1.0) return false;
 
   long int n_reads = 0;
-  if (!(iss >> n_reads)) return false;
+  if (!(iss >> n_reads) || n_reads < 0) return false;
 
   string temp;
   if (iss >> temp) return false;
@@ -196,3 +189,14 @@ is_msite_file(const string &file) {
 
 }
 
+bool
+is_msite_file(const string &file) {
+  bamxx::bgzf_file in(file, "r");
+  if (!in)
+    throw runtime_error("cannot open file: " + file);
+
+  string line;
+  if (!getline(in, line)) return false;
+
+  return is_msite_line(line);
+}

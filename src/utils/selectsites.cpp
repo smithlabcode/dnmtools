@@ -159,10 +159,22 @@ regions_by_chrom(vector<GenomicRegion> &regions,
   regions.shrink_to_fit();
 }
 
+
 inline bool
 file_exists(const string &filename) {
   return (access(filename.c_str(), F_OK) == 0);
 }
+
+
+static bool
+is_compressed_file(const string &filename) {
+  const bgzf_file f(filename.c_str(), "r");
+  htsFormat fmt;
+  const int ret = hts_detect_format(f.f->fp, &fmt);
+  if (ret != 0) throw runtime_error("failed to detect format: " + filename);
+  return fmt.compression != no_compression;
+}
+
 
 int
 main_selectsites(int argc, const char **argv) {
@@ -214,6 +226,12 @@ main_selectsites(int argc, const char **argv) {
 
     if (isdir(sites_file.c_str()) || !file_exists(sites_file))
       throw runtime_error("bad input sites file: " + sites_file);
+
+    if (is_compressed_file(sites_file)) {
+      LOAD_ENTIRE_FILE = true;
+      if (VERBOSE)
+        cerr << "input file is so must be loaded" << endl;
+    }
 
     vector<GenomicRegion> regions;
     ReadBEDFile(regions_file, regions);

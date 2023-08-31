@@ -415,6 +415,10 @@ main_hmr_rep(int argc, const char **argv) {
     const vector<string> cpgs_files(leftover_args);
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    for (auto &filename : cpgs_files)
+      if (!is_msite_file(filename))
+        throw runtime_error("malformed counts file: " + filename);
+
     vector<string> params_in_file;
     if (!params_in_files.empty()) {
       params_in_file = split_comma(params_in_files);

@@ -120,6 +120,9 @@ main_levels(int argc, const char **argv) {
     const string meth_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    if (!is_msite_file(meth_file))
+      throw runtime_error("malformed counts file: " + meth_file);
+
     const counts_file_format guessed_format =
       guess_counts_file_format(meth_file);
     if (guessed_format != counts_file_format::ordinary) {

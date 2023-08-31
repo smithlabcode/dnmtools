@@ -212,7 +212,7 @@ main_selectsites(int argc, const char **argv) {
     const string sites_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (fs::is_regular_file(sites_file))
+    if (!fs::is_regular_file(sites_file))
       throw runtime_error("bad input sites file: " + sites_file);
 
     if (is_compressed_file(sites_file)) {

@@ -13,18 +13,20 @@ jobs:
       with:
         submodules: recursive
     - name: Install dependencies
-      run: sudo apt-get install -y libhts-dev libgsl-dev samtools
+      run: sudo apt-get install -y libhts-dev libgsl-dev
     - name: Generate configure script
       run: ./autogen.sh
-    - name: configure
-      run: ./configure
+    - name: configure for GCC
+      run: ./configure CXX="g++"
     - name: make with g++
-      run: make CXX="g++"
+      run: make
     - name: cleanup after g++
-      run: make clean
-    - name: install clang dependencies
+      run: make distclean
+    - name: install Clang dependencies
       run: sudo apt-get install -y libomp-dev
-    - name: make with clang++
-      run: make CXX="clang++" CXXFLAGS="-fopenmp=libomp"
+    - name: configure for GCC
+      run: ./configure CXX="clang++"
+    - name: make with Clang
+      run: make
     - name: cleanup after clang++
-      run: make clean
+      run: make distclean

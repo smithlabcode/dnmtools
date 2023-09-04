@@ -938,9 +938,9 @@ get_seq_str(const bam_rec &aln, string &seq_str) {
 
 string
 to_string(const bam_header &hdr, const bam_rec &aln) {
-  kstring_t ks = {0, 0, NULL};
+  kstring_t ks = {0, 0, nullptr};
   int ret = sam_format1(hdr.h, aln.b, &ks);
   if (ret < 0) { runtime_error("Can't format record: " + to_string(hdr, aln)); }
-
+  if (ks.s != nullptr) free(ks.s);
   return string(ks.s);
 }

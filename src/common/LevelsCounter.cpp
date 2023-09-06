@@ -77,6 +77,55 @@ LevelsCounter::tostring() const {
   return oss.str();
 }
 
+string
+LevelsCounter::tostring_as_row() const {
+  const bool good = (sites_covered > 0);
+  std::ostringstream oss;
+  // directly counted values
+  oss << total_sites << '\t'
+      << sites_covered << '\t'
+      << total_c << '\t'
+      << total_t << '\t'
+      << max_depth << '\t'
+      << mutations << '\t'
+      << called_meth << '\t'
+      << called_unmeth << '\t'
+      << mean_agg << '\t';
+  // derived values
+  oss << coverage() << '\t'
+      << static_cast<double>(sites_covered)/total_sites << '\t'
+      << static_cast<double>(coverage())/total_sites << '\t'
+      << static_cast<double>(coverage())/sites_covered << '\t'
+      << (good ? to_string(mean_meth()) : 0)  << '\t'
+      << (good ? to_string(mean_meth_weighted()) : 0) << '\t'
+      << (good ? to_string(fractional_meth()) : 0);
+  return oss.str();
+}
+
+string
+LevelsCounter::tostring_as_row_header() {
+  std::ostringstream oss;
+  // directly counted values
+  oss << "01. total_sites" << '\n'
+      << "02. sites_covered" << '\n'
+      << "03. total_c" << '\n'
+      << "04. total_t" << '\n'
+      << "05. max_depth" << '\n'
+      << "06. mutations" << '\n'
+      << "07. called_meth" << '\n'
+      << "08. called_unmeth" << '\n'
+      << "09. mean_agg" << '\n';
+  // derived values
+  oss << "10. coverage" << '\n'
+      << "11. sites_covered/total_sites" << '\n'
+      << "12. coverage/total_sites" << '\n'
+      << "13. coverage/sites_covered" << '\n'
+      << "14. mean_meth" << '\n'
+      << "15. mean_meth_weighted" << '\n'
+      << "16. fractional_meth";
+  return oss.str();
+}
+
 double LevelsCounter::alpha = 0.05;
 
 std::ostream &
@@ -124,4 +173,18 @@ operator>>(std::istream &in, LevelsCounter &cs) {
   check_label(label, "mean_agg:");
 
   return in;
+}
+
+LevelsCounter &
+LevelsCounter::operator+=(const LevelsCounter &rhs) {
+  total_sites += rhs.total_sites;
+  sites_covered += rhs.sites_covered;
+  max_depth += rhs.max_depth;
+  mutations += rhs.mutations;
+  total_c += rhs.total_c;
+  total_t += rhs.total_t;
+  called_meth += rhs.called_meth;
+  called_unmeth += rhs.called_unmeth;
+  mean_agg += rhs.mean_agg;
+  return *this;
 }

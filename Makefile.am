@@ -186,6 +186,7 @@ dnmtools_SOURCES += src/analysis/hmr.cpp
 dnmtools_SOURCES += src/analysis/hmr-rep.cpp
 dnmtools_SOURCES += src/analysis/levels.cpp
 dnmtools_SOURCES += src/analysis/hypermr.cpp
+dnmtools_SOURCES += src/analysis/metagene.cpp
 
 dnmtools_SOURCES += src/utils/clean-hairpins.cpp
 dnmtools_SOURCES += src/utils/guessprotocol.cpp

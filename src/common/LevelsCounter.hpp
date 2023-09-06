@@ -23,29 +23,23 @@
 
 struct LevelsCounter {
   std::string context;
-  size_t total_sites;
-  size_t sites_covered;
-  size_t max_depth;
-  size_t mutations;
-  size_t total_c, total_t;
-  size_t called_meth, called_unmeth;
-  double mean_agg;
-  LevelsCounter(const std::string &c) :
-    context(c), total_sites(0), sites_covered(0), max_depth(0),
-    mutations(0), total_c(0), total_t(0),
-    called_meth(0), called_unmeth(0),
-    mean_agg(0.0) {}
+  uint64_t total_sites{};
+  uint64_t sites_covered{};
+  uint64_t max_depth{};
+  uint64_t mutations{};
+  uint64_t total_c{}, total_t{};
+  uint64_t called_meth{}, called_unmeth{};
+  double mean_agg{};
+  LevelsCounter(const std::string &c) : context{c} {}
 
-  LevelsCounter() :
-    total_sites(0), sites_covered(0), max_depth(0),
-    mutations(0), total_c(0), total_t(0),
-    called_meth(0), called_unmeth(0),
-    mean_agg(0.0) {}
+  LevelsCounter() = default;
+
+  LevelsCounter &operator+=(const LevelsCounter &rhs);
 
   void update(const MSite &s);
 
-  size_t coverage() const {return total_c + total_t;}
-  size_t total_called() const {return called_meth + called_unmeth;}
+  uint64_t coverage() const {return total_c + total_t;}
+  uint64_t total_called() const {return called_meth + called_unmeth;}
 
   double mean_meth_weighted() const {
     return static_cast<double>(total_c)/coverage();
@@ -58,6 +52,8 @@ struct LevelsCounter {
   }
 
   std::string tostring() const;
+  std::string tostring_as_row() const;
+  static std::string tostring_as_row_header();
 
   static double alpha;
 };

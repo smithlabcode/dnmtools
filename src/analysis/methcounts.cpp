@@ -183,7 +183,6 @@ get_tag_from_genome(const string &s, const size_t pos) {
   return 4; // shouldn't be used for anything
 }
 
-
 /* This "has_mutated" function looks on the opposite strand to see
  * if the apparent conversion from C->T was actually already in the
  * DNA because of a mutation or SNP.
@@ -191,31 +190,28 @@ get_tag_from_genome(const string &s, const size_t pos) {
 static bool
 has_mutated(const char base, const CountSet &cs) {
   static const double MUTATION_DEFINING_FRACTION = 0.5;
-  return is_cytosine(base) ?
-    (cs.nG < MUTATION_DEFINING_FRACTION*(cs.neg_total())) :
-    (cs.pG < MUTATION_DEFINING_FRACTION*(cs.pos_total()));
+  return is_cytosine(base)
+           ? (cs.nG < MUTATION_DEFINING_FRACTION * (cs.neg_total()))
+           : (cs.pG < MUTATION_DEFINING_FRACTION * (cs.pos_total()));
 }
-
 
 static inline bool
 is_cpg_site(const string &s, const size_t pos) {
-  return (is_cytosine(s[pos]) ? is_guanine(s[pos + 1]) :
-          (is_guanine(s[pos]) ?
-           (pos > 0 && is_cytosine(s[pos - 1])) : false));
+  return is_cytosine(s[pos])
+           ? is_guanine(s[pos + 1])
+           : (is_guanine(s[pos]) ? (pos > 0 && is_cytosine(s[pos - 1]))
+                                 : false);
 }
-
 
 static inline size_t
 get_chrom_id(const string &chrom_name,
              const unordered_map<string, size_t> &cl) {
-
   auto the_chrom(cl.find(chrom_name));
   if (the_chrom == end(cl))
     throw dnmt_error("could not find chrom: " + chrom_name);
 
   return the_chrom->second;
 }
-
 
 static const char *tag_values[] = {
   "CpG", // 0
@@ -253,37 +249,24 @@ write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
       if (CPG_ONLY && the_tag != 0) continue;
 
       const bool is_c = is_cytosine(base);
-      const double unconverted = is_c ?
-        counts[i].unconverted_cytosine() : counts[i].unconverted_guanine();
-      const double converted = is_c ?
-        counts[i].converted_cytosine() : counts[i].converted_guanine();
+      const double unconverted = is_c ? counts[i].unconverted_cytosine()
+                                      : counts[i].unconverted_guanine();
+      const double converted =
+        is_c ? counts[i].converted_cytosine() : counts[i].converted_guanine();
       const bool mut = has_mutated(base, counts[i]);
       const size_t n_reads = unconverted + converted;
       buf.clear();
       // ADS: here is where we make an MSite, but not using MSite
-      buf << sam_hdr_tid2name(hdr, tid) << '\t'
-          << i << '\t'
+      buf << sam_hdr_tid2name(hdr, tid) << '\t' << i << '\t'
           << (is_c ? '+' : '-') << '\t'
           << tag_values[tag_with_mut(the_tag, mut)] << '\t'
-          << (n_reads > 0 ? unconverted/n_reads : 0.0) << '\t'
-          << n_reads << '\n';
+          << (n_reads > 0 ? unconverted / n_reads : 0.0) << '\t' << n_reads
+          << '\n';
       if (!out.write(buf.c_str(), buf.tellp()))
         throw dnmt_error("error writing output");
     }
   }
 }
-
-
-/* ADS: was tempted to use these until I passed in a "b++"... */
-// #define get_tid(b) ((b)->core.tid)
-// #define get_rlen(b) (bam_cigar2rlen((b)->core.n_cigar, bam_get_cigar(b)))
-// #define get_pos(b) ((b)->core.pos)
-// #define get_qlen(b) ((b)->core.l_qseq)
-
-
-
-
-
 
 
 static void

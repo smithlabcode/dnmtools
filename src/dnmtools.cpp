@@ -123,6 +123,8 @@ int
 main_selectsites(int argc, const char **argv);
 int
 main_symmetric_cpgs(int argc, const char **argv);
+int
+metagene(int argc, const char **argv);
 
 void
 print_help(
@@ -181,6 +183,7 @@ main(int argc, const char **argv) {
 
 {"methylation visualization",
  {{{"fastlift",   "liftover methylation levels between species", main_fast_liftover},
+   {"metagene",   "summarize methylation around genomic features", metagene},
    {"liftfilter", "filter CpGs that are not CpGs in the target genome", main_lift_filter}}}},
 
 {"utilities",
@@ -201,10 +204,13 @@ main(int argc, const char **argv) {
       return a.tag == argv[1];
     };
 
-    for (auto &&g : command_groups) {
+    for (auto &g : command_groups) {
       const auto the_cmd = find_if(begin(g.second), end(g.second), has_tag);
       if (the_cmd != end(g.second)) return (*the_cmd)(argc, argv);
     }
+
+    std::cerr << "ERROR: invalid command " << argv[1] << std::endl;
+
   }
   catch (const std::exception &e) {
     std::cerr << "ERROR:\t" << e.what() << endl;

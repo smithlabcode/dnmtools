@@ -117,7 +117,7 @@ write_methdiff_site(bgzf_file &out, const MSite &a, const MSite &b,
   return out;
 }
 
-static bool
+static inline bool
 site_precedes(const size_t lhs_chrom_idx, const size_t lhs_pos,
               const size_t rhs_chrom_idx, const size_t rhs_pos) {
   return (lhs_chrom_idx < rhs_chrom_idx ||
@@ -159,31 +159,40 @@ bad_order(const std::unordered_map<string, size_t> &chrom_order,
 }
 
 template<class T> static void
-process_sites(const bool VERBOSE, bgzf_file &in_a, bgzf_file &in_b,
+process_sites(const bool show_progress, bgzf_file &in_a, bgzf_file &in_b,
               const bool allow_uncovered, const double pseudocount, T &out) {
   // chromosome order in the files
   std::unordered_map<string, size_t> chrom_order;
   std::unordered_set<string> chroms_seen_a, chroms_seen_b;
 
   MSite a, b;
+  a.pos = 0;
+  b.pos = 0;
   string prev_chrom_a, prev_chrom_b;
   size_t chrom_id_a = 0, chrom_id_b = 0;
   size_t prev_chrom_id_a = 0, prev_chrom_id_b = 0;
   size_t prev_pos_a = 0, prev_pos_b = 0;
 
-  string line;
-  while (read_site(in_a, a)) {
-    if (prev_chrom_a.compare(a.chrom) != 0) {
-      prev_chrom_id_a = chrom_id_a;
-      chrom_id_a = get_chrom_id(chrom_order, chroms_seen_a, a);
-      prev_chrom_a = a.chrom;
-      if (VERBOSE) cerr << "processing " << a.chrom << endl;
-    }
-    if (site_precedes(chrom_id_a, a.pos, prev_chrom_id_a, prev_pos_a))
-      throw runtime_error(
-        bad_order(chrom_order, prev_chrom_a, prev_pos_a, a.chrom, a.pos));
+  bool advance_a = true;
+  bool advance_b = true;
 
-    bool advance_b = true;
+  while (true) {
+
+    while (advance_a && read_site(in_a, a)) {
+      if (prev_chrom_a.compare(a.chrom) != 0) {
+        prev_chrom_id_a = chrom_id_a;
+        chrom_id_a = get_chrom_id(chrom_order, chroms_seen_a, a);
+        if (show_progress) cerr << "processing " << a.chrom << endl;
+        prev_chrom_a = a.chrom;
+      }
+      if (site_precedes(chrom_id_a, a.pos, prev_chrom_id_a, prev_pos_a))
+        throw runtime_error(
+          bad_order(chrom_order, prev_chrom_a, prev_pos_a, a.chrom, a.pos));
+      advance_a = site_precedes(chrom_id_a, a.pos, chrom_id_b, b.pos);
+      prev_pos_a = a.pos;
+    }
+    if (!in_a) break;
+
     while (advance_b && read_site(in_b, b)) {
       if (prev_chrom_b.compare(b.chrom) != 0) {
         prev_chrom_id_b = chrom_id_b;
@@ -196,6 +205,7 @@ process_sites(const bool VERBOSE, bgzf_file &in_a, bgzf_file &in_b,
       advance_b = site_precedes(chrom_id_b, b.pos, chrom_id_a, a.pos);
       prev_pos_b = b.pos;
     }
+    if (!in_b) break;
 
     if (chrom_id_a == chrom_id_b && a.pos == b.pos) {
       if (allow_uncovered || min(a.n_reads, b.n_reads) > 0) {
@@ -209,8 +219,19 @@ process_sites(const bool VERBOSE, bgzf_file &in_a, bgzf_file &in_b,
 
         write_methdiff_site(out, a, b, diffscore);
       }
+      advance_a = true;
+      advance_b = true;
     }
-    prev_pos_a = a.pos;
+    else {
+      if (site_precedes(chrom_id_a, a.pos, chrom_id_b, b.pos)) {
+        advance_a = true;
+        advance_b = false;
+      }
+      else {
+        advance_b = true;
+        advance_a = false;
+      }
+    }
   }
 }
 

@@ -32,29 +32,64 @@ using std::string;
 using std::vector;
 using std::isfinite;
 
+using epi_r = small_epiread;
+
 static const double PSEUDOCOUNT = 1e-10;
 
-inline bool
-is_meth(const epiread &r, const size_t pos) {return (r.seq[pos] == 'C');}
+static inline size_t
+adjust_read_offsets(std::vector<epi_r> &reads) {
+  auto first_read_offset = std::numeric_limits<size_t>::max();
+  for (auto &read : reads)
+    first_read_offset = std::min(read.pos, first_read_offset);
+  for (auto &read : reads)
+    read.pos -= first_read_offset;
+  return first_read_offset;
+}
+
+static inline size_t
+get_n_cpgs(const std::vector<epi_r> &reads) {
+  size_t n_cpgs = 0;
+  for (size_t i = 0; i < reads.size(); ++i)
+    n_cpgs = std::max(n_cpgs, reads[i].end());
+  return n_cpgs;
+}
 
 inline bool
-un_meth(const epiread &r, const size_t pos) {return (r.seq[pos] == 'T');}
+is_meth(const epi_r &r, const size_t pos) {return (r.seq[pos] == 'C');}
 
-double
-log_likelihood(const epiread &r, const vector<double> &a) {
+inline bool
+un_meth(const epi_r &r, const size_t pos) {return (r.seq[pos] == 'T');}
+
+inline double
+log_likelihood(const epi_r &r, const vector<double> &a) {
   double ll = 0.0;
-  for (size_t i = 0; i < r.seq.length(); ++i)
-    if (is_meth(r, i) || un_meth(r, i)) {
-      const double val = (is_meth(r, i) ? a[r.pos + i] : (1.0 - a[r.pos + i]));
+  auto a_itr = cbegin(a) + r.pos;
+  auto s_itr = cbegin(r.seq);
+  const auto s_lim = cend(r.seq);
+  for (; s_itr != s_lim; ++s_itr, ++a_itr)
+    if (*s_itr != 'N') {
+      const double val = *s_itr == 'C' ? *a_itr : 1.0 - *a_itr;
       assert(isfinite(log(val)));
       ll += log(val);
     }
   return ll;
 }
 
+// double
+// log_likelihood(const epi_r &r, const vector<double> &a) {
+//   double ll = 0.0;
+//   for (size_t i = 0; i < r.seq.length(); ++i)
+//     if (is_meth(r, i) || un_meth(r, i)) {
+//       const double val = (is_meth(r, i) ? a[r.pos + i] : (1.0 - a[r.pos + i]));
+//       assert(isfinite(log(val)));
+//       ll += log(val);
+//     }
+//   return ll;
+// }
+
 
 double
-log_likelihood(const epiread &r, const double mixing,
+log_likelihood(const epi_r &r, const double mixing,
                const vector<double> &a1, const vector<double> &a2) {
   return log(mixing*exp(log_likelihood(r, a1)) +
              (1.0 - mixing)*exp(log_likelihood(r, a2)));
@@ -62,7 +97,7 @@ log_likelihood(const epiread &r, const double mixing,
 
 
 double
-log_likelihood(const vector<epiread> &reads, const double mixing,
+log_likelihood(const vector<epi_r> &reads, const double mixing,
                const vector<double> &a1, const vector<double> &a2) {
   double ll = 0.0;
   for (size_t i = 0; i < reads.size(); ++i)
@@ -72,7 +107,7 @@ log_likelihood(const vector<epiread> &reads, const double mixing,
 
 
 static double
-expectation_step(const vector<epiread> &reads, const double mixing,
+expectation_step(const vector<epi_r> &reads, const double mixing,
                  const vector<double> &a1, const vector<double> &a2,
                  vector<double> &indicators) {
   const double log_mixing1 = log(mixing);
@@ -92,62 +127,39 @@ expectation_step(const vector<epiread> &reads, const double mixing,
   return score;
 }
 
-
-void
-fit_epiallele(double pseudo, const vector<epiread> &reads,
+template<const bool inverse> void
+fit_epiallele(const double pseudo, const vector<epi_r> &reads,
               const vector<double> &indicators, vector<double> &a) {
   const size_t n_cpgs = a.size();
-  vector<double> meth(n_cpgs, 0.0), total(n_cpgs, 0.0);
-  for (size_t i = 0; i < reads.size(); ++i) {
-    const size_t start = reads[i].pos;
-    const double weight = indicators[i];
-    for (size_t j = 0; j < reads[i].seq.length(); ++j)
-      if (is_meth(reads[i], j) || un_meth(reads[i], j)) {
-        meth[start + j] += weight*(is_meth(reads[i], j));
-        total[start + j] += weight;
-      }
+  vector<double> meth(n_cpgs, pseudo), total(n_cpgs, 2 * pseudo);
+  auto indic_itr = cbegin(indicators);
+  for (auto r_itr = cbegin(reads); r_itr != cend(reads); ++r_itr) {
+    const double weight = inverse ? 1.0 - *indic_itr++ : *indic_itr++;
+    const size_t start = r_itr->pos;
+    auto m_itr = begin(meth) + start;
+    auto t_itr = begin(total) + start;
+    for (auto s = cbegin(r_itr->seq); s != cend(r_itr->seq); ++s) {
+      *m_itr++ += weight * (*s == 'C');
+      *t_itr++ += weight * (*s != 'N');
+    }
   }
-  for (size_t i = 0; i < n_cpgs; ++i)
-    a[i] = (meth[i] + pseudo)/(total[i] + 2*pseudo);
+  for (size_t i = 0; i < n_cpgs; ++i) a[i] = meth[i] / total[i];
 }
-
-
-static void
-maximization_step(const vector<epiread> &reads, const vector<double> &indicators,
-                  vector<double> &a1, vector<double> &a2) {
-
-  vector<double> inverted_indicators(indicators);
-  for (size_t i = 0; i < inverted_indicators.size(); ++i)
-    inverted_indicators[i] = 1.0 - inverted_indicators[i];
-
-  // Fit the regular model parameters. Since the two epialleles'
-  // likelihoods are summed, we need to make sure the pseudocount
-  // is proportional to the pseudocount used in the single allele model.
-  fit_epiallele(0.5*PSEUDOCOUNT, reads, indicators, a1);
-  fit_epiallele(0.5*PSEUDOCOUNT, reads, inverted_indicators, a2);
-}
-
 
 static void
 rescale_indicators(const double mixing, vector<double> &indic) {
-  const double n_reads = indic.size();
-  const double total = accumulate(indic.begin(), indic.end(), 0.0);
-  const double ratio = total/n_reads;
-
+  const double ratio = accumulate(cbegin(indic), cend(indic), 0.0)/indic.size();
   if (mixing < ratio)
-    for (size_t i = 0; i < indic.size(); ++i)
-      indic[i] *= (mixing/ratio);
-
+    for (auto &i : indic) i *= mixing/ratio;
   else {
     const double adjustment = mixing/(1.0 - ratio);
-    for (size_t i = 0; i < indic.size(); ++i)
-      indic[i] = 1.0 - (1.0 - indic[i])*adjustment;
+    for (auto &i : indic)
+      i = 1.0 - (1.0 - i)*adjustment;
   }
 }
 
-
 static double
-expectation_maximization(const size_t max_itr, const vector<epiread> &reads,
+expectation_maximization(const size_t max_itr, const vector<epi_r> &reads,
                          const double &mixing, vector<double> &indicators,
                          vector<double> &a1, vector<double> &a2) {
 
@@ -158,10 +170,14 @@ expectation_maximization(const size_t max_itr, const vector<epiread> &reads,
 
     const double score = expectation_step(reads, mixing, a1, a2, indicators);
     rescale_indicators(mixing, indicators);
-    maximization_step(reads, indicators, a1, a2);
 
     if ((prev_score - score)/prev_score < EPIREAD_STATS_TOLERANCE)
       break;
+
+    // maximization_step(reads, indicators, a1, a2);
+    fit_epiallele<false>(0.5*PSEUDOCOUNT, reads, indicators, a1);
+    fit_epiallele<true>(0.5*PSEUDOCOUNT, reads, indicators, a2);
+
     prev_score = score;
   }
   return prev_score;
@@ -169,7 +185,7 @@ expectation_maximization(const size_t max_itr, const vector<epiread> &reads,
 
 
 double
-resolve_epialleles(const size_t max_itr, const vector<epiread> &reads,
+resolve_epialleles(const size_t max_itr, const vector<epi_r> &reads,
                    const double &mixing, vector<double> &indicators,
                    vector<double> &a1, vector<double> &a2) {
 
@@ -187,10 +203,10 @@ resolve_epialleles(const size_t max_itr, const vector<epiread> &reads,
 
 
 double
-fit_single_epiallele(const vector<epiread> &reads, vector<double> &a) {
+fit_single_epiallele(const vector<epi_r> &reads, vector<double> &a) {
   assert(reads.size() > 0);
   vector<double> indicators(reads.size(), 1.0);
-  fit_epiallele(PSEUDOCOUNT, reads, indicators, a);
+  fit_epiallele<false>(PSEUDOCOUNT, reads, indicators, a);
 
   double score = 0.0;
   for (size_t i = 0; i < reads.size(); ++i) {
@@ -205,7 +221,7 @@ void
 compute_model_likelihoods(double &single_score, double &pair_score,
                           const size_t &max_itr, const double &low_prob,
                           const double &high_prob, const size_t &n_cpgs,
-                          const vector<epiread> &reads) {
+                          const vector<epi_r> &reads) {
 
   static const double mixing = 0.5;
 
@@ -224,14 +240,17 @@ compute_model_likelihoods(double &single_score, double &pair_score,
 
 double
 test_asm_lrt(const size_t max_itr, const double low_prob,
-             const double high_prob, vector<epiread> reads) {
+             const double high_prob, vector<epi_r> &reads) {
   double single_score = std::numeric_limits<double>::min();
   double pair_score = std::numeric_limits<double>::min();
-  adjust_read_offsets(reads);
+  const auto first_read_offset = adjust_read_offsets(reads);
   const size_t n_cpgs = get_n_cpgs(reads);
 
   compute_model_likelihoods(single_score, pair_score, max_itr, low_prob,
                             high_prob, n_cpgs, reads);
+
+  for (auto &read : reads)
+    read.pos += first_read_offset;
 
   // degrees of freedom = 2*n_cpgs for two-allele model
   // minus n_cpgs for one-allele model
@@ -245,7 +264,7 @@ test_asm_lrt(const size_t max_itr, const double low_prob,
 
 double
 test_asm_bic(const size_t max_itr, const double low_prob,
-             const double high_prob, vector<epiread> reads) {
+             const double high_prob, vector<epi_r> &reads) {
 
   double single_score = std::numeric_limits<double>::min();
   double pair_score = std::numeric_limits<double>::min();

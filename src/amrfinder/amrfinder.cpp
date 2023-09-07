@@ -71,6 +71,8 @@ validate_epiread_bgzf_file(const string &filename) {
   return true;
 }
 
+using epi_r = small_epiread;
+
 ////////////////////////////////////////////////////////////////////////
 /// CODE BELOW HERE IS FOR FILTERING THE AMR WINDOWS AND MERGING THEM
 /// TO OBTAIN FINAL AMRS
@@ -147,7 +149,7 @@ merge_amrs(const size_t gap_limit, vector<GenomicRegion> &amrs) {
 /////
 
 // static void
-// set_read_states(vector<vector<char> > &state_counts, vector<epiread> &reads) {
+// set_read_states(vector<vector<char> > &state_counts, vector<epi_r> &reads) {
 //   for (size_t i = 0; i < reads.size(); ++i) {
 //     const size_t offset = reads[i].pos;
 //     for (size_t j = 0; j < reads[i].length(); ++j) {
@@ -158,7 +160,7 @@ merge_amrs(const size_t gap_limit, vector<GenomicRegion> &amrs) {
 // }
 
 // static void
-// get_state_counts(const vector<epiread> &reads, const size_t total_cpgs,
+// get_state_counts(const vector<epi_r> &reads, const size_t total_cpgs,
 //               vector<vector<char> > &state_counts) {
 
 //   state_counts = vector<vector<char> >(total_cpgs);
@@ -172,7 +174,7 @@ merge_amrs(const size_t gap_limit, vector<GenomicRegion> &amrs) {
 // }
 
 // static void
-// randomize_read_states(vector<epiread> &reads) {
+// randomize_read_states(vector<epi_r> &reads) {
 //   /**/srand(time(0) + getpid());
 //   const size_t total_cpgs = get_n_cpgs(reads);
 //   vector<vector<char> > state_counts;
@@ -270,25 +272,28 @@ convert_coordinates(const bool VERBOSE, const string chroms_dir,
 /////////  CODE FOR DOING THE SLIDING WINDOW STUFF BELOW HERE
 /////////
 
-
-/* make sure the current read is shortened to only include positions
-   within the relevant window */
+// /* make sure the current read is shortened to only include positions
+//    within the relevant window */
 static void
-clip_read(const size_t start_pos, const size_t end_pos, epiread &r) {
+clip_read(const size_t start_pos, const size_t end_pos, epi_r &r) {
   if (r.pos < start_pos) {
-    r.seq = r.seq.substr(start_pos - r.pos);
+    const auto st = start_pos - r.pos;
+    const auto sz = r.length() - st;
+    copy(begin(r.seq) + st, end(r.seq), begin(r.seq));
+    r.seq.resize(sz);
     r.pos = start_pos;
   }
-  if (r.end() > end_pos)
-    r.seq = r.seq.substr(0, end_pos - r.pos);
+  if (r.end() > end_pos) {
+    const auto sz = end_pos - r.pos;
+    r.seq.resize(sz);
+  }
 }
 
-
 static void
-get_current_epireads(const vector<epiread> &epireads,
+get_current_epireads(const vector<epi_r> &epireads,
                      const size_t max_epiread_len,
                      const size_t cpg_window, const size_t start_pos,
-                     size_t &read_id, vector<epiread> &current_epireads) {
+                     size_t &read_id, vector<epi_r> &current_epireads) {
   while (read_id < epireads.size() &&
          epireads[read_id].pos + max_epiread_len <=start_pos)
     ++read_id;
@@ -305,7 +310,7 @@ get_current_epireads(const vector<epiread> &epireads,
 
 
 static size_t
-total_states(const vector<epiread> &epireads) {
+total_states(const vector<epi_r> &epireads) {
   size_t total = 0;
   for (size_t i = 0; i < epireads.size(); ++i)
     total += epireads[i].length();
@@ -315,7 +320,7 @@ total_states(const vector<epiread> &epireads) {
 
 static void
 add_amr(const string &chrom_name, const size_t start_cpg,
-        const size_t cpg_window, const vector<epiread> &reads,
+        const size_t cpg_window, const vector<epi_r> &reads,
         const double score, vector<GenomicRegion> &amrs) {
   static const string name_label("AMR");
   const size_t end_cpg = start_cpg + cpg_window - 1;
@@ -324,12 +329,21 @@ add_amr(const string &chrom_name, const size_t start_cpg,
                                amr_name, score, '+'));
 }
 
+static inline size_t
+get_n_cpgs(const std::vector<epi_r> &reads) {
+  size_t n_cpgs = 0;
+  for (size_t i = 0; i < reads.size(); ++i)
+    n_cpgs = std::max(n_cpgs, reads[i].end());
+  return n_cpgs;
+}
 
+
+template<const bool use_bic>
 static size_t
 process_chrom(const bool VERBOSE, const bool PROGRESS,
               const size_t min_obs_per_cpg, const size_t window_size,
               const EpireadStats &epistat, const string &chrom_name,
-              const vector<epiread> &epireads, vector<GenomicRegion> &amrs) {
+              const vector<epi_r> &epireads, vector<GenomicRegion> &amrs) {
   size_t max_epiread_len = 0;
   for (size_t i = 0; i < epireads.size(); ++i)
     max_epiread_len = std::max(max_epiread_len, epireads[i].length());
@@ -346,7 +360,7 @@ process_chrom(const bool VERBOSE, const bool PROGRESS,
   size_t windows_tested = 0;
   size_t start_idx = 0;
   const size_t lim = chrom_cpgs - window_size + 1;
-  vector<epiread> current_epireads;
+  vector<epi_r> current_epireads;
   for (size_t i = 0; i < lim && start_idx < epireads.size(); ++i) {
 
     if (PROGRESS && progress.time_to_report(start_idx))
@@ -358,7 +372,8 @@ process_chrom(const bool VERBOSE, const bool PROGRESS,
 
     if (total_states(current_epireads) >= min_obs_per_window) {
       bool is_significant = false;
-      const double score = epistat.test_asm(current_epireads, is_significant);
+      const double score =
+        epistat.test_asm<use_bic>(current_epireads, is_significant);
       if (is_significant)
         add_amr(chrom_name, i, window_size, current_epireads, score, amrs);
       ++windows_tested;
@@ -454,7 +469,7 @@ main_amrfinder(int argc, const char **argv) {
            << "[iterations=" << max_itr << "]" << endl;
 
     const EpireadStats epistat(low_prob, high_prob,
-                               critical_value, max_itr, use_bic);
+                               critical_value, max_itr);
 
     bgzf_file in(reads_file, "r");
     if (!in) throw runtime_error("failed to open input file: " + reads_file);
@@ -462,25 +477,31 @@ main_amrfinder(int argc, const char **argv) {
     vector<GenomicRegion> amrs;
     size_t windows_tested = 0;
     epiread er;
-    vector<epiread> epireads;
+    vector<epi_r> epireads;
     string prev_chrom, curr_chrom, tmp_states;
 
     while (read_epiread(in, er)) {
       curr_chrom = er.chr;
       if (!epireads.empty() && curr_chrom != prev_chrom) {
         windows_tested +=
-          process_chrom(VERBOSE, PROGRESS, min_obs_per_cpg, window_size,
-                        epistat, prev_chrom, epireads, amrs);
+          use_bic ?
+          process_chrom<true>(VERBOSE, PROGRESS, min_obs_per_cpg,
+                              window_size, epistat, prev_chrom, epireads, amrs) :
+          process_chrom<false>(VERBOSE, PROGRESS, min_obs_per_cpg,
+                               window_size, epistat, prev_chrom, epireads, amrs);
         epireads.clear();
       }
-      epireads.push_back(er);
+      epireads.emplace_back(er.pos, er.seq);
       prev_chrom = curr_chrom;
     }
 
     if (!epireads.empty())
       windows_tested +=
-        process_chrom(VERBOSE, PROGRESS, min_obs_per_cpg, window_size,
-                      epistat, prev_chrom, epireads, amrs);
+        use_bic ?
+        process_chrom<true>(VERBOSE, PROGRESS, min_obs_per_cpg, window_size,
+                            epistat, prev_chrom, epireads, amrs) :
+        process_chrom<false>(VERBOSE, PROGRESS, min_obs_per_cpg, window_size,
+                             epistat, prev_chrom, epireads, amrs);
 
     if (VERBOSE)
       cerr << "========= POST PROCESSING =========" << endl;

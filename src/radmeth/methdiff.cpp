@@ -281,12 +281,12 @@ main_methdiff(int argc, const char **argv) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (VERBOSE)
-      cerr << "[opening methcounts file: " << cpgs_file_a << "]" << endl;
+      cerr << "[opening counts file: " << cpgs_file_a << "]" << endl;
     bgzf_file in_a(cpgs_file_a, "r");
     if (!in_a) throw runtime_error("cannot open file: " + cpgs_file_a);
 
     if (VERBOSE)
-      cerr << "[opening methcounts file: " << cpgs_file_b << "]" << endl;
+      cerr << "[opening counts file: " << cpgs_file_b << "]" << endl;
     bgzf_file in_b(cpgs_file_b, "r");
     if (!in_b) throw runtime_error("cannot open file: " + cpgs_file_b);
 

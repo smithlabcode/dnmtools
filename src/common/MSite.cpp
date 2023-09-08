@@ -21,28 +21,85 @@
 #include <sstream>
 #include <stdexcept>
 #include <regex>
+#include <charconv>
 
 #include "smithlab_utils.hpp"
 
 using std::string;
 using std::runtime_error;
 using std::regex_match;
+using std::from_chars;
+using std::find_first_of;
+using std::find_if;
+using std::cbegin;
+using std::cend;
+using std::end;
 
 MSite::MSite(const string &line) {
-  /* GS: this is faster but seems to be genenerating issues when
-   * compiled with clang
-  std::istringstream iss;
-  iss.rdbuf()->pubsetbuf(const_cast<char*>(line.c_str()), line.length());
-  */
-  std::istringstream iss(line);
-  string strand_tmp;
-  if (!(iss >> chrom >> pos >> strand_tmp >> context >> meth >> n_reads))
-    throw std::runtime_error("bad line: \"" + line + "\"");
-  strand = strand_tmp[0];
-  if (strand != '-' && strand != '+')
-    throw std::runtime_error("bad line: \"" + line + "\"");
-}
+  constexpr auto is_sep = [](const char x) { return x == ' ' || x == '\t'; };
+  constexpr auto not_sep = [](const char x) { return x != ' ' && x != '\t'; };
 
+  bool failed = false;
+
+  const auto c = line.data();
+  const auto c_end = c + line.size();
+
+  auto field_s = c;
+  auto field_e = find_if(field_s + 1, c_end, is_sep);
+  if (field_e == c_end) failed = true;
+
+  {
+    const uint32_t d = std::distance(field_s, field_e);
+    chrom = string{field_s, d};
+  }
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || (field_e == c_end);
+
+  {
+    const auto [ptr, ec] = from_chars(field_s, field_e, pos);
+    failed = failed || (ptr == field_s);
+  }
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || (field_e != field_s + 1 || field_e == c_end);
+
+  strand = *field_s;
+  failed = failed || (strand != '-' && strand != '+');
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || (field_e == c_end);
+
+  {
+    const uint32_t d = std::distance(field_s, field_e);
+    context = string{field_s, d};
+  }
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || (field_e == c_end);
+
+  {
+    const auto [ptr, ec] = from_chars(field_s, field_e, meth);
+    failed = failed || (ptr == field_s);
+  }
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+
+  {
+    const auto [ptr, ec] = from_chars(field_s, c_end, n_reads);
+    failed = failed || (ptr != c_end);
+  }
+
+  if (failed) {
+    throw runtime_error("bad count line: " + line);
+    // ADS: the value below would work for a flag
+    // pos = std::numeric_limits<decltype(pos)>::max();
+  }
+}
 
 string
 MSite::tostring() const {
@@ -56,14 +113,12 @@ MSite::tostring() const {
   return oss.str();
 }
 
-
 size_t
 distance(const MSite &a, const MSite &b) {
   return a.chrom == b.chrom ?
     std::max(a.pos, b.pos) - std::min(a.pos, b.pos) :
     std::numeric_limits<size_t>::max();
 }
-
 
 using std::ifstream;
 using std::ios_base;
@@ -155,45 +210,43 @@ find_offset_for_msite(const std::string &chr,
   }
 }
 
-
 bool
 is_msite_line(const string &line) {
-
   std::istringstream iss(line);
 
   string chrom;
   if (!(iss >> chrom)) return false;
 
-  long int pos = 0;
-  if (!(iss >> pos)) return false;
+  int64_t pos = 0;
+  if (!(iss >> pos || pos < 0)) return false;
 
   string strand;
-  if (!(iss >> strand) ||
-      (strand.size() != 1) ||
-      ((strand != "+") && (strand != "-")) )
+  if (!(iss >> strand) || (strand.size() != 1) ||
+      ((strand != "+") && (strand != "-")))
     return false;
 
   string context;
-  std::regex pattern("^C[pHWX][GH]$");
-  if (!(iss >> context) || !regex_match(context, pattern)) return false;
+  // ADS: below, allowing any context
+  // std::regex pattern("^C[pHWX][GH]$");
+  if (!(iss >> context)) return false;
 
   double level = 0.0;
   if (!(iss >> level) || level < 0.0 || level > 1.0) return false;
 
-  long int n_reads = 0;
-  if (!(iss >> n_reads) || n_reads < 0) return false;
+  int64_t n_reads = 0;
+  if (!(iss >> n_reads || n_reads < 0)) return false;
 
   string temp;
-  if (iss >> temp) return false;
-  else return true;
-
+  if (iss >> temp)
+    return false;
+  else
+    return true;
 }
 
 bool
 is_msite_file(const string &file) {
   bamxx::bgzf_file in(file, "r");
-  if (!in)
-    throw runtime_error("cannot open file: " + file);
+  if (!in) throw runtime_error("cannot open file: " + file);
 
   string line;
   if (!getline(in, line)) return false;

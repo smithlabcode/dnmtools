@@ -20,6 +20,7 @@
 
 #include <string>
 #include <cmath>
+#include <cstdint>
 #include <unordered_map>
 
 struct MSite {

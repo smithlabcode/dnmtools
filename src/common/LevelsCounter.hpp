@@ -29,7 +29,7 @@ struct LevelsCounter {
   uint64_t mutations{};
   uint64_t total_c{}, total_t{};
   uint64_t called_meth{}, called_unmeth{};
-  double mean_agg{};
+  double total_meth{};
   LevelsCounter(const std::string &c) : context{c} {}
 
   LevelsCounter() = default;
@@ -42,18 +42,18 @@ struct LevelsCounter {
   uint64_t total_called() const {return called_meth + called_unmeth;}
 
   double mean_meth_weighted() const {
-    return static_cast<double>(total_c)/coverage();
+    return static_cast<double>(total_c)/std::max(coverage(), 1ul);
   }
   double fractional_meth() const {
-    return static_cast<double>(called_meth)/total_called();
+    return static_cast<double>(called_meth)/std::max(total_called(), 1ul);
   }
   double mean_meth() const {
-    return mean_agg/sites_covered;
+    return static_cast<double>(total_meth)/std::max(sites_covered, 1ul);
   }
 
   std::string tostring() const;
-  std::string tostring_as_row() const;
-  static std::string tostring_as_row_header();
+  std::string format_row() const;
+  static std::string format_header();
 
   static double alpha;
 };

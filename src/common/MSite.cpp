@@ -210,6 +210,104 @@ find_offset_for_msite(const std::string &chr,
   }
 }
 
+#include <unordered_map>
+using std::unordered_map;
+void
+find_offset_for_msite(const unordered_map<string, uint32_t> &chrom_order,
+                      const std::string &chr,
+                      const size_t idx,
+                      std::ifstream &site_in) {
+
+  site_in.seekg(0, ios_base::beg);
+  const size_t begin_pos = site_in.tellg();
+  site_in.seekg(0, ios_base::end);
+  const size_t end_pos = site_in.tellg();
+
+  if (end_pos - begin_pos < 2)
+    throw runtime_error("empty counts file");
+
+  size_t step_size = (end_pos - begin_pos)/2;
+
+  const auto chr_idx_itr = chrom_order.find(chr);
+  if (chr_idx_itr == end(chrom_order)) {
+    site_in.seekg(0, ios_base::end);
+    return;
+  }
+  const auto chr_idx = chr_idx_itr->second;
+
+  site_in.seekg(0, ios_base::beg);
+  string low_chr;
+  size_t low_idx{};
+  if (!(site_in >> low_chr >> low_idx))
+    throw runtime_error("failed search in counts file");
+
+  const auto low_chr_idx_itr = chrom_order.find(low_chr);
+  if (low_chr_idx_itr == end(chrom_order))
+    throw runtime_error("inconsistent chromosome order info");
+  auto low_chr_idx = low_chr_idx_itr->second;
+
+  // MAGIC: need the -2 here to get past the EOF and hopefully a '\n'
+  site_in.seekg(-2, ios_base::end);
+  move_to_start_of_line(site_in);
+  string high_chr;
+  size_t high_idx{};
+  if (!(site_in >> high_chr >> high_idx))
+    throw runtime_error("failed search in counts file");
+
+  const auto high_chr_idx_itr = chrom_order.find(high_chr);
+  if (high_chr_idx_itr == end(chrom_order))
+    throw runtime_error("inconsistent chromosome order info");
+  auto high_chr_idx = high_chr_idx_itr->second;
+
+  size_t pos = step_size;
+  site_in.seekg(pos, ios_base::beg);
+  move_to_start_of_line(site_in);
+  size_t prev_pos = 0; // keep track of previous position in file
+
+  // binary search inside sorted file on disk
+  // iterate until step size is 0 or positions are identical
+  while (step_size > 0 && prev_pos != pos) {
+
+    // track (mid) position in file to make sure it keeps moving
+    prev_pos = pos;
+
+    string mid_chr; // chromosome name at mid point
+    size_t mid_idx{}; // position at mid point
+    if (!(site_in >> mid_chr >> mid_idx))
+      throw runtime_error("failed navigating inside file");
+
+    const auto mid_chr_idx_itr = chrom_order.find(mid_chr);
+    if (mid_chr_idx_itr == end(chrom_order))
+      throw runtime_error("inconsistent chromosome order info");
+    const auto mid_chr_idx = mid_chr_idx_itr->second;
+
+    // this check will never give a false indication of unsorted, but
+    // might catch an unsorted file
+    using std::to_string;
+    if (mid_chr_idx < low_chr_idx || mid_chr_idx > high_chr_idx)
+      throw runtime_error("chromosomes unsorted inside file: "
+                          "low=" + to_string(low_chr_idx) + ",mid=" + to_string(mid_chr_idx) +
+                          ",high=" + to_string(high_chr_idx));
+
+    step_size /= 2; // cut the range in half
+
+    if (chr_idx < mid_chr_idx || (chr_idx == mid_chr_idx && idx <= mid_idx)) {
+      // move to the left
+      high_chr_idx = mid_chr_idx;
+      high_idx = mid_idx;
+      pos -= step_size;
+    }
+    else {
+      // move to the left
+      low_chr_idx = mid_chr_idx;
+      low_idx = mid_idx;
+      pos += step_size;
+    }
+    site_in.seekg(pos, ios_base::beg);
+    move_to_start_of_line(site_in);
+  }
+}
+
 bool
 is_msite_line(const string &line) {
   std::istringstream iss(line);

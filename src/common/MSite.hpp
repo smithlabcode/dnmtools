@@ -20,6 +20,8 @@
 
 #include <string>
 #include <cmath>
+#include <cstdint>
+#include <unordered_map>
 
 struct MSite {
 
@@ -136,6 +138,12 @@ distance(const MSite &a, const MSite &b);
 void
 find_offset_for_msite(const std::string &chrom,
                       const size_t start_pos,
+                      std::ifstream &site_in);
+
+void
+find_offset_for_msite(const std::unordered_map<std::string, uint32_t> &chrom_order,
+                      const std::string &chr,
+                      const size_t idx,
                       std::ifstream &site_in);
 
 // ADS: using the functions below for now for static polymorphism

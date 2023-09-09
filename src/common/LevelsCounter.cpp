@@ -34,7 +34,7 @@ LevelsCounter::update(const MSite &s) {
     max_depth = std::max(max_depth, s.n_reads);
     total_c += s.n_meth();
     total_t += s.n_reads - s.n_meth();
-    mean_agg += s.meth;
+    total_meth += s.meth;
     double lower = 0.0, upper = 0.0;
     wilson_ci_for_binomial(alpha, s.n_reads, s.meth, lower, upper);
     called_meth += (lower > 0.5);
@@ -58,7 +58,7 @@ LevelsCounter::tostring() const {
       << indent << "mutations: " << mutations << '\n'
       << indent << "called_meth: " << called_meth << '\n'
       << indent << "called_unmeth: " << called_unmeth << '\n'
-      << indent << "mean_agg: " << mean_agg << '\n';
+      << indent << "total_meth: " << total_meth << '\n';
 
   // derived values
   oss << indent << "coverage: " << coverage() << '\n'
@@ -78,10 +78,11 @@ LevelsCounter::tostring() const {
 }
 
 string
-LevelsCounter::tostring_as_row() const {
+LevelsCounter::format_row() const {
   const bool good = (sites_covered > 0);
   std::ostringstream oss;
   // directly counted values
+  // clang-format off
   oss << total_sites << '\t'
       << sites_covered << '\t'
       << total_c << '\t'
@@ -90,20 +91,21 @@ LevelsCounter::tostring_as_row() const {
       << mutations << '\t'
       << called_meth << '\t'
       << called_unmeth << '\t'
-      << mean_agg << '\t';
+      << total_meth << '\t';
   // derived values
   oss << coverage() << '\t'
       << static_cast<double>(sites_covered)/total_sites << '\t'
       << static_cast<double>(coverage())/total_sites << '\t'
       << static_cast<double>(coverage())/sites_covered << '\t'
-      << (good ? to_string(mean_meth()) : 0)  << '\t'
-      << (good ? to_string(mean_meth_weighted()) : 0) << '\t'
-      << (good ? to_string(fractional_meth()) : 0);
+      << (good ? mean_meth() : 0.0)  << '\t'
+      << (good ? mean_meth_weighted() : 0.0) << '\t'
+      << (good ? fractional_meth() : 0.0);
+  // clang-format on
   return oss.str();
 }
 
 string
-LevelsCounter::tostring_as_row_header() {
+LevelsCounter::format_header() {
   std::ostringstream oss;
   // directly counted values
   oss << "01. total_sites" << '\n'
@@ -114,7 +116,7 @@ LevelsCounter::tostring_as_row_header() {
       << "06. mutations" << '\n'
       << "07. called_meth" << '\n'
       << "08. called_unmeth" << '\n'
-      << "09. mean_agg" << '\n';
+      << "09. total_meth" << '\n';
   // derived values
   oss << "10. coverage" << '\n'
       << "11. sites_covered/total_sites" << '\n'
@@ -169,8 +171,8 @@ operator>>(std::istream &in, LevelsCounter &cs) {
   in >> label >> cs.called_unmeth; // the number of sites called unmethylated
   check_label(label, "called_unmeth:");
 
-  in >> label >> cs.mean_agg; // the mean aggregate
-  check_label(label, "mean_agg:");
+  in >> label >> cs.total_meth; // the mean aggregate
+  check_label(label, "total_meth:");
 
   return in;
 }
@@ -185,6 +187,6 @@ LevelsCounter::operator+=(const LevelsCounter &rhs) {
   total_t += rhs.total_t;
   called_meth += rhs.called_meth;
   called_unmeth += rhs.called_unmeth;
-  mean_agg += rhs.mean_agg;
+  total_meth += rhs.total_meth;
   return *this;
 }

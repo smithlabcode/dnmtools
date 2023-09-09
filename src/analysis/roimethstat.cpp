@@ -337,10 +337,6 @@ Columns (beyond the first 6) in the BED format output:
       cerr << opt_parse.help_message() << endl;
       return EXIT_FAILURE;
     }
-    if (sort_data_if_needed && !preload) {
-      cerr << "cannot sort data unless all data is loaded" << endl;
-      return EXIT_FAILURE;
-    }
     if (level_code != "w" && level_code != "u" && level_code != "f") {
       cerr << "selected level must be in {w, u, f}" << endl;
       return EXIT_FAILURE;

@@ -372,7 +372,7 @@ Columns (beyond the first 6) in the BED format output:
         sort(begin(regions), end(regions), cmp_region_chrom_order(chrom_order));
       }
       else
-        throw runtime_error("regions not sorted: " + regions_file);
+        throw runtime_error("not sorted: " + regions_file + " (consider -s)");
     }
 
     if (n_columns == 3)  // then we should name the regions

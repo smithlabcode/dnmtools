@@ -49,24 +49,40 @@ using std::vector;
 
 using bamxx::bgzf_file;
 
-struct cmp_region_chrom_order {
-  cmp_region_chrom_order(const unordered_map<string, uint32_t> &m): order{m} {}
+bool
+cmp_within_chrom(const GenomicRegion &r1, const GenomicRegion &r2) {
+  return (r1.get_start() < r2.get_start() ||
+          (r1.get_start() == r2.get_start() &&
+           (r1.get_end() < r2.get_end() ||
+            (r1.get_end() == r2.get_end() &&
+             (r1.get_strand() < r2.get_strand())))));
+}
+
+bool
+cmp_within_chrom(const MSite &s1, const MSite &s2) {
+  return s1.pos < s2.pos;
+}
+
+template<class T> typename T::const_iterator
+get_chrom_order(const T &order, const MSite &s) {
+  return order.find(s.chrom);
+}
+
+template<class T> typename T::const_iterator
+get_chrom_order(const T &order, const GenomicRegion &r) {
+  return order.find(r.get_chrom());
+}
+
+struct cmp_chrom_order {
+  cmp_chrom_order(const unordered_map<string, uint32_t> &m): order{m} {}
 
   template<class T> bool operator()(const T &a, const T &b) const {
-    const auto ac = order.find(a.get_chrom());
+    const auto ac = get_chrom_order(order, a);
     if (ac == cend(order)) return false;
-    const auto bc = order.find(b.get_chrom());
+    const auto bc = get_chrom_order(order, b);
     if (bc == cend(order)) return true;
     const auto c = static_cast<int>(ac->second) - static_cast<int>(bc->second);
-    // clang-format off
-    return (c < 0 ||
-            (c == 0 &&
-             (a.get_start() < b.get_start() ||
-              (a.get_start() == b.get_start() &&
-               (a.get_end() < b.get_end() ||
-                (a.get_end() == b.get_end() &&
-                 (a.get_strand() < b.get_strand())))))));
-    // clang-format on
+    return c < 0 || (c == 0 && cmp_within_chrom(a, b));
   }
 
   const unordered_map<string, uint32_t> &order;
@@ -102,7 +118,8 @@ get_chroms(const string &filename) {
 
 template <class ForwardIt, class T>
 static inline pair<ForwardIt, ForwardIt>
-region_bounds(ForwardIt first, ForwardIt last, const T &region) {
+region_bounds(const unordered_map<string, uint32_t> &chrom_order,
+              ForwardIt first, ForwardIt last, const T &region) {
   // ADS: in the sites below, a and b, the strand is set to '+'
   // always. Otherwise the ordering on MSite would force strand to be
   // used. The consequence is that sites on the positive strand would
@@ -118,7 +135,8 @@ region_bounds(ForwardIt first, ForwardIt last, const T &region) {
   // below use "lower_bound" because "b" is strictly following valid
   // elements. Otherwise we would include in our range all elements
   // comparing equal to "b", which are invalid.
-  return {lower_bound(first, last, a), lower_bound(first, last, b)};
+  const cmp_chrom_order cmp{chrom_order};
+  return {lower_bound(first, last, a, cmp), lower_bound(first, last, b, cmp)};
 }
 
 static string
@@ -173,6 +191,7 @@ read_sites(const string &filename) {
 static void
 process_preloaded(const bool VERBOSE, const bool report_more_information,
                   const char level_code, const string &sites_file,
+                  const unordered_map<string, uint32_t> &chrom_order,
                   const vector<GenomicRegion> &regions, std::ostream &out) {
 
   const auto sites = read_sites(sites_file);
@@ -183,18 +202,18 @@ process_preloaded(const bool VERBOSE, const bool report_more_information,
 
   if (VERBOSE) cerr << "[n_sites=" << sites.size() << "]" << endl;
 
-  for (auto &region : regions) {
+  for (auto &r : regions) {
     LevelsCounter lc;
-    const auto bounds = region_bounds(cbegin(sites), cend(sites), region);
-    for (auto c = bounds.first; c != bounds.second; ++c) lc.update(*c);
+    const auto b = region_bounds(chrom_order, cbegin(sites), cend(sites), r);
+    for (auto c = b.first; c != b.second; ++c) lc.update(*c);
 
     const double score =
       level_code == 'w'
         ? lc.mean_meth_weighted()
         : (level_code == 'u' ? lc.mean_meth() : lc.fractional_meth());
-    GenomicRegion r{region};
-    r.set_score(score);
-    out << r;
+    GenomicRegion r_scored{r};
+    r_scored.set_score(score);
+    out << r_scored;
     if (report_more_information)
       out << '\t' << format_levels_counter(lc);
     out << '\n';
@@ -375,7 +394,7 @@ Columns (beyond the first 6) in the BED format output:
     if (!is_sorted(begin(regions), end(regions))) {
       if (sort_data_if_needed) {
         if (VERBOSE) cerr << "sorting regions" << endl;
-        sort(begin(regions), end(regions), cmp_region_chrom_order(chrom_order));
+        sort(begin(regions), end(regions), cmp_chrom_order(chrom_order));
       }
       else
         throw runtime_error("not sorted: " + regions_file + " (consider -s)");
@@ -396,7 +415,7 @@ Columns (beyond the first 6) in the BED format output:
 
     if (preload)
       process_preloaded(VERBOSE, report_more_information, level_code[0],
-                        sites_file, regions, out);
+                        sites_file, chrom_order, regions, out);
     else
       process_on_disk(report_more_information, level_code[0], sites_file,
                       chrom_order, regions, out);

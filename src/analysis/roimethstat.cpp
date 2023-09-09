@@ -247,7 +247,10 @@ process_on_disk(const bool report_more_information, const char level_code,
         : (level_code == 'u' ? lc.mean_meth() : lc.fractional_meth());
     GenomicRegion r{region};
     r.set_score(score);
-    out << r << '\t' << format_levels_counter(lc) << '\n';
+    out << r;
+    if (report_more_information)
+      out << '\t' << format_levels_counter(lc);
+    out << '\n';
   }
 }
 

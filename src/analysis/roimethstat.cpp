@@ -220,14 +220,20 @@ process_preloaded(const bool VERBOSE, const bool report_more_information,
   }
 }
 
-static inline bool
-not_after(const MSite &site, const string &chrom, const size_t end_pos) {
-  const auto x = site.chrom.compare(chrom);
-  return (x == 0 && site.pos < end_pos) || x < 0;
+template<class T> static inline bool
+not_after(const T &chrom_order, const MSite &site, const uint32_t &chrom_idx,
+          const size_t end_pos) {
+  const auto sc_itr = chrom_order.find(site.chrom);
+  if (sc_itr == cend(chrom_order))
+    throw runtime_error("lookup failure: " + site.chrom);
+  const auto sc = sc_itr->second;
+  return (sc == chrom_idx && site.pos < end_pos) || sc < chrom_idx;
 }
 
 static inline bool
 at_or_after(const MSite &site, const string &chrom, const size_t start_pos) {
+  // not using dictionary in this function because equality of chrom
+  // can be tested using the strings regardless of index
   return (start_pos <= site.pos && site.chrom == chrom);
 }
 
@@ -235,6 +241,10 @@ static LevelsCounter
 calc_site_stats(ifstream &sites_in, const GenomicRegion &region,
                 const unordered_map<string, uint32_t> &chrom_order) {
   const string chrom{region.get_chrom()};
+  const auto chrom_itr = chrom_order.find(chrom);
+  if (chrom_itr == cend(chrom_order))
+    throw runtime_error("lookup failure: " + chrom);
+  const auto chrom_idx = chrom_itr->second;
   const auto start_pos = region.get_start();
   const auto end_pos = region.get_end();
   find_offset_for_msite(chrom_order, chrom, start_pos, sites_in);
@@ -242,7 +252,7 @@ calc_site_stats(ifstream &sites_in, const GenomicRegion &region,
   LevelsCounter lc;
 
   MSite site;
-  while (sites_in >> site && not_after(site, chrom, end_pos))
+  while (sites_in >> site && not_after(chrom_order, site, chrom_idx, end_pos))
     if (at_or_after(site, chrom, start_pos)) lc.update(site);
 
   sites_in.clear();  // clear here otherwise an eof means we skip later
@@ -400,7 +410,9 @@ Columns (beyond the first 6) in the BED format output:
         throw runtime_error("not sorted: " + regions_file + " (consider -s)");
     }
 
-    if (n_columns == 3)  // then we should name the regions
+    // if columns are 3 we name the regions otherwise that column will
+    // be empty and the output format will be wrong
+    if (n_columns == 3)
       for (auto i = 0u; i < regions.size(); ++i)
         regions[i].set_name(default_name_prefix + to_string(i));
 

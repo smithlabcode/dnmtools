@@ -29,7 +29,7 @@ LevelsCounter::update(const MSite &s) {
   if (s.is_mutated()) {
     ++mutations;
   }
-  else if (s.n_reads > 0) {
+  if (s.n_reads > 0) {
     ++sites_covered;
     max_depth = std::max(max_depth, s.n_reads);
     total_c += s.n_meth();

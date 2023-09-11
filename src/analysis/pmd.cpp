@@ -61,7 +61,7 @@ struct pmd_summary {
     pmd_total_size = accumulate(cbegin(pmds), cend(pmds), 0,
                                 [](const uint64_t t, const GenomicRegion &p) {
                                   return t + p.get_width(); });
-    pmd_mean_size = pmd_total_size/static_cast<double>(pmd_count);
+    //pmd_mean_size = pmd_total_size/static_cast<double>(pmd_count);
   }
   // pmd_count is the number of identified PMDs.
   uint64_t pmd_count{};
@@ -74,9 +74,13 @@ struct pmd_summary {
     std::ostringstream oss;
     oss << "pmd_count: " << pmd_count << endl
         << "pmd_total_size: " << pmd_total_size << endl
-        << "pmd_mean_size: "
-        << std::fixed << std::setprecision(2)
-        << pmd_mean_size;
+        << "pmd_mean_size: ";
+    if (pmd_count > 0) 
+      oss << std::fixed << std::setprecision(2)
+          << pmd_total_size/static_cast<double>(pmd_count) << endl;
+    else
+      oss << "~" << endl;
+
     return oss.str();
   }
 };

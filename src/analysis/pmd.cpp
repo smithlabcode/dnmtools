@@ -58,23 +58,25 @@ using bamxx::bgzf_file;
 struct pmd_summary {
   pmd_summary(const vector<GenomicRegion> &pmds) {
     pmd_count = pmds.size();
-    total_pmd_size = accumulate(cbegin(pmds), cend(pmds), 0.0,
-                                [](const double t, const GenomicRegion &p) {
+    pmd_total_size = accumulate(cbegin(pmds), cend(pmds), 0,
+                                [](const uint64_t t, const GenomicRegion &p) {
                                   return t + p.get_width(); });
-    mean_pmd_size = pmd_count/total_pmd_size;
+    pmd_mean_size = pmd_total_size/static_cast<double>(pmd_count);
   }
   // pmd_count is the number of identified PMDs.
   uint64_t pmd_count{};
   // total_pmd_size is the sum of the sizes of the identified PMDs
-  uint64_t total_pmd_size{};
+  uint64_t pmd_total_size{};
   // mean_pmd_size is the mean size of the identified PMDs
-  double mean_pmd_size{};
+  double pmd_mean_size{};
 
   string tostring() {
     std::ostringstream oss;
     oss << "pmd_count: " << pmd_count << endl
-        << "total_pmd_size: " << total_pmd_size << endl
-        << "mean_pmd_size: " << mean_pmd_size;
+        << "pmd_total_size: " << pmd_total_size << endl
+        << "pmd_mean_size: "
+        << std::fixed << std::setprecision(2)
+        << pmd_mean_size;
     return oss.str();
   }
 };

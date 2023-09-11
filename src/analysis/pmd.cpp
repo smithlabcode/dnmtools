@@ -26,6 +26,7 @@
 #include <stdexcept>
 #include <unordered_set>
 #include <random>
+#include <sstream>
 
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
@@ -53,6 +54,30 @@ using std::ofstream;
 using std::to_string;
 
 using bamxx::bgzf_file;
+
+struct pmd_summary {
+  pmd_summary(const vector<GenomicRegion> &pmds) {
+    pmd_count = pmds.size();
+    total_pmd_size = accumulate(cbegin(pmds), cend(pmds), 0.0,
+                                [](const double t, const GenomicRegion &p) {
+                                  return t + p.get_width(); });
+    mean_pmd_size = pmd_count/total_pmd_size;
+  }
+  // pmd_count is the number of identified PMDs.
+  uint64_t pmd_count{};
+  // total_pmd_size is the sum of the sizes of the identified PMDs
+  uint64_t total_pmd_size{};
+  // mean_pmd_size is the mean size of the identified PMDs
+  double mean_pmd_size{};
+
+  string tostring() {
+    std::ostringstream oss;
+    oss << "pmd_count: " << pmd_count << endl
+        << "total_pmd_size: " << total_pmd_size << endl
+        << "mean_pmd_size: " << mean_pmd_size;
+    return oss.str();
+  }
+};
 
 static void
 get_adjacent_distances(const vector<GenomicRegion> &pmds,
@@ -1105,6 +1130,8 @@ main_pmd(int argc, const char **argv) {
     static const double tolerance = 1e-5;
     static const double min_prob  = 1e-10;
 
+    string summary_file;
+
     string params_in_files;
     string params_out_file;
     string posteriors_out_prefix;
@@ -1138,6 +1165,9 @@ main_pmd(int argc, const char **argv) {
     opt_parse.add_opt("posteriors-out", 'r',
                       "write out posterior probabilities in methcounts format",
                       false, posteriors_out_prefix);
+    opt_parse.add_opt("summary", '\0',
+                      "write summary output here",
+                      false, summary_file);
     opt_parse.add_opt("params-out", 'p', "write HMM parameters to this file",
                       false, params_out_file);
     opt_parse.add_opt("seed", 's', "specify random seed",
@@ -1384,6 +1414,12 @@ main_pmd(int argc, const char **argv) {
     optimize_boundaries(bin_size, cpgs_file, good_domains, array_status,
                         reps_fg_alpha, reps_fg_beta,
                         reps_bg_alpha, reps_bg_beta);
+
+    if (!summary_file.empty()) {
+      ofstream summary_out(summary_file);
+      if (!summary_out) throw runtime_error("failed to open: " + summary_file);
+      summary_out << pmd_summary(good_domains).tostring() << endl;
+    }
 
     ofstream of;
     if (!outfile.empty()) of.open(outfile);

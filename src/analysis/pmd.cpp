@@ -76,8 +76,7 @@ struct pmd_summary {
     oss << "pmd_count: " << pmd_count << endl
         << "pmd_total_size: " << pmd_total_size << endl
         << "pmd_mean_size: "
-        << std::fixed << std::setprecision(2)
-        << pmd_mean_size << endl;
+        << std::fixed << std::setprecision(2) << pmd_mean_size;
 
     return oss.str();
   }

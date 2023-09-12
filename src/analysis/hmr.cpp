@@ -452,7 +452,7 @@ main_hmr(int argc, const char **argv) {
     opt_parse.add_opt("params-out", 'p', "write HMM parameters to this "
                       "file (default: none)", false, params_out_file);
     opt_parse.add_opt("seed", 's', "specify random seed", false, rng_seed);
-    opt_parse.add_opt("summary", '\0', "write summary output here", false, 
+    opt_parse.add_opt("summary", 'S', "write summary output here", false, 
                       summary_file);
     opt_parse.set_show_defaults();
     vector<string> leftover_args;

@@ -286,7 +286,7 @@ main_uniq(int argc, const char **argv) {
                            "sorted mapped reads",
                            "<in-file> [out-file]", 2);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
-    opt_parse.add_opt("stats", 'S', "statistics output file", false, statfile);
+    opt_parse.add_opt("summary", 'S', "statistics output file", false, statfile);
     opt_parse.add_opt("add-count", 'a', "add duplicate counts to reads", false,
                       add_dup_count);
     opt_parse.add_opt("hist", '\0',

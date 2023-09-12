@@ -1168,7 +1168,7 @@ main_pmd(int argc, const char **argv) {
     opt_parse.add_opt("posteriors-out", 'r',
                       "write out posterior probabilities in methcounts format",
                       false, posteriors_out_prefix);
-    opt_parse.add_opt("summary", '\0',
+    opt_parse.add_opt("summary", 'S',
                       "write summary output here",
                       false, summary_file);
     opt_parse.add_opt("params-out", 'p', "write HMM parameters to this file",

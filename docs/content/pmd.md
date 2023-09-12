@@ -186,3 +186,10 @@ Write the trained parameters to this file.
  -s, -seed
 ```
 Specify a random seed value.
+
+```txt
+ , -summary
+```
+Write the analysis summary to this file. The summary is not
+reported unless a file is specified here.
+

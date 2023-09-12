@@ -50,6 +50,34 @@ using std::unordered_set;
 
 using bamxx::bgzf_file;
 
+struct hmr_summary {
+  hmr_summary(const vector<GenomicRegion> &hmrs) {
+    hmr_count = hmrs.size();
+    hmr_total_size = accumulate(cbegin(hmrs), cend(hmrs), 0,
+                                [](const uint64_t t, const GenomicRegion &p) {
+                                  return t + p.get_width(); });
+    hmr_mean_size = 
+      static_cast<double>(hmr_total_size)/std::max(1ul, hmr_count);
+  }
+  // hmr_count is the number of identified HMRs.
+  uint64_t hmr_count{};
+  // total_hmr_size is the sum of the sizes of the identified HMRs
+  uint64_t hmr_total_size{};
+  // mean_hmr_size is the mean size of the identified HMRs
+  double hmr_mean_size{};
+
+  string tostring() {
+    std::ostringstream oss;
+    oss << "hmr_count: " << hmr_count << endl
+        << "hmr_total_size: " << hmr_total_size << endl
+        << "hmr_mean_size: "
+        << std::fixed << std::setprecision(2) << hmr_mean_size;
+
+    return oss.str();
+  }
+};
+
+
 static GenomicRegion
 as_gen_rgn(const MSite &s) {
   return GenomicRegion(s.chrom, s.pos, s.pos + 1);
@@ -386,6 +414,8 @@ main_hmr(int argc, const char **argv) {
     // corrections for small values
     const double tolerance = 1e-10;
 
+    string summary_file;
+
     string params_in_file;
     string params_out_file;
 
@@ -414,11 +444,16 @@ main_hmr(int argc, const char **argv) {
     opt_parse.add_opt("post-meth", '\0', "output file for single-CpG posteiror "
                       "methylation probability (default: none)",
                       false, meth_post_outfile);
+    opt_parse.add_opt("post-meth", '\0', "output file for single-CpG posteiror "
+                      "methylation probability (default: none)",
+                      false, meth_post_outfile);
     opt_parse.add_opt("params-in", 'P', "HMM parameter file "
                       "(override training)", false, params_in_file);
     opt_parse.add_opt("params-out", 'p', "write HMM parameters to this "
                       "file (default: none)", false, params_out_file);
     opt_parse.add_opt("seed", 's', "specify random seed", false, rng_seed);
+    opt_parse.add_opt("summary", 'S', "write summary output here", false, 
+                      summary_file);
     opt_parse.set_show_defaults();
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -556,6 +591,11 @@ main_hmr(int argc, const char **argv) {
         cpg.set_score(1.0 - posteriors[i]);
         out << cpg << '\n';
       }
+    }
+    if (!summary_file.empty()) {
+      std::ofstream summary_out(summary_file);
+      if (!summary_out) throw runtime_error("failed to open: " + summary_file);
+      summary_out << hmr_summary(domains).tostring() << endl;
     }
   }
   catch (runtime_error &e) {

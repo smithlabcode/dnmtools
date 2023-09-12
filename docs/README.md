@@ -19,7 +19,7 @@ pip install -U mkdocs
 
 Build the HTML documentation by running
 ```
-mkdocs build
+mkdocs build -f docs/mkdocs.yml
 ```
 which will create a `site` directory where markdown files are
 converted to HTML
@@ -27,7 +27,7 @@ converted to HTML
 Create a local host for the HTML documentation by running
 
 ```
-mkdocs serve
+mkdocs serve -f docs/mkdocs.yml
 ```
 
 This will create the documentation, usually at http://localhost:8000 .

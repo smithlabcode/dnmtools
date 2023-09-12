@@ -77,25 +77,66 @@ struct rd_stats {  // keep track of good bases/reads in and out
   }
 };
 
+
+struct uniq_summary {
+  uniq_summary(const rd_stats &rs_in, const rd_stats &rs_out,
+               const size_t reads_duped) {
+    total_reads = rs_in.reads;
+    total_bases = rs_in.bases;
+    unique_reads = rs_out.reads;
+    unique_read_bases = rs_out.bases;
+    reads_removed = rs_in.reads - rs_out.reads;
+    non_duplicate_fraction = static_cast<double>(rs_out.reads - reads_duped) / 
+                             std::max(1ul, rs_in.reads);
+    duplication_rate = static_cast<double>(reads_removed + reads_duped) / 
+                       std::max(1ul, reads_duped);
+    duplicate_reads = reads_duped;
+  }
+
+  // total_reads is the number of input reads
+  size_t total_reads{};
+  // total_bases is the total number of input bases
+  size_t total_bases{};
+  // unique_reads is the number of unique reads 
+  size_t unique_reads{};
+  // unique_read_bases is the total number of bases for the unique reads
+  size_t unique_read_bases{};
+  // non_duplicate_fraction is the ratio of the number of unique reads with 
+  // no duplicates to that of the input reads 
+  double non_duplicate_fraction{};
+  // duplicate_reads is the number of unique reads with at least one duplicate
+  size_t duplicate_reads{};
+  // reads_removed is the number of duplicate reads that have been removed
+  size_t reads_removed{};
+  // duplication_rate is the average number of duplicates for the reads with 
+  // at least one duplicate (>1 by definition)
+  double duplication_rate{};
+
+  string tostring() {
+    std::ostringstream oss;
+    oss << "total_reads: " << total_reads << endl
+        << "total_bases: " << total_bases << endl
+        << "unique_reads: " << unique_reads << endl
+        << "unique_read_bases: " << unique_read_bases << endl
+        << "non_duplicate_fraction: " << non_duplicate_fraction << endl
+        << "duplicate_reads: " << duplicate_reads << endl
+        << "reads_removed: " << reads_removed << endl
+        << "duplication_rate: " << duplication_rate;
+
+    return oss.str();
+  }
+};
+
+
+
 static void
 write_stats_output(const rd_stats &rs_in, const rd_stats &rs_out,
                    const size_t reads_duped, const string &statfile) {
   if (!statfile.empty()) {
-    const size_t reads_removed = rs_in.reads - rs_out.reads;
-    const double non_dup_frac =
-      (rs_out.reads - reads_duped) / static_cast<double>(rs_in.reads);
-    const double dup_rate =
-      (reads_removed + reads_duped) / static_cast<double>(reads_duped);
+    uniq_summary summary(rs_in, rs_out, reads_duped);
     ofstream out_stat(statfile);
     if (!out_stat) throw runtime_error("bad stats output file");
-    out_stat << "total_reads: " << rs_in.reads << endl
-             << "total_bases: " << rs_in.bases << endl
-             << "unique_reads: " << rs_out.reads << endl
-             << "unique_read_bases: " << rs_out.bases << endl
-             << "non_duplicate_fraction: " << non_dup_frac << endl
-             << "duplicate_reads: " << reads_duped << endl
-             << "reads_removed: " << reads_removed << endl
-             << "duplication_rate: " << dup_rate << endl;
+    out_stat << summary.tostring() << endl;
   }
 }
 

@@ -172,7 +172,7 @@ to filering candidate HMRs. This parameter is typically only used for
 testing (default: 408).
 
 ```txt
- , -summary
+ -summary
 ```
 Write the analysis summary to this file. The summary is not
 reported unless a file is specified here.

@@ -188,7 +188,7 @@ Write the trained parameters to this file.
 Specify a random seed value.
 
 ```txt
- , -summary
+ -summary
 ```
 Write the analysis summary to this file. The summary is not
 reported unless a file is specified here.

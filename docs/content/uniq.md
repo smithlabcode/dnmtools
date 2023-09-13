@@ -49,10 +49,10 @@ most helpful when the input and output are both BAM, where the threads
 can really speed things up.
 
 ```txt
- -S, -stats
+ -S, -summary
 ```
 Save statistics on duplication rates to this file. The statistics are not
-reported unless a file is specified here.
+reported unless a file is specified here. This option is correct as of v1.4.0.
 
 ```txt
  -hist

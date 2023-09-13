@@ -46,13 +46,157 @@ using std::string;
 using std::unordered_map;
 using std::unordered_set;
 using std::vector;
+using std::for_each;
 
 using bamxx::bam_rec;
 
+struct bsrate_summary {
+
+  bsrate_summary() = default;
+
+  uint64_t converted_count_positive{};
+  uint64_t total_count_positive{};
+  double bisulfite_conversion_rate_positive{};
+
+  uint64_t converted_count_negative{};
+  uint64_t total_count_negative{};
+  double bisulfite_conversion_rate_negative{};
+
+  uint64_t converted_count{};
+  uint64_t total_count{};
+  double bisulfite_conversion_rate{};
+
+  uint64_t error_count{};
+  uint64_t valid_count{};
+  double error_rate{};
+
+  void update_pos(const char nt) {
+    if (nt == 'C' || nt == 'T') {
+      ++total_count_positive;
+      converted_count_positive += (nt == 'T');
+    }
+    else if (nt != 'N')
+      ++error_count;
+  }
+
+  void update_neg(const char nt) {
+    if (nt == 'C' || nt == 'T') {
+      ++total_count_negative;
+      converted_count_negative += (nt == 'T');
+    }
+    else if (nt != 'N')
+      ++error_count;
+  }
+
+  bsrate_summary &operator+=(const bsrate_summary &rhs) {
+    converted_count_positive += rhs.converted_count_positive;
+    total_count_positive += rhs.total_count_positive;
+    bisulfite_conversion_rate_positive = 0.0;
+
+    converted_count_negative += rhs.converted_count_negative;
+    total_count_negative += rhs.total_count_negative;
+    bisulfite_conversion_rate_negative = 0.0;
+
+    converted_count += rhs.converted_count;
+    total_count += rhs.total_count;
+    bisulfite_conversion_rate = 0.0;
+
+    error_count += rhs.error_count;
+    valid_count += rhs.valid_count;
+    error_rate = 0.0;
+    return *this;
+  }
+
+  void set_values() {
+    bisulfite_conversion_rate_positive =
+      static_cast<double>(converted_count_positive) /
+      std::max(total_count_positive, 1ul);
+
+    bisulfite_conversion_rate_negative =
+      static_cast<double>(converted_count_negative) /
+      std::max(total_count_negative, 1ul);
+
+    converted_count = converted_count_positive + converted_count_negative;
+    total_count = total_count_positive + total_count_negative;
+
+    bisulfite_conversion_rate =
+      static_cast<double>(converted_count) / std::max(total_count, 1ul);
+
+    valid_count = total_count + error_count;
+
+    error_rate = static_cast<double>(error_count) / std::max(valid_count, 1ul);
+  }
+
+  string tostring_as_row() const {
+    constexpr auto precision_val = 5u;
+    std::ostringstream oss;
+    oss.precision(precision_val);
+    oss.setf(std::ios_base::fixed, std::ios_base::floatfield);
+    oss << total_count_positive << '\t' << converted_count_positive << '\t'
+        << bisulfite_conversion_rate_positive << '\t';
+
+    oss << total_count_negative << '\t' << converted_count_negative << '\t'
+        << bisulfite_conversion_rate_negative << '\t';
+
+    oss << total_count << '\t' << converted_count << '\t'
+        << bisulfite_conversion_rate << '\t';
+
+    oss << error_count << '\t' << valid_count << '\t' << error_rate;
+    return oss.str();
+  }
+
+  string tostring() const {
+    std::ostringstream oss;
+    oss << "converted_count_positive"
+        << ": " << converted_count_positive << '\n';
+
+    oss << "total_count_positive"
+        << ": " << total_count_positive << '\n';
+
+    oss << "bisulfite_conversion_rate_positive"
+        << ": " << bisulfite_conversion_rate_positive << '\n';
+
+    oss << "converted_count_negative"
+        << ": " << converted_count_negative << '\n';
+
+    oss << "total_count_negative"
+        << ": " << total_count_negative << '\n';
+
+    oss << "bisulfite_conversion_rate_negative"
+        << ": " << bisulfite_conversion_rate_negative << '\n';
+
+    oss << "converted_count"
+        << ": " << converted_count << '\n';
+    oss << "total_count"
+        << ": " << total_count << '\n';
+
+    oss << "bisulfite_conversion_rate"
+        << ": " << bisulfite_conversion_rate << '\n';
+
+    oss << "error_count"
+        << ": " << error_count << '\n';
+    oss << "valid_count"
+        << ": " << valid_count << '\n';
+    oss << "error_rate"
+        << ": " << error_rate;
+
+    return oss.str();
+  }
+};
+
+inline bsrate_summary
+operator+(bsrate_summary lhs, const bsrate_summary &rhs) {
+  lhs += rhs;
+  return lhs;
+}
+
 static pair<uint32_t, uint32_t>
 count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
-                 const bam_rec &aln, vector<size_t> &unconv,
-                 vector<size_t> &conv, vector<size_t> &err, size_t &hanging) {
+                 const bam_rec &aln,
+                 vector<size_t> &unconv,
+                 vector<size_t> &conv,
+                 vector<size_t> &err,
+                 size_t &hanging) {
   uint32_t n_conv = 0, n_uconv = 0;
 
   /* iterate through reference, query/read and fragment */
@@ -95,7 +239,48 @@ count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
       if (cigar_eats_frag(op)) fpos += n;
     }
   }
+  assert(qpos == get_l_qseq(aln));
+  return {n_conv, n_conv + n_uconv};
+}
 
+static pair<uint32_t, uint32_t>
+count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
+                 const bam_rec &aln,
+                 vector<bsrate_summary> &summaries,
+                 size_t &hanging) {
+  uint32_t n_conv = 0, n_uconv = 0;
+
+  /* iterate through reference, query/read and fragment */
+  const auto seq = bam_get_seq(aln);
+  const auto beg_cig = bam_get_cigar(aln);
+  const auto end_cig = beg_cig + get_n_cigar(aln);
+  auto rpos = get_pos(aln);
+  auto qpos = 0;
+  auto fpos = 0;
+
+  const decltype(rpos) chrom_lim = chrom.size() - 1;
+
+  for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
+    const auto op = bam_cigar_op(*c_itr);
+    const auto n = bam_cigar_oplen(*c_itr);
+    if (cigar_eats_ref(op) && cigar_eats_query(op)) {
+      const decltype(qpos) end_qpos = qpos + n;
+      for (; qpos < end_qpos; ++qpos, ++rpos, ++fpos) {
+        if (rpos > chrom_lim) ++hanging;
+        if (is_cytosine(chrom[rpos]) &&
+            (rpos >= chrom_lim || !is_guanine(chrom[rpos + 1]) ||
+             INCLUDE_CPGS)) {
+          const auto qc = seq_nt16_str[bam_seqi(seq, qpos)];
+          summaries[fpos].update_pos(qc);
+        }
+      }
+    }
+    else {
+      if (cigar_eats_query(op)) qpos += n;
+      if (cigar_eats_ref(op)) rpos += n;
+      if (cigar_eats_frag(op)) fpos += n;
+    }
+  }
   assert(qpos == get_l_qseq(aln));
   return {n_conv, n_conv + n_uconv};
 }
@@ -150,22 +335,61 @@ count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
   return {n_conv, n_conv + n_uconv};
 }
 
+static pair<uint32_t, uint32_t>
+count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
+                 const bam_rec &aln, vector<bsrate_summary> &summaries,
+                 size_t &hanging) {
+  uint32_t n_conv = 0, n_uconv = 0;
+
+  /* iterate backward over query/read positions but forward over
+     reference and fragment positions */
+  const auto seq = bam_get_seq(aln);
+  const auto beg_cig = bam_get_cigar(aln);
+  const auto end_cig = beg_cig + get_n_cigar(aln);
+  auto rpos = get_pos(aln);
+  auto qpos = get_l_qseq(aln);
+  auto fpos = 0;
+
+  const decltype(rpos) chrom_lim = chrom.size() - 1;
+
+  for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
+    const auto op = bam_cigar_op(*c_itr);
+    const auto n = bam_cigar_oplen(*c_itr);
+    if (cigar_eats_ref(op) && cigar_eats_query(op)) {
+      const decltype(qpos) end_qpos = qpos - n;
+      for (; qpos > end_qpos; --qpos, ++rpos, ++fpos) {
+        if (rpos > chrom_lim) ++hanging;
+        if (is_guanine(chrom[rpos]) &&
+            (rpos == 0 || !is_cytosine(chrom[rpos - 1]) || INCLUDE_CPGS)) {
+          const auto qc = seq_nt16_str[bam_seqi(seq, qpos - 1)];
+          summaries[fpos].update_neg(qc);
+        }
+      }
+    }
+    else {
+      if (cigar_eats_query(op)) qpos -= n;
+      if (cigar_eats_ref(op)) rpos += n;
+      if (cigar_eats_frag(op)) fpos += n;
+    }
+  }
+  assert(qpos == 0);
+  return {n_conv, n_conv + n_uconv};
+}
+
 static void
 write_output(const string &outfile, const vector<size_t> &ucvt_count_p,
              const vector<size_t> &cvt_count_p,
              const vector<size_t> &ucvt_count_n,
              const vector<size_t> &cvt_count_n, const vector<size_t> &err_p,
              const vector<size_t> &err_n) {
-  // Get some totals first
-  const size_t pos_cvt = accumulate(begin(cvt_count_p), end(cvt_count_p), 0ul);
-  const size_t neg_cvt = accumulate(begin(cvt_count_n), end(cvt_count_n), 0ul);
-  const size_t total_cvt = pos_cvt + neg_cvt;
+  // get some totals first
+  const auto pos_cvt = reduce(begin(cvt_count_p), end(cvt_count_p));
+  const auto neg_cvt = reduce(begin(cvt_count_n), end(cvt_count_n));
+  const auto total_cvt = pos_cvt + neg_cvt;
 
-  const size_t pos_ucvt =
-    accumulate(begin(ucvt_count_p), end(ucvt_count_p), 0ul);
-  const size_t neg_ucvt =
-    accumulate(begin(ucvt_count_n), end(ucvt_count_n), 0ul);
-  const size_t total_ucvt = pos_ucvt + neg_ucvt;
+  const auto pos_ucvt = reduce(begin(ucvt_count_p), end(ucvt_count_p));
+  const auto neg_ucvt = reduce(begin(ucvt_count_n), end(ucvt_count_n));
+  const auto total_ucvt = pos_ucvt + neg_ucvt;
 
   std::ofstream of;
   if (!outfile.empty()) of.open(outfile.c_str());
@@ -238,6 +462,67 @@ write_output(const string &outfile, const vector<size_t> &ucvt_count_p,
   }
 }
 
+static void
+write_output(const string &outfile, const vector<bsrate_summary> &summaries) {
+
+  std::ofstream of;
+  if (!outfile.empty()) of.open(outfile.c_str());
+  std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
+  if (!out) throw dnmt_error("failed to open output file");
+
+  bsrate_summary overall_summary = reduce(cbegin(summaries), cend(summaries));
+  overall_summary.set_values();
+
+  out << "OVERALL CONVERSION RATE = "
+      << std::fixed << overall_summary.bisulfite_conversion_rate << '\n'
+      << "POS CONVERSION RATE = "
+      << std::fixed << overall_summary.bisulfite_conversion_rate_positive << '\t'
+      << std::fixed << overall_summary.total_count_positive << '\n'
+      << "NEG CONVERSION RATE = "
+      << std::fixed << overall_summary.bisulfite_conversion_rate_negative << '\t'
+      << std::fixed << overall_summary.total_count_negative << '\n';
+
+  // clang-format off
+  out << "BASE" << '\t'
+      << "PTOT" << '\t'
+      << "PCONV" << '\t'
+      << "PRATE" << '\t'
+      << "NTOT" << '\t'
+      << "NCONV" << '\t'
+      << "NRATE" << '\t'
+      << "BTHTOT" << '\t'
+      << "BTHCONV" << '\t'
+      << "BTHRATE" << '\t'
+      << "ERR" << '\t'
+      << "ALL" << '\t'
+      << "ERRRATE"  << endl;
+  // clang-format on
+
+  // Figure out how many positions to print in the output, capped at 1000
+  size_t output_len = std::min(std::size(summaries), 1000ul);
+
+  while (output_len > 0 && summaries[output_len - 1].total_count == 0)
+    --output_len;
+
+  // Now actually output the results
+  static const size_t precision_val = 5;
+  for (size_t i = 0; i < output_len; ++i) {
+    out << (i + 1) << "\t";
+    out << summaries[i].tostring_as_row() << '\n';
+  }
+}
+
+static void
+write_summary(const string &summary_file, vector<bsrate_summary> &summaries) {
+
+  auto s = reduce(cbegin(summaries), cend(summaries));
+  s.set_values();
+
+  std::ofstream out(summary_file);
+  if (!out) throw dnmt_error("failed to open file: " + summary_file);
+  out << s.tostring() << '\n';
+}
+
 template<typename T> static inline void
 update_per_read_stats(const pair<T, T> &x, vector<vector<T>> &tab) {
   if (x.second < tab.size()) ++tab[x.second][x.first];
@@ -299,6 +584,7 @@ main_bsrate(int argc, const char **argv) {
     size_t n_hist_bins = 20;
 
     string chroms_file;
+    string summary_file;
     string outfile;
     string seq_to_use;  // use only this chrom/sequence in the analysis
 
@@ -322,6 +608,7 @@ main_bsrate(int argc, const char **argv) {
                       false, report_per_read);
     opt_parse.add_opt("bins", 'b', "number of bins for per-read", false,
                       n_hist_bins);
+    opt_parse.add_opt("summary", 'S', "summary file name", false, summary_file);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
@@ -377,12 +664,14 @@ main_bsrate(int argc, const char **argv) {
     vector<vector<uint32_t>> per_read_counts(
       max_cytosine_per_frag, vector<uint32_t>(max_cytosine_per_frag, 0));
 
-    vector<size_t> unconv_count_pos(output_size, 0ul);
-    vector<size_t> conv_count_pos(output_size, 0ul);
-    vector<size_t> unconv_count_neg(output_size, 0ul);
-    vector<size_t> conv_count_neg(output_size, 0ul);
-    vector<size_t> err_pos(output_size, 0ul);
-    vector<size_t> err_neg(output_size, 0ul);
+    // vector<size_t> unconv_count_pos(output_size, 0ul);
+    // vector<size_t> conv_count_pos(output_size, 0ul);
+    // vector<size_t> unconv_count_neg(output_size, 0ul);
+    // vector<size_t> conv_count_neg(output_size, 0ul);
+    // vector<size_t> err_pos(output_size, 0ul);
+    // vector<size_t> err_neg(output_size, 0ul);
+
+    vector<bsrate_summary> summaries(output_size);
 
     int32_t current_tid = -1;
     size_t chrom_idx = numeric_limits<size_t>::max();
@@ -422,20 +711,32 @@ main_bsrate(int argc, const char **argv) {
       if (use_this_chrom) {
         // do the work for the current mapped read
         const auto conv_result =
+          // bam_is_rev(aln) ? count_states_neg(INCLUDE_CPGS, chroms[chrom_idx],
+          //                                    aln, unconv_count_neg,
+          //                                    conv_count_neg, err_neg, hanging)
+          //                 : count_states_pos(INCLUDE_CPGS, chroms[chrom_idx],
+          //                                    aln, unconv_count_pos,
+          //                                    conv_count_pos, err_pos, hanging);
           bam_is_rev(aln) ? count_states_neg(INCLUDE_CPGS, chroms[chrom_idx],
-                                             aln, unconv_count_neg,
-                                             conv_count_neg, err_neg, hanging)
+                                             aln, summaries, hanging)
                           : count_states_pos(INCLUDE_CPGS, chroms[chrom_idx],
-                                             aln, unconv_count_pos,
-                                             conv_count_pos, err_pos, hanging);
+                                             aln, summaries, hanging);
         if (report_per_read)
           update_per_read_stats(conv_result, per_read_counts);
       }
     }
-    write_output(outfile, unconv_count_pos, conv_count_pos, unconv_count_neg,
-                 conv_count_neg, err_pos, err_neg);
+    // write_output(outfile, unconv_count_pos, conv_count_pos, unconv_count_neg,
+    //              conv_count_neg, err_pos, err_neg);
+    for_each(begin(summaries), end(summaries), [](bsrate_summary &s) {
+      s.set_values();
+    });
+
+    write_output(outfile, summaries);
 
     if (hanging > 0) write_hanging_read_message(cerr, hanging);
+
+    if (!summary_file.empty())
+      write_summary(summary_file, summaries);
 
     if (report_per_read)
       write_per_read_histogram(per_read_counts, n_hist_bins, cout);

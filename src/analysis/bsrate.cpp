@@ -52,8 +52,6 @@ using bamxx::bam_rec;
 
 struct bsrate_summary {
 
-  bsrate_summary() = default;
-
   uint64_t converted_count_positive{};
   uint64_t total_count_positive{};
   double bisulfite_conversion_rate_positive{};
@@ -110,21 +108,21 @@ struct bsrate_summary {
   void set_values() {
     bisulfite_conversion_rate_positive =
       static_cast<double>(converted_count_positive) /
-      std::max(total_count_positive, 1ul);
+      max(total_count_positive, 1ul);
 
     bisulfite_conversion_rate_negative =
       static_cast<double>(converted_count_negative) /
-      std::max(total_count_negative, 1ul);
+      max(total_count_negative, 1ul);
 
     converted_count = converted_count_positive + converted_count_negative;
     total_count = total_count_positive + total_count_negative;
 
     bisulfite_conversion_rate =
-      static_cast<double>(converted_count) / std::max(total_count, 1ul);
+      static_cast<double>(converted_count) / max(total_count, 1ul);
 
     valid_count = total_count + error_count;
 
-    error_rate = static_cast<double>(error_count) / std::max(valid_count, 1ul);
+    error_rate = static_cast<double>(error_count) / max(valid_count, 1ul);
   }
 
   string tostring_as_row() const {
@@ -132,53 +130,51 @@ struct bsrate_summary {
     std::ostringstream oss;
     oss.precision(precision_val);
     oss.setf(std::ios_base::fixed, std::ios_base::floatfield);
-    oss << total_count_positive << '\t' << converted_count_positive << '\t'
+    // clang-format off
+    oss << total_count_positive << '\t'
+        << converted_count_positive << '\t'
         << bisulfite_conversion_rate_positive << '\t';
-
-    oss << total_count_negative << '\t' << converted_count_negative << '\t'
+    oss << total_count_negative << '\t'
+        << converted_count_negative << '\t'
         << bisulfite_conversion_rate_negative << '\t';
-
-    oss << total_count << '\t' << converted_count << '\t'
+    oss << total_count << '\t'
+        << converted_count << '\t'
         << bisulfite_conversion_rate << '\t';
-
-    oss << error_count << '\t' << valid_count << '\t' << error_rate;
+    oss << error_count << '\t'
+        << valid_count << '\t'
+        << error_rate;
+    // clang-format on
     return oss.str();
   }
 
   string tostring() const {
+    constexpr auto sep = ": ";
     std::ostringstream oss;
-    oss << "converted_count_positive"
-        << ": " << converted_count_positive << '\n';
+    oss << "converted_count_positive" << sep << converted_count_positive
+        << '\n';
 
-    oss << "total_count_positive"
-        << ": " << total_count_positive << '\n';
+    oss << "total_count_positive" << sep << total_count_positive << '\n';
 
-    oss << "bisulfite_conversion_rate_positive"
-        << ": " << bisulfite_conversion_rate_positive << '\n';
+    oss << "bisulfite_conversion_rate_positive" << sep
+        << bisulfite_conversion_rate_positive << '\n';
 
-    oss << "converted_count_negative"
-        << ": " << converted_count_negative << '\n';
+    oss << "converted_count_negative" << sep << converted_count_negative
+        << '\n';
 
-    oss << "total_count_negative"
-        << ": " << total_count_negative << '\n';
+    oss << "total_count_negative" << sep << total_count_negative << '\n';
 
-    oss << "bisulfite_conversion_rate_negative"
-        << ": " << bisulfite_conversion_rate_negative << '\n';
+    oss << "bisulfite_conversion_rate_negative" << sep
+        << bisulfite_conversion_rate_negative << '\n';
 
-    oss << "converted_count"
-        << ": " << converted_count << '\n';
-    oss << "total_count"
-        << ": " << total_count << '\n';
+    oss << "converted_count" << sep << converted_count << '\n';
+    oss << "total_count" << sep << total_count << '\n';
 
-    oss << "bisulfite_conversion_rate"
-        << ": " << bisulfite_conversion_rate << '\n';
+    oss << "bisulfite_conversion_rate" << sep << bisulfite_conversion_rate
+        << '\n';
 
-    oss << "error_count"
-        << ": " << error_count << '\n';
-    oss << "valid_count"
-        << ": " << valid_count << '\n';
-    oss << "error_rate"
-        << ": " << error_rate;
+    oss << "error_count" << sep << error_count << '\n';
+    oss << "valid_count" << sep << valid_count << '\n';
+    oss << "error_rate" << sep << error_rate;
 
     return oss.str();
   }
@@ -190,58 +186,6 @@ operator+(bsrate_summary lhs, const bsrate_summary &rhs) {
   return lhs;
 }
 
-static pair<uint32_t, uint32_t>
-count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
-                 const bam_rec &aln,
-                 vector<size_t> &unconv,
-                 vector<size_t> &conv,
-                 vector<size_t> &err,
-                 size_t &hanging) {
-  uint32_t n_conv = 0, n_uconv = 0;
-
-  /* iterate through reference, query/read and fragment */
-  const auto seq = bam_get_seq(aln);
-  const auto beg_cig = bam_get_cigar(aln);
-  const auto end_cig = beg_cig + get_n_cigar(aln);
-  auto rpos = get_pos(aln);
-  auto qpos = 0;
-  auto fpos = 0;
-
-  const decltype(rpos) chrom_lim = chrom.size() - 1;
-
-  for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
-    const auto op = bam_cigar_op(*c_itr);
-    const auto n = bam_cigar_oplen(*c_itr);
-    if (cigar_eats_ref(op) && cigar_eats_query(op)) {
-      const decltype(qpos) end_qpos = qpos + n;
-      for (; qpos < end_qpos; ++qpos, ++rpos, ++fpos) {
-        if (rpos > chrom_lim) ++hanging;
-        if (is_cytosine(chrom[rpos]) &&
-            (rpos >= chrom_lim || !is_guanine(chrom[rpos + 1]) ||
-             INCLUDE_CPGS)) {
-          const auto qc = seq_nt16_str[bam_seqi(seq, qpos)];
-          if (qc == 'C') {
-            ++unconv[fpos];
-            ++n_uconv;
-          }
-          else if (qc == 'T') {
-            ++conv[fpos];
-            ++n_conv;
-          }
-          else if (qc != 'N')
-            ++err[fpos];
-        }
-      }
-    }
-    else {
-      if (cigar_eats_query(op)) qpos += n;
-      if (cigar_eats_ref(op)) rpos += n;
-      if (cigar_eats_frag(op)) fpos += n;
-    }
-  }
-  assert(qpos == get_l_qseq(aln));
-  return {n_conv, n_conv + n_uconv};
-}
 
 static pair<uint32_t, uint32_t>
 count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
@@ -287,56 +231,6 @@ count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
 
 static pair<uint32_t, uint32_t>
 count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
-                 const bam_rec &aln, vector<size_t> &unconv,
-                 vector<size_t> &conv, vector<size_t> &err, size_t &hanging) {
-  uint32_t n_conv = 0, n_uconv = 0;
-
-  /* iterate backward over query/read positions but forward over
-     reference and fragment positions */
-  const auto seq = bam_get_seq(aln);
-  const auto beg_cig = bam_get_cigar(aln);
-  const auto end_cig = beg_cig + get_n_cigar(aln);
-  auto rpos = get_pos(aln);
-  auto qpos = get_l_qseq(aln);
-  auto fpos = 0;
-
-  const decltype(rpos) chrom_lim = chrom.size() - 1;
-
-  for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
-    const auto op = bam_cigar_op(*c_itr);
-    const auto n = bam_cigar_oplen(*c_itr);
-    if (cigar_eats_ref(op) && cigar_eats_query(op)) {
-      const decltype(qpos) end_qpos = qpos - n;
-      for (; qpos > end_qpos; --qpos, ++rpos, ++fpos) {
-        if (rpos > chrom_lim) ++hanging;
-        if (is_guanine(chrom[rpos]) &&
-            (rpos == 0 || !is_cytosine(chrom[rpos - 1]) || INCLUDE_CPGS)) {
-          const auto qc = seq_nt16_str[bam_seqi(seq, qpos - 1)];
-          if (qc == 'C') {
-            ++unconv[fpos];
-            ++n_uconv;
-          }
-          else if (qc == 'T') {
-            ++conv[fpos];
-            ++n_conv;
-          }
-          else if (qc != 'N')
-            ++err[fpos];
-        }
-      }
-    }
-    else {
-      if (cigar_eats_query(op)) qpos -= n;
-      if (cigar_eats_ref(op)) rpos += n;
-      if (cigar_eats_frag(op)) fpos += n;
-    }
-  }
-  assert(qpos == 0);
-  return {n_conv, n_conv + n_uconv};
-}
-
-static pair<uint32_t, uint32_t>
-count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
                  const bam_rec &aln, vector<bsrate_summary> &summaries,
                  size_t &hanging) {
   uint32_t n_conv = 0, n_uconv = 0;
@@ -377,94 +271,7 @@ count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
 }
 
 static void
-write_output(const string &outfile, const vector<size_t> &ucvt_count_p,
-             const vector<size_t> &cvt_count_p,
-             const vector<size_t> &ucvt_count_n,
-             const vector<size_t> &cvt_count_n, const vector<size_t> &err_p,
-             const vector<size_t> &err_n) {
-  // get some totals first
-  const auto pos_cvt = reduce(begin(cvt_count_p), end(cvt_count_p));
-  const auto neg_cvt = reduce(begin(cvt_count_n), end(cvt_count_n));
-  const auto total_cvt = pos_cvt + neg_cvt;
-
-  const auto pos_ucvt = reduce(begin(ucvt_count_p), end(ucvt_count_p));
-  const auto neg_ucvt = reduce(begin(ucvt_count_n), end(ucvt_count_n));
-  const auto total_ucvt = pos_ucvt + neg_ucvt;
-
-  std::ofstream of;
-  if (!outfile.empty()) of.open(outfile.c_str());
-  std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
-  if (!out) throw dnmt_error("failed to open output file");
-
-  out << "OVERALL CONVERSION RATE = "
-      << static_cast<double>(total_cvt) / (total_cvt + total_ucvt) << endl
-      << "POS CONVERSION RATE = "
-      << static_cast<double>(pos_cvt) / (pos_cvt + pos_ucvt) << '\t'
-      << std::fixed << static_cast<size_t>(pos_cvt + pos_ucvt) << endl
-      << "NEG CONVERSION RATE = "
-      << static_cast<double>(neg_cvt) / (neg_cvt + neg_ucvt) << '\t'
-      << std::fixed << static_cast<size_t>(neg_cvt + neg_ucvt) << endl;
-
-  // clang-format off
-  out << "BASE" << '\t'
-      << "PTOT" << '\t'
-      << "PCONV" << '\t'
-      << "PRATE" << '\t'
-      << "NTOT" << '\t'
-      << "NCONV" << '\t'
-      << "NRATE" << '\t'
-      << "BTHTOT" << '\t'
-      << "BTHCONV" << '\t'
-      << "BTHRATE" << '\t'
-      << "ERR" << '\t'
-      << "ALL" << '\t'
-      << "ERRRATE"  << endl;
-  // clang-format on
-
-  // Figure out how many positions to print in the output, capped at 1000
-  size_t output_len = (ucvt_count_p.size() > 1000) ? 1000 : ucvt_count_p.size();
-
-  while (output_len > 0 &&
-         (ucvt_count_p[output_len - 1] + cvt_count_p[output_len - 1] +
-            ucvt_count_n[output_len - 1] + cvt_count_n[output_len - 1] ==
-          0))
-    --output_len;
-
-  // Now actually output the results
-  static const size_t precision_val = 5;
-  for (size_t i = 0; i < output_len; ++i) {
-    const size_t total_p = ucvt_count_p[i] + cvt_count_p[i];
-    const size_t total_n = ucvt_count_n[i] + cvt_count_n[i];
-    const size_t total_valid = total_p + total_n;
-    out << (i + 1) << "\t";
-
-    out.precision(precision_val);
-    out << total_p << '\t' << cvt_count_p[i] << '\t'
-        << static_cast<double>(cvt_count_p[i]) / max(size_t(1ul), total_p)
-        << '\t';
-
-    out.precision(precision_val);
-    out << total_n << '\t' << cvt_count_n[i] << '\t'
-        << static_cast<double>(cvt_count_n[i]) / max(size_t(1ul), total_n)
-        << '\t';
-
-    const double total_cvt = cvt_count_p[i] + cvt_count_n[i];
-    out.precision(precision_val);
-    out << static_cast<size_t>(total_valid) << '\t'
-        << cvt_count_p[i] + cvt_count_n[i] << '\t'
-        << total_cvt / max(1ul, total_valid) << '\t';
-
-    const double total_err = err_p[i] + err_n[i];
-    out.precision(precision_val);
-    const size_t total = total_valid + err_p[i] + err_n[i];
-    out << err_p[i] + err_n[i] << '\t' << static_cast<size_t>(total) << '\t'
-        << total_err / max(1ul, total) << endl;
-  }
-}
-
-static void
 write_output(const string &outfile, const vector<bsrate_summary> &summaries) {
-
   std::ofstream of;
   if (!outfile.empty()) of.open(outfile.c_str());
   std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
@@ -474,13 +281,13 @@ write_output(const string &outfile, const vector<bsrate_summary> &summaries) {
   overall_summary.set_values();
 
   out << "OVERALL CONVERSION RATE = "
-      << std::fixed << overall_summary.bisulfite_conversion_rate << '\n'
+      << overall_summary.bisulfite_conversion_rate << '\n'
       << "POS CONVERSION RATE = "
-      << std::fixed << overall_summary.bisulfite_conversion_rate_positive << '\t'
-      << std::fixed << overall_summary.total_count_positive << '\n'
+      << overall_summary.bisulfite_conversion_rate_positive << '\t'
+      << overall_summary.total_count_positive << '\n'
       << "NEG CONVERSION RATE = "
-      << std::fixed << overall_summary.bisulfite_conversion_rate_negative << '\t'
-      << std::fixed << overall_summary.total_count_negative << '\n';
+      << overall_summary.bisulfite_conversion_rate_negative << '\t'
+      << overall_summary.total_count_negative << '\n';
 
   // clang-format off
   out << "BASE" << '\t'
@@ -498,18 +305,13 @@ write_output(const string &outfile, const vector<bsrate_summary> &summaries) {
       << "ERRRATE"  << endl;
   // clang-format on
 
-  // Figure out how many positions to print in the output, capped at 1000
-  size_t output_len = std::min(std::size(summaries), 1000ul);
-
+  // figure out how many positions to print in the output, capped at 1000
+  auto output_len = std::min(std::size(summaries), 1000ul);
   while (output_len > 0 && summaries[output_len - 1].total_count == 0)
     --output_len;
 
-  // Now actually output the results
-  static const size_t precision_val = 5;
-  for (size_t i = 0; i < output_len; ++i) {
-    out << (i + 1) << "\t";
-    out << summaries[i].tostring_as_row() << '\n';
-  }
+  for (auto i = 0u; i < output_len; ++i)
+    out << (i + 1) << '\t' << summaries[i].tostring_as_row() << '\n';
 }
 
 static void
@@ -711,12 +513,6 @@ main_bsrate(int argc, const char **argv) {
       if (use_this_chrom) {
         // do the work for the current mapped read
         const auto conv_result =
-          // bam_is_rev(aln) ? count_states_neg(INCLUDE_CPGS, chroms[chrom_idx],
-          //                                    aln, unconv_count_neg,
-          //                                    conv_count_neg, err_neg, hanging)
-          //                 : count_states_pos(INCLUDE_CPGS, chroms[chrom_idx],
-          //                                    aln, unconv_count_pos,
-          //                                    conv_count_pos, err_pos, hanging);
           bam_is_rev(aln) ? count_states_neg(INCLUDE_CPGS, chroms[chrom_idx],
                                              aln, summaries, hanging)
                           : count_states_pos(INCLUDE_CPGS, chroms[chrom_idx],
@@ -725,8 +521,6 @@ main_bsrate(int argc, const char **argv) {
           update_per_read_stats(conv_result, per_read_counts);
       }
     }
-    // write_output(outfile, unconv_count_pos, conv_count_pos, unconv_count_neg,
-    //              conv_count_neg, err_pos, err_neg);
     for_each(begin(summaries), end(summaries), [](bsrate_summary &s) {
       s.set_values();
     });

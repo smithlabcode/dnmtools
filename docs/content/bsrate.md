@@ -137,6 +137,41 @@ avoids having to extract reads separately from the mapped reads file
 before using bsrate.
 
 ```txt
+ -A, -a-rich
+```
+The reads are A-rich. This may be relevant if a BPAT protocol is used.
+
+```txt
 -v, -verbose
 ```
 Print more information while the program is running.
+
+```txt
+ -S, -summary
+```
+Write the analysis summary to this file. The summary is not reported
+unless a file is specified here. This information includes nothing
+beyond what is currently generated for the output file. This option is
+correct as of v1.4.0.
+
+```txt
+ -t, -threads
+```
+Use this many threads. This only has an effect if set to a value
+greater than 1. The additional threads are only used for decompressing
+BAM format input. It is not recommended to use many threads due to
+diminishing returns, and performance will degrade if more threads are
+specified than physical cores available. This option is correct as of
+v1.4.0.
+
+```txt
+ -p, -per-read
+```
+This option will generate a histogram of conversion rate per read,
+printed to the terminal. This option is correct as of v1.4.0.
+
+```txt
+ -p, -per-read
+```
+Assming the `-p` option is used, this option determines the number of
+bins in the histogram. This option is correct as of v1.4.0.

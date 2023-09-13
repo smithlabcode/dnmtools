@@ -165,7 +165,7 @@ struct bsrate_summary {
   }
 
   string tostring_as_row() const {
-    constexpr auto precision_val = 5u;
+    static constexpr auto precision_val = 5u;
     std::ostringstream oss;
     oss.precision(precision_val);
     oss.setf(std::ios_base::fixed, std::ios_base::floatfield);
@@ -369,7 +369,7 @@ update_per_read_stats(const pair<T, T> &x, vector<vector<T>> &tab) {
 static inline vector<double>
 format_histogram(const vector<vector<uint32_t>> &tab,
                  const size_t n_hist_bins) {
-  constexpr auto epsilon = 1e-6;
+  static constexpr auto epsilon = 1e-6;
   vector<double> hist(n_hist_bins, 0.0);
   for (size_t i = 1; i < tab.size(); ++i) {
     const double denom = i + epsilon;
@@ -407,12 +407,12 @@ int
 main_bsrate(int argc, const char **argv) {
   try {
     // assumed maximum length of a fragment
-    constexpr const size_t output_size = 10000;
+    static constexpr const size_t output_size = 10000;
 
     // Assumed maximum cytosines per fragment. Currently the per-read
     // information is collected as counts in a 2D array, so that later
     // features may be able to fit distributions based these counts.
-    constexpr const size_t max_cytosine_per_frag = 1000;
+    static constexpr const size_t max_cytosine_per_frag = 1000;
 
     bool VERBOSE = false;
     bool INCLUDE_CPGS = false;

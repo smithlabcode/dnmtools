@@ -251,8 +251,10 @@ count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
         if (is_cytosine(chrom[rpos]) &&
             (rpos >= chrom_lim || !is_guanine(chrom[rpos + 1]) ||
              INCLUDE_CPGS)) {
-          const auto qc = seq_nt16_str[bam_seqi(seq, qpos)];
-          summaries[fpos].update_pos(qc);
+          const auto nt = seq_nt16_str[bam_seqi(seq, qpos)];
+          summaries[fpos].update_pos(nt);
+          n_conv += (nt == 'T');
+          n_uconv += (nt == 'C');
         }
       }
     }
@@ -292,8 +294,10 @@ count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
         if (rpos > chrom_lim) ++hanging;
         if (is_guanine(chrom[rpos]) &&
             (rpos == 0 || !is_cytosine(chrom[rpos - 1]) || INCLUDE_CPGS)) {
-          const auto qc = seq_nt16_str[bam_seqi(seq, qpos - 1)];
-          summaries[fpos].update_neg(qc);
+          const auto nt = seq_nt16_str[bam_seqi(seq, qpos - 1)];
+          summaries[fpos].update_neg(nt);
+          n_conv += (nt == 'T');
+          n_uconv += (nt == 'C');
         }
       }
     }
@@ -363,7 +367,7 @@ write_summary(const string &summary_file, vector<bsrate_summary> &summaries) {
 
 template<typename T> static inline void
 update_per_read_stats(const pair<T, T> &x, vector<vector<T>> &tab) {
-  if (x.second < tab.size()) ++tab[x.second][x.first];
+  if (x.second < std::size(tab)) ++tab[x.second][x.first];
 }
 
 static inline vector<double>

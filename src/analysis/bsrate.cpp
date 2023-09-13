@@ -38,6 +38,7 @@ using std::accumulate;
 using std::cerr;
 using std::cout;
 using std::endl;
+using std::for_each;
 using std::max;
 using std::numeric_limits;
 using std::pair;
@@ -46,26 +47,61 @@ using std::string;
 using std::unordered_map;
 using std::unordered_set;
 using std::vector;
-using std::for_each;
 
 using bamxx::bam_rec;
 
 struct bsrate_summary {
-
+  // converted_count_positive is the number of nucleotides covering a
+  // cytosine in the reference that show a thymine in the read, and
+  // for reads mapping to the positive strand.
   uint64_t converted_count_positive{};
+  // total_count_positive is the number of nucleotides covering a
+  // cytosine in the reference that show either a cytosine or a
+  // thymine in the read, and for reads mapping to the positive
+  // strand.
   uint64_t total_count_positive{};
+  // bisulfite_conversion_rate_positive is equal to
+  // converted_count_positive divided by total_count_positive, a value
+  // that is always between 0 and 1. When total_count_positive is 0,
+  // then bisulfite_conversion_rate_positive is given a value of 0.
   double bisulfite_conversion_rate_positive{};
 
+  // converted_count_negative is the number of nucleotides covering a
+  // cytosine in the reference that show a thymine in the read, and
+  // for reads mapping to the negative strand.
   uint64_t converted_count_negative{};
+  // total_count_negative is the number of nucleotides covering a
+  // cytosine in the reference that show either a cytosine or a
+  // thymine in the read, and for reads mapping to the negative
+  // strand.
   uint64_t total_count_negative{};
+  // bisulfite_conversion_rate_negative is equal to
+  // converted_count_negative divided by total_count_negative, a value
+  // that is always between 0 and 1. When total_count_negative is 0,
+  // then bisulfite_conversion_rate_negative is given a value of 0.
   double bisulfite_conversion_rate_negative{};
 
+  // converted_count is equal to the sum of converted_count_positive
+  // and converted_count_negative.
   uint64_t converted_count{};
+  // total_count is equal to the sum of total_count_positive and
+  // total_count_negative
   uint64_t total_count{};
+  // bisulfite_conversion_rate is equal to converted_count divided by
+  // total_count, a value that is always between 0 and 1. When
+  // total_count is 0, then bisulfite_conversion_rate is given a value
+  // of 0.
   double bisulfite_conversion_rate{};
 
+  // error_count is the number of nucleotides covering a cytosine in
+  // the reference shows either an A or a G in the read.
   uint64_t error_count{};
+  // valid_count is the number of nucleotides covering a cytosine in
+  // the reference shows any nucleotide that is not an N in the read.
   uint64_t valid_count{};
+  // error_rate is equal to error_count divided by valid_count, and is
+  // a value that is always between 0 and 1. When valid_count is 0,
+  // then error_rate is given a value of 0.
   double error_rate{};
 
   void update_pos(const char nt) {
@@ -87,6 +123,9 @@ struct bsrate_summary {
   }
 
   bsrate_summary &operator+=(const bsrate_summary &rhs) {
+    // ADS: the "rates" are set to 0.0 here to ensure that they are
+    // computed properly using the full data after any accumulation of
+    // integer values has completed.
     converted_count_positive += rhs.converted_count_positive;
     total_count_positive += rhs.total_count_positive;
     bisulfite_conversion_rate_positive = 0.0;
@@ -148,7 +187,7 @@ struct bsrate_summary {
   }
 
   string tostring() const {
-    constexpr auto sep = ": ";
+    static constexpr auto sep = ": ";
     std::ostringstream oss;
     oss << "converted_count_positive" << sep << converted_count_positive
         << '\n';
@@ -186,11 +225,9 @@ operator+(bsrate_summary lhs, const bsrate_summary &rhs) {
   return lhs;
 }
 
-
 static pair<uint32_t, uint32_t>
 count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
-                 const bam_rec &aln,
-                 vector<bsrate_summary> &summaries,
+                 const bam_rec &aln, vector<bsrate_summary> &summaries,
                  size_t &hanging) {
   uint32_t n_conv = 0, n_uconv = 0;
 
@@ -316,7 +353,6 @@ write_output(const string &outfile, const vector<bsrate_summary> &summaries) {
 
 static void
 write_summary(const string &summary_file, vector<bsrate_summary> &summaries) {
-
   auto s = reduce(cbegin(summaries), cend(summaries));
   s.set_values();
 
@@ -458,20 +494,13 @@ main_bsrate(int argc, const char **argv) {
     // reference genome
     unordered_map<int32_t, size_t> chrom_lookup;
     size_t chrom_idx_to_use = numeric_limits<size_t>::max();
-    for (size_t i = 0; i < chroms.size(); ++i) {
+    for (auto i = 0u; i < std::size(chroms); ++i) {
       if (names[i] == seq_to_use) chrom_idx_to_use = i;
-      chrom_lookup.insert({sam_hdr_name2tid(hdr.h, names[i].data()), i});
+      chrom_lookup.emplace(sam_hdr_name2tid(hdr.h, names[i].data()), i);
     }
 
     vector<vector<uint32_t>> per_read_counts(
       max_cytosine_per_frag, vector<uint32_t>(max_cytosine_per_frag, 0));
-
-    // vector<size_t> unconv_count_pos(output_size, 0ul);
-    // vector<size_t> conv_count_pos(output_size, 0ul);
-    // vector<size_t> unconv_count_neg(output_size, 0ul);
-    // vector<size_t> conv_count_neg(output_size, 0ul);
-    // vector<size_t> err_pos(output_size, 0ul);
-    // vector<size_t> err_neg(output_size, 0ul);
 
     vector<bsrate_summary> summaries(output_size);
 
@@ -521,16 +550,17 @@ main_bsrate(int argc, const char **argv) {
           update_per_read_stats(conv_result, per_read_counts);
       }
     }
-    for_each(begin(summaries), end(summaries), [](bsrate_summary &s) {
-      s.set_values();
-    });
+
+    // before writing the output we need to ensure the derived
+    // quantities in bsrate_summary have been calculated
+    for_each(begin(summaries), end(summaries),
+             [](bsrate_summary &s) { s.set_values(); });
 
     write_output(outfile, summaries);
 
     if (hanging > 0) write_hanging_read_message(cerr, hanging);
 
-    if (!summary_file.empty())
-      write_summary(summary_file, summaries);
+    if (!summary_file.empty()) write_summary(summary_file, summaries);
 
     if (report_per_read)
       write_per_read_histogram(per_read_counts, n_hist_bins, cout);

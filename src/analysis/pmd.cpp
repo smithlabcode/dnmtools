@@ -793,6 +793,10 @@ load_array_data(const size_t bin_size,
 
   MSite site;
   while (read_site(in, site)) {
+    // TODO: MN: I think that the block below should be placed later
+    // in this scope. At this location, the methylation level of the 
+    // first site in a new chrom is contributed to the last bin of the 
+    // previous chrom.
     if (site.n_reads > 0) { // its covered by a probe
       ++num_probes_in_bin;
       if (site.meth < meth_min)
@@ -880,8 +884,12 @@ load_wgbs_data(const size_t bin_size, const string &cpgs_file,
   std::unordered_set<string> chroms_seen;
 
   MSite site;
+  size_t prev_pos = 0ul;
+  size_t sites_in_bin = 0ul;
+
   while (read_site(in, site)) {
     if (curr_chrom != site.chrom) { // handle change of chrom
+      if (sites_in_bin > 0) bins.back().set_end(prev_pos);
       if (chroms_seen.find(site.chrom) != end(chroms_seen))
         throw runtime_error("sites not sorted");
       chroms_seen.insert(site.chrom);
@@ -889,10 +897,13 @@ load_wgbs_data(const size_t bin_size, const string &cpgs_file,
       reads.push_back(0);
       meth.push_back(make_pair(0.0, 0.0));
       bins.push_back(SimpleGenomicRegion(site.chrom, 0, bin_size));
+      sites_in_bin = 0;
     }
+    prev_pos = site.pos;
     if (site.pos < bins.back().get_start())
       throw runtime_error("sites not sorted");
     while (bins.back().get_end() < site.pos) {
+      sites_in_bin = 0;
       reads.push_back(0);
       meth.push_back(make_pair(0.0, 0.0));
       bins.push_back(SimpleGenomicRegion(site.chrom, bins.back().get_end(),
@@ -901,7 +912,9 @@ load_wgbs_data(const size_t bin_size, const string &cpgs_file,
     reads.back() += site.n_reads;
     meth.back().first += site.n_meth();
     meth.back().second += site.n_unmeth();
+    sites_in_bin++;
   }
+  if (sites_in_bin > 0) bins.back().set_end(prev_pos);
 }
 
 

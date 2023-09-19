@@ -24,6 +24,7 @@
 #include <cmath>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <filesystem>
 
 #include "OptionParser.hpp"
 #include "smithlab_os.hpp"
@@ -58,8 +59,8 @@ wilson_ci_for_binomial(const double alpha, const double n,
 static int
 binom_null(const double alpha, const double n,
            const double p_hat, const double p) {
-  // ADS: function tests if final argument p is outside the (1 -
-  // alpha) CI for p_hat given counts n.
+  // ADS: function tests if final argument p is outside the (1-alpha)
+  // CI for p_hat given counts n.
   double lower = 0.0;
   double upper = 0.0;
   wilson_ci_for_binomial(alpha, n, p_hat, lower, upper);
@@ -140,6 +141,7 @@ static void
 expectation(const size_t a, const size_t x,
             const double p, const double q,
             vector<vector<double>> &coeff) {
+
   assert(p > 0.0 && q > 0.0);
   assert(p + q <= 1.0);
 
@@ -156,8 +158,7 @@ expectation(const size_t a, const size_t x,
   coeff = vector<vector<double>>(x + 1, vector<double>(a + 1, 0.0));
 
   for (size_t k = 0; k <= x; ++k) {
-    const double x_c_k =
-      lnchoose(x, k) + log_p*k + log_1mpq*(x - k) - log_1mq*x;
+    const double x_c_k = lnchoose(x, k) + log_p*k + log_1mpq*(x-k) - log_1mq*x;
     for (size_t j = 0; j <= a; ++j)
       coeff[k][j] = exp(a_c_j[j] + x_c_k);
   }
@@ -201,8 +202,6 @@ expectation_maximization(const bool DEBUG,
                          const double tolerance,
                          double &p, double &q) {
   constexpr auto max_iterations = 500;
-  size_t iter = 0;
-  double delta = std::numeric_limits<double>::max();
 
   if (DEBUG) {
     cerr << "t:" << a << ", u:" << b
@@ -211,6 +210,8 @@ expectation_maximization(const bool DEBUG,
          << "p:" << p << ", q:" << q << endl;
   }
 
+  uint32_t iter = 0u;
+  double delta = std::numeric_limits<double>::max();
   do {
     vector<vector<double>> coeff;
 
@@ -226,9 +227,7 @@ expectation_maximization(const bool DEBUG,
     q = max(tolerance, min(q, 1-tolerance-p));
     delta = max(fabs(p_old - p), fabs(q_old - q));
 
-    ++iter;
-
-  } while (delta > tolerance && iter <= max_iterations);
+  } while (delta > tolerance && iter++ < max_iterations);
 
   if (DEBUG) {
     cerr << iter << '\t'
@@ -242,39 +241,33 @@ expectation_maximization(const bool DEBUG,
 /// only 2 input files ///
 //////////////////////////
 static double
-log_L(const size_t x, const size_t y,
-      const size_t z, const size_t w,
+log_L(const size_t x, const size_t y, const size_t z, const size_t w,
       const double p, const double q) {
-  assert(p+q <= 1);
-  double log_lkhd = lnchoose(x+y, x) + lnchoose(z+w, z);
-  if (p > 0) log_lkhd += x*log(p);
-  if (p < 1) log_lkhd += y*log(1-p);
+  assert(p + q <= 1);
+  double log_lkhd = lnchoose(x + y, x) + lnchoose(z + w, z);
+  if (p > 0) log_lkhd += x * log(p);
+  if (p < 1) log_lkhd += y * log(1 - p);
 
-  if (q > 0) log_lkhd += z*log(q);
-  if (q < 1) log_lkhd += w*log(1-q);
+  if (q > 0) log_lkhd += z * log(q);
+  if (q < 1) log_lkhd += w * log(1 - q);
 
-  return(log_lkhd);
+  return (log_lkhd);
 }
 
 /* Get start point for p and q, if only 2 inputs are available */
-static void
-get_start_point(const size_t x, const size_t y,
-                const size_t z, const size_t w,
-                const double tolerance,
-                double &p, double &q) {
-
-  p = tolerance + 1.0*x/(x + y);
-  q = tolerance + 1.0*z/(z + w);
+static inline void
+get_start_point(const size_t x, const size_t y, const size_t z, const size_t w,
+                const double tolerance, double &p, double &q) {
+  p = tolerance + 1.0 * x / (x + y);
+  q = tolerance + 1.0 * z / (z + w);
   if (p + q >= 1.0) {
-    p = max(tolerance, (1.0 - tolerance)*p/(p+q));
+    p = max(tolerance, (1.0 - tolerance) * p / (p + q));
     q = max(tolerance, 1.0 - p - tolerance);
   }
-
 }
 
 static void
-expectation(const size_t y,
-            const double p, const double q,
+expectation(const size_t y, const double p, const double q,
             vector<double> &coeff) {
   assert(p > 0.0 && q > 0.0);
   assert(p + q < 1.0);
@@ -283,30 +276,24 @@ expectation(const size_t y,
   const double log_q = log(q);
   const double log_1mp = log(1.0 - p);
   for (size_t j = 0; j <= y; ++j)
-    coeff.push_back(exp(lnchoose(y, j) + log_q*j
-                        + log_1mpq*(y-j) - log_1mp*y));
+    coeff.push_back(
+      exp(lnchoose(y, j) + log_q * j + log_1mpq * (y - j) - log_1mp * y));
 }
 
-static double
-maximization(const size_t x, const size_t y,
-             const vector<double> &coeff) {
-  double num = x, denom = x+y;
-  for (size_t j = 0; j <= y; ++j) {
-    denom -= coeff[j]*j;
-  }
-  return num/denom;
+static inline double
+maximization(const size_t x, const size_t y, const vector<double> &coeff) {
+  double num = x, denom = x + y;
+  for (size_t j = 0; j <= y; ++j) { denom -= coeff[j] * j; }
+  return num / denom;
 }
 
-static double
-update_q(const size_t x, const size_t y,
-         const size_t z, const size_t w,
+static inline double
+update_q(const size_t x, const size_t y, const size_t z, const size_t w,
          const vector<double> &coeff) {
   double num = z;
-  double denom = x+y+z+w;
-  for (size_t j =0; j <=y; ++j) {
-    num += coeff[j]*j;
-  }
-  return num/denom;
+  const double denom = x + y + z + w;
+  for (size_t j = 0; j <= y; ++j) num += coeff[j] * j;
+  return num / denom;
 }
 
 static void
@@ -340,12 +327,9 @@ expectation_maximization(const bool DEBUG,
   }
 }
 
-
-static bool
+static inline bool
 check_file_non_empty(const string &filename) {
-  struct stat buf;
-  stat(filename.c_str(), &buf);
-  return buf.st_size != 0;
+  return std::filesystem::file_size(filename) > 0;
 }
 
 static void
@@ -561,7 +545,8 @@ process_two_types(const double alpha,
                   size_t &total_sites,
                   size_t &overshoot_sites,
                   size_t &conflict_sites) {
-  constexpr auto max_read_count = 500;
+
+  constexpr auto max_read_count = 500u;
 
   ofstream of;
   if (!outfile.empty()) {
@@ -587,23 +572,30 @@ process_two_types(const double alpha,
   if (oxbs_file.empty()) {
     s_rev = true;
     f_in.open(hydroxy_file);
+    if (!f_in) throw dnmt_error("failed to open file: " + hydroxy_file);
     s_in.open(bs_seq_file);
+    if (!s_in) throw dnmt_error("failed to open file: " + bs_seq_file);
   }
   else if (hydroxy_file.empty()) {
     f_rev = true;
     f_in.open(bs_seq_file);
+    if (!f_in) throw dnmt_error("failed to open file: " + bs_seq_file);
     s_in.open(oxbs_file);
+    if (!s_in) throw dnmt_error("failed to open file: " + oxbs_file);
   }
   else {
     f_in.open(oxbs_file);
+    if (!f_in) throw dnmt_error("failed to open file: " + oxbs_file);
     s_in.open(hydroxy_file);
+    if (!s_in) throw dnmt_error("failed to open file: " + hydroxy_file);
   }
+
 
   MSite f, s;
   while (f_in >> f && s_in >> s) {
 
     if (f.chrom != s.chrom || f.pos != s.pos)
-      throw runtime_error("error: sites not synchronized between files");
+      throw dnmt_error("error: sites not synchronized between files");
 
     if (f.n_reads > max_read_count) f.n_reads = max_read_count;
     size_t x = f.n_meth();

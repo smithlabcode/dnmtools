@@ -20,3 +20,4 @@ bcbf01be810cbf4051292813eb6b9225  tests/tRex1.idx
 7c84dafb85252a04a45704da71eba7c4  tests/tRex1_promoters.roi.bed
 e7e9590475a7f9b1ae41701d81892e57  tests/two_epialleles.amr
 ec6a686617cad31e9f7a37a3d378e6ed  tests/two_epialleles.states
+93e38b20d162062a5d147c4290095a13  tests/mlml.out

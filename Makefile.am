@@ -67,7 +67,6 @@ EXTRA_DIST = \
              data/two_epialleles.states \
              data/araTha1_simulated.counts.gz \
              test_scripts/test_abismalidx.test \
-             test_scripts/test_simreads.test \
              test_scripts/test_abismal.test \
              test_scripts/test_format.test \
              test_scripts/test_uniq.test \
@@ -96,8 +95,15 @@ AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp -I $
 
 CXXFLAGS = -Wall -O3 $(OPENMP_CXXFLAGS) # default has optimization on
 
-TESTS = test_scripts/test_simreads.test \
-        test_scripts/test_abismalidx.test \
+### ADS: Testing with `make check` can be a long process. Testing with
+### `make check` is designed to work recursively. Modifying this
+### behavior requires overriding build-in rules which generates
+### warnings, probably for good reason. Defining a check-local only
+### adds to functionality and does not remove the dependency that
+### causes the recursion. The preferred alternative is to do `make`
+### first and then `make check-TESTS` after. This will not do tests
+### recursively.
+TESTS = test_scripts/test_abismalidx.test \
         test_scripts/test_abismal.test \
         test_scripts/test_format.test \
         test_scripts/test_uniq.test \
@@ -230,8 +236,6 @@ CLEANFILES = \
     tests/reads.mstats \
     tests/reads.sam \
     tests/reads.ustats \
-    tests/simreads_1.fq \
-    tests/simreads_2.fq \
     tests/tRex1.idx \
     tests/tRex1_promoters.roi.bed \
     tests/reads.counts.select \

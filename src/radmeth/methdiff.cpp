@@ -44,6 +44,16 @@ using std::ostream_iterator;
 
 using bamxx::bgzf_file;
 
+struct quick_buf : public std::ostringstream,
+                   public std::basic_stringbuf<char> {
+  quick_buf() { static_cast<std::basic_ios<char> &>(*this).rdbuf(this); }
+  void clear() { setp(pbase(), pbase()); }
+  char const *c_str() {
+    *pptr() = '\0';
+    return pbase();
+  }
+};
+
 static inline double
 log_sum_log(const double p, const double q) {
   if (p == 0) { return q; }
@@ -62,15 +72,15 @@ lnchoose(const unsigned int n, unsigned int m) {
 }
 
 static inline double
-log_hyper_g_greater(size_t meth_a, size_t unmeth_a, size_t meth_b,
-                    size_t unmeth_b, size_t k) {
+log_hyper_g_greater(const size_t meth_a, const size_t unmeth_a,
+                    const size_t meth_b, const size_t unmeth_b, size_t k) {
   return (
     lnchoose(meth_b + unmeth_b - 1, k) +
     lnchoose(meth_a + unmeth_a - 1, meth_a + meth_b - 1 - k) -
     lnchoose(meth_a + unmeth_a + meth_b + unmeth_b - 2, meth_a + meth_b - 1));
 }
 
-static double
+static inline double
 test_greater_population(const size_t meth_a, const size_t unmeth_a,
                         const size_t meth_b, const size_t unmeth_b) {
   double p = 0;
@@ -83,27 +93,25 @@ test_greater_population(const size_t meth_a, const size_t unmeth_a,
 template<class T> T &
 write_methdiff_site(T &out, const MSite &a, const MSite &b,
                     const double diffscore) {
-  std::ostringstream oss;
   // clang-format off
-  oss << a.chrom << '\t'
-      << a.pos << '\t'
-      << a.strand << '\t'
-      << a.context << '\t'
-      << diffscore << '\t'
-      << a.n_meth() << '\t'
-      << a.n_unmeth() << '\t'
-      << b.n_meth() << '\t'
-      << b.n_unmeth() << '\n';
+  return out << a.chrom << '\t'
+             << a.pos << '\t'
+             << a.strand << '\t'
+             << a.context << '\t'
+             << diffscore << '\t'
+             << a.n_meth() << '\t'
+             << a.n_unmeth() << '\t'
+             << b.n_meth() << '\t'
+             << b.n_unmeth() << '\n';
   // clang-format on
-  return out << oss.str();
 }
 
 bgzf_file &
 write_methdiff_site(bgzf_file &out, const MSite &a, const MSite &b,
                     const double diffscore) {
-  std::ostringstream oss;
+  quick_buf buf;
   // clang-format off
-  oss << a.chrom << '\t'
+  buf << a.chrom << '\t'
       << a.pos << '\t'
       << a.strand << '\t'
       << a.context << '\t'
@@ -113,11 +121,11 @@ write_methdiff_site(bgzf_file &out, const MSite &a, const MSite &b,
       << b.n_meth() << '\t'
       << b.n_unmeth() << '\n';
   // clang-format on
-  out.write(oss.str());
+  out.write(buf.c_str(), buf.tellp());
   return out;
 }
 
-static bool
+static inline bool
 site_precedes(const size_t lhs_chrom_idx, const size_t lhs_pos,
               const size_t rhs_chrom_idx, const size_t rhs_pos) {
   return (lhs_chrom_idx < rhs_chrom_idx ||
@@ -129,15 +137,14 @@ get_chrom_id(std::unordered_map<string, size_t> &chrom_order,
              std::unordered_set<string> &chroms_seen, const MSite &s) {
   if (chroms_seen.find(s.chrom) != end(chroms_seen))
     throw runtime_error("unsorted chromosomes found");
-  chroms_seen.insert(s.chrom);
+  chroms_seen.emplace(s.chrom);
   auto x = chrom_order.find(s.chrom);
   if (x == end(chrom_order)) {
-    const size_t idx = chrom_order.size();
-    chrom_order.insert(std::make_pair(s.chrom, idx));
+    const auto idx = chrom_order.size();
+    chrom_order.emplace(s.chrom, idx);
     return idx;
   }
-  else
-    return x->second;
+  else return x->second;
 }
 
 static string
@@ -159,31 +166,39 @@ bad_order(const std::unordered_map<string, size_t> &chrom_order,
 }
 
 template<class T> static void
-process_sites(const bool VERBOSE, bgzf_file &in_a, bgzf_file &in_b,
+process_sites(const bool show_progress, bgzf_file &in_a, bgzf_file &in_b,
               const bool allow_uncovered, const double pseudocount, T &out) {
   // chromosome order in the files
   std::unordered_map<string, size_t> chrom_order;
   std::unordered_set<string> chroms_seen_a, chroms_seen_b;
 
-  MSite a, b;
+  MSite a, b;  // ADS: default "pos" might be num lim max
+  a.pos = 0;
+  b.pos = 0;
   string prev_chrom_a, prev_chrom_b;
   size_t chrom_id_a = 0, chrom_id_b = 0;
   size_t prev_chrom_id_a = 0, prev_chrom_id_b = 0;
   size_t prev_pos_a = 0, prev_pos_b = 0;
 
-  string line;
-  while (read_site(in_a, a)) {
-    if (prev_chrom_a.compare(a.chrom) != 0) {
-      prev_chrom_id_a = chrom_id_a;
-      chrom_id_a = get_chrom_id(chrom_order, chroms_seen_a, a);
-      prev_chrom_a = a.chrom;
-      if (VERBOSE) cerr << "processing " << a.chrom << endl;
-    }
-    if (site_precedes(chrom_id_a, a.pos, prev_chrom_id_a, prev_pos_a))
-      throw runtime_error(
-        bad_order(chrom_order, prev_chrom_a, prev_pos_a, a.chrom, a.pos));
+  bool advance_a = true;
+  bool advance_b = true;
 
-    bool advance_b = true;
+  while (true) {
+
+    while (advance_a && read_site(in_a, a)) {
+      if (prev_chrom_a.compare(a.chrom) != 0) {
+        prev_chrom_id_a = chrom_id_a;
+        chrom_id_a = get_chrom_id(chrom_order, chroms_seen_a, a);
+        if (show_progress) cerr << "processing " << a.chrom << endl;
+        prev_chrom_a = a.chrom;
+      }
+      if (site_precedes(chrom_id_a, a.pos, prev_chrom_id_a, prev_pos_a))
+        throw runtime_error(
+          bad_order(chrom_order, prev_chrom_a, prev_pos_a, a.chrom, a.pos));
+      advance_a = site_precedes(chrom_id_a, a.pos, chrom_id_b, b.pos);
+      prev_pos_a = a.pos;
+    }
+
     while (advance_b && read_site(in_b, b)) {
       if (prev_chrom_b.compare(b.chrom) != 0) {
         prev_chrom_id_b = chrom_id_b;
@@ -197,6 +212,8 @@ process_sites(const bool VERBOSE, bgzf_file &in_a, bgzf_file &in_b,
       prev_pos_b = b.pos;
     }
 
+    if (!in_a || !in_b) break;
+
     if (chrom_id_a == chrom_id_b && a.pos == b.pos) {
       if (allow_uncovered || min(a.n_reads, b.n_reads) > 0) {
         const size_t meth_a = a.n_meth() + pseudocount;
@@ -209,8 +226,13 @@ process_sites(const bool VERBOSE, bgzf_file &in_a, bgzf_file &in_b,
 
         write_methdiff_site(out, a, b, diffscore);
       }
+      advance_a = true;
+      advance_b = true;
     }
-    prev_pos_a = a.pos;
+    else {
+      advance_a = site_precedes(chrom_id_a, a.pos, chrom_id_b, b.pos);
+      advance_b = !advance_a;
+    }
   }
 }
 
@@ -218,7 +240,7 @@ int
 main_methdiff(int argc, const char **argv) {
   try {
     string outfile;
-    size_t pseudocount = 1;
+    double pseudocount = 1.0;
 
     // run mode flags
     bool allow_uncovered = true;
@@ -260,12 +282,12 @@ main_methdiff(int argc, const char **argv) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (VERBOSE)
-      cerr << "[opening methcounts file: " << cpgs_file_a << "]" << endl;
+      cerr << "[opening counts file: " << cpgs_file_a << "]" << endl;
     bgzf_file in_a(cpgs_file_a, "r");
     if (!in_a) throw runtime_error("cannot open file: " + cpgs_file_a);
 
     if (VERBOSE)
-      cerr << "[opening methcounts file: " << cpgs_file_b << "]" << endl;
+      cerr << "[opening counts file: " << cpgs_file_b << "]" << endl;
     bgzf_file in_b(cpgs_file_b, "r");
     if (!in_b) throw runtime_error("cannot open file: " + cpgs_file_b);
 

@@ -38,6 +38,11 @@ in `input-a.meth`, number of unmethylated reads in `input-a.meth`,
 number of methylated reads in `input-b.meth`, and number of
 unmethylated reads in `input-b.meth`, respectively.
 
+The two input files must be have all sites within a chromosomes
+consecutive, have the same chromosome order, and have sites sorted in
+increasing order within each chromosome. The order of chromosomes does
+not matter (e.g., chr10 may precede chr2, or chr2 may precede chr10).
+
 **Warning** the order of the samples/methylomes given as input, the
 "a" and "b", matters. It is probably a good idea to include this order
 in the output file name, for example as `output_a_lt_b.diff`.

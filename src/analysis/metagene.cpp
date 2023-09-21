@@ -209,14 +209,14 @@ metagene(int argc, const char **argv) {
 
     if (verbose)
       cerr << "output columns:\n"
-           << LevelsCounter::tostring_as_row_header() << endl;
+           << LevelsCounter::format_header() << endl;
 
     std::ofstream of;
     if (!outfile.empty()) of.open(outfile);
     std::ostream out(of.is_open() ? of.rdbuf() : std::cout.rdbuf());
 
     for (auto i = 0u; i < levels.size(); ++i)
-      out << i * bin_size << '\t' << levels[i].tostring_as_row() << endl;
+      out << i * bin_size << '\t' << levels[i].format_row() << endl;
   }
   catch (std::exception &e) {
     cerr << e.what() << endl;

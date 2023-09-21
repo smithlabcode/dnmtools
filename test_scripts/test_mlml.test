@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+archive=tests/mlml_test_data.tgz
+if [[ ! -e "${archive}" ]] ; then
+    echo "input missing; skipping test";
+    exit 77;
+fi
+
+infile1=tests/bs.counts
+infile2=tests/tab.counts
+infile3=tests/oxbs.counts
+outfile=tests/mlml.out
+tar -xf ${archive} -C tests
+if [[ -e "${infile1}" || -e "${infile2}" || -e "${infile3}" ]]; then
+    ./dnmtools mlml -o ${outfile} -bsseq ${infile1} -tabseq ${infile2} -oxbsseq ${infile3}
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile}:" | cut -d ' ' -f 2)
+    rm -f ${infile1} ${infile2} ${infile3}
+    if [[ "${x}" != "OK" ]]; then
+        exit 1;
+    fi
+else
+    echo "input missing; skipping test";
+    rm -f ${infile1} ${infile2} ${infile3}
+    exit 77;
+fi

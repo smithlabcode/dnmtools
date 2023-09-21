@@ -26,6 +26,7 @@
 #include <stdexcept>
 #include <unordered_set>
 #include <random>
+#include <sstream>
 
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
@@ -53,6 +54,33 @@ using std::ofstream;
 using std::to_string;
 
 using bamxx::bgzf_file;
+
+struct pmd_summary {
+  pmd_summary(const vector<GenomicRegion> &pmds) {
+    pmd_count = pmds.size();
+    pmd_total_size = accumulate(cbegin(pmds), cend(pmds), 0,
+                                [](const uint64_t t, const GenomicRegion &p) {
+                                  return t + p.get_width(); });
+    pmd_mean_size = 
+      static_cast<double>(pmd_total_size)/std::max(1ul, pmd_count);
+  }
+  // pmd_count is the number of identified PMDs.
+  uint64_t pmd_count{};
+  // total_pmd_size is the sum of the sizes of the identified PMDs
+  uint64_t pmd_total_size{};
+  // mean_pmd_size is the mean size of the identified PMDs
+  double pmd_mean_size{};
+
+  string tostring() {
+    std::ostringstream oss;
+    oss << "pmd_count: " << pmd_count << endl
+        << "pmd_total_size: " << pmd_total_size << endl
+        << "pmd_mean_size: "
+        << std::fixed << std::setprecision(2) << pmd_mean_size;
+
+    return oss.str();
+  }
+};
 
 static void
 get_adjacent_distances(const vector<GenomicRegion> &pmds,
@@ -765,6 +793,10 @@ load_array_data(const size_t bin_size,
 
   MSite site;
   while (read_site(in, site)) {
+    // TODO: MN: I think that the block below should be placed later
+    // in this scope. At this location, the methylation level of the 
+    // first site in a new chrom is contributed to the last bin of the 
+    // previous chrom.
     if (site.n_reads > 0) { // its covered by a probe
       ++num_probes_in_bin;
       if (site.meth < meth_min)
@@ -852,8 +884,12 @@ load_wgbs_data(const size_t bin_size, const string &cpgs_file,
   std::unordered_set<string> chroms_seen;
 
   MSite site;
+  size_t prev_pos = 0ul;
+  size_t sites_in_bin = 0ul;
+
   while (read_site(in, site)) {
     if (curr_chrom != site.chrom) { // handle change of chrom
+      if (sites_in_bin > 0) bins.back().set_end(prev_pos);
       if (chroms_seen.find(site.chrom) != end(chroms_seen))
         throw runtime_error("sites not sorted");
       chroms_seen.insert(site.chrom);
@@ -861,10 +897,13 @@ load_wgbs_data(const size_t bin_size, const string &cpgs_file,
       reads.push_back(0);
       meth.push_back(make_pair(0.0, 0.0));
       bins.push_back(SimpleGenomicRegion(site.chrom, 0, bin_size));
+      sites_in_bin = 0;
     }
+    prev_pos = site.pos;
     if (site.pos < bins.back().get_start())
       throw runtime_error("sites not sorted");
     while (bins.back().get_end() < site.pos) {
+      sites_in_bin = 0;
       reads.push_back(0);
       meth.push_back(make_pair(0.0, 0.0));
       bins.push_back(SimpleGenomicRegion(site.chrom, bins.back().get_end(),
@@ -873,7 +912,9 @@ load_wgbs_data(const size_t bin_size, const string &cpgs_file,
     reads.back() += site.n_reads;
     meth.back().first += site.n_meth();
     meth.back().second += site.n_unmeth();
+    sites_in_bin++;
   }
+  if (sites_in_bin > 0) bins.back().set_end(prev_pos);
 }
 
 
@@ -1105,6 +1146,8 @@ main_pmd(int argc, const char **argv) {
     static const double tolerance = 1e-5;
     static const double min_prob  = 1e-10;
 
+    string summary_file;
+
     string params_in_files;
     string params_out_file;
     string posteriors_out_prefix;
@@ -1138,6 +1181,9 @@ main_pmd(int argc, const char **argv) {
     opt_parse.add_opt("posteriors-out", 'r',
                       "write out posterior probabilities in methcounts format",
                       false, posteriors_out_prefix);
+    opt_parse.add_opt("summary", 'S',
+                      "write summary output here",
+                      false, summary_file);
     opt_parse.add_opt("params-out", 'p', "write HMM parameters to this file",
                       false, params_out_file);
     opt_parse.add_opt("seed", 's', "specify random seed",
@@ -1384,6 +1430,12 @@ main_pmd(int argc, const char **argv) {
     optimize_boundaries(bin_size, cpgs_file, good_domains, array_status,
                         reps_fg_alpha, reps_fg_beta,
                         reps_bg_alpha, reps_bg_beta);
+
+    if (!summary_file.empty()) {
+      ofstream summary_out(summary_file);
+      if (!summary_out) throw runtime_error("failed to open: " + summary_file);
+      summary_out << pmd_summary(good_domains).tostring() << endl;
+    }
 
     ofstream of;
     if (!outfile.empty()) of.open(outfile);

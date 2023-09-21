@@ -152,15 +152,63 @@ check_hairpins(const size_t name_suffix_len,
   return static_cast<double>(n_bad_reads)/n_reads;
 }
 
+struct hp_summary {
 
+  // n_reads is the total number of read pairs in the input fastq
+  // files.
+  uint64_t n_reads{};
+
+  // n_hairpin_reads is the number of read pairs identified as being
+  // hairpins using the criteria in the "cutoff" variable.
+  uint64_t n_hairpin_reads{};
+
+  // sum_percent_match_good is the sum of the percent matches between
+  // the read ends for reads that do not meet the criteria for hairpin.
+  double sum_percent_match_good{};
+
+  // sum_percent_match_good is the sum of the percent matches between
+  // the read ends for reads that meet the criteria for hairpin.
+  double sum_percent_match_bad{};
+
+  // cutoff is the fraction of matches between the two ends of the
+  // read when matching under the assumption that the ends are from a
+  // hairpin.
+  double cutoff{};
+
+  // mean_percent_match_non_hairpin is the ratio of the
+  // sum_percent_match_good over the total non-hairpin reads.
+  double mean_percent_match_non_hairpin{};
+
+  // mean_percent_match_hairpin is the ratio of the
+  // sum_percent_match_bad over the total hairpin reads.
+  double mean_percent_match_hairpin{};
+
+  auto assign_values() -> void {
+    mean_percent_match_non_hairpin =
+      sum_percent_match_good / (n_reads - n_hairpin_reads);
+    mean_percent_match_hairpin = sum_percent_match_bad / n_hairpin_reads;
+  }
+
+  auto tostring() const -> string {
+    std::ostringstream oss;
+    oss << "total_reads_pairs: " << n_reads << '\n'
+        << "hairpin_read_pairs: " << n_hairpin_reads << '\n'
+        << "hairpin_cutoff: " << cutoff << '\n'
+        << "sum_percent_match_good: " << sum_percent_match_good << '\n'
+        << "mean_percent_match_non_hairpin: " << mean_percent_match_non_hairpin << '\n'
+        << "sum_percent_match_bad: " << sum_percent_match_bad << '\n'
+        << "mean_percent_match_hairpin: " << mean_percent_match_hairpin << '\n';
+    return oss.str();
+  }
+};
 
 int
 main_clean_hairpins(int argc, const char **argv) {
-
   try {
 
     string outfile;
     string stat_outfile;
+    string hist_outfile;
 
     double cutoff = 0.95;
     size_t name_suffix_len = 0;
@@ -175,22 +223,23 @@ main_clean_hairpins(int argc, const char **argv) {
     OptionParser opt_parse(strip_path(argv[0]),
                            "fix and stat invdup/hairping reads",
                            "<end1-fastq> <end2-fastq>");
-    opt_parse.add_opt("output", 'o',
-                      "output filename", true, outfile);
-    opt_parse.add_opt("stat", 's',
-                      "stats output filename", true, stat_outfile);
-    opt_parse.add_opt("hairpin", 'h',
-                      "max hairpin rate", false, max_hairpin_rate);
-    opt_parse.add_opt("check", '\0',
-                      "check for hairpin contamination", false, check_first);
-    opt_parse.add_opt("nreads", 'n',
-                      "number of reads in initial check",
-                      false, reads_to_check);
+    opt_parse.add_opt("output", 'o', "output filename", true, outfile);
+    opt_parse.add_opt("stat", 's', "stats output filename", true, stat_outfile);
+    opt_parse.add_opt("hairpin", 'H', "max hairpin rate", false,
+                      max_hairpin_rate);
+    opt_parse.add_opt("check", '\0', "check for hairpin contamination", false,
+                      check_first);
+    opt_parse.add_opt("nreads", 'n', "number of reads in initial check", false,
+                      reads_to_check);
     opt_parse.add_opt("cutoff", 'c',
-                      "cutoff for calling an invdup (default: 0.95)",
-                      false, cutoff);
-    opt_parse.add_opt("ignore", 'i', "length of read name suffix "
-                      "to ignore when matching", false, name_suffix_len);
+                      "cutoff for calling an invdup (default: 0.95)", false,
+                      cutoff);
+    opt_parse.add_opt("ignore", 'i',
+                      "length of read name suffix "
+                      "to ignore when matching",
+                      false, name_suffix_len);
+    opt_parse.add_opt("hist", '\0', "write a histogram of hairpin matches here",
+                      true, hist_outfile);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -228,6 +277,10 @@ main_clean_hairpins(int argc, const char **argv) {
       }
     }
 
+    hp_summary hps;
+    hps.cutoff = cutoff;
+    vector<double> hist(20, 0.0);
+
     if (!check_first || hairpin_fraction > max_hairpin_rate) {
 
       // Input: paired-end reads with end1 and end2
@@ -244,13 +297,9 @@ main_clean_hairpins(int argc, const char **argv) {
       if (!out)
         throw runtime_error("cannot open output file: " + outfile);
 
-      size_t n_reads = 0;
-      size_t n_bad_reads = 0;
-      double sum_percent_match_good = 0.0, sum_percent_match_bad = 0.0;
-
       FASTQRecord end_one, end_two;
       while (in1 >> end_one && in2 >> end_two) {
-        ++n_reads;
+        hps.n_reads++;
 
         // two reads should be in paired-ends
         if (!mates(name_suffix_len, end_one, end_two))
@@ -265,28 +314,41 @@ main_clean_hairpins(int argc, const char **argv) {
         const double min_len = min(end_one.seq.length(), end_two.seq.length());
         const double percent_match = sim/min_len;
 
+        // ADS: need a bitter way to get this bin identifier
+        const int hist_bin = hist.size()*((sim - 0.001)/(min_len + 0.001));
+        hist[hist_bin]++;
+
         if (percent_match > cutoff) {
 
-          sum_percent_match_bad += percent_match;
-          ++n_bad_reads;
+          hps.sum_percent_match_bad += percent_match;
+          hps.n_hairpin_reads++;
 
           end_two.seq.clear();
           end_two.score.clear();
         }
         else
-          sum_percent_match_good += percent_match;
+          hps.sum_percent_match_good += percent_match;
 
         out << end_two << '\n';
       }
 
       std::ofstream stat_out(stat_outfile);
-      stat_out << "total_reads_pairs: " << n_reads << endl
-               << "hairpin_read_pairs: " << n_bad_reads << endl
-               << "hairpin_cutoff: " << cutoff << endl
-               << "mean_percent_match_non_hairpin: "
-               << sum_percent_match_good/(n_reads - n_bad_reads) << endl
-               << "mean_percent_match_hairpin: "
-               << sum_percent_match_bad/n_bad_reads << endl;
+      if (!stat_out)
+        throw runtime_error("failed to open file: " + stat_outfile);
+      hps.assign_values();
+      stat_out << hps.tostring();
+
+      if (!hist_outfile.empty()) {
+        std::ofstream hist_out(hist_outfile);
+        if (!hist_out)
+          throw runtime_error("failed to open file: " + hist_outfile);
+        const auto total = accumulate(cbegin(hist), cend(hist), 0.0);
+        transform(cbegin(hist), cend(hist), begin(hist),
+                  [&total](const double t) { return t / total; });
+        hist_out.precision(3);
+        for (auto i = 0u; i < std::size(hist); ++i)
+          hist_out << i << '\t' << hist[i] << '\n';
+      }
     }
   }
   catch (const runtime_error &e) {

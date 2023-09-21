@@ -115,10 +115,10 @@ sam_realloc_bam_data(bam1_t *b, size_t desired) {
     new_data = static_cast<uint8_t *>(malloc(new_m_data));
     if (new_data != nullptr) {
       if (b->l_data > 0)
-        std::copy_n(new_data,
+        std::copy_n(b->data,
                     (static_cast<uint32_t>(b->l_data) < b->m_data) ? b->l_data
                                                                    : b->m_data,
-                    b->data);
+                    new_data);
       bam_set_mempolicy(b, bam_get_mempolicy(b) & (~BAM_USER_OWNS_DATA));
     }
   }

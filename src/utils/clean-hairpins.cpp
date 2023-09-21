@@ -228,6 +228,8 @@ main_clean_hairpins(int argc, const char **argv) {
       }
     }
 
+    vector<double> hist(20, 0.0);
+
     if (!check_first || hairpin_fraction > max_hairpin_rate) {
 
       // Input: paired-end reads with end1 and end2
@@ -265,6 +267,9 @@ main_clean_hairpins(int argc, const char **argv) {
         const double min_len = min(end_one.seq.length(), end_two.seq.length());
         const double percent_match = sim/min_len;
 
+        const int hist_bin = hist.size()*((sim - 0.001)/(min_len + 0.001));
+        hist[hist_bin]++;
+
         if (percent_match > cutoff) {
 
           sum_percent_match_bad += percent_match;
@@ -287,6 +292,13 @@ main_clean_hairpins(int argc, const char **argv) {
                << sum_percent_match_good/(n_reads - n_bad_reads) << endl
                << "mean_percent_match_hairpin: "
                << sum_percent_match_bad/n_bad_reads << endl;
+
+      const auto total = accumulate(cbegin(hist), cend(hist), 0.0);
+      transform(cbegin(hist), cend(hist), begin(hist),
+                [&total](const double t) {return t/total;});
+      for (auto i = 0; i < std::size(hist); ++i)
+        cout << i << '\t' << std::setprecision(3) << hist[i] << endl;
+      cout << endl;
     }
   }
   catch (const runtime_error &e) {

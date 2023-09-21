@@ -25,7 +25,7 @@
 #include <algorithm>
 #include <numeric>
 #include <unordered_map>
-
+#include <filesystem>
 #include <bamxx.hpp>
 
 #include "OptionParser.hpp"
@@ -46,43 +46,37 @@ using std::unordered_map;
 
 using bamxx::bgzf_file;
 
+namespace fs = std::filesystem;
+
 static void
 collapsebed(vector<GenomicRegion> &regions) {
   size_t j = 0;
   for (size_t i = 1; i < regions.size(); ++i) {
     if (regions[j].same_chrom(regions[i]) &&
         regions[i].get_start() <= regions[j].get_end()) {
-      regions[j].set_end(std::max(regions[j].get_end(),
-                                  regions[i].get_end()));
+      regions[j].set_end(std::max(regions[j].get_end(), regions[i].get_end()));
     }
-    else {
-      regions[++j] = regions[i];
-    }
+    else { regions[++j] = regions[i]; }
   }
   regions.erase(begin(regions) + j + 1, end(regions));
 }
 
-static bool
+static inline bool
 precedes(const GenomicRegion &r, const MSite &s) {
   return (r.get_chrom() < s.chrom ||
           (r.get_chrom() == s.chrom && r.get_end() <= s.pos));
 }
 
-
-static bool
+static inline bool
 contains(const GenomicRegion &r, const MSite &s) {
   return (r.get_chrom() == s.chrom &&
           (r.get_start() <= s.pos && s.pos < r.get_end()));
 }
 
-
-template <class T>
-static void
-process_all_sites(const bool VERBOSE,
-                  const string &sites_file,
+template<class T> static void
+process_all_sites(const bool VERBOSE, const string &sites_file,
                   const unordered_map<string, vector<GenomicRegion>> &regions,
                   T &out) {
-
   bgzf_file in(sites_file, "r");
   if (!in) throw runtime_error("cannot open file: " + sites_file);
 
@@ -91,32 +85,28 @@ process_all_sites(const bool VERBOSE,
   bool chrom_is_relevant = false;
   while (read_site(in, the_site)) {
     if (the_site.chrom != prev_site.chrom) {
-      if (VERBOSE)
-        cerr << "processing " << the_site.chrom << endl;
-      auto r = regions.find(the_site.chrom);
-      chrom_is_relevant = (r != end(regions));
+      if (VERBOSE) cerr << "processing " << the_site.chrom << endl;
+      const auto r = regions.find(the_site.chrom);
+      chrom_is_relevant = (r != cend(regions));
       if (chrom_is_relevant) {
-        i = begin(r->second);
-        i_lim = end(r->second);
+        i = cbegin(r->second);
+        i_lim = cend(r->second);
       }
     }
     if (chrom_is_relevant) {
       while (i != i_lim && precedes(*i, the_site))
         ++i;
-
-      if (contains(*i, the_site))
+      if (i != i_lim && contains(*i, the_site))
         write_site(out, the_site);
     }
     std::swap(prev_site, the_site);
   }
 }
 
-
 static void
 get_sites_in_region(ifstream &site_in, const GenomicRegion &region,
                     std::ostream &out) {
-
-  string chrom(region.get_chrom());
+  const string chrom{region.get_chrom()};
   const size_t start_pos = region.get_start();
   const size_t end_pos = region.get_end();
   find_offset_for_msite(chrom, start_pos, site_in);
@@ -127,10 +117,8 @@ get_sites_in_region(ifstream &site_in, const GenomicRegion &region,
   while (site_in >> the_site &&
          (the_site.chrom < chrom ||
           (the_site.chrom == chrom && the_site.pos < end_pos)))
-    if (start_pos <= the_site.pos)
-      out << the_site << endl;
+    if (start_pos <= the_site.pos) out << the_site << endl;
 }
-
 
 static void
 process_with_sites_on_disk(const string &sites_file,
@@ -182,7 +170,7 @@ main_selectsites(int argc, const char **argv) {
   try {
 
     bool VERBOSE = false;
-    bool LOAD_ENTIRE_FILE = false;
+    bool load_entire_file = false;
 
     string outfile;
 
@@ -198,7 +186,7 @@ main_selectsites(int argc, const char **argv) {
                       false, outfile);
     opt_parse.add_opt("preload", 'p',
                       "preload sites (use for large target intervals)",
-                      false, LOAD_ENTIRE_FILE);
+                      false, load_entire_file);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     opt_parse.set_show_defaults();
     vector<string> leftover_args;
@@ -224,11 +212,11 @@ main_selectsites(int argc, const char **argv) {
     const string sites_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (isdir(sites_file.c_str()) || !file_exists(sites_file))
+    if (!fs::is_regular_file(sites_file))
       throw runtime_error("bad input sites file: " + sites_file);
 
     if (is_compressed_file(sites_file)) {
-      LOAD_ENTIRE_FILE = true;
+      load_entire_file = true;
       if (VERBOSE)
         cerr << "input file is so must be loaded" << endl;
     }
@@ -245,7 +233,7 @@ main_selectsites(int argc, const char **argv) {
            << n_orig_regions - regions.size() << "]" << endl;
 
     unordered_map<string, vector<GenomicRegion>> regions_lookup;
-    if ((outfile.empty() || !has_gz_ext(outfile)) && LOAD_ENTIRE_FILE)
+    if ((outfile.empty() || !has_gz_ext(outfile)) && load_entire_file)
       regions_by_chrom(regions, regions_lookup);
 
     if (outfile.empty() || !has_gz_ext(outfile)) {
@@ -255,7 +243,7 @@ main_selectsites(int argc, const char **argv) {
       if (!outfile.empty() && !out)
         throw runtime_error("failed to open output file: " + outfile);
 
-      if (LOAD_ENTIRE_FILE)
+      if (load_entire_file)
         process_all_sites(VERBOSE, sites_file, regions_lookup, out);
       else
         process_with_sites_on_disk(sites_file, regions, out);

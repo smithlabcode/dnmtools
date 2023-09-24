@@ -2,7 +2,7 @@
 
 ## Synopsis
 ```shell
-$ dnmtools roi [OPTIONS] <intervals.bed> <input.meth>
+$ dnmtools roi [OPTIONS] <intervals.bed> <input.counts>
 ```
 
 ## Description
@@ -17,15 +17,18 @@ found in the documentation for the `levels` command.
 
 The `roi` command requires two input files. The first is a
 sorted [counts output file](../counts),
-i.e. `input.meth` in the example above. This file provides data for
+i.e. `input.counts` in the example above. This file provides data for
 every site, either a cytosine or CpG, that is of interest. The second
 input file (`intervals.bed`) specifies the genomic intervals in which
 methylation statistics should be summarized. If either file is not
 sorted by (chrom,end,start,strand) it can be sorted using the
 following command:
 ```shell
-$ LC_ALL=C sort -k 1,1 -k 3,3n -k 2,2n -k 6,6 -o input-sorted.meth input.meth
+$ LC_ALL=C sort -k 1,1 -k 3,3n -k 2,2n -k 6,6 -o input-sorted.counts input.counts
 ```
+Note: As of v1.4.0, the sorted order of chromosomes/targets within these
+files is not important, but the sites within each chromosome must
+still be sorted.
 
 The intervals must be specified as a BED format file, and these can be
 sorted using [bedtools
@@ -35,9 +38,19 @@ formats: (1) 6-column BED format, which may have more than 6 columns,
 but requires the first 6 columns to match the specification, or (2)
 3-column BED format.
 
+*An important note about the input files:* several aspects of the
+output for `roi` depend on the number of sites within each region of
+interest. If the `.counts` file provided as input does not have all
+the sites you might expect, for example if it is missing sites that
+have been excluded from some earlier step in your pipeline, then the
+results will be affected. We hope to make `roi` more robust to this
+issue in the future, for example by accepting some information about
+the reference genome to ensure that the numbers of sites are as
+expected by the user.
+
 From there, the `roi` command can be run as follows:
 ```shell
-$ dnmtools roi -o output.bed regions.bed input-sorted.meth
+$ dnmtools roi -o output.bed regions.bed input-sorted.counts
 ```
 
 The default output format is a 6-column BED format file, with the

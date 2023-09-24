@@ -67,6 +67,7 @@ EXTRA_DIST = \
              data/two_epialleles.states \
              data/araTha1_simulated.counts.gz \
              data/mlml_test_data.tgz \
+             data/pmd_test_data.counts.sym.gz \
              test_scripts/test_abismalidx.test \
              test_scripts/test_abismal.test \
              test_scripts/test_format.test \
@@ -76,6 +77,7 @@ EXTRA_DIST = \
              test_scripts/test_levels.test \
              test_scripts/test_sym.test \
              test_scripts/test_hmr.test \
+             test_scripts/test_pmd.test \
              test_scripts/test_roi.test \
              test_scripts/test_selectsites.test \
              test_scripts/test_radmeth.test \
@@ -114,6 +116,7 @@ TESTS = test_scripts/test_abismalidx.test \
         test_scripts/test_levels.test \
         test_scripts/test_sym.test \
         test_scripts/test_hmr.test \
+        test_scripts/test_pmd.test \
         test_scripts/test_roi.test \
         test_scripts/test_selectsites.test \
         test_scripts/test_radmeth.test \
@@ -247,4 +250,5 @@ CLEANFILES = \
     tests/two_epialleles.amr \
     tests/araTha1_simulated.hypermr \
     tests/methylome_ab.diff \
+    tests/methylome.pmd \
     tests/mlml.out

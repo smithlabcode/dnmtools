@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+infile=tests/pmd_test_data.counts.sym.gz
+outfile=tests/methylome.pmd
+if [[ -e "${infile}" ]]; then
+    ./dnmtools pmd -o ${outfile} ${infile}
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile}:" | cut -d ' ' -f 2)
+    if [[ "${x}" != "OK" ]]; then
+        exit 1;
+    fi
+else
+    echo "${infile} not found; skipping remaining tests";
+    exit 77;
+fi

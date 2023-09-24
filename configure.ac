@@ -76,6 +76,7 @@ tests/araTha1_simulated.counts.gz:data/araTha1_simulated.counts.gz
 tests/methylome_a.counts.sym:data/methylome_a.counts.sym
 tests/methylome_b.counts.sym:data/methylome_b.counts.sym
 tests/mlml_test_data.tgz:data/mlml_test_data.tgz
+tests/pmd_test_data.counts.sym.gz:data/pmd_test_data.counts.sym.gz
 ])
 
 AC_OUTPUT

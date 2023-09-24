@@ -55,13 +55,15 @@ using std::to_string;
 
 using bamxx::bgzf_file;
 
+template<typename T> using num_lim = std::numeric_limits<T>;
+
 struct pmd_summary {
   pmd_summary(const vector<GenomicRegion> &pmds) {
     pmd_count = pmds.size();
     pmd_total_size = accumulate(cbegin(pmds), cend(pmds), 0,
                                 [](const uint64_t t, const GenomicRegion &p) {
                                   return t + p.get_width(); });
-    pmd_mean_size = 
+    pmd_mean_size =
       static_cast<double>(pmd_total_size)/std::max(1ul, pmd_count);
   }
   // pmd_count is the number of identified PMDs.
@@ -166,7 +168,7 @@ find_best_bound(const bool IS_RIGHT_BOUNDARY,
     }
 
   size_t best_idx = 0;
-  double best_score = -numeric_limits<double>::max();
+  double best_score = -num_lim<double>::max();
   if (meth_tot.size() > 0)
     for (size_t i = 1; i < meth_tot.size()-1; ++i) {
       size_t N_low, k_low, N_hi, k_hi;
@@ -199,8 +201,8 @@ find_best_bound(const bool IS_RIGHT_BOUNDARY,
         }
       }
     }
-  return (best_score > -numeric_limits<double>::max()) ?
-    positions[best_idx] : numeric_limits<size_t>::max();
+  return (best_score > -num_lim<double>::max()) ?
+    positions[best_idx] : num_lim<size_t>::max();
 }
 
 
@@ -419,10 +421,10 @@ optimize_boundaries(const size_t bin_size,
   /////
   for (size_t i = 0; i < pmds.size(); ++i) {
     const size_t start_site = bound_site[2*i];
-    if (start_site != numeric_limits<size_t>::max())
+    if (start_site != num_lim<size_t>::max())
       pmds[i].set_start(start_site);
     const size_t end_site = bound_site[2*i + 1];
-    if (end_site != numeric_limits<size_t>::max())
+    if (end_site != num_lim<size_t>::max())
       pmds[i].set_end(end_site + 1);
   }
 
@@ -476,15 +478,15 @@ optimize_boundaries(const size_t bin_size,
 double
 get_score_cutoff_for_fdr(const vector<double> &scores, const double fdr) {
   if (fdr <= 0)
-    return numeric_limits<double>::max();
+    return num_lim<double>::max();
   else if (fdr > 1)
-    return numeric_limits<double>::min();
+    return num_lim<double>::min();
   vector<double> local(scores);
   std::sort(begin(local), end(local));
   size_t i = 0;
   for (; i < local.size() - 1 &&
          local[i+1] < fdr*static_cast<double>(i+1)/local.size(); ++i);
-  return local[i];
+  return local[i] + 1.0/scores.size();
 }
 
 
@@ -616,7 +618,7 @@ separate_regions(const bool VERBOSE, const size_t desert_size,
   size_t prev_cpg = 0;
   for (size_t i = 0; i < bins[0].size(); ++i) {
     const size_t dist = (i > 0 && bins[0][i].same_chrom(bins[0][i - 1])) ?
-      bins[0][i].get_start() - prev_cpg : numeric_limits<size_t>::max();
+      bins[0][i].get_start() - prev_cpg : num_lim<size_t>::max();
     if (dist > desert_size)
       reset_points.push_back(i);
     prev_cpg = bins[0][i].get_start();
@@ -662,15 +664,13 @@ static void
 assign_p_values(const vector<double> &random_scores,
                 const vector<double> &observed_scores,
                 vector<double> &p_values) {
-  const double n_randoms =
-    random_scores.size() == 0 ? 1 : random_scores.size();
-  for (size_t i = 0; i < observed_scores.size(); ++i)
-    p_values.push_back((end(random_scores) -
-                        upper_bound(begin(random_scores),
-                                    end(random_scores),
-                                    observed_scores[i]))/n_randoms);
+  const double n_randoms = random_scores.size() == 0 ? 1 : random_scores.size();
+  for (auto scr : observed_scores) {
+    const auto scr_itr =
+      upper_bound(cbegin(random_scores), cend(random_scores), scr);
+    p_values.push_back(std::distance(scr_itr, cend(random_scores)) / n_randoms);
+  }
 }
-
 
 static void
 read_params_file(const bool VERBOSE,
@@ -794,8 +794,8 @@ load_array_data(const size_t bin_size,
   MSite site;
   while (read_site(in, site)) {
     // TODO: MN: I think that the block below should be placed later
-    // in this scope. At this location, the methylation level of the 
-    // first site in a new chrom is contributed to the last bin of the 
+    // in this scope. At this location, the methylation level of the
+    // first site in a new chrom is contributed to the last bin of the
     // previous chrom.
     if (site.n_reads > 0) { // its covered by a probe
       ++num_probes_in_bin;
@@ -1026,7 +1026,7 @@ get_min_reads_for_confidence(const double conf_level) {
 }
 
 
-// ADS: this function will return numeric_limits<size_t>::max() if the
+// ADS: this function will return num_lim<size_t>::max() if the
 // fraction of "good" bins is zero for all attempted bin sizes.
 static size_t
 binsize_selection(const bool &VERBOSE, const size_t resolution,
@@ -1049,8 +1049,8 @@ binsize_selection(const bool &VERBOSE, const size_t resolution,
     if (frac_passed < min_frac_passed)
       bin_size += resolution;
   }
-  return frac_passed <= numeric_limits<double>::min() ?
-    std::numeric_limits<size_t>::max() : bin_size;
+  return frac_passed <= num_lim<double>::min() ?
+    num_lim<size_t>::max() : bin_size;
 }
 
 
@@ -1090,7 +1090,7 @@ get_union_of_bins(const vector<vector<SimpleGenomicRegion> > &orig,
     std::inplace_merge(first, middle, middle + orig[i].size());
   }
   // ensure unique bins
-  bins.resize(std::distance(begin(bins), unique(begin(bins), end(bins))));
+  bins.erase(unique(begin(bins), end(bins)), end(bins));
   bins.shrink_to_fit();
 
   // make sure all bins are aligned at same boundaries
@@ -1243,7 +1243,7 @@ main_pmd(int argc, const char **argv) {
                                        min_bin_size, max_bin_size,
                                        confidence_interval, prop_accept,
                                        cpgs_file[i]);
-          if (bin_size == std::numeric_limits<size_t>::max())
+          if (bin_size == num_lim<size_t>::max())
             insufficient_data = true;
           desert_size = 5*bin_size; // TODO: explore extrapolation number
         }
@@ -1288,7 +1288,7 @@ main_pmd(int argc, const char **argv) {
                 reads[i], array_status);
       const double total_observations =
         accumulate(begin(reads[i]), end(reads[i]), 0);
-      if (total_observations <= numeric_limits<double>::min())
+      if (total_observations <= num_lim<double>::min())
         insufficient_data = true;
       if (VERBOSE)
         cerr << "TOTAL BINS: " << bins[i].size() << endl
@@ -1336,7 +1336,7 @@ main_pmd(int argc, const char **argv) {
     vector<double> reps_fg_beta(n_replicates, 0.95);
     vector<double> reps_bg_alpha(n_replicates, 0.95);
     vector<double> reps_bg_beta(n_replicates, 0.05);
-    double score_cutoff_for_fdr = numeric_limits<double>::max();
+    double score_cutoff_for_fdr = num_lim<double>::max();
 
     if (!params_in_file.empty()) {
       // read parameters files
@@ -1387,9 +1387,8 @@ main_pmd(int argc, const char **argv) {
                               reps_bg_alpha, reps_bg_beta, classes,
                               scores, array_status);
 
-    if (!posteriors_out_prefix.empty()) {
-      write_posteriors_file(posteriors_out_prefix + ".emissions", bins, scores);
-    }
+    if (!posteriors_out_prefix.empty())
+      write_posteriors_file(posteriors_out_prefix + ".posteriors", bins, scores);
 
     vector<double> domain_scores;
     get_domain_scores(classes, meth, reset_points, domain_scores);
@@ -1405,7 +1404,7 @@ main_pmd(int argc, const char **argv) {
     vector<double> p_values;
     assign_p_values(random_scores, domain_scores, p_values);
 
-    if (score_cutoff_for_fdr == numeric_limits<double>::max() &&
+    if (score_cutoff_for_fdr == num_lim<double>::max() &&
         !p_values.empty())
       score_cutoff_for_fdr = get_score_cutoff_for_fdr(p_values, 0.01);
 

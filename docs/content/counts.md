@@ -171,3 +171,8 @@ merge data as symmetric CpGs.
 -v, -verbose
 ```
 Report more information while the program is running.
+
+```txt
+-progress
+```
+Show progress while the program is running.

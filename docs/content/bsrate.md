@@ -171,7 +171,12 @@ This option will generate a histogram of conversion rate per read,
 printed to the terminal. This option is correct as of v1.4.0.
 
 ```txt
- -p, -per-read
+ -b, -bins
 ```
 Assming the `-p` option is used, this option determines the number of
 bins in the histogram. This option is correct as of v1.4.0.
+
+```txt
+ -S, -summary
+```
+Write a summary of information gathered during the run to this file.

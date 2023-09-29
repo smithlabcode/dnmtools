@@ -190,6 +190,5 @@ Specify a random seed value.
 ```txt
  -S, -summary
 ```
-Write the analysis summary to this file. The summary is not
-reported unless a file is specified here. This option is correct as of v1.4.0.
-
+Write the analysis summary to this file. The summary is not reported
+unless a file is specified here. This option is correct as of v1.4.0.

@@ -6,9 +6,7 @@ ae05a28de5643a512386e767b3aa963a  tests/araTha1_simulated.hypermr
 961b0671a349e2ad8041e0807393bf78  tests/reads.counts.select
 af22e5468fd6614c611646cbc675542f  tests/reads.counts.sym
 b38d571baaf2bc16646dbd14a7edb770  tests/reads.epiread
-6abb0e3e6571e221ec6f91ba52a358ea  tests/reads.fmt.sam
 8edab98b1be4411820e2f130aa6ba6b9  tests/reads.fmt.srt.sam
-3e57d7bde5f7be88b56cd92bbfc935ce  tests/reads.fmt.srt.uniq.sam
 af8b97ef25af8a16ced1537ca4a74d07  tests/reads.hmr
 52d44c4c1d6891b45741f573f51e67cd  tests/reads.levels
 916fe07a1d03449b65dfc1458d7c1c40  tests/reads.mstats
@@ -20,3 +18,5 @@ e7e9590475a7f9b1ae41701d81892e57  tests/two_epialleles.amr
 ec6a686617cad31e9f7a37a3d378e6ed  tests/two_epialleles.states
 93e38b20d162062a5d147c4290095a13  tests/mlml.out
 d947fe3d61ef7b1564558a69608f0e64  tests/methylome.pmd
+04c007d96bcaf975bdb09afc46216f72  tests/reads.fmt.sam
+03057e8c736ff1f07f7fb6e7f20d0cf3  tests/reads.fmt.srt.uniq.sam

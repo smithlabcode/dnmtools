@@ -148,6 +148,38 @@ the entire methylation file first. The `-L` option loads all lines of
 the methcounts file into memory, which saves time at the expense of an
 increased memory requirement.
 
+**Performance**
+There are two different methods for reading the `.counts` input file.
+The default mode of assuming the counts file is sorted and doing
+binary search on disk will only work if the file is not zipped. If the
+file is not zipped, the user must specify `-L` to load all the counts
+into memory. These two methods should produce identical output files,
+but depending on the application one might be much faster than the
+other. The numbers below are based on sampling random intervals from a
+file with mean interval size of 2237 bp.  The time is measured in
+seconds, and all work was done on local SSDs.
+
+|     N | on disk | in memory |
+|   ---:|     ---:|       ---:|
+|    10 |  1.70 s |    9.55 s |
+|   100 |  1.75 s |    9.43 s |
+|  1000 |  2.05 s |    9.56 s |
+| 10000 |  5.13 s |    9.64 s |
+| 20000 |  8.49 s |    9.81 s |
+| 30000 | 11.93 s |    9.83 s |
+| 40000 | 15.20 s |   10.06 s |
+| 50000 | 18.96 s |    9.95 s |
+|    10 |  6.7 MB | 3079.7 MB |
+| 50000 | 10.1 MB | 3084.0 MB |
+
+The counts file for the above data had 30962770 lines, corresponding
+to CpG sites in hg38 including those in the "extra" chromosomes.  Be
+aware that if you work on a cluster or in the cloud, latency of the
+disks might become a problem so the "in memory" option might be better
+all the way. This depends on how your storage is configured. Even if
+throughput is highly tuned, latency can cause major slowdown for the
+"on disk" mode.
+
 ## Options
 ```txt
 -o, -output

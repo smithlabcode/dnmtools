@@ -64,7 +64,7 @@ struct pmd_summary {
                                 [](const uint64_t t, const GenomicRegion &p) {
                                   return t + p.get_width(); });
     pmd_mean_size =
-      static_cast<double>(pmd_total_size)/std::max(1ul, pmd_count);
+      static_cast<double>(pmd_total_size)/std::max(pmd_count, static_cast<uint64_t>(1));
   }
   // pmd_count is the number of identified PMDs.
   uint64_t pmd_count{};

@@ -147,21 +147,23 @@ struct bsrate_summary {
   void set_values() {
     bisulfite_conversion_rate_positive =
       static_cast<double>(converted_count_positive) /
-      max(total_count_positive, 1ul);
+      max(total_count_positive, static_cast<uint64_t>(1));
 
     bisulfite_conversion_rate_negative =
       static_cast<double>(converted_count_negative) /
-      max(total_count_negative, 1ul);
+      max(total_count_negative, static_cast<uint64_t>(1));
 
     converted_count = converted_count_positive + converted_count_negative;
     total_count = total_count_positive + total_count_negative;
 
     bisulfite_conversion_rate =
-      static_cast<double>(converted_count) / max(total_count, 1ul);
+      static_cast<double>(converted_count) /
+      max(total_count, static_cast<uint64_t>(1));
 
     valid_count = total_count + error_count;
 
-    error_rate = static_cast<double>(error_count) / max(valid_count, 1ul);
+    error_rate = static_cast<double>(error_count) /
+      max(valid_count, static_cast<uint64_t>(1));
   }
 
   string tostring_as_row() const {

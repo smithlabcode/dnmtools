@@ -44,3 +44,18 @@ preload sites (use for large target intervals)
  -v, -verbose
 ```
 print more run info to STDERR while the program is running.
+
+```txt
+ -d, -disk
+```
+process sites on disk (fast if target intervals are few)
+
+```txt
+ -S, -summary
+```
+write summary to this file
+
+```txt
+ -z, -zip
+```
+output file will be in gzip compressed format

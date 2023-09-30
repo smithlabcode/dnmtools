@@ -81,21 +81,24 @@ struct LevelsCounter {
   // is the ratio of total_c divided by coverage. This value is always
   // between 0 and 1.
   double mean_meth_weighted() const {
-    return static_cast<double>(total_c)/std::max(coverage(), 1ul);
+    return static_cast<double>(total_c)/
+      std::max(coverage(), static_cast<uint64_t>(1));
   }
 
   // fractional_meth is the fraction of "called" sites that are called
   // methylated. It is the ratio of called_meth divided by
   // total_called. This value is always between 0 and 1.
   double fractional_meth() const {
-    return static_cast<double>(called_meth)/std::max(total_called(), 1ul);
+    return static_cast<double>(called_meth)/
+      std::max(total_called(), static_cast<uint64_t>(1));
   }
 
   // mean_meth is the unweighted mean methylation level. This is the
   // ratio of total_meth divided by sites_covered. This value is
   // always between 0 and 1.
   double mean_meth() const {
-    return static_cast<double>(total_meth)/std::max(sites_covered, 1ul);
+    return static_cast<double>(total_meth)/
+      std::max(sites_covered, static_cast<uint64_t>(1));
   }
 
   LevelsCounter(const std::string &c) : context{c} {}

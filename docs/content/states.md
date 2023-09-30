@@ -69,4 +69,9 @@ FASTA file of chromosomes containing FASTA files [required].
 ```txt
  -v, -verbose
 ```
-Print more run info to STDERR while the program is running.
+Print information to the terminal while the program runs.
+
+```txt
+ -z, -zip
+```
+Write output in gzip compressed format.

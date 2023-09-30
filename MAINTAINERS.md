@@ -67,6 +67,6 @@ The image can be pulled by one of the following commands.
 ```bash
 docker pull ghcr.io/smithlabcode/dnmtools:latest
 docker pull ghcr.io/smithlabcode/dnmtools:[7-DIGIT SHA]
-docker pull ghcr.io/smithlabcode/dnmtools:v[VERSION NUMBER] #(e.g. v1.3.0)
+docker pull ghcr.io/smithlabcode/dnmtools:v[VERSION NUMBER] #(e.g. v1.4.0)
 ```
 

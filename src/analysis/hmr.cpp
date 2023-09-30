@@ -56,8 +56,9 @@ struct hmr_summary {
     hmr_total_size = accumulate(cbegin(hmrs), cend(hmrs), 0,
                                 [](const uint64_t t, const GenomicRegion &p) {
                                   return t + p.get_width(); });
-    hmr_mean_size = 
-      static_cast<double>(hmr_total_size)/std::max(1ul, hmr_count);
+    hmr_mean_size =
+      static_cast<double>(hmr_total_size)/
+      std::max(hmr_count, static_cast<uint64_t>(1));
   }
   // hmr_count is the number of identified HMRs.
   uint64_t hmr_count{};
@@ -452,7 +453,7 @@ main_hmr(int argc, const char **argv) {
     opt_parse.add_opt("params-out", 'p', "write HMM parameters to this "
                       "file (default: none)", false, params_out_file);
     opt_parse.add_opt("seed", 's', "specify random seed", false, rng_seed);
-    opt_parse.add_opt("summary", 'S', "write summary output here", false, 
+    opt_parse.add_opt("summary", 'S', "write summary output here", false,
                       summary_file);
     opt_parse.set_show_defaults();
     vector<string> leftover_args;

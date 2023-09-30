@@ -12,7 +12,7 @@ sequencing (RRBS). These tools focus on overcoming the computing
 challenges imposed by the scale of genome-wide DNA methylation data,
 which is usually the early parts of data analysis.
 
-## Installing release 1.3.0
+## Installing release 1.4.0
 
 The documentation for DNMTools can be found
 [here](https://dnmtools.readthedocs.io). But if you want to install
@@ -41,14 +41,14 @@ repo, it is easiest if all dependencies are available through conda.
 
 ### Configuration
 
-* Download [dnmtools-1.3.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.3.0/dnmtools-1.3.0.tar.gz).
+* Download [dnmtools-1.4.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.4.0/dnmtools-1.4.0.tar.gz).
 * Unpack the archive:
 ```console
-tar -zxvf dnmtools-1.3.0.tar.gz
+tar -zxvf dnmtools-1.4.0.tar.gz
 ```
 * Move into the dnmtools directory and create a build directory:
 ```console
-cd dnmtools-1.3.0 && mkdir build && cd build
+cd dnmtools-1.4.0 && mkdir build && cd build
 ```
 * Run the configuration script:
 ```console
@@ -137,7 +137,7 @@ docker tag ghcr.io/smithlabcode/dnmtools:latest dnmtools:latest
 
 You can also install the image for a particular vertion by running
 ```console
-docker pull ghcr.io/smithlabcode/dnmtools:v[VERSION NUMBER] #(e.g. v1.3.0)
+docker pull ghcr.io/smithlabcode/dnmtools:v[VERSION NUMBER] #(e.g. v1.4.0)
 ```
 Not all versions have corresponding images; you can find available images
 [here](https://github.com/smithlabcode/dnmtools/pkgs/container/dnmtools).

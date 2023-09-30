@@ -31,7 +31,7 @@ LevelsCounter::update(const MSite &s) {
   }
   if (s.n_reads > 0) {
     ++sites_covered;
-    max_depth = std::max(max_depth, s.n_reads);
+    max_depth = std::max(max_depth, static_cast<uint64_t>(s.n_reads));
     total_c += s.n_meth();
     total_t += s.n_reads - s.n_meth();
     total_meth += s.meth;

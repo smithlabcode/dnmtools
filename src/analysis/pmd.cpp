@@ -1265,10 +1265,9 @@ main_pmd(int argc, const char **argv) {
     if (insufficient_data) {
       // ADS: first check for insufficient data; another is needed if
       // fixed bin size is used
-      if (VERBOSE) {
+      if (VERBOSE)
         cerr << "EXITING: INSUFFICIENT DATA" << endl;
-        return EXIT_SUCCESS;
-      }
+      return EXIT_SUCCESS;
     }
 
     if (VERBOSE)

@@ -29,7 +29,6 @@ using std::string;
 using std::runtime_error;
 using std::regex_match;
 using std::from_chars;
-using std::find_first_of;
 using std::find_if;
 using std::cbegin;
 using std::cend;

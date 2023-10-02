@@ -195,7 +195,7 @@ main_methstates(int argc, const char **argv) {
     bool compress_output = false;
 
     string chrom_file;
-    string outfile;
+    string outfile("-");
     int n_threads = 1;
 
     /****************** COMMAND LINE OPTIONS ********************/

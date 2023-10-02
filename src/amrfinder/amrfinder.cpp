@@ -23,6 +23,8 @@
 #include <numeric>
 #include <stdexcept>
 
+#include <bamxx.hpp>
+
 #include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
@@ -38,6 +40,36 @@ using std::endl;
 using std::unordered_map;
 using std::runtime_error;
 
+using bamxx::bgzf_file;
+
+#include <bamxx.hpp>
+#include <sstream>
+
+static inline bamxx::bgzf_file &
+read_epiread(bamxx::bgzf_file &f, epiread &er) {
+  std::string line;
+  if (getline(f, line))
+    er = epiread(line);
+  return f;
+}
+
+static inline bool
+validate_epiread_bgzf_file(const string &filename) {
+  constexpr size_t max_lines_to_validate = 10000;
+  bgzf_file in(filename, "r");
+  if (!in) throw std::runtime_error("failed to open file: " + filename);
+
+  string c, s, other;
+  size_t p = 0;
+
+  size_t n_lines = 0;
+  string line;
+  while (getline(in, line) && n_lines++ < max_lines_to_validate) {
+    std::istringstream iss(line);
+    if (!(iss >> c >> p >> s) || iss >> other) return false;
+  }
+  return true;
+}
 
 ////////////////////////////////////////////////////////////////////////
 /// CODE BELOW HERE IS FOR FILTERING THE AMR WINDOWS AND MERGING THEM
@@ -413,7 +445,7 @@ main_amrfinder(int argc, const char **argv) {
     const string reads_file(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (!validate_epiread_file(reads_file))
+    if (!validate_epiread_bgzf_file(reads_file))
       throw runtime_error("invalid states file: " + reads_file);
 
     if (VERBOSE)
@@ -424,9 +456,8 @@ main_amrfinder(int argc, const char **argv) {
     const EpireadStats epistat(low_prob, high_prob,
                                critical_value, max_itr, use_bic);
 
-    std::ifstream in(reads_file);
-    if (!in)
-      throw runtime_error("cannot open input file: " + reads_file);
+    bgzf_file in(reads_file, "r");
+    if (!in) throw runtime_error("failed to open input file: " + reads_file);
 
     vector<GenomicRegion> amrs;
     size_t windows_tested = 0;
@@ -434,7 +465,7 @@ main_amrfinder(int argc, const char **argv) {
     vector<epiread> epireads;
     string prev_chrom, curr_chrom, tmp_states;
 
-    while (in >> er) {
+    while (read_epiread(in, er)) {
       curr_chrom = er.chr;
       if (!epireads.empty() && curr_chrom != prev_chrom) {
         windows_tested +=

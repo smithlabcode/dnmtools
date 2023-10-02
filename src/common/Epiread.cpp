@@ -18,6 +18,7 @@
 #include <string>
 #include <stdexcept>
 #include <fstream>
+#include <charconv>
 
 #include "Epiread.hpp"
 
@@ -75,4 +76,43 @@ validate_epiread_file(const string &filename) {
     if (!(iss >> c >> p >> s) || iss >> other) return false;
   }
   return true;
+}
+
+epiread::epiread(const string &line) {
+  constexpr auto is_sep = [](const char x) { return x == ' ' || x == '\t'; };
+  constexpr auto not_sep = [](const char x) { return x != ' ' && x != '\t'; };
+
+  using std::find_if;
+  using std::from_chars;
+  using std::distance;
+
+  bool failed = false;
+
+  const auto c = line.data();
+  const auto c_end = c + line.size();
+
+  auto field_s = c;
+  auto field_e = find_if(field_s + 1, c_end, is_sep);
+  if (field_e == c_end) failed = true;
+
+  chr = string{field_s, static_cast<uint32_t>(distance(field_s, field_e))};
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || (field_e == c_end);
+
+  const auto [ptr, ec] = from_chars(field_s, field_e, pos);
+  failed = failed || (ptr == field_s);
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || (field_e != c_end);
+
+  seq = string{field_s, static_cast<uint32_t>(distance(field_s, field_e))};
+
+  if (failed) {
+    throw std::runtime_error("bad epiread line: " + line);
+    // ADS: the value below would work for a flag
+    // pos = std::numeric_limits<decltype(pos)>::max();
+  }
 }

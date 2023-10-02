@@ -90,8 +90,10 @@ process_sites(bgzf_file &in, T &out) {
 int
 main_symmetric_cpgs(int argc, const char **argv) {
   try {
-    string outfile;
+    // file types from HTSlib use "-" for the filename to go to stdout
+    string outfile("-");
     // (not used) bool VERBOSE = false;
+    bool compress_output = false;
 
     const string description =
       "Get CpG sites and make methylation levels symmetric.";
@@ -101,6 +103,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
                            "<methcounts-file>");
     opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
                       outfile);
+    opt_parse.add_opt("zip", 'z', "output gzip format", false, compress_output);
     // opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     std::vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -124,27 +127,24 @@ main_symmetric_cpgs(int argc, const char **argv) {
     const string filename(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
-//     const bool show_progress = VERBOSE && isatty(fileno(stderr));
+    const bool show_progress = VERBOSE && isatty(fileno(stderr));
     bgzf_file in(filename, "r");
     if (!in) throw std::runtime_error("could not open file: " + filename);
 
     bool sites_are_sorted = true;
-    if (outfile.empty() || !has_gz_ext(outfile)) {
-      std::ofstream of;
-      if (!outfile.empty()) of.open(outfile.c_str());
-      std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
-      sites_are_sorted = process_sites(in, out);
-    }
-    else {
-      bgzf_file out(outfile, "w");
-      sites_are_sorted = process_sites(in, out);
-    }
+
+    // open the output file
+    const string output_mode = compress_output ? "w" : "wu";
+    bamxx::bgzf_file out(outfile, output_mode);
+    if (!out) throw std::runtime_error("error opening output file: " + outfile);
+
+    sites_are_sorted = process_sites(in, out);
 
     if (!sites_are_sorted) {
       cerr << "sites are not sorted in: " << filename << endl;
-      namespace fs = std::filesystem;
-      const fs::path outpath{outfile};
-      if (fs::exists(outpath)) fs::remove(outpath);
+      const std::filesystem::path outpath{outfile};
+      if (std::filesystem::exists(outpath))
+        std::filesystem::remove(outpath);
       return EXIT_FAILURE;
     }
   }

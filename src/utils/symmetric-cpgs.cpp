@@ -127,7 +127,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
     const string filename(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    const bool show_progress = VERBOSE && isatty(fileno(stderr));
+    // const bool show_progress = VERBOSE && isatty(fileno(stderr));
     bgzf_file in(filename, "r");
     if (!in) throw std::runtime_error("could not open file: " + filename);
 
@@ -141,10 +141,11 @@ main_symmetric_cpgs(int argc, const char **argv) {
     sites_are_sorted = process_sites(in, out);
 
     if (!sites_are_sorted) {
+      namespace fs = std::filesystem;
       cerr << "sites are not sorted in: " << filename << endl;
-      const std::filesystem::path outpath{outfile};
-      if (std::filesystem::exists(outpath))
-        std::filesystem::remove(outpath);
+      const fs::path outpath{outfile};
+      if (fs::exists(outpath))
+        fs::remove(outpath);
       return EXIT_FAILURE;
     }
   }

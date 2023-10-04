@@ -86,7 +86,7 @@ struct nucleotide_model {
   double operator()(const string &s) const {
     return accumulate(cbegin(s), cend(s), 0.0,
                       [&](const double x, const char c) {
-                        const auto i = nuc_to_idx[c];
+                        const auto i = nuc_to_idx[static_cast<uint8_t>(c)];
                         return i == 4 ? x : x + lpr[i];
                       });
   };
@@ -103,6 +103,7 @@ struct nucleotide_model {
 };
 
 struct guessprotocol_summary {
+
   static constexpr auto wgbs_cutoff_confident = 0.99;
   static constexpr auto wgbs_cutoff_unconfident = 0.9;
   static constexpr auto rpbat_cutoff_confident_high = 0.8;
@@ -110,14 +111,25 @@ struct guessprotocol_summary {
   static constexpr auto pbat_cutoff_unconfident = 0.1;
   static constexpr auto pbat_cutoff_confident = 0.01;
 
+  // protocol is the guessed protocol (wgbs, pbat, rpbat, or inconclusive)
+  // based on the content of the reads.
   string protocol;
+  // confidence indicates the level of confidence in the guess for the
+  // protocol.
   string confidence;
+  // layout indicates whether the reads are paired or single-ended.
   string layout;
+  // n_reads_wgbs is the average number of reads (for single-ended reads) or
+  // read pairs (for paired reads) where read1 is T-rich.
   double n_reads_wgbs{};
+  // n_reads is the number of evaluated reads or read pairs.
   uint64_t n_reads{};
+  // wgbs_fraction is the probability that a read (for single-ended reads) or
+  // the read1 of a read pair (for paired reads) is T-rich.
   double wgbs_fraction{};
 
   void evaluate() {
+
     const auto frac = n_reads_wgbs / n_reads;
     protocol = "inconclusive";
 

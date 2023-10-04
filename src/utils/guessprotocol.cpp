@@ -103,7 +103,15 @@ struct nucleotide_model {
 };
 
 struct guessprotocol_summary {
+  static constexpr auto wgbs_cutoff_confident = 0.99;
+  static constexpr auto wgbs_cutoff_unconfident = 0.9;
+  static constexpr auto rpbat_cutoff_confident_high = 0.8;
+  static constexpr auto rpbat_cutoff_confident_low = 0.2;
+  static constexpr auto pbat_cutoff_unconfident = 0.1;
+  static constexpr auto pbat_cutoff_confident = 0.01;
+
   string protocol;
+  string confidence;
   string layout;
   double n_reads_wgbs{};
   uint64_t n_reads{};
@@ -112,15 +120,43 @@ struct guessprotocol_summary {
   void evaluate() {
     const auto frac = n_reads_wgbs / n_reads;
     protocol = "inconclusive";
-    if (frac > 0.8) protocol = "wgbs";
-    if (frac < 0.2) protocol = "pbat";
-    if (frac > 0.4 && frac < 0.6) protocol = "rpbat";
+
+    // assigning wgbs (near one)
+    if (frac > wgbs_cutoff_confident) {
+      protocol = "wgbs";
+      confidence = "high";
+    }
+    else if (frac > wgbs_cutoff_unconfident) {
+      protocol = "wgbs";
+      confidence = "low";
+    }
+    // assigning pbat (near zero)
+    else if (frac < pbat_cutoff_confident) {
+      protocol = "pbat";
+      confidence = "high";
+    }
+    else if (frac < pbat_cutoff_unconfident) {
+      protocol = "pbat";
+      confidence = "low";
+    }
+    // assigning rpbat (towards middle)
+    else if (frac > rpbat_cutoff_confident_low &&
+             frac < rpbat_cutoff_confident_high) {
+      protocol = "rpbat";
+      confidence = "high";
+    }
+    else {
+      protocol = "rpbat";
+      confidence = "low";
+    }
+
     wgbs_fraction = frac;
   }
 
   string tostring() const {
     std::ostringstream oss;
     oss << "protocol: " << protocol << '\n'
+        << "confidence: " << confidence << '\n'
         << "wgbs_fraction: " << wgbs_fraction  << '\n'
         << "n_reads_wgbs: " << n_reads_wgbs << '\n'
         << "n_reads: " << n_reads;

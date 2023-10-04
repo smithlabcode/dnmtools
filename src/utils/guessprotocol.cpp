@@ -103,10 +103,18 @@ struct nucleotide_model {
 };
 
 struct guessprotocol_summary {
+  // protocol is the guessed protocol (wgbs, pbat, rpbat, or inconclusive)
+  // based on the content of the reads.
   string protocol;
+  // layout indicates whether the reads are paired or single-ended. 
   string layout;
+  // n_reads_wgbs is the average number of reads (for single-ended reads) or
+  // read pairs (for paired reads) where read1 is T-rich.
   double n_reads_wgbs{};
+  // n_reads is the number of evaluated reads or read pairs.
   uint64_t n_reads{};
+  // wgbs_fraction is the probability that a read (for single-ended reads) or
+  // the read1 of a read pair (for paired reads) is T-rich.
   double wgbs_fraction{};
 
   void evaluate() {

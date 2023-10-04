@@ -1,7 +1,7 @@
 /* guessprotocol: a program for guessing whether a wgbs protocol is
- * original, pbat or random pbat
+ * wgbs, pbat or random pbat
  *
- * Copyright (C) 2019-2023
+ * Copyright (C) 2019-2023 Andrew D. Smith
  *
  * Authors: Andrew D. Smith
  *
@@ -27,6 +27,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <array>
 
 #include "OptionParser.hpp"
 #include "numerical_utils.hpp"
@@ -83,9 +84,11 @@ struct nucleotide_model {
   }
 
   double operator()(const string &s) const {
-    return accumulate(
-      cbegin(s), cend(s), 0.0,
-      [&](const double x, const char c) { return x + lpr[nuc_to_idx[c]]; });
+    return accumulate(cbegin(s), cend(s), 0.0,
+                      [&](const double x, const char c) {
+                        const auto i = nuc_to_idx[c];
+                        return i == 4 ? x : x + lpr[i];
+                      });
   };
 
   string tostring() const {

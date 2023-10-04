@@ -16,61 +16,111 @@
  * General Public License for more details.
  */
 
+#include <bamxx.hpp>
+
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
-#include <iostream>
-#include <fstream>
-#include <iterator>
-#include <algorithm>
-#include <stdexcept>
-#include <filesystem>
-#include <sstream>
 
 #include "OptionParser.hpp"
-#include "smithlab_utils.hpp"
+#include "numerical_utils.hpp"
 #include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
 
-using std::string;
-using std::vector;
-using std::cout;
+using std::array;
 using std::cerr;
+using std::cout;
 using std::endl;
 using std::min;
 using std::runtime_error;
-using std::array;
+using std::string;
+using std::vector;
 
-static string
-guess_protocol(const double fraction_t_rich) {
-  if (fraction_t_rich >= 0.8) {
-    return "original";
+using bamxx::bgzf_file;
+
+constexpr int nuc_to_idx[] = {
+ /*  0*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 16*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 32*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 48*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 64*/  4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 80*/  4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 96*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /*112*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /*128*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+};
+
+struct nucleotide_model {
+  vector<double> pr{};
+  vector<double> lpr{};
+  double bisulfite_conversion_rate{};
+  bool is_t_rich{};
+
+  nucleotide_model(const vector<double> &bc, const double conv_rate,
+                   const bool itr)
+      : pr{bc}, bisulfite_conversion_rate{conv_rate}, is_t_rich{itr} {
+    auto nuc_from = is_t_rich ? 1 : 2;
+    auto nuc_to = is_t_rich ? 3 : 0;
+    pr[nuc_to] += bisulfite_conversion_rate * pr[nuc_from];
+    pr[nuc_from] *= (1.0 - bisulfite_conversion_rate);
+    assert(reduce(cbegin(pr), cend(pr), 0.0) == 1.0);
+    lpr.resize(std::size(pr));
+    transform(cbegin(pr), cend(pr), begin(lpr),
+              [](const double x) { return log(x); });
   }
-  if (fraction_t_rich <= 0.2) {
-    return "pbat";
+
+  double operator()(const string &s) const {
+    return accumulate(
+      cbegin(s), cend(s), 0.0,
+      [&](const double x, const char c) { return x + lpr[nuc_to_idx[c]]; });
+  };
+
+  string tostring() const {
+    std::ostringstream oss;
+    oss << "pr:\n";
+    for (auto i : pr) oss << i << '\n';
+    oss << "log pr:\n";
+    for (auto i : lpr) oss << i << '\n';
+    oss << bisulfite_conversion_rate << '\n' << is_t_rich;
+    return oss.str();
   }
-  if (fraction_t_rich >= 0.4 && fraction_t_rich <= 0.6) {
-    return "random";
-  }
-  return "inconclusive";
-}
+};
 
 struct guessprotocol_summary {
   string protocol;
   string layout;
-  uint64_t n_t_rich_reads{};
+  double n_reads_wgbs{};
   uint64_t n_reads{};
-  double fraction_t_rich_reads{};
+  double wgbs_fraction{};
 
   void evaluate() {
-    fraction_t_rich_reads = static_cast<double>(n_t_rich_reads)/n_reads;
-    protocol = guess_protocol(fraction_t_rich_reads);
+    const auto frac = n_reads_wgbs / n_reads;
+    protocol = "inconclusive";
+    if (frac > 0.8) protocol = "wgbs";
+    if (frac < 0.2) protocol = "pbat";
+    if (frac > 0.4 && frac < 0.6) protocol = "rpbat";
+    wgbs_fraction = frac;
   }
 
   string tostring() const {
     std::ostringstream oss;
     oss << "protocol: " << protocol << '\n'
-        << "fraction_t_rich_reads: " << fraction_t_rich_reads  << '\n'
-        << "t_rich_reads: " << n_t_rich_reads << '\n'
-        << "reads_examined: " << n_reads;
+        << "wgbs_fraction: " << wgbs_fraction  << '\n'
+        << "n_reads_wgbs: " << n_reads_wgbs << '\n'
+        << "n_reads: " << n_reads;
     return oss.str();
   }
 };
@@ -92,13 +142,14 @@ mates(const size_t to_ignore_at_end, // in case names have #0/1 name ends
 }
 
 // Read 4 lines one time from fastq and fill in the FASTQRecord structure
-static std::istream&
-operator>>(std::istream& s, FASTQRecord &r) {
+static bgzf_file &
+operator>>(bgzf_file &s, FASTQRecord &r) {
   constexpr auto n_error_codes = 5u;
+
   enum err_code { none, bad_name, bad_seq, bad_plus, bad_qual };
+
   static const array<runtime_error, n_error_codes> error_msg = {
-    runtime_error(""),
-    runtime_error("failed to parse fastq name line"),
+    runtime_error(""), runtime_error("failed to parse fastq name line"),
     runtime_error("failed to parse fastq sequence line"),
     runtime_error("failed to parse fastq plus line"),
     runtime_error("failed to parse fastq qual line")
@@ -106,27 +157,22 @@ operator>>(std::istream& s, FASTQRecord &r) {
 
   err_code ec = err_code::none;
 
-  getline(s, r.name);
+  if (!getline(s, r.name)) return s;
 
-  if (r.name.empty() || r.name[0] != '@')
-    ec = err_code::bad_name;
+  if (r.name.empty() || r.name[0] != '@') ec = err_code::bad_name;
 
-  r.name.resize(r.name.find_first_of(' '));
-  const auto nm_sz = r.name.find_first_of(' ');
-  copy(cbegin(r.name) + 1, cbegin(r.name) + nm_sz, begin(r.name));
+  const auto nm_end = r.name.find_first_of(" \t");
+  const auto nm_sz = (nm_end == string::npos ? r.name.size() : nm_end) - 1;
+  r.name.erase(copy_n(cbegin(r.name) + 1, nm_sz, begin(r.name)), cend(r.name));
 
-  if (!getline(s, r.seq))
-    ec = err_code::bad_seq;
+  if (!getline(s, r.seq)) ec = err_code::bad_seq;
 
   string tmp;
-  if (!getline(s, tmp))
-    ec = err_code::bad_plus;
+  if (!getline(s, tmp)) ec = err_code::bad_plus;
 
-  if (!getline(s, tmp))
-    ec = err_code::bad_qual;
+  if (!getline(s, tmp)) ec = err_code::bad_qual;
 
-  if (ec != err_code::none)
-    throw error_msg[ec];
+  if (ec != err_code::none) throw error_msg[ec];
 
   return s;
 }
@@ -136,11 +182,16 @@ main_guessprotocol(int argc, const char **argv) {
 
   try {
 
+    static const vector<double> human_base_comp = {0.2, 0.3, 0.3, 0.2};
+    static const vector<double> flat_base_comp = {0.25, 0.25, 0.25, 0.25};
+
     constexpr auto description = "guess bisulfite protocol for a library";
 
+    bool verbose;
     string outfile;
     size_t reads_to_check = 1000000;
     size_t name_suffix_len = 0;
+    double bisulfite_conversion_rate = 0.98;
 
     namespace fs = std::filesystem;
     const string cmd_name = std::filesystem::path(argv[0]).filename();
@@ -152,7 +203,12 @@ main_guessprotocol(int argc, const char **argv) {
                       false, reads_to_check);
     opt_parse.add_opt("ignore", 'i', "length of read name suffix "
                       "to ignore when matching", false, name_suffix_len);
+    opt_parse.add_opt("bisulfite", 'b', "bisulfite conversion rate",
+                      false, bisulfite_conversion_rate);
     opt_parse.add_opt("output", 'o', "output file name", false, outfile);
+    opt_parse.add_opt("verbose", 'v',
+                      "report available information during the run",
+                      false, verbose);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
@@ -171,72 +227,77 @@ main_guessprotocol(int argc, const char **argv) {
     const vector<string> reads_files(leftover_args);
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    auto base_comp = human_base_comp;
+    nucleotide_model t_rich_model(base_comp, bisulfite_conversion_rate, true);
+    nucleotide_model a_rich_model(base_comp, bisulfite_conversion_rate, false);
+
     guessprotocol_summary summary;
+    summary.layout = reads_files.size() == 2 ? "paired" : "single";
+
+    if (verbose) {
+      if (reads_files.size() == 2)
+        cerr << "data layout: "
+             << "paired" << '\n'
+             << "read1 file: " << reads_files.front() << '\n'
+             << "read2 file: " << reads_files.back() << '\n';
+      else
+        cerr << "data layout: "
+             << "single" << '\n'
+             << "read file: " << reads_files.front() << '\n';
+      cerr << "reads to check: " << reads_to_check << '\n'
+           << "read name suffix length: " << name_suffix_len << '\n'
+           << "bisulfite conversion: " << bisulfite_conversion_rate << '\n';
+    }
+
     if (reads_files.size() == 2) {
-      summary.layout = "paired";
 
       // input: paired-end reads with end1 and end2
-      std::ifstream in1(reads_files.front());
+      bgzf_file in1(reads_files.front(), "r");
       if (!in1)
-        throw runtime_error("cannot open input file: " + reads_files.front());
+        throw runtime_error("cannot open file: " + reads_files.front());
 
-      std::ifstream in2(reads_files.back());
+      bgzf_file in2(reads_files.back(), "r");
       if (!in2)
-        throw runtime_error("cannot open input file: " + reads_files.back());
+        throw runtime_error("cannot open file: " + reads_files.back());
 
-      FASTQRecord end_one, end_two;
-      while (in1 >> end_one && in2 >> end_two &&
-             summary.n_reads < reads_to_check) {
+      FASTQRecord r1, r2;
+      while (in1 >> r1 && in2 >> r2 && summary.n_reads < reads_to_check) {
         summary.n_reads++;
 
-        // two reads should be in paired-ends
-        if (!mates(name_suffix_len, end_one, end_two))
-          throw runtime_error("expected mates, got: " +
-                              end_one.name + " and " + end_two.name);
+        if (!mates(name_suffix_len, r1, r2))
+          throw runtime_error("expected mates: " + r1.name + ", " + r2.name);
 
-        const double end_one_a =
-          count(begin(end_one.seq), end(end_one.seq), 'A') +
-          count(begin(end_one.seq), end(end_one.seq), 'C');
-        const double end_one_t =
-          count(begin(end_one.seq), end(end_one.seq), 'T') +
-          count(begin(end_one.seq), end(end_one.seq), 'G');
+        const double ta = t_rich_model(r1.seq) + a_rich_model(r2.seq);
+        const double at = a_rich_model(r1.seq) + t_rich_model(r2.seq);
 
-        const double end_two_a =
-          count(begin(end_two.seq), end(end_two.seq), 'A') +
-          count(begin(end_two.seq), end(end_two.seq), 'C');
-        const double end_two_t =
-          count(begin(end_two.seq), end(end_two.seq), 'T') +
-          count(begin(end_two.seq), end(end_two.seq), 'G');
-
-        const double t_rich_count = (end_one_t + end_two_a);
-        const double pbat_count = (end_one_a + end_two_t);
-
-        summary.n_t_rich_reads += (t_rich_count > pbat_count);
+        const auto prob_read1_t_rich = exp(ta - log_sum_log(ta, at));
+        summary.n_reads_wgbs += prob_read1_t_rich;
       }
     }
     else {
-      summary.layout = "single";
 
       // input: single-end reads
-      std::ifstream in(reads_files.front());
+      bgzf_file in(reads_files.front(), "r");
       if (!in)
-        throw runtime_error("cannot open input file: " + reads_files.front());
+        throw runtime_error("cannot open file: " + reads_files.front());
 
       FASTQRecord r;
       while (in >> r && summary.n_reads < reads_to_check) {
         summary.n_reads++;
-        const double a = (count(begin(r.seq), end(r.seq), 'A') +
-                          count(begin(r.seq), end(r.seq), 'C'));
-        const double t = (count(begin(r.seq), end(r.seq), 'T') +
-                          count(begin(r.seq), end(r.seq), 'G'));
-        summary.n_t_rich_reads += (t > a);
+
+        const double t = t_rich_model(r.seq);
+        const double a = a_rich_model(r.seq);
+
+        const auto prob_t_rich = exp(t - log_sum_log(t, a));
+        summary.n_reads_wgbs += prob_t_rich;
       }
     }
 
     summary.evaluate();
+
     if (!outfile.empty()) {
       std::ofstream out(outfile);
-      if (!out) throw runtime_error("failed to open output file: " + outfile);
+      if (!out) throw runtime_error("failed to open: " + outfile);
       out << summary.tostring() << endl;
     }
     else cout << summary.tostring() << endl;

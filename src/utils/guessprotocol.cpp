@@ -86,7 +86,7 @@ struct nucleotide_model {
   double operator()(const string &s) const {
     return accumulate(cbegin(s), cend(s), 0.0,
                       [&](const double x, const char c) {
-                        const auto i = nuc_to_idx[c];
+                        const auto i = nuc_to_idx[static_cast<uint8_t>(c)];
                         return i == 4 ? x : x + lpr[i];
                       });
   };
@@ -106,6 +106,9 @@ struct guessprotocol_summary {
   // protocol is the guessed protocol (wgbs, pbat, rpbat, or inconclusive)
   // based on the content of the reads.
   string protocol;
+  // confidence indicates the level of confidence in the guess for the 
+  // protocol.
+  string confidence;
   // layout indicates whether the reads are paired or single-ended. 
   string layout;
   // n_reads_wgbs is the average number of reads (for single-ended reads) or
@@ -118,17 +121,21 @@ struct guessprotocol_summary {
   double wgbs_fraction{};
 
   void evaluate() {
-    const auto frac = n_reads_wgbs / n_reads;
-    protocol = "inconclusive";
-    if (frac > 0.8) protocol = "wgbs";
-    if (frac < 0.2) protocol = "pbat";
-    if (frac > 0.4 && frac < 0.6) protocol = "rpbat";
+    const auto frac = n_reads_wgbs / std::max(1ul, n_reads);
+    if (frac <= 0.01)      {protocol = "pbat"; confidence = "high";}
+    else if (frac <= 0.1)  {protocol = "pbat"; confidence = "low";}
+    else if (frac <= 0.2)  {protocol = "rpbat"; confidence = "low";}
+    else if (frac <= 0.8)  {protocol = "rpbat"; confidence = "high";}
+    else if (frac <= 0.9)  {protocol = "rpbat"; confidence = "low";}
+    else if (frac <= 0.99) {protocol = "wgbs"; confidence = "low";}
+    else                  {protocol = "wgbs"; confidence = "high";}
     wgbs_fraction = frac;
   }
 
   string tostring() const {
     std::ostringstream oss;
     oss << "protocol: " << protocol << '\n'
+        << "confidence: " << confidence << '\n'
         << "wgbs_fraction: " << wgbs_fraction  << '\n'
         << "n_reads_wgbs: " << n_reads_wgbs << '\n'
         << "n_reads: " << n_reads;

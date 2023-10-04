@@ -182,12 +182,13 @@ main_guessprotocol(int argc, const char **argv) {
 
   try {
 
-    static const vector<double> human_base_comp = {0.2, 0.3, 0.3, 0.2};
+    static const vector<double> human_base_comp = {0.295, 0.205, 0.205, 0.295};
     static const vector<double> flat_base_comp = {0.25, 0.25, 0.25, 0.25};
 
     constexpr auto description = "guess bisulfite protocol for a library";
 
     bool verbose;
+    bool use_human;
     string outfile;
     size_t reads_to_check = 1000000;
     size_t name_suffix_len = 0;
@@ -205,6 +206,8 @@ main_guessprotocol(int argc, const char **argv) {
                       "to ignore when matching", false, name_suffix_len);
     opt_parse.add_opt("bisulfite", 'b', "bisulfite conversion rate",
                       false, bisulfite_conversion_rate);
+    opt_parse.add_opt("human", 'H', "assume human genome",
+                      false, use_human);
     opt_parse.add_opt("output", 'o', "output file name", false, outfile);
     opt_parse.add_opt("verbose", 'v',
                       "report available information during the run",
@@ -227,7 +230,9 @@ main_guessprotocol(int argc, const char **argv) {
     const vector<string> reads_files(leftover_args);
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    auto base_comp = human_base_comp;
+    auto base_comp = flat_base_comp;
+    if (use_human) base_comp = human_base_comp;
+
     nucleotide_model t_rich_model(base_comp, bisulfite_conversion_rate, true);
     nucleotide_model a_rich_model(base_comp, bisulfite_conversion_rate, false);
 

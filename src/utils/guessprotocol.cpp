@@ -1,7 +1,7 @@
 /* guessprotocol: a program for guessing whether a wgbs protocol is
- * original, pbat or random pbat
+ * wgbs, pbat or random pbat
  *
- * Copyright (C) 2019-2022
+ * Copyright (C) 2019-2023 Andrew D. Smith
  *
  * Authors: Andrew D. Smith
  *
@@ -16,25 +16,165 @@
  * General Public License for more details.
  */
 
+#include <bamxx.hpp>
+
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
-#include <iostream>
-#include <fstream>
-#include <iterator>
-#include <algorithm>
-#include <stdexcept>
+#include <array>
 
 #include "OptionParser.hpp"
-#include "smithlab_utils.hpp"
+#include "numerical_utils.hpp"
 #include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
 
-using std::string;
-using std::vector;
-using std::cout;
+using std::array;
 using std::cerr;
+using std::cout;
 using std::endl;
 using std::min;
 using std::runtime_error;
+using std::string;
+using std::vector;
+
+using bamxx::bgzf_file;
+
+constexpr int nuc_to_idx[] = {
+ /*  0*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 16*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 32*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 48*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 64*/  4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 80*/  4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /* 96*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /*112*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+ /*128*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+};
+
+struct nucleotide_model {
+  vector<double> pr{};
+  vector<double> lpr{};
+  double bisulfite_conversion_rate{};
+  bool is_t_rich{};
+
+  nucleotide_model(const vector<double> &bc, const double conv_rate,
+                   const bool itr)
+      : pr{bc}, bisulfite_conversion_rate{conv_rate}, is_t_rich{itr} {
+    auto nuc_from = is_t_rich ? 1 : 2;
+    auto nuc_to = is_t_rich ? 3 : 0;
+    pr[nuc_to] += bisulfite_conversion_rate * pr[nuc_from];
+    pr[nuc_from] *= (1.0 - bisulfite_conversion_rate);
+    assert(reduce(cbegin(pr), cend(pr), 0.0) == 1.0);
+    lpr.resize(std::size(pr));
+    transform(cbegin(pr), cend(pr), begin(lpr),
+              [](const double x) { return log(x); });
+  }
+
+  double operator()(const string &s) const {
+    return accumulate(cbegin(s), cend(s), 0.0,
+                      [&](const double x, const char c) {
+                        const auto i = nuc_to_idx[static_cast<uint8_t>(c)];
+                        return i == 4 ? x : x + lpr[i];
+                      });
+  };
+
+  string tostring() const {
+    std::ostringstream oss;
+    oss << "pr:\n";
+    for (auto i : pr) oss << i << '\n';
+    oss << "log pr:\n";
+    for (auto i : lpr) oss << i << '\n';
+    oss << bisulfite_conversion_rate << '\n' << is_t_rich;
+    return oss.str();
+  }
+};
+
+struct guessprotocol_summary {
+
+  static constexpr auto wgbs_cutoff_confident = 0.99;
+  static constexpr auto wgbs_cutoff_unconfident = 0.9;
+  static constexpr auto rpbat_cutoff_confident_high = 0.8;
+  static constexpr auto rpbat_cutoff_confident_low = 0.2;
+  static constexpr auto pbat_cutoff_unconfident = 0.1;
+  static constexpr auto pbat_cutoff_confident = 0.01;
+
+  // protocol is the guessed protocol (wgbs, pbat, rpbat, or inconclusive)
+  // based on the content of the reads.
+  string protocol;
+  // confidence indicates the level of confidence in the guess for the
+  // protocol.
+  string confidence;
+  // layout indicates whether the reads are paired or single-ended.
+  string layout;
+  // n_reads_wgbs is the average number of reads (for single-ended reads) or
+  // read pairs (for paired reads) where read1 is T-rich.
+  double n_reads_wgbs{};
+  // n_reads is the number of evaluated reads or read pairs.
+  uint64_t n_reads{};
+  // wgbs_fraction is the probability that a read (for single-ended reads) or
+  // the read1 of a read pair (for paired reads) is T-rich.
+  double wgbs_fraction{};
+
+  void evaluate() {
+
+    const auto frac = n_reads_wgbs / n_reads;
+    protocol = "inconclusive";
+
+    // assigning wgbs (near one)
+    if (frac > wgbs_cutoff_confident) {
+      protocol = "wgbs";
+      confidence = "high";
+    }
+    else if (frac > wgbs_cutoff_unconfident) {
+      protocol = "wgbs";
+      confidence = "low";
+    }
+    // assigning pbat (near zero)
+    else if (frac < pbat_cutoff_confident) {
+      protocol = "pbat";
+      confidence = "high";
+    }
+    else if (frac < pbat_cutoff_unconfident) {
+      protocol = "pbat";
+      confidence = "low";
+    }
+    // assigning rpbat (towards middle)
+    else if (frac > rpbat_cutoff_confident_low &&
+             frac < rpbat_cutoff_confident_high) {
+      protocol = "rpbat";
+      confidence = "high";
+    }
+    else {
+      protocol = "rpbat";
+      confidence = "low";
+    }
+
+    wgbs_fraction = frac;
+  }
+
+  string tostring() const {
+    std::ostringstream oss;
+    oss << "protocol: " << protocol << '\n'
+        << "confidence: " << confidence << '\n'
+        << "wgbs_fraction: " << wgbs_fraction  << '\n'
+        << "n_reads_wgbs: " << n_reads_wgbs << '\n'
+        << "n_reads: " << n_reads;
+    return oss.str();
+  }
+};
 
 // store each read from one end
 struct FASTQRecord {
@@ -47,46 +187,45 @@ struct FASTQRecord {
 static bool
 mates(const size_t to_ignore_at_end, // in case names have #0/1 name ends
       const FASTQRecord &a, const FASTQRecord &b) {
-  assert(to_ignore_at_end < a.name.length());
-  return equal(begin(a.name), end(a.name) - to_ignore_at_end, begin(b.name));
+  assert(to_ignore_at_end < std::size(a.name));
+  return equal(cbegin(a.name), cend(a.name) - to_ignore_at_end,
+               cbegin(b.name));
 }
 
 // Read 4 lines one time from fastq and fill in the FASTQRecord structure
-static std::istream&
-operator>>(std::istream& s, FASTQRecord &r) {
-  if (getline(s, r.name)) {
+static bgzf_file &
+operator>>(bgzf_file &s, FASTQRecord &r) {
+  constexpr auto n_error_codes = 5u;
 
-    if (r.name.empty() || r.name[0] != '@')
-      throw std::runtime_error("bad name line: " + r.name);
+  enum err_code { none, bad_name, bad_seq, bad_plus, bad_qual };
 
-    r.name = r.name.substr(1, r.name.find_first_of(' '));
+  static const array<runtime_error, n_error_codes> error_msg = {
+    runtime_error(""), runtime_error("failed to parse fastq name line"),
+    runtime_error("failed to parse fastq sequence line"),
+    runtime_error("failed to parse fastq plus line"),
+    runtime_error("failed to parse fastq qual line")
+  };
 
-    if (!getline(s, r.seq))
-      throw runtime_error("failed to read expected seq line");
+  err_code ec = err_code::none;
 
-    string tmp;
-    if (!getline(s, tmp))
-      throw runtime_error("failed to read expected + line");
+  if (!getline(s, r.name)) return s;
 
-    if (!getline(s, tmp))
-      throw runtime_error("failed to read expected score line");
-  }
+  if (r.name.empty() || r.name[0] != '@') ec = err_code::bad_name;
+
+  const auto nm_end = r.name.find_first_of(" \t");
+  const auto nm_sz = (nm_end == string::npos ? r.name.size() : nm_end) - 1;
+  r.name.erase(copy_n(cbegin(r.name) + 1, nm_sz, begin(r.name)), cend(r.name));
+
+  if (!getline(s, r.seq)) ec = err_code::bad_seq;
+
+  string tmp;
+  if (!getline(s, tmp)) ec = err_code::bad_plus;
+
+  if (!getline(s, tmp)) ec = err_code::bad_qual;
+
+  if (ec != err_code::none) throw error_msg[ec];
+
   return s;
-}
-
-
-static string
-guess_protocol(const double fraction_t_rich) {
-  if (fraction_t_rich >= 0.8) {
-    return "original";
-  }
-  if (fraction_t_rich <= 0.2) {
-    return "pbat";
-  }
-  if (fraction_t_rich >= 0.4 && fraction_t_rich <= 0.6) {
-    return "random";
-  }
-  return "inconclusive";
 }
 
 int
@@ -94,17 +233,36 @@ main_guessprotocol(int argc, const char **argv) {
 
   try {
 
+    static const vector<double> human_base_comp = {0.295, 0.205, 0.205, 0.295};
+    static const vector<double> flat_base_comp = {0.25, 0.25, 0.25, 0.25};
+
+    constexpr auto description = "guess bisulfite protocol for a library";
+
+    bool verbose;
+    bool use_human;
+    string outfile;
     size_t reads_to_check = 1000000;
     size_t name_suffix_len = 0;
+    double bisulfite_conversion_rate = 0.98;
+
+    namespace fs = std::filesystem;
+    const string cmd_name = std::filesystem::path(argv[0]).filename();
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]),
-                           "guess whether protocol is ordinary, pbat or random",
+    OptionParser opt_parse(cmd_name, description,
                            "<end1-fastq> [<end2-fastq>]");
     opt_parse.add_opt("nreads", 'n', "number of reads in initial check",
                       false, reads_to_check);
     opt_parse.add_opt("ignore", 'i', "length of read name suffix "
                       "to ignore when matching", false, name_suffix_len);
+    opt_parse.add_opt("bisulfite", 'b', "bisulfite conversion rate",
+                      false, bisulfite_conversion_rate);
+    opt_parse.add_opt("human", 'H', "assume human genome",
+                      false, use_human);
+    opt_parse.add_opt("output", 'o', "output file name", false, outfile);
+    opt_parse.add_opt("verbose", 'v',
+                      "report available information during the run",
+                      false, verbose);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
@@ -123,84 +281,85 @@ main_guessprotocol(int argc, const char **argv) {
     const vector<string> reads_files(leftover_args);
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (reads_files.size() == 2) {
-      // Input: paired-end reads with end1 and end2
-      std::ifstream in1(reads_files.front());
-      if (!in1)
-        throw runtime_error("cannot open input file: " + reads_files.front());
+    auto base_comp = flat_base_comp;
+    if (use_human) base_comp = human_base_comp;
 
-      std::ifstream in2(reads_files.back());
-      if (!in2)
-        throw runtime_error("cannot open input file: " + reads_files.back());
+    nucleotide_model t_rich_model(base_comp, bisulfite_conversion_rate, true);
+    nucleotide_model a_rich_model(base_comp, bisulfite_conversion_rate, false);
 
-      size_t n_pairs = 0;
-      size_t t_rich_pairs = 0;
+    guessprotocol_summary summary;
+    summary.layout = reads_files.size() == 2 ? "paired" : "single";
 
-      FASTQRecord end_one, end_two;
-      while (in1 >> end_one && in2 >> end_two && n_pairs < reads_to_check) {
-        ++n_pairs;
-
-        // two reads should be in paired-ends
-        if (!mates(name_suffix_len, end_one, end_two))
-          throw runtime_error("expected mates, got: " +
-                              end_one.name + " and " + end_two.name);
-
-        const double end_one_a =
-          count(begin(end_one.seq), end(end_one.seq), 'A') +
-          count(begin(end_one.seq), end(end_one.seq), 'C');
-        const double end_one_t =
-          count(begin(end_one.seq), end(end_one.seq), 'T') +
-          count(begin(end_one.seq), end(end_one.seq), 'G');
-
-        const double end_two_a =
-          count(begin(end_two.seq), end(end_two.seq), 'A') +
-          count(begin(end_two.seq), end(end_two.seq), 'C');
-        const double end_two_t =
-          count(begin(end_two.seq), end(end_two.seq), 'T') +
-          count(begin(end_two.seq), end(end_two.seq), 'G');
-
-        const double t_rich_count = (end_one_t + end_two_a);
-        const double pbat_count = (end_one_a + end_two_t);
-
-        t_rich_pairs += (t_rich_count > pbat_count);
-      }
-      const double fraction_t_rich = static_cast<double>(t_rich_pairs)/n_pairs;
-      cout << guess_protocol(fraction_t_rich) << '\t'
-           << "fraction_t_rich=" << fraction_t_rich  << '\t'
-           << "t_rich_pairs=" << t_rich_pairs << '\t'
-           << "pairs_examined=" << n_pairs << endl;
+    if (verbose) {
+      if (reads_files.size() == 2)
+        cerr << "data layout: "
+             << "paired" << '\n'
+             << "read1 file: " << reads_files.front() << '\n'
+             << "read2 file: " << reads_files.back() << '\n';
+      else
+        cerr << "data layout: "
+             << "single" << '\n'
+             << "read file: " << reads_files.front() << '\n';
+      cerr << "reads to check: " << reads_to_check << '\n'
+           << "read name suffix length: " << name_suffix_len << '\n'
+           << "bisulfite conversion: " << bisulfite_conversion_rate << '\n';
     }
-    else { // if (reads_files.size() == 1)
-      // Input: single-end reads
-      std::ifstream in(reads_files.front());
-      if (!in)
-        throw runtime_error("cannot open input file: " + reads_files.front());
 
-      size_t n_reads = 0;
-      size_t t_rich_reads = 0;
+    if (reads_files.size() == 2) {
+
+      // input: paired-end reads with end1 and end2
+      bgzf_file in1(reads_files.front(), "r");
+      if (!in1)
+        throw runtime_error("cannot open file: " + reads_files.front());
+
+      bgzf_file in2(reads_files.back(), "r");
+      if (!in2)
+        throw runtime_error("cannot open file: " + reads_files.back());
+
+      FASTQRecord r1, r2;
+      while (in1 >> r1 && in2 >> r2 && summary.n_reads < reads_to_check) {
+        summary.n_reads++;
+
+        if (!mates(name_suffix_len, r1, r2))
+          throw runtime_error("expected mates: " + r1.name + ", " + r2.name);
+
+        const double ta = t_rich_model(r1.seq) + a_rich_model(r2.seq);
+        const double at = a_rich_model(r1.seq) + t_rich_model(r2.seq);
+
+        const auto prob_read1_t_rich = exp(ta - log_sum_log(ta, at));
+        summary.n_reads_wgbs += prob_read1_t_rich;
+      }
+    }
+    else {
+
+      // input: single-end reads
+      bgzf_file in(reads_files.front(), "r");
+      if (!in)
+        throw runtime_error("cannot open file: " + reads_files.front());
 
       FASTQRecord r;
-      while (in >> r && n_reads < reads_to_check) {
-        ++n_reads;
-        const double a = (count(begin(r.seq), end(r.seq), 'A') +
-                          count(begin(r.seq), end(r.seq), 'C'));
-        const double t = (count(begin(r.seq), end(r.seq), 'T') +
-                          count(begin(r.seq), end(r.seq), 'G'));
-        t_rich_reads += (t > a);
+      while (in >> r && summary.n_reads < reads_to_check) {
+        summary.n_reads++;
+
+        const double t = t_rich_model(r.seq);
+        const double a = a_rich_model(r.seq);
+
+        const auto prob_t_rich = exp(t - log_sum_log(t, a));
+        summary.n_reads_wgbs += prob_t_rich;
       }
-      const double fraction_t_rich = static_cast<double>(t_rich_reads)/n_reads;
-      cout << guess_protocol(fraction_t_rich) << '\t'
-           << "fraction_t_rich=" << fraction_t_rich  << '\t'
-           << "t_rich_reads=" << t_rich_reads << '\t'
-           << "reads_examined=" << n_reads << endl;
     }
+
+    summary.evaluate();
+
+    if (!outfile.empty()) {
+      std::ofstream out(outfile);
+      if (!out) throw runtime_error("failed to open: " + outfile);
+      out << summary.tostring() << endl;
+    }
+    else cout << summary.tostring() << endl;
   }
   catch (const runtime_error &e) {
     cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

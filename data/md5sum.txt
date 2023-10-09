@@ -10,7 +10,6 @@ b38d571baaf2bc16646dbd14a7edb770  tests/reads.epiread
 af8b97ef25af8a16ced1537ca4a74d07  tests/reads.hmr
 52d44c4c1d6891b45741f573f51e67cd  tests/reads.levels
 916fe07a1d03449b65dfc1458d7c1c40  tests/reads.mstats
-65816bee34b977adf1dd798fbf85d758  tests/reads.sam
 1aecbb2b12bd867405118eae42de6743  tests/reads.ustats
 bcbf01be810cbf4051292813eb6b9225  tests/tRex1.idx
 7c84dafb85252a04a45704da71eba7c4  tests/tRex1_promoters.roi.bed
@@ -18,5 +17,6 @@ e7e9590475a7f9b1ae41701d81892e57  tests/two_epialleles.amr
 ec6a686617cad31e9f7a37a3d378e6ed  tests/two_epialleles.states
 93e38b20d162062a5d147c4290095a13  tests/mlml.out
 d947fe3d61ef7b1564558a69608f0e64  tests/methylome.pmd
-3f4241b03027961ae4753644dbd2a2b4  tests/reads.fmt.sam
-0089ea4ef0e36f91c48275630599e79b  tests/reads.fmt.srt.uniq.sam
+7d481d31e4316e97d519838f4887b10d  tests/reads.sam
+4b038c82b51be15307d4969e859e864f  tests/reads.fmt.sam
+a7b94dd23f308f653fbfab98ec7b62d8  tests/reads.fmt.srt.uniq.sam

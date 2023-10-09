@@ -97,7 +97,8 @@ SUBDIRS := src/smithlab_cpp src/abismal
 install installdirs: SUBDIRS := $(filter-out src/smithlab_cpp src/abismal, $(SUBDIRS))
 AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp -I $(top_srcdir)/src/bamxx
 
-CXXFLAGS = -Wall -O3 $(OPENMP_CXXFLAGS) # default has optimization on
+AM_CXXFLAGS = $(OPENMP_CXXFLAGS)
+CXXFLAGS = -Wall -O3 # default has optimization on
 
 ### ADS: Testing with `make check` can be a long process. Testing with
 ### `make check` is designed to work recursively. Modifying this

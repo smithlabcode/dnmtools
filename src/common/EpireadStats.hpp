@@ -22,11 +22,11 @@
 #include <cstdint>
 
 struct small_epiread {
-  size_t pos{};
+  uint32_t pos{};
   std::string seq{};
-  small_epiread(size_t p, std::string s) : pos{p}, seq{s} {}
-  size_t end() const {return pos + seq.size();}
-  size_t length() const {return seq.size();}
+  small_epiread(uint32_t p, std::string s) : pos{p}, seq{s} {}
+  uint32_t end() const {return pos + std::size(seq);}
+  uint32_t length() const {return std::size(seq);}
 };
 
 
@@ -80,23 +80,25 @@ public:
   EpireadStats(const double lp,
                const double hp,
                const double cv,
-               const size_t mi) :
-    low_prob(lp), high_prob(hp),
-    critical_value(cv), max_itr(mi) {}
+               const size_t mi,
+               const bool ub) :
+    low_prob{lp}, high_prob{hp},
+    critical_value{cv}, max_itr{mi}, use_bic{ub} {}
 
-  template<bool use_bic> double
+  double
   test_asm(std::vector<small_epiread> &reads, bool &is_significant) const {
     const double score = use_bic
-                           ? test_asm_bic(max_itr, low_prob, high_prob, reads)
-                           : test_asm_lrt(max_itr, low_prob, high_prob, reads);
+      ? test_asm_bic(max_itr, low_prob, high_prob, reads)
+      : test_asm_lrt(max_itr, low_prob, high_prob, reads);
     is_significant = use_bic ? score < 0.0 : score < critical_value;
     return score;
   }
 private:
-  double low_prob;
-  double high_prob;
-  double critical_value;
-  size_t max_itr;
+  double low_prob{};
+  double high_prob{};
+  double critical_value{};
+  size_t max_itr{};
+  bool use_bic{};
 };
 
 #endif

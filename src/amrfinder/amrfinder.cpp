@@ -1,7 +1,7 @@
 /* amrfinder: program for resolving epialleles in a sliding window
  * along a chromosome.
  *
- * Copyright (C) 2014-2022 University of Southern California and
+ * Copyright (C) 2014-2023 University of Southern California and
  *                         Andrew D. Smith and Benjamin E. Decato
  *
  * Authors: Fang Fang and Benjamin E. Decato and Andrew D. Smith
@@ -158,6 +158,22 @@ convert_coordinates(const vector<T> &cpgs, GenomicRegion &region) {
   return true;
 }
 
+static vector<pair<uint32_t, uint32_t>>
+get_chrom_partition(const vector<GenomicRegion> &r) {
+  if (r.empty()) return {};
+  vector<pair<uint32_t, uint32_t>> parts;
+  string prev_chrom = r.front().get_chrom();
+  uint32_t prev_idx = 0u;
+  for (auto i = 0u; i < size(r); ++i)
+    if (r[i].get_chrom() != prev_chrom) {
+      parts.emplace_back(prev_idx, i);
+      prev_idx = i;
+      prev_chrom = r[i].get_chrom();
+    }
+  parts.emplace_back(prev_idx, size(r));
+  return parts;
+}
+
 static bool
 convert_coordinates(const string &genome_file, vector<GenomicRegion> &amrs) {
 
@@ -172,18 +188,22 @@ convert_coordinates(const string &genome_file, vector<GenomicRegion> &amrs) {
   for (auto i = 0u; i < n_chroms; ++i)
     chrom_lookup.emplace(move(c_name[i]), move(c_seq[i]));
 
-  vector<uint32_t> cpgs;
-  string chrom_name;
-  for (auto &a : amrs) {
-    if (a.get_chrom() != chrom_name) {
-      chrom_name = a.get_chrom();
-      auto c_itr = chrom_lookup.find(chrom_name);
-      if (c_itr == end(chrom_lookup)) return false;
-      cpgs = collect_cpgs(c_itr->second);
+  vector<pair<uint32_t, uint32_t>> chrom_parts = get_chrom_partition(amrs);
+  std::atomic_uint32_t conv_failure = 0;
+
+#pragma omp parallel for
+  for (const auto &p : chrom_parts) {
+    const string chrom_name = amrs[p.first].get_chrom();
+    auto c_itr = chrom_lookup.find(chrom_name);
+    if (c_itr == end(chrom_lookup))
+      conv_failure++;
+    else {
+      vector<uint32_t> cpgs = collect_cpgs(c_itr->second);
+      for (uint32_t i = p.first; i < p.second; ++i)
+        conv_failure += !convert_coordinates(cpgs, amrs[i]);
     }
-    if (!convert_coordinates(cpgs, a)) return false;
   }
-  return true;
+  return conv_failure == 0;
 }
 
 // make sure the current read is shortened to only include positions
@@ -202,14 +222,21 @@ clip_read(const size_t start_pos, const size_t end_pos, epi_r r) {
 static vector<epi_r>
 get_current_epireads(const vector<epi_r> &epireads, const size_t max_len,
                      const size_t cpg_window, const size_t start_pos,
-                     size_t &read_id) {
+                     uint64_t &read_id) {
+
+  // assert(is_sorted(cbegin(epireads), cend(epireads),
+  //                  [](const epi_r &a, const epi_r &b) {
+  //                    return a.pos < b.pos;
+  //                  }));
+
   const auto n_epi = size(epireads);
 
-  while (read_id < n_epi && epireads[read_id].pos + max_len <= start_pos)
+  while (read_id < epireads.size() && epireads[read_id].pos + max_len <= start_pos)
     ++read_id;
 
-  vector<epi_r> current_epireads;
   const auto end_pos = start_pos + cpg_window;
+
+  vector<epi_r> current_epireads;
   for (auto i = read_id; i < n_epi && epireads[i].pos < end_pos; ++i)
     if (epireads[i].end() > start_pos)
       current_epireads.push_back(clip_read(start_pos, end_pos, epireads[i]));
@@ -420,16 +447,18 @@ main_amrfinder(int argc, const char **argv) {
 
     while (read_epiread(in, er)) {
       if (!epireads.empty() && er.chr != prev_chrom) {
-        windows_tested += process_chrom(verbose, n_threads, min_obs_per_cpg,
-                                        window_size, epistat, prev_chrom, epireads, amrs);
+        windows_tested +=
+          process_chrom(verbose, n_threads, min_obs_per_cpg, window_size,
+                        epistat, prev_chrom, epireads, amrs);
         epireads.clear();
       }
       swap(prev_chrom, er.chr);
       epireads.emplace_back(er.pos, er.seq);
     }
     if (!epireads.empty())
-      windows_tested += process_chrom(verbose, n_threads, min_obs_per_cpg, window_size,
-                                      epistat, prev_chrom, epireads, amrs);
+      windows_tested +=
+        process_chrom(verbose, n_threads, min_obs_per_cpg, window_size, epistat,
+                      prev_chrom, epireads, amrs);
 
     // because the threads might not add these in order
     sort(begin(amrs), end(amrs));

@@ -19,6 +19,16 @@
 
 #include "Epiread.hpp"
 #include <vector>
+#include <cstdint>
+
+struct small_epiread {
+  uint32_t pos{};
+  std::string seq{};
+  small_epiread(uint32_t p, std::string s) : pos{p}, seq{s} {}
+  uint32_t end() const {return pos + std::size(seq);}
+  uint32_t length() const {return std::size(seq);}
+};
+
 
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
@@ -27,12 +37,12 @@
 //////
 
 double
-log_likelihood(const epiread &r, const std::vector<double> &a);
+log_likelihood(const small_epiread &r, const std::vector<double> &a);
 void
-fit_epiallele(const std::vector<epiread> &reads,
+fit_epiallele(const std::vector<small_epiread> &reads,
               const std::vector<double> &indicators, std::vector<double> &a);
 double
-fit_single_epiallele(const std::vector<epiread> &reads, std::vector<double> &a);
+fit_single_epiallele(const std::vector<small_epiread> &reads, std::vector<double> &a);
 
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
@@ -41,28 +51,28 @@ fit_single_epiallele(const std::vector<epiread> &reads, std::vector<double> &a);
 //////
 
 double
-log_likelihood(const epiread &r, const double z,
+log_likelihood(const small_epiread &r, const double z,
                const std::vector<double> &a1, const std::vector<double> &a2);
 double
-log_likelihood(const epiread &r, const std::vector<double> &a1,
+log_likelihood(const small_epiread &r, const std::vector<double> &a1,
                const std::vector<double> &a2);
 double
-log_likelihood(const std::vector<epiread> &reads, const std::vector<double> &indicators,
+log_likelihood(const std::vector<small_epiread> &reads, const std::vector<double> &indicators,
                const std::vector<double> &a1, const std::vector<double> &a2);
 
 double
 resolve_epialleles(const size_t max_itr,
-                   const std::vector<epiread> &reads,
+                   const std::vector<small_epiread> &reads,
                    std::vector<double> &indicators,
                    std::vector<double> &a1, std::vector<double> &a2);
 
 double
 test_asm_lrt(const size_t max_itr, const double low_prob,
-             const double high_prob, std::vector<epiread> reads);
+             const double high_prob, std::vector<small_epiread> &reads);
 
 double
 test_asm_bic(const size_t max_itr, const double low_prob,
-             const double high_prob, std::vector<epiread> reads);
+             const double high_prob, std::vector<small_epiread> &reads);
 
 
 class EpireadStats {
@@ -71,26 +81,24 @@ public:
                const double hp,
                const double cv,
                const size_t mi,
-               const bool UB) :
-    low_prob(lp), high_prob(hp),
-    critical_value(cv), max_itr(mi),
-    USE_BIC(UB) {}
+               const bool ub) :
+    low_prob{lp}, high_prob{hp},
+    critical_value{cv}, max_itr{mi}, use_bic{ub} {}
 
   double
-  test_asm(const std::vector<epiread> &reads, bool &is_significant) const {
-    const double score = (USE_BIC) ?
-      test_asm_bic(max_itr, low_prob, high_prob, reads) :
-      test_asm_lrt(max_itr, low_prob, high_prob, reads);
-    is_significant = (score < critical_value || (USE_BIC && score < 0.0));
+  test_asm(std::vector<small_epiread> &reads, bool &is_significant) const {
+    const double score = use_bic
+      ? test_asm_bic(max_itr, low_prob, high_prob, reads)
+      : test_asm_lrt(max_itr, low_prob, high_prob, reads);
+    is_significant = use_bic ? score < 0.0 : score < critical_value;
     return score;
   }
-
 private:
-  double low_prob;
-  double high_prob;
-  double critical_value;
-  size_t max_itr;
-  bool USE_BIC;
+  double low_prob{};
+  double high_prob{};
+  double critical_value{};
+  size_t max_itr{};
+  bool use_bic{};
 };
 
 #endif

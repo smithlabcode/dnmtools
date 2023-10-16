@@ -44,6 +44,7 @@ using std::runtime_error;
 using std::begin;
 using std::end;
 
+using epi_r = small_epiread;
 
 static void
 backup_to_start_of_current_record(std::ifstream &in) {
@@ -97,7 +98,8 @@ find_first_epiread_ending_after_position(const string &query_chrom,
 
 static void
 load_reads(const string &reads_file_name,
-           const GenomicRegion &region, vector<epiread> &the_reads) {
+           const GenomicRegion &region,
+           vector<epi_r> &the_reads) {
 
   // open and check the file
   std::ifstream in(reads_file_name.c_str());
@@ -117,7 +119,7 @@ load_reads(const string &reads_file_name,
   size_t start = 0ul;
   while ((in >> chrom >> start >> seq) &&
          chrom == query_chrom && start < query_end)
-    the_reads.push_back(epiread(start, seq));
+    the_reads.emplace_back(start, seq);
 }
 
 
@@ -155,7 +157,7 @@ collect_cpgs(const string &s, vector<size_t> &cpgs) {
 
 static void
 clip_reads(const size_t start_pos, const size_t end_pos,
-           vector<epiread> &r) {
+           vector<epi_r> &r) {
   size_t j = 0;
   for (size_t i = 0; i < r.size(); ++i) {
     if (start_pos < r[i].pos + r[i].seq.length() &&
@@ -317,7 +319,7 @@ main_amrtester(int argc, const char **argv) {
       GenomicRegion converted_region(regions[i]);
       convert_coordinates(cpg_positions, converted_region);
 
-      vector<epiread> reads;
+      vector<epi_r> reads;
       load_reads(reads_file_name, converted_region, reads);
 
       clip_reads(converted_region.get_start(),

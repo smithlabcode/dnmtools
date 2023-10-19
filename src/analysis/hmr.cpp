@@ -108,7 +108,7 @@ get_domain_scores(const vector<bool> &state_ids,
                   const vector<size_t> &reset_points,
                   vector<double> &scores) {
 
-  size_t n_cpgs = 0, reset_idx = 1;
+  size_t reset_idx = 1;
   bool in_domain = false;
   double score = 0;
   for (size_t i = 0; i < state_ids.size(); ++i) {
@@ -123,7 +123,6 @@ get_domain_scores(const vector<bool> &state_ids,
     if (state_ids[i]) {
       in_domain = true;
       score += 1.0 - (meth[i].first/(meth[i].first + meth[i].second));
-      ++n_cpgs;
     }
     else if (in_domain) {
       in_domain = false;
@@ -132,22 +131,19 @@ get_domain_scores(const vector<bool> &state_ids,
     }
   }
 
-  if (in_domain) {
+  if (in_domain)
     scores.push_back(score);
-  }
 }
 
 
 static void
 build_domains(const vector<MSite> &cpgs,
-              const vector<double> &post_scores,
               const vector<size_t> &reset_points,
               const vector<bool> &state_ids,
               vector<GenomicRegion> &domains) {
 
   size_t n_cpgs = 0, reset_idx = 1, prev_end = 0;
   bool in_domain = false;
-  double score = 0;
   for (size_t i = 0; i < state_ids.size(); ++i) {
     if (reset_points[reset_idx] == i) {
       if (in_domain) {
@@ -155,7 +151,6 @@ build_domains(const vector<MSite> &cpgs,
         domains.back().set_end(prev_end);
         domains.back().set_score(n_cpgs);
         n_cpgs = 0;
-        score = 0;
       }
       ++reset_idx;
     }
@@ -166,14 +161,12 @@ build_domains(const vector<MSite> &cpgs,
         domains.back().set_name("HYPO" + to_string(domains.size()));
       }
       ++n_cpgs;
-      score += post_scores[i];
     }
     else if (in_domain) {
       in_domain = false;
       domains.back().set_end(prev_end);
       domains.back().set_score(n_cpgs);
       n_cpgs = 0;
-      score = 0;
     }
     prev_end = cpgs[i].pos + 1;
   }
@@ -556,7 +549,7 @@ main_hmr(int argc, const char **argv) {
                         p_fb, p_bf, domain_score_cutoff);
 
     vector<GenomicRegion> domains;
-    build_domains(cpgs, posteriors, reset_points, state_ids, domains);
+    build_domains(cpgs, reset_points, state_ids, domains);
 
     std::ofstream of;
     if (!outfile.empty()) of.open(outfile.c_str());

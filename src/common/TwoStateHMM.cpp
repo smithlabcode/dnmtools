@@ -537,7 +537,6 @@ TwoStateHMM::PosteriorScores(const vector<pair<double, double> > &values,
   get_emissions(begin(values), end(values), begin(fg_emit), fg_distro);
   get_emissions(begin(values), end(values), begin(bg_emit), bg_distro);
 
-  double total_loglik = 0;
   for (size_t i = 0; i < reset_points.size() - 1; ++i) {
     const double score =
       forward_algorithm(reset_points[i], reset_points[i + 1],
@@ -552,8 +551,6 @@ TwoStateHMM::PosteriorScores(const vector<pair<double, double> > &values,
                        fg_emit, bg_emit, backward);
 
     assert(fabs(score - backward_score)/max(score, backward_score) < tolerance);
-
-    total_loglik += score;
   }
 
   get_posteriors(forward, backward, posteriors);
@@ -620,7 +617,6 @@ TwoStateHMM::TransitionPosteriors(const vector<pair<double, double> > &values,
   get_emissions(begin(values), end(values), begin(fg_emit), fg_distro);
   get_emissions(begin(values), end(values), begin(bg_emit), bg_distro);
 
-  double total_loglik = 0;
   for (size_t i = 0; i < reset_points.size() - 1; ++i) {
     const double score =
       forward_algorithm(reset_points[i], reset_points[i + 1],
@@ -635,8 +631,6 @@ TwoStateHMM::TransitionPosteriors(const vector<pair<double, double> > &values,
                        fg_emit, bg_emit, backward);
 
     assert(fabs(score - backward_score)/max(score, backward_score) < tolerance);
-
-    total_loglik += score;
   }
 
   scores.clear();
@@ -1074,7 +1068,6 @@ TwoStateHMM::PosteriorScores(const vector<vector<pair<double, double> > > &value
   get_emissions_rep(values, fg_emit, fg_distro);
   get_emissions_rep(values, bg_emit, bg_distro);
 
-  double total_loglik = 0;
   for (size_t i = 0; i < reset_points.size() - 1; ++i) {
     const double score =
       forward_algorithm(reset_points[i], reset_points[i + 1],
@@ -1089,8 +1082,6 @@ TwoStateHMM::PosteriorScores(const vector<vector<pair<double, double> > > &value
                        fg_emit, bg_emit, backward);
 
     assert(fabs(score - backward_score)/max(score, backward_score) < tolerance);
-
-    total_loglik += score;
   }
 
   get_posteriors(forward, backward, posteriors);

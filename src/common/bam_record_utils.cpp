@@ -70,16 +70,16 @@ bam_get_aux(const bam1_t *b) {
          ((b->core.l_qseq + 1) >> 1) + b->core.l_qseq;
 }
 
-static inline int
-bam_get_l_aux(const bam1_t *b) {
-  return b->l_data - (b->core.l_qname + (b->core.n_cigar << 2) +
-                      ((b->core.l_qseq + 1) >> 1) + b->core.l_qseq);
-}
+// static inline int
+// bam_get_l_aux(const bam1_t *b) {
+//   return b->l_data - (b->core.l_qname + (b->core.n_cigar << 2) +
+//                       ((b->core.l_qseq + 1) >> 1) + b->core.l_qseq);
+// }
 
-static inline bool
-bam_same_orientation(const bam1_t *a, const bam1_t *b) {
-  return ((a->core.flag ^ b->core.flag) & BAM_FREVERSE) != 0;
-}
+// static inline bool
+// bam_same_orientation(const bam1_t *a, const bam1_t *b) {
+//   return ((a->core.flag ^ b->core.flag) & BAM_FREVERSE) != 0;
+// }
 
 static void
 roundup_to_power_of_2(uint32_t &x) {
@@ -255,10 +255,10 @@ bam_set1_wrapper(bam1_t *bam, const size_t l_qname, const char *qname,
   return static_cast<int>(data_len);
 }
 
-static inline size_t
-bam_get_n_cigar(const bam1_t *b) {
-  return b->core.n_cigar;
-}
+// static inline size_t
+// bam_get_n_cigar(const bam1_t *b) {
+//   return b->core.n_cigar;
+// }
 
 static inline uint32_t
 to_insertion(const uint32_t x) {
@@ -373,24 +373,24 @@ get_l_qseq(const bam1_t *b) {
   return b->core.l_qseq;
 }
 
-static inline void
-complement_seq(char *first, char *last) {
-  for (; first != last; ++first) {
-    assert(valid_base(*first));
-    *first = complement(*first);
-  }
-}
+// static inline void
+// complement_seq(char *first, char *last) {
+//   for (; first != last; ++first) {
+//     assert(valid_base(*first));
+//     *first = complement(*first);
+//   }
+// }
 
-static inline void
-reverse(char *a, char *b) {
-  char *p1, *p2;
-  for (p1 = a, p2 = b - 1; p2 > p1; ++p1, --p2) {
-    *p1 ^= *p2;
-    *p2 ^= *p1;
-    *p1 ^= *p2;
-    assert(valid_base(*p1) && valid_base(*p2));
-  }
-}
+// static inline void
+// reverse(char *a, char *b) {
+//   char *p1, *p2;
+//   for (p1 = a, p2 = b - 1; p2 > p1; ++p1, --p2) {
+//     *p1 ^= *p2;
+//     *p2 ^= *p1;
+//     *p1 ^= *p2;
+//     assert(valid_base(*p1) && valid_base(*p2));
+//   }
+// }
 
 // return value is the number of cigar ops that are fully consumed in
 // order to read n_ref, while "partial_oplen" is the number of bases
@@ -542,15 +542,15 @@ flip_conversion(bam_rec &aln) {
   flip_conversion(aln.b);
 }
 
-static inline bool
-are_mates(const bam1_t *one, const bam1_t *two) {
-  return one->core.mtid == two->core.tid && one->core.mpos == two->core.pos &&
-         (one->core.flag & BAM_FREVERSE) != (one->core.flag & BAM_FREVERSE);
-  // below is a consistency check and should not be necessary
-  /* &&
-     two->core.mtid == one->core.tid &&
-     two->core.mpos == one->core.pos; */
-}
+// static inline bool
+// are_mates(const bam1_t *one, const bam1_t *two) {
+//   return one->core.mtid == two->core.tid && one->core.mpos == two->core.pos &&
+//          (one->core.flag & BAM_FREVERSE) != (one->core.flag & BAM_FREVERSE);
+//   // below is a consistency check and should not be necessary
+//   /* &&
+//      two->core.mtid == one->core.tid &&
+//      two->core.mpos == one->core.pos; */
+// }
 
 static inline int
 truncate_overlap(const bam1_t *a, const uint32_t overlap, bam1_t *c) {

@@ -625,7 +625,6 @@ TwoStateHMM::PosteriorScores_rep(
   const vector<unique_ptr<EmissionDistribution>> &fg_distro,
   const vector<unique_ptr<EmissionDistribution>> &bg_distro,
   const vector<bool> &classes, vector<double> &llr_scores) const {
-  double total_score = 0;
 
   const double lp_sf = log(p_sf);
   const double lp_sb = log(p_sb);
@@ -669,8 +668,6 @@ TwoStateHMM::PosteriorScores_rep(
                   max(score, backward_score)) > 1e-10)
       cerr << "fabs(score - backward_score)/"
            << "max(score, backward_score) > 1e-10" << endl;
-
-    total_score += score;
   }
 
   llr_scores.resize(values[0].size());
@@ -737,7 +734,6 @@ TwoStateHMM::TransitionPosteriors_rep(
       const size_t transition,
       vector<double> &scores) const {
 
-  double total_score = 0;
   size_t NREP = values.size();
   const double lp_sf = log(p_sf);
   const double lp_sb = log(p_sb);
@@ -773,9 +769,7 @@ TwoStateHMM::TransitionPosteriors_rep(
     if (DEBUG && (fabs(score - backward_score)/
           max(score, backward_score)) > 1e-10)
       cerr << "fabs(score - backward_score)/"
-       << "max(score, backward_score) > 1e-10" << endl;
-
-    total_score += score;
+           << "max(score, backward_score) > 1e-10" << endl;
   }
   scores.resize(values[0].size());
   size_t j = 0;

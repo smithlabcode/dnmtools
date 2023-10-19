@@ -162,7 +162,7 @@ all_is_finite(const vector<double> &scores) {
 
 static void
 process_with_cpgs_loaded(const bool VERBOSE,
-                         const bool sort_data_if_needed,
+                         // const bool sort_data_if_needed,
                          const bool PRINT_NUMERIC_ONLY,
                          const bool report_more_information,
                          const char level_code,
@@ -625,7 +625,7 @@ main_multimethstat(int argc, const char **argv) {
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
     if (load_entire_file)
-      process_with_cpgs_loaded(VERBOSE, sort_data_if_needed,
+      process_with_cpgs_loaded(VERBOSE, // sort_data_if_needed,
                                PRINT_NUMERIC_ONLY,
                                report_more_information,
                                level_code[0],

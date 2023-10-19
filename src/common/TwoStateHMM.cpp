@@ -355,10 +355,12 @@ single_iteration(const vector<pair<double, double> > &values,
                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
                         fg_emit, bg_emit, forward);
 
+#ifndef NDEBUG
     const double backward_score =
-      backward_algorithm(reset_points[i], reset_points[i + 1],
-                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
-                         fg_emit, bg_emit, backward);
+#endif
+    backward_algorithm(reset_points[i], reset_points[i + 1],
+                       lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
+                       fg_emit, bg_emit, backward);
 
     assert(fabs(score - backward_score)/max(score, backward_score) < tolerance);
 
@@ -492,7 +494,7 @@ TwoStateHMM::BaumWelchTraining(const vector<pair<double, double> > &values,
     // ADS: removing the check based on expected log likelihood from
     // forward/backward as these seem to have some problem...
     converged = ((get_delta(p_fb_est, p_fb) < tolerance) &&
-		 (get_delta(p_bf_est, p_bf) < tolerance));
+                 (get_delta(p_bf_est, p_bf) < tolerance));
     // converged = (get_delta(prev_total, total) < tolerance);
 
     if (converged) {
@@ -542,10 +544,12 @@ TwoStateHMM::PosteriorScores(const vector<pair<double, double> > &values,
                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
                         fg_emit, bg_emit, forward);
 
+#ifndef NDEBUG
     const double backward_score =
-      backward_algorithm(reset_points[i], reset_points[i + 1],
-                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
-                         fg_emit, bg_emit, backward);
+#endif
+    backward_algorithm(reset_points[i], reset_points[i + 1],
+                       lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
+                       fg_emit, bg_emit, backward);
 
     assert(fabs(score - backward_score)/max(score, backward_score) < tolerance);
 
@@ -623,10 +627,12 @@ TwoStateHMM::TransitionPosteriors(const vector<pair<double, double> > &values,
                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
                         fg_emit, bg_emit, forward);
 
+#ifndef NDEBUG
     const double backward_score =
-      backward_algorithm(reset_points[i], reset_points[i + 1],
-                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
-                         fg_emit, bg_emit, backward);
+#endif
+    backward_algorithm(reset_points[i], reset_points[i + 1],
+                       lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
+                       fg_emit, bg_emit, backward);
 
     assert(fabs(score - backward_score)/max(score, backward_score) < tolerance);
 
@@ -686,10 +692,12 @@ TwoStateHMM::PosteriorDecoding(const vector<pair<double, double> > &values,
                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
                         fg_emit, bg_emit, forward);
 
+#ifndef NDEBUG
     const double backward_score =
-      backward_algorithm(reset_points[i], reset_points[i + 1],
-                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
-                         fg_emit, bg_emit, backward);
+#endif
+    backward_algorithm(reset_points[i], reset_points[i + 1],
+                       lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
+                       fg_emit, bg_emit, backward);
 
     assert(fabs(score - backward_score)/max(score, backward_score) < tolerance);
 
@@ -930,10 +938,12 @@ single_iteration_rep(const vector<vector<pair<double, double> > > &values,
                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
                         fg_emit, bg_emit, forward);
 
+#ifndef NDEBUG
     const double backward_score =
-      backward_algorithm(reset_points[i], reset_points[i + 1],
-                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
-                         fg_emit, bg_emit, backward);
+#endif
+    backward_algorithm(reset_points[i], reset_points[i + 1],
+                       lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
+                       fg_emit, bg_emit, backward);
 
     assert(fabs(score - backward_score)/max(score, backward_score) < tolerance);
 
@@ -1023,7 +1033,7 @@ TwoStateHMM::BaumWelchTraining(const vector<vector<pair<double, double> > > &val
     // ADS: removing the check based on expected log likelihood from
     // forward/backward as these seem to have some problem...
     converged = ((get_delta(p_fb_est, p_fb) < tolerance) &&
-		 (get_delta(p_bf_est, p_bf) < tolerance));
+                 (get_delta(p_bf_est, p_bf) < tolerance));
     // converged = (get_delta(prev_total, total) < tolerance);
 
     if (converged) {
@@ -1071,10 +1081,12 @@ TwoStateHMM::PosteriorScores(const vector<vector<pair<double, double> > > &value
                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
                         fg_emit, bg_emit, forward);
 
+#ifndef NDEBUG
     const double backward_score =
-      backward_algorithm(reset_points[i], reset_points[i + 1],
-                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
-                         fg_emit, bg_emit, backward);
+#endif
+    backward_algorithm(reset_points[i], reset_points[i + 1],
+                       lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
+                       fg_emit, bg_emit, backward);
 
     assert(fabs(score - backward_score)/max(score, backward_score) < tolerance);
 
@@ -1119,10 +1131,12 @@ TwoStateHMM::PosteriorDecoding(const vector<vector<pair<double, double> > > &val
                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
                         fg_emit, bg_emit, forward);
 
+#ifndef NDEBUG
     const double backward_score =
-      backward_algorithm(reset_points[i], reset_points[i + 1],
-                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
-                         fg_emit, bg_emit, backward);
+#endif
+    backward_algorithm(reset_points[i], reset_points[i + 1],
+                       lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
+                       fg_emit, bg_emit, backward);
 
     assert(fabs(score - backward_score)/max(score, backward_score) < tolerance);
 

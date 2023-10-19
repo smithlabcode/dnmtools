@@ -106,9 +106,13 @@ separate_regions(const size_t desert_size, vector<MSite> &cpgs, vector<T> &meth,
   reset_points.push_back(cpgs.size());
 }
 
+
+// ADS (!!!) this function seems to not be working at all right now
 static void
-read_params_file(const string &params_file, betabin &hypo_emission,
-                 betabin &HYPER_emission, betabin &HYPO_emission,
+read_params_file(const string &params_file,
+                 // betabin &hypo_emission,
+                 // betabin &HYPER_emission,
+                 // betabin &HYPO_emission,
                  vector<vector<double>> &trans) {
   std::ifstream in(params_file);
   if (!in) throw runtime_error("failed to read param file: " + params_file);
@@ -142,7 +146,7 @@ write_params_file(const string &params_file, const betabin &hypo_emission,
 }
 
 static void
-build_domains(const bool VERBOSE, const vector<MSite> &cpgs,
+build_domains(const vector<MSite> &cpgs,
               const vector<pair<double, double>> &meth,
               const vector<size_t> &reset_points,
               const vector<STATE_LABELS> &classes,
@@ -190,7 +194,7 @@ build_domains(const bool VERBOSE, const vector<MSite> &cpgs,
 }
 
 static void
-filter_domains(const bool VERBOSE, const double min_cumulative_meth,
+filter_domains(const double min_cumulative_meth,
                vector<GenomicRegion> &domains) {
   size_t j = 0;
   for (size_t i = 0; i < domains.size(); ++i)
@@ -317,8 +321,11 @@ main_hypermr(int argc, const char **argv) {
     betabin hypo_emission, HYPER_emission, HYPO_emission;
 
     if (!params_in_file.empty())
-      read_params_file(params_in_file, hypo_emission, HYPER_emission,
-                       HYPO_emission, trans);
+      read_params_file(params_in_file,
+                       // hypo_emission,
+                       // HYPER_emission,
+                       // HYPO_emission,
+                       trans);
     else {
       const double n_reads = mean_cov;
       const double fg_alpha = 0.33 * n_reads;
@@ -349,9 +356,8 @@ main_hypermr(int argc, const char **argv) {
 
     // identify the domains of hypermethylation
     vector<GenomicRegion> domains;
-    build_domains(VERBOSE, cpgs, hmm.observations, reset_points, classes,
-                  domains);
-    filter_domains(VERBOSE, min_cumulative_meth, domains);
+    build_domains(cpgs, hmm.observations, reset_points, classes, domains);
+    filter_domains(min_cumulative_meth, domains);
 
     // write the results
     ofstream of;

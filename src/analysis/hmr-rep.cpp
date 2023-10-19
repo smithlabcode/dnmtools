@@ -104,8 +104,7 @@ get_domain_scores_rep(const vector<bool> &state_ids,
 
 
 static void
-build_domains(const bool VERBOSE,
-              const vector<MSite> &cpgs,
+build_domains(const vector<MSite> &cpgs,
               const vector<double> &post_scores,
               const vector<size_t> &reset_points,
               const vector<bool> &state_ids,
@@ -506,7 +505,7 @@ main_hmr_rep(int argc, const char **argv) {
       fdr_cutoff = get_stepup_cutoff(p_values, 0.01);
 
     vector<GenomicRegion> domains;
-    build_domains(VERBOSE, cpgs, posteriors, reset_points, state_ids, domains);
+    build_domains(cpgs, posteriors, reset_points, state_ids, domains);
 
     std::ofstream of;
     if (!outfile.empty()) of.open(outfile);

@@ -86,9 +86,9 @@ struct uniq_summary {
     unique_reads = rs_out.reads;
     unique_read_bases = rs_out.bases;
     reads_removed = rs_in.reads - rs_out.reads;
-    non_duplicate_fraction = static_cast<double>(rs_out.reads - reads_duped) / 
+    non_duplicate_fraction = static_cast<double>(rs_out.reads - reads_duped) /
                              std::max(1ul, rs_in.reads);
-    duplication_rate = static_cast<double>(reads_removed + reads_duped) / 
+    duplication_rate = static_cast<double>(reads_removed + reads_duped) /
                        std::max(1ul, reads_duped);
     duplicate_reads = reads_duped;
   }
@@ -97,18 +97,18 @@ struct uniq_summary {
   size_t total_reads{};
   // total_bases is the total number of input bases
   size_t total_bases{};
-  // unique_reads is the number of unique reads 
+  // unique_reads is the number of unique reads
   size_t unique_reads{};
   // unique_read_bases is the total number of bases for the unique reads
   size_t unique_read_bases{};
-  // non_duplicate_fraction is the ratio of the number of unique reads with 
-  // no duplicates to that of the input reads 
+  // non_duplicate_fraction is the ratio of the number of unique reads with
+  // no duplicates to that of the input reads
   double non_duplicate_fraction{};
   // duplicate_reads is the number of unique reads with at least one duplicate
   size_t duplicate_reads{};
   // reads_removed is the number of duplicate reads that have been removed
   size_t reads_removed{};
-  // duplication_rate is the average number of duplicates for the reads with 
+  // duplication_rate is the average number of duplicates for the reads with
   // at least one duplicate (>1 by definition)
   double duplication_rate{};
 
@@ -197,7 +197,7 @@ process_buffer(const bool add_dup_count, rd_stats &rs_out, size_t &reads_duped,
 }
 
 static void
-uniq(const bool VERBOSE, const bool add_dup_count, const size_t n_threads,
+uniq(const bool add_dup_count, const size_t n_threads,
      const string &cmd, const string &infile, const string &statfile,
      const string &histfile, const bool bam_format, const string &outfile) {
   // values to tabulate stats; no real cost
@@ -344,7 +344,7 @@ main_uniq(int argc, const char **argv) {
            << "[command line: \"" << cmd.str() << "\"]" << endl
            << "[random number seed: " << the_seed << "]" << endl;
 
-    uniq(VERBOSE, add_dup_count, n_threads, cmd.str(), infile, statfile,
+    uniq(add_dup_count, n_threads, cmd.str(), infile, statfile,
          histfile, bam_format, outfile);
   }
   catch (const runtime_error &e) {

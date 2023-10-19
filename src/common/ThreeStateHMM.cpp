@@ -276,7 +276,10 @@ ThreeStateHMM::estimate_state_posterior(const size_t start, const size_t end) {
   vector<double> hypo_evidence(end - start, 0), HYPER_evidence(end - start, 0),
     HYPO_evidence(end - start, 0);
 
-  double prev_denom(0), denom(0);
+#ifndef NDEBUG
+  double prev_denom = 0.0;
+#endif
+  double denom = 0.0;
   for (size_t i = start; i < end; ++i) {
     hypo_evidence[i - start] = forward[i].hypo + backward[i].hypo;
     HYPER_evidence[i - start] = forward[i].HYPER + backward[i].HYPER;
@@ -286,7 +289,9 @@ ThreeStateHMM::estimate_state_posterior(const size_t start, const size_t end) {
                         HYPO_evidence[i - start]);
 
     if (i > start) assert(fabs(exp(prev_denom - denom) - 1) < 1e-6);
+#ifndef NDEBUG
     prev_denom = denom;
+#endif
   }
 
   for (size_t i = start; i < end; ++i) {
@@ -407,8 +412,10 @@ ThreeStateHMM::single_iteration() {
   for (size_t i = 0; i < reset_points.size() - 1; ++i) {
     const double forward_score =
       forward_algorithm(reset_points[i], reset_points[i + 1]);
+#ifndef NDEBUG
     const double backward_score =
-      backward_algorithm(reset_points[i], reset_points[i + 1]);
+#endif
+    backward_algorithm(reset_points[i], reset_points[i + 1]);
 
     assert(fabs((forward_score - backward_score) /
                 max(forward_score, backward_score)) < 1e-10);
@@ -491,8 +498,10 @@ ThreeStateHMM::PosteriorDecoding() {
   for (size_t i = 0; i < reset_points.size() - 1; ++i) {
     const double forward_score =
       forward_algorithm(reset_points[i], reset_points[i + 1]);
+#ifndef NDEBUG
     const double backward_score =
-      backward_algorithm(reset_points[i], reset_points[i + 1]);
+#endif
+    backward_algorithm(reset_points[i], reset_points[i + 1]);
 
     assert(fabs((forward_score - backward_score) /
                 max(forward_score, backward_score)) < 1e-10);

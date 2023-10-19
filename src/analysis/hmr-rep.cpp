@@ -105,14 +105,12 @@ get_domain_scores_rep(const vector<bool> &state_ids,
 
 static void
 build_domains(const vector<MSite> &cpgs,
-              const vector<double> &post_scores,
               const vector<size_t> &reset_points,
               const vector<bool> &state_ids,
               vector<GenomicRegion> &domains) {
 
   size_t n_cpgs = 0, n_domains = 0, reset_idx = 1, prev_end = 0;
   bool in_domain = false;
-  double score = 0;
   for (size_t i = 0; i < state_ids.size(); ++i) {
     if (reset_points[reset_idx] == i) {
       if (in_domain) {
@@ -120,7 +118,6 @@ build_domains(const vector<MSite> &cpgs,
         domains.back().set_end(prev_end);
         domains.back().set_score(n_cpgs);
         n_cpgs = 0;
-        score = 0;
       }
       ++reset_idx;
     }
@@ -131,14 +128,12 @@ build_domains(const vector<MSite> &cpgs,
         domains.back().set_name("HYPO" + to_string(n_domains++));
       }
       ++n_cpgs;
-      score += post_scores[i];
     }
     else if (in_domain) {
       in_domain = false;
       domains.back().set_end(prev_end);
       domains.back().set_score(n_cpgs);
       n_cpgs = 0;
-      score = 0;
     }
     prev_end = cpgs[i].pos + 1;
   }
@@ -505,7 +500,7 @@ main_hmr_rep(int argc, const char **argv) {
       fdr_cutoff = get_stepup_cutoff(p_values, 0.01);
 
     vector<GenomicRegion> domains;
-    build_domains(cpgs, posteriors, reset_points, state_ids, domains);
+    build_domains(cpgs, reset_points, state_ids, domains);
 
     std::ofstream of;
     if (!outfile.empty()) of.open(outfile);

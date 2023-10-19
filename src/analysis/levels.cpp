@@ -146,13 +146,10 @@ main_levels(int argc, const char **argv) {
     LevelsCounter cytosines("cytosines");
 
     MSite site, prev_site;
-    size_t chrom_count = 0;
 
     while (read_site(in, site)) {
-      if (site.chrom != prev_site.chrom) {
-        ++chrom_count;
+      if (site.chrom != prev_site.chrom)
         if (VERBOSE) cerr << "processing " << site.chrom << endl;
-      }
 
       cytosines.update(site);
 

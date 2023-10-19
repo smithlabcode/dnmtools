@@ -195,24 +195,6 @@ has_mutated(const char base, const CountSet &cs) {
            : (cs.pG < MUTATION_DEFINING_FRACTION * (cs.pos_total()));
 }
 
-static inline bool
-is_cpg_site(const string &s, const size_t pos) {
-  return is_cytosine(s[pos])
-           ? is_guanine(s[pos + 1])
-           : (is_guanine(s[pos]) ? (pos > 0 && is_cytosine(s[pos - 1]))
-                                 : false);
-}
-
-static inline size_t
-get_chrom_id(const string &chrom_name,
-             const unordered_map<string, size_t> &cl) {
-  auto the_chrom(cl.find(chrom_name));
-  if (the_chrom == end(cl))
-    throw dnmt_error("could not find chrom: " + chrom_name);
-
-  return the_chrom->second;
-}
-
 static const char *tag_values[] = {
   "CpG", // 0
   "CHH", // 1

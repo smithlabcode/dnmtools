@@ -57,11 +57,11 @@ get_n_cpgs(const vector<epi_r> &reads) {
   return n_cpgs;
 }
 
-static inline bool
-is_meth(const epi_r &r, const uint32_t pos) {return (r.seq[pos] == 'C');}
+// static inline bool
+// is_meth(const epi_r &r, const uint32_t pos) {return (r.seq[pos] == 'C');}
 
-static inline bool
-un_meth(const epi_r &r, const uint32_t pos) {return (r.seq[pos] == 'T');}
+// static inline bool
+// un_meth(const epi_r &r, const uint32_t pos) {return (r.seq[pos] == 'T');}
 
 inline double
 log_likelihood(const epi_r &r, const vector<double> &a) {

@@ -169,8 +169,6 @@ metagene(int argc, const char **argv) {
     bamxx::bgzf_file cpgin(cpg_file_name, "r");
     if (!cpgin) throw runtime_error("failed to open file: " + cpg_file_name);
 
-    uint32_t total_features = 0u;
-
     vector<MSite> sites;
     string line;
     chrom_name.clear();
@@ -185,7 +183,6 @@ metagene(int argc, const char **argv) {
           if (show_progress)
             cerr << "[sites=" << sites.size() << " features=" << n_features
                  << "]" << endl;
-          total_features += n_features;
           sites.clear();
         }
         if (show_progress) cerr << "[processing: " << the_site.chrom << "]";
@@ -202,7 +199,6 @@ metagene(int argc, const char **argv) {
       if (show_progress)
         cerr << "[sites=" << sites.size() << " features=" << n_features << "]"
              << endl;
-      total_features += n_features;
     }
 
     collapse_bins(bin_size, levels);

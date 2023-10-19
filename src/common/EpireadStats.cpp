@@ -292,8 +292,8 @@ compute_model_likelihoods(double &single_score, double &pair_score,
   vector<double> a1(n_cpgs, low_prob), a2(n_cpgs, high_prob), indicators;
   resolve_epialleles(max_itr, reads, mixing, indicators, a1, a2);
 
-  constexpr double log_mixing1 = log(mixing);
-  constexpr double log_mixing2 = log(1.0 - mixing);
+  const double log_mixing1 = log(mixing);
+  const double log_mixing2 = log(1.0 - mixing);
 
   pair_score = transform_reduce(
     cbegin(reads), cend(reads), 0.0, std::plus<>(),

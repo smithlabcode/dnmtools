@@ -536,7 +536,8 @@ main_bsrate(int argc, const char **argv) {
 
         auto chrom_itr = chrom_lookup.find(the_tid);
         if (chrom_itr == end(chrom_lookup))
-          throw runtime_error("could not find chrom: " + the_tid);
+          throw runtime_error("could not find chrom: " +
+                              std::to_string(the_tid));
 
         chrom_idx = chrom_itr->second;
 

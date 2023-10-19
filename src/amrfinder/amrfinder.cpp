@@ -186,7 +186,7 @@ convert_coordinates(const string &genome_file, vector<GenomicRegion> &amrs) {
 
   unordered_map<string, string> chrom_lookup;
   for (auto i = 0u; i < n_chroms; ++i)
-    chrom_lookup.emplace(move(c_name[i]), move(c_seq[i]));
+    chrom_lookup.emplace(std::move(c_name[i]), std::move(c_seq[i]));
 
   vector<pair<uint32_t, uint32_t>> chrom_parts = get_chrom_partition(amrs);
   std::atomic_uint32_t conv_failure = 0;
@@ -300,7 +300,8 @@ process_chrom(const bool verbose, const uint32_t n_threads,
   const auto n_blocks = n_threads*blocks_per_thread;
 
   const uint64_t lim = n_cpgs - window_size + 1;
-  const auto blocks = get_block_bounds(0ul, lim, lim/n_blocks);
+  const auto blocks = get_block_bounds(static_cast<uint64_t>(0),
+                                       lim, lim/n_blocks);
 
   atomic_ulong windows_tested = 0;
 
@@ -324,7 +325,7 @@ process_chrom(const bool verbose, const uint32_t n_threads,
     }
 #pragma omp critical
     {
-      all_amrs.push_back(move(curr_amrs));
+      all_amrs.push_back(std::move(curr_amrs));
     }
     windows_tested += windows_tested_block;
   }
@@ -335,7 +336,7 @@ process_chrom(const bool verbose, const uint32_t n_threads,
 
   amrs.reserve(total_amrs);
   for (auto &v : all_amrs)
-    for (auto &a : v) amrs.push_back(move(a));
+    for (auto &a : v) amrs.push_back(std::move(a));
 
   return windows_tested;
 }

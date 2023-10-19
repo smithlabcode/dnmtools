@@ -82,8 +82,13 @@ MSite::MSite(const string &line) {
   failed = failed || (field_e == c_end);
 
   {
+#ifdef __APPLE__
+    const int ret = std::sscanf(field_s, "%lf", &meth);
+    failed = failed || (ret < 1);
+#else
     const auto [ptr, ec] = from_chars(field_s, field_e, meth);
     failed = failed || (ptr == field_s);
+#endif
   }
 
   field_s = find_if(field_e + 1, c_end, not_sep);

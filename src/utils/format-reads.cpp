@@ -58,7 +58,7 @@ using std::vector;
 using bamxx::bam_rec;
 
 static int32_t
-merge_mates(const size_t range, bam_rec &one, bam_rec &two, bam_rec &merged) {
+merge_mates(bam_rec &one, bam_rec &two, bam_rec &merged) {
   if (!are_mates(one, two)) return -std::numeric_limits<int32_t>::max();
 
   // arithmetic easier using base 0 so subtracting 1 from pos
@@ -345,7 +345,7 @@ format(const string &cmd, const size_t n_threads, const string &inputfile,
       if (same_name(prev_aln, aln, suff_len)) {
         // below: essentially check for dovetail
         if (!bam_is_rev(aln)) swap(prev_aln, aln);
-        const auto frag_len = merge_mates(max_frag_len, prev_aln, aln, merged);
+        const auto frag_len = merge_mates(prev_aln, aln, merged);
         if (frag_len > 0 && frag_len < max_frag_len) {
           if (is_a_rich(merged)) flip_conversion(merged);
           if (!out.write(hdr, merged)) throw bam_write_err;

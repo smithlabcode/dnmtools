@@ -538,10 +538,12 @@ TwoStateHMM::PosteriorScores(const vector<pair<double, double> > &values,
   get_emissions(begin(values), end(values), begin(bg_emit), bg_distro);
 
   for (size_t i = 0; i < reset_points.size() - 1; ++i) {
+#ifndef NDEBUG
     const double score =
-      forward_algorithm(reset_points[i], reset_points[i + 1],
-                        lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
-                        fg_emit, bg_emit, forward);
+#endif
+    forward_algorithm(reset_points[i], reset_points[i + 1],
+                      lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
+                      fg_emit, bg_emit, forward);
 
 #ifndef NDEBUG
     const double backward_score =
@@ -618,10 +620,12 @@ TwoStateHMM::TransitionPosteriors(const vector<pair<double, double> > &values,
   get_emissions(begin(values), end(values), begin(bg_emit), bg_distro);
 
   for (size_t i = 0; i < reset_points.size() - 1; ++i) {
+#ifndef NDEBUG
     const double score =
-      forward_algorithm(reset_points[i], reset_points[i + 1],
-                        lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
-                        fg_emit, bg_emit, forward);
+#endif
+    forward_algorithm(reset_points[i], reset_points[i + 1],
+                      lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
+                      fg_emit, bg_emit, forward);
 
 #ifndef NDEBUG
     const double backward_score =
@@ -1069,10 +1073,12 @@ TwoStateHMM::PosteriorScores(const vector<vector<pair<double, double> > > &value
   get_emissions_rep(values, bg_emit, bg_distro);
 
   for (size_t i = 0; i < reset_points.size() - 1; ++i) {
+#ifndef NDEBUG
     const double score =
-      forward_algorithm(reset_points[i], reset_points[i + 1],
-                        lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
-                        fg_emit, bg_emit, forward);
+#endif
+    forward_algorithm(reset_points[i], reset_points[i + 1],
+                      lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,
+                      fg_emit, bg_emit, forward);
 
 #ifndef NDEBUG
     const double backward_score =
@@ -1116,7 +1122,6 @@ TwoStateHMM::PosteriorDecoding(const vector<vector<pair<double, double> > > &val
 
   double total_loglik = 0;
   for (size_t i = 0; i < reset_points.size() - 1; ++i) {
-
     const double score =
       forward_algorithm(reset_points[i], reset_points[i + 1],
                         lp_sf, lp_sb, lp_ff, lp_fb, lp_bf, lp_bb,

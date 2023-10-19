@@ -60,21 +60,22 @@ public:
                         const std::vector<double> fg_alpha, const std::vector<double> fg_beta,
                         const std::vector<double> bg_alpha, const std::vector<double> bg_beta,
                         std::vector<bool> &classes,
-                        std::vector<double> &llr_scores,
+      std::vector<double> &llr_scores,
       const std::vector<bool> &array_status) const;
 
-  void
-  PosteriorScores_rep(
-          const std::vector<std::vector<std::pair<double, double> > > &values,
-                      const std::vector<size_t> &reset_points,
-                      const std::vector<double> &start_trans,
-                      const std::vector<std::vector<double> > &trans,
-                      const std::vector<double> &end_trans,
-                      const std::vector<double> fg_alpha, const std::vector<double> fg_beta,
-                      const std::vector<double> bg_alpha, const std::vector<double> bg_beta,
-                      const std::vector<bool> &classes,
-                      std::vector<double> &llr_scores,
-          const std::vector<bool> &array_status) const;
+  void PosteriorScores_rep(
+    const std::vector<std::vector<std::pair<double, double>>> &values,
+    const std::vector<size_t> &reset_points,
+    const std::vector<double> &start_trans,
+    const std::vector<std::vector<double>> &trans,
+    const std::vector<double> &end_trans,
+    const std::vector<double> fg_alpha,
+    const std::vector<double> fg_beta,
+    const std::vector<double> bg_alpha,
+    const std::vector<double> bg_beta,
+    const std::vector<bool> &classes,
+    std::vector<double> &llr_scores,
+    const std::vector<bool> &array_status) const;
 
   void
   TransitionPosteriors_rep(
@@ -138,8 +139,7 @@ private:
                         const double lp_bf, const double lp_bb, const double lp_bt,
                         const std::vector<std::unique_ptr<EmissionDistribution> > &fg_distro,
                         const std::vector<std::unique_ptr<EmissionDistribution> > &bg_distro,
-                        std::vector<std::pair<double, double> > &f,
-      const std::vector<bool> &array_status) const;
+                        std::vector<std::pair<double, double> > &f) const;
 
   double
   backward_algorithm_rep(
@@ -150,26 +150,23 @@ private:
                          const double lp_bf, const double lp_bb, const double lp_bt,
                          const std::vector<std::unique_ptr<EmissionDistribution> > &fg_distro,
                          const std::vector<std::unique_ptr<EmissionDistribution> > &bg_distro,
-                         std::vector<std::pair<double, double> > &b,
-       const std::vector<bool> &array_status) const;
+                         std::vector<std::pair<double, double> > &b) const;
 
   void
   estimate_transitions_rep(
          const std::vector<std::vector<std::pair<double, double> > > &vals,
-                           const size_t start, const size_t end,
-                           const std::vector<std::pair<double, double> > &f,
-                           const std::vector<std::pair<double, double> > &b,
-                           const double total,
-                           const std::vector<std::unique_ptr<EmissionDistribution> > &fg_distro,
-                           const std::vector<std::unique_ptr<EmissionDistribution> > &bg_distro,
-                           const double lp_ff, const double lp_fb,
-                           const double lp_bf, const double lp_bb,
-                           const double lp_ft, const double lp_bt,
-                           std::vector<double> &ff_vals,
-                           std::vector<double> &fb_vals,
-                           std::vector<double> &bf_vals,
-                           std::vector<double> &bb_vals,
-         const std::vector<bool> &array_status) const;
+         const size_t start, const size_t end,
+         const std::vector<std::pair<double, double> > &f,
+         const std::vector<std::pair<double, double> > &b,
+         const double total,
+         const std::vector<std::unique_ptr<EmissionDistribution> > &fg_distro,
+         const std::vector<std::unique_ptr<EmissionDistribution> > &bg_distro,
+         const double lp_ff, const double lp_fb,
+         const double lp_bf, const double lp_bb,
+         std::vector<double> &ff_vals,
+         std::vector<double> &fb_vals,
+         std::vector<double> &bf_vals,
+         std::vector<double> &bb_vals) const;
 
   double
   single_iteration_rep(
@@ -183,8 +180,7 @@ private:
                        double &p_ff, double &p_fb, double &p_ft,
                        double &p_bf, double &p_bb, double &p_bt,
                        std::vector<std::unique_ptr<EmissionDistribution> > &fg_distro,
-                       std::vector<std::unique_ptr<EmissionDistribution> > &bg_distro,
-           const std::vector<bool> &array_status) const;
+                       std::vector<std::unique_ptr<EmissionDistribution> > &bg_distro) const;
 
 
   double
@@ -201,42 +197,35 @@ private:
   void
   PosteriorScores_rep(
           const std::vector<std::vector<std::pair<double, double> > > &values,
-                      const std::vector<size_t> &reset_points,
-                      double p_sf, double p_sb,
-                      double p_ff, double p_fb, double p_ft,
-                      double p_bf, double p_bb, double p_bt,
-                      const std::vector<std::unique_ptr<EmissionDistribution> > &fg_distro,
-                      const std::vector<std::unique_ptr<EmissionDistribution> > &bg_distro,
-                      const std::vector<bool> &classes,
-                      std::vector<double> &llr_scores,
-          const std::vector<bool> &array_status) const;
+          const std::vector<size_t> &reset_points,
+          double p_sf, double p_sb,
+          double p_ff, double p_fb, double p_ft,
+          double p_bf, double p_bb, double p_bt,
+          const std::vector<std::unique_ptr<EmissionDistribution> > &fg_distro,
+          const std::vector<std::unique_ptr<EmissionDistribution> > &bg_distro,
+          const std::vector<bool> &classes,
+          std::vector<double> &llr_scores) const;
 
-  double
-  PosteriorDecoding_rep(
-      const std::vector< std::vector<std::pair<double, double> > > &values,
-                        const std::vector<size_t> &reset_points,
-                        double p_sf, double p_sb,
-                        double p_ff, double p_fb, double p_ft,
-                        double p_bf, double p_bb, double p_bt,
-                        const std::vector<std::unique_ptr<EmissionDistribution> > &fg_distro,
-                        const std::vector<std::unique_ptr<EmissionDistribution> > &bg_distro,
-                        std::vector<bool> &classes,
-                        std::vector<double> &llr_scores,
-      const std::vector<bool> &array_status) const;
+  double PosteriorDecoding_rep(
+    const std::vector<std::vector<std::pair<double, double>>> &values,
+    const std::vector<size_t> &reset_points, double p_sf, double p_sb,
+    double p_ff, double p_fb, double p_ft, double p_bf, double p_bb,
+    double p_bt,
+    const std::vector<std::unique_ptr<EmissionDistribution>> &fg_distro,
+    const std::vector<std::unique_ptr<EmissionDistribution>> &bg_distro,
+    std::vector<bool> &classes, std::vector<double> &llr_scores) const;
 
-  void
-  TransitionPosteriors_rep(
-      const std::vector< std::vector<std::pair<double, double> > > &values,
-      const std::vector<size_t> &reset_points,
-      double p_sf, double p_sb,
-      double p_ff, double p_fb, double p_ft,
-      double p_bf, double p_bb, double p_bt,
-      const std::vector<std::unique_ptr<EmissionDistribution> > &fg_distro,
-      const std::vector<std::unique_ptr<EmissionDistribution> > &bg_distro,
-      const size_t transition, const std::vector<bool> &array_status,
-      std::vector<double> &scores) const;
-
-
+  void TransitionPosteriors_rep(
+    const std::vector<std::vector<std::pair<double, double>>> &values,
+    const std::vector<size_t> &reset_points,
+    double p_sf, double p_sb,
+    double p_ff, double p_fb,
+    double p_ft, double p_bf,
+    double p_bb, double p_bt,
+    const std::vector<std::unique_ptr<EmissionDistribution>> &fg_distro,
+    const std::vector<std::unique_ptr<EmissionDistribution>> &bg_distro,
+    const size_t transition,
+    std::vector<double> &scores) const;
 
   /***************************/
 

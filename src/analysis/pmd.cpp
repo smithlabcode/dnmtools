@@ -533,24 +533,19 @@ get_domain_scores(const vector<bool> &classes,
 
 
 static void
-build_domains(const bool VERBOSE,
-              const vector<SimpleGenomicRegion> &bins,
-              const vector<double> &post_scores,
+build_domains(const vector<SimpleGenomicRegion> &bins,
               const vector<size_t> &reset_points,
               const vector<bool> &classes,
-              const vector<size_t> &dists_btwn_bins,
               vector<GenomicRegion> &domains) {
 
   size_t n_bins = 0, reset_idx = 1, prev_end = 0;
   bool in_domain = false;
-  double score = 0;
   for (size_t i = 0; i < classes.size(); ++i) {
     if (reset_points[reset_idx] == i) {
       if (in_domain) {
         domains.back().set_end(prev_end);
         domains.back().set_score(n_bins);
         n_bins = 0;
-        score = 0;
         in_domain = false;
       }
       ++reset_idx;
@@ -561,13 +556,11 @@ build_domains(const bool VERBOSE,
         in_domain = true;
       }
       ++n_bins;
-      score += post_scores[i];
     }
     else if (in_domain) {
       domains.back().set_end(prev_end);
       domains.back().set_score(n_bins);
       n_bins = 0;
-      score = 0;
       in_domain = false;
     }
     prev_end = bins[i].get_end();
@@ -1029,10 +1022,9 @@ get_min_reads_for_confidence(const double conf_level) {
 // ADS: this function will return num_lim<size_t>::max() if the
 // fraction of "good" bins is zero for all attempted bin sizes.
 static size_t
-binsize_selection(const bool &VERBOSE, const size_t resolution,
-                  const size_t min_bin_sz, const size_t max_bin_sz,
-                  const double conf_level, const double min_frac_passed,
-                  const string &cpgs_file) {
+binsize_selection(const size_t resolution, const size_t min_bin_sz,
+                  const size_t max_bin_sz, const double conf_level,
+                  const double min_frac_passed, const string &cpgs_file) {
 
   const size_t min_cov_to_pass = get_min_reads_for_confidence(conf_level);
 
@@ -1239,8 +1231,7 @@ main_pmd(int argc, const char **argv) {
       for (size_t i = 0; i < n_replicates && !insufficient_data; ++i) {
         const bool arrayData = check_if_array_data(cpgs_file[i]);
         if (!arrayData) {
-          bin_size = binsize_selection(VERBOSE, resolution,
-                                       min_bin_size, max_bin_size,
+          bin_size = binsize_selection(resolution, min_bin_size, max_bin_size,
                                        confidence_interval, prop_accept,
                                        cpgs_file[i]);
           if (bin_size == num_lim<size_t>::max())
@@ -1414,8 +1405,7 @@ main_pmd(int argc, const char **argv) {
     }
 
     vector<GenomicRegion> domains;
-    build_domains(VERBOSE, bins[0], scores, reset_points, classes,
-                  dists_btwn_bins, domains);
+    build_domains(bins[0], reset_points, classes, domains);
 
     size_t good_pmd_count = 0;
     vector<GenomicRegion> good_domains;

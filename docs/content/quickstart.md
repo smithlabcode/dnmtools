@@ -72,14 +72,14 @@ would need to be activated when you want to use dnmtools.
 
 ### Configuration
 
-* Download [dnmtools-1.4.1.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.4.1/dnmtools-1.4.1.tar.gz).
+* Download [dnmtools-1.4.2.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.4.2/dnmtools-1.4.2.tar.gz).
 * Unpack the archive:
 ```console
-$ tar -zxvf dnmtools-1.4.1.tar.gz
+$ tar -zxvf dnmtools-1.4.2.tar.gz
 ```
 * Move into the dnmtools directory and create a build directory:
 ```console
-$ cd dnmtools-1.4.1
+$ cd dnmtools-1.4.2
 $ mkdir build && cd build
 ```
 * Run the configuration script:

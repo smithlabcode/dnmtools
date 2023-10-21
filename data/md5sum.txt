@@ -18,5 +18,5 @@ ec6a686617cad31e9f7a37a3d378e6ed  tests/two_epialleles.states
 93e38b20d162062a5d147c4290095a13  tests/mlml.out
 d947fe3d61ef7b1564558a69608f0e64  tests/methylome.pmd
 7d481d31e4316e97d519838f4887b10d  tests/reads.sam
-4b038c82b51be15307d4969e859e864f  tests/reads.fmt.sam
-a7b94dd23f308f653fbfab98ec7b62d8  tests/reads.fmt.srt.uniq.sam
+466e2715f0c677593e84b3790efbec6e  tests/reads.fmt.sam
+5583ebe1b689159f8eb0a93f32e2fd48  tests/reads.fmt.srt.uniq.sam

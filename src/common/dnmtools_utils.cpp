@@ -21,14 +21,16 @@
 #include <iterator>
 
 using std::string;
+using std::copy;
+using std::ostringstream;
+using std::ostream_iterator;
 
 auto
 get_command_line(const int argc, const char **const argv) -> string {
   if (argc == 0) return string();
   std::ostringstream cmd;
   cmd << '"';
-  std::copy(argv, argv + (argc - 1),
-            std::ostream_iterator<const char *>(cmd, " "));
-  cmd << argv[argc-1] << '"';
+  copy(argv, argv + (argc - 1), ostream_iterator<const char *>(cmd, " "));
+  cmd << argv[argc - 1] << '"';
   return cmd.str();
 }

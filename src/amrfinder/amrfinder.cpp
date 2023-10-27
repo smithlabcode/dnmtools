@@ -17,44 +17,74 @@
  * General Public License for more details.
  */
 
-#include <string>
-#include <vector>
-#include <iostream>
-#include <numeric>
-#include <stdexcept>
-#include <atomic>
-
 #include <bamxx.hpp>
 #include <omp.h>
 
-#include "GenomicRegion.hpp"
-#include "OptionParser.hpp"
-#include "smithlab_utils.hpp"
-#include "smithlab_os.hpp"
+#include <atomic>
+#include <iostream>
+#include <numeric>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
 #include "EpireadStats.hpp"
 #include "GenomicRegion.hpp"
+#include "OptionParser.hpp"
+#include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
 
-using std::string;
-using std::vector;
 using std::cerr;
 using std::cout;
 using std::endl;
-using std::unordered_map;
-using std::runtime_error;
 using std::max;
 using std::min;
-using std::to_string;
-using std::atomic_ulong;
+using std::move;
+using std::ofstream;
+using std::ostream_iterator;
 using std::pair;
 using std::remove_if;
-using std::toupper;
-using std::move;
+using std::runtime_error;
 using std::size;
+using std::string;
+using std::to_string;
+using std::vector;
 
 using bamxx::bgzf_file;
 
 #include <bamxx.hpp>
+
 #include <sstream>
+
+struct amr_summary {
+  amr_summary(const vector<GenomicRegion> &amrs) {
+    amr_count = size(amrs);
+    amr_total_size = accumulate(cbegin(amrs), cend(amrs), 0,
+                                [](const uint64_t t, const GenomicRegion &p) {
+                                  return t + p.get_width();
+                                });
+    amr_mean_size = static_cast<double>(amr_total_size) /
+                    std::max(amr_count, static_cast<uint64_t>(1));
+  }
+
+  // amr_count is the number of identified AMRs, which are the merged
+  // AMRs that are found to be significant when tested as a single
+  // interval
+  uint64_t amr_count{};
+  // total_amr_size is the sum of the sizes of the identified AMRs
+  uint64_t amr_total_size{};
+  // mean_amr_size is the mean size of the identified AMRs
+  double amr_mean_size{};
+
+  auto tostring() -> string {
+    static constexpr uint32_t current_precision = 2;
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(current_precision);
+    oss << "amr_count: " << amr_count << '\n'
+        << "amr_total_size: " << amr_total_size << '\n'
+        << "amr_mean_size: " << amr_mean_size;
+    return oss.str();
+  }
+};
 
 static inline bamxx::bgzf_file &
 read_epiread(bamxx::bgzf_file &f, epiread &er) {
@@ -67,7 +97,7 @@ static inline bool
 validate_epiread_bgzf_file(const string &filename) {
   constexpr size_t max_lines_to_validate = 10000;
   bgzf_file in(filename, "r");
-  if (!in) throw std::runtime_error("failed to open file: " + filename);
+  if (!in) throw runtime_error("failed to open file: " + filename);
 
   string c, s, other;
   size_t p = 0;
@@ -87,17 +117,17 @@ using epi_r = small_epiread;
 static void
 merge_amrs(const uint64_t gap_limit, vector<GenomicRegion> &amrs) {
   auto j = begin(amrs);
-  for (auto &a : amrs)
+  for (const auto &a : amrs)
     // check distance between two amrs is greater than gap limit
     if (j->same_chrom(a) && j->get_end() + gap_limit >= a.get_start()) {
       j->set_end(a.get_end());
       j->set_score(min(a.get_score(), j->get_score()));
     }
-    else *(++j) = a;
+    else
+      *(++j) = a;
 
   amrs.erase(++j, cend(amrs));
 }
-
 
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
@@ -162,7 +192,7 @@ static vector<pair<uint32_t, uint32_t>>
 get_chrom_partition(const vector<GenomicRegion> &r) {
   if (r.empty()) return {};
   vector<pair<uint32_t, uint32_t>> parts;
-  string prev_chrom = r.front().get_chrom();
+  string prev_chrom{r.front().get_chrom()};
   uint32_t prev_idx = 0u;
   for (auto i = 0u; i < size(r); ++i)
     if (r[i].get_chrom() != prev_chrom) {
@@ -176,15 +206,14 @@ get_chrom_partition(const vector<GenomicRegion> &r) {
 
 static bool
 convert_coordinates(const string &genome_file, vector<GenomicRegion> &amrs) {
-
   vector<string> c_name, c_seq;
   read_fasta_file_short_names(genome_file, c_name, c_seq);
   const size_t n_chroms = size(c_seq);
 
   for (auto &s : c_seq)
-    for (auto &c : s) c = toupper(c);
+    for (auto &c : s) c = std::toupper(c);
 
-  unordered_map<string, string> chrom_lookup;
+  std::unordered_map<string, string> chrom_lookup;
   for (auto i = 0u; i < n_chroms; ++i)
     chrom_lookup.emplace(std::move(c_name[i]), std::move(c_seq[i]));
 
@@ -231,7 +260,8 @@ get_current_epireads(const vector<epi_r> &epireads, const size_t max_len,
 
   const auto n_epi = size(epireads);
 
-  while (read_id < epireads.size() && epireads[read_id].pos + max_len <= start_pos)
+  while (read_id < size(epireads) &&
+         epireads[read_id].pos + max_len <= start_pos)
     ++read_id;
 
   const auto end_pos = start_pos + cpg_window;
@@ -303,7 +333,7 @@ process_chrom(const bool verbose, const uint32_t n_threads,
   const auto blocks = get_block_bounds(static_cast<uint64_t>(0),
                                        lim, lim/n_blocks);
 
-  atomic_ulong windows_tested = 0;
+  std::atomic_ulong windows_tested = 0;
 
   vector<vector<GenomicRegion>> all_amrs;
 
@@ -313,6 +343,8 @@ process_chrom(const bool verbose, const uint32_t n_threads,
     uint64_t start_idx = 0;
     uint64_t windows_tested_block = 0;
     for (auto i = b.first; i < b.second && start_idx < size(epireads); ++i) {
+      // ADS: below, we could do binary search, but this does not seem
+      // to be a bottleneck
       auto curr_epireads = get_current_epireads(epireads, max_epiread_len,
                                                 window_size, i, start_idx);
       if (total_states(curr_epireads) >= min_obs_per_window) {
@@ -355,20 +387,19 @@ main_amrfinder(int argc, const char **argv) {
     const string description =
       "identify regions of allele-specific methylation";
 
-    static const string fasta_suffix = "fa";
-
     bool verbose = false;
-    size_t n_threads = 1;
+    uint32_t n_threads = 1;
 
     string outfile;
     string genome_file;
+    string summary_file;
 
-    size_t max_itr = 10;
-    size_t window_size = 10;
-    size_t gap_limit = 1000;
+    uint32_t max_itr = 10;
+    uint32_t window_size = 10;
+    uint64_t gap_limit = 1000;
 
     double high_prob = 0.75, low_prob = 0.25;
-    size_t min_obs_per_cpg = 4;
+    uint32_t min_obs_per_cpg = 4;
     double critical_value = 0.01;
 
     // ADS: below, for when the time comes
@@ -398,6 +429,8 @@ main_amrfinder(int argc, const char **argv) {
                       false, apply_correction);
     opt_parse.add_opt("nofdr", 'f', "omits FDR procedure", false, use_fdr);
     opt_parse.add_opt("bic", 'b', "use BIC to compare models", false, use_bic);
+    opt_parse.add_opt("summary", 'S', "write summary output here", false,
+                      summary_file);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
     opt_parse.set_show_defaults();
@@ -432,8 +465,8 @@ main_amrfinder(int argc, const char **argv) {
            << "[test=" << (use_bic ? "BIC" : "LRT") << "] "
            << "[iterations=" << max_itr << "]" << endl;
 
-    const EpireadStats epistat(low_prob, high_prob, critical_value, max_itr,
-                               use_bic);
+    const auto epistat =
+      EpireadStats(low_prob, high_prob, critical_value, max_itr, use_bic);
 
     bamxx::bam_tpool tp(n_threads);
     bgzf_file in(reads_file, "r");
@@ -441,7 +474,11 @@ main_amrfinder(int argc, const char **argv) {
     if (n_threads > 1) tp.set_io(in);
 
     vector<GenomicRegion> amrs;
-    size_t windows_tested = 0;
+
+    // windows_tested is the number of sliding windows in the
+    // methylome that were tested for a signal of significant
+    // allele-specific methylation
+    uint64_t windows_tested = 0;
     epiread er;
     vector<epi_r> epireads;
     string prev_chrom, curr_chrom, tmp_states;
@@ -470,7 +507,10 @@ main_amrfinder(int argc, const char **argv) {
     if (verbose)
       cerr << "========= POST PROCESSING =========" << endl;
 
-    const size_t windows_accepted = amrs.size();
+    // windows_accepted is the number of sliding windows in the
+    // methylome that were found to have a significant signal of
+    // allele-specific methylation
+    const auto windows_accepted = amrs.size();
     if (!amrs.empty()) {
       /*
         ADS: there are several "steps" below that are done
@@ -516,7 +556,11 @@ main_amrfinder(int argc, const char **argv) {
       // ADS: not sure it's a good idea in this next collapse function
       // to keep the lowest among all p-values for merged regions
       merge_amrs(1, amrs);
-      const size_t collapsed_amrs = amrs.size();
+
+      // collapsed_amrs is the number of intervals of consecutive CpG
+      // sites that are found to reside in a window among those
+      // accepted as significant
+      const auto collapsed_amrs = amrs.size();
 
       if (!convert_coordinates(genome_file, amrs)) {
         cerr << "failed converting coordinates" << endl;
@@ -527,7 +571,11 @@ main_amrfinder(int argc, const char **argv) {
       // should not be too large, and a distance of 1000 bp is likely
       // too large.
       merge_amrs(gap_limit, amrs);
-      const size_t merged_amrs = amrs.size();
+
+      // merged_amrs are the number of intervals that result from
+      // merging any collapsed amrs that have a distance of less than
+      // gap_limit/2 from each other
+      const auto merged_amrs = amrs.size();
 
       // if BIC was not requested, then eliminate AMRs based on either
       // the p-value cutoff, or with the FDR-based cutoff, if it was
@@ -540,7 +588,7 @@ main_amrfinder(int argc, const char **argv) {
                    cend(amrs));
       }
 
-      const size_t amrs_passing_fdr = amrs.size();
+      const auto amrs_passing_fdr = amrs.size();
 
       // ADS: eliminating AMRs based on their size makes sense, but
       // not if that size is tied to the gap between AMRs we would
@@ -551,30 +599,30 @@ main_amrfinder(int argc, const char **argv) {
                  cend(amrs));
 
       if (verbose) {
-        cerr << "WINDOWS TESTED: " << windows_tested << endl
-             << "WINDOWS ACCEPTED: " << windows_accepted << endl
-             << "COLLAPSED WINDOWS: " << collapsed_amrs << endl
-             << "MERGED WINDOWS: " << merged_amrs << endl;
+        cerr << "windows_tested: " << windows_tested << '\n'
+             << "windows_accepted: " << windows_accepted << '\n'
+             << "collapsed_amrs: " << collapsed_amrs << '\n'
+             << "merged_amrs: " << merged_amrs << '\n';
         if (use_fdr)
-          cerr << "FDR CUTOFF: " << fdr_cutoff << endl
-               << "WINDOWS PASSING FDR: " << amrs_passing_fdr << endl;
-        cerr << "AMRS (WINDOWS PASSING MINIMUM SIZE): " << amrs.size() << endl;
+          cerr << "fdr_cutoff: " << fdr_cutoff << '\n'
+               << "amrs_passing_fdr: " << amrs_passing_fdr << '\n';
+        cerr << amr_summary(amrs).tostring() << '\n';
       }
-      std::ofstream of;
+      ofstream of;
       if (!outfile.empty()) of.open(outfile);
       std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
-      copy(begin(amrs), end(amrs),
-           std::ostream_iterator<GenomicRegion>(out, "\n"));
+      if (!out) runtime_error("failed to open output file: " + outfile);
+      copy(cbegin(amrs), cend(amrs),
+           ostream_iterator<GenomicRegion>(out, "\n"));
+      if (!summary_file.empty()) {
+        ofstream summary_out(summary_file);
+        if (!summary_out) throw runtime_error("failed to open: " + summary_file);
+        summary_out << amr_summary(amrs).tostring() << endl;
+      }
     }
-    else if (verbose)
-      cerr << "no AMRs found" << endl;
   }
   catch (const runtime_error &e) {
     cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

@@ -509,7 +509,7 @@ main_hmr(int argc, const char **argv) {
         if (!summary_out) throw runtime_error("failed to open: " + summary_file);
         summary_out << hmr_summary({}).tostring() << endl;
       }
-      return EXIT_FAILURE;
+      return EXIT_SUCCESS;
     }
 
     // separate the regions by chrom and by desert, and eliminate
@@ -613,10 +613,6 @@ main_hmr(int argc, const char **argv) {
   }
   catch (runtime_error &e) {
     cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

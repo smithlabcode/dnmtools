@@ -1258,6 +1258,12 @@ main_pmd(int argc, const char **argv) {
       // fixed bin size is used
       if (VERBOSE)
         cerr << "EXITING: INSUFFICIENT DATA" << endl;
+      if (!summary_file.empty()) {
+        ofstream summary_out(summary_file);
+        if (!summary_out)
+          throw runtime_error("failed to open: " + summary_file);
+        summary_out << pmd_summary({}).tostring() << endl;
+      }
       return EXIT_SUCCESS;
     }
 
@@ -1290,10 +1296,15 @@ main_pmd(int argc, const char **argv) {
     if (insufficient_data) {
       // ADS: first check for insufficient data; another is needed if
       // fixed bin size is used
-      if (VERBOSE) {
+      if (VERBOSE)
         cerr << "EXITING: INSUFFICIENT DATA" << endl;
-        return EXIT_SUCCESS;
+      if (!summary_file.empty()) {
+        ofstream summary_out(summary_file);
+        if (!summary_out)
+          throw runtime_error("failed to open: " + summary_file);
+        summary_out << pmd_summary({}).tostring() << endl;
       }
+      return EXIT_SUCCESS;
     }
 
     if (n_replicates > 1) {

@@ -442,9 +442,6 @@ main_hmr(int argc, const char **argv) {
     opt_parse.add_opt("post-meth", '\0', "output file for single-CpG posteiror "
                       "methylation probability (default: none)",
                       false, meth_post_outfile);
-    opt_parse.add_opt("post-meth", '\0', "output file for single-CpG posteiror "
-                      "methylation probability (default: none)",
-                      false, meth_post_outfile);
     opt_parse.add_opt("params-in", 'P', "HMM parameter file "
                       "(override training)", false, params_in_file);
     opt_parse.add_opt("params-out", 'p', "write HMM parameters to this "
@@ -543,7 +540,6 @@ main_hmr(int argc, const char **argv) {
     if (max_iterations > 0)
       hmm.BaumWelchTraining(meth, reset_points, p_fb, p_bf,
                             fg_alpha, fg_beta, bg_alpha, bg_beta);
-
     // DECODE THE DOMAINS
     vector<bool> state_ids;
     vector<double> posteriors;
@@ -560,7 +556,8 @@ main_hmr(int argc, const char **argv) {
     vector<double> p_values;
     assign_p_values(random_scores, domain_scores, p_values);
 
-    if (domain_score_cutoff == numeric_limits<double>::max())
+    if (domain_score_cutoff == numeric_limits<double>::max() &&
+        !domain_scores.empty())
       domain_score_cutoff = get_stepup_cutoff(p_values, 0.01);
 
     // write parameters if requested
@@ -569,14 +566,15 @@ main_hmr(int argc, const char **argv) {
                         p_fb, p_bf, domain_score_cutoff);
 
     vector<GenomicRegion> domains;
-    build_domains(cpgs, reset_points, state_ids, domains);
+    if (!domain_scores.empty())
+      build_domains(cpgs, reset_points, state_ids, domains);
 
     std::ofstream of;
     if (!outfile.empty()) of.open(outfile.c_str());
     std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
     size_t good_hmr_count = 0;
-    for (size_t i = 0; i < domains.size(); ++i)
+    for (auto i = 0u; i < size(domains); ++i)
       if (p_values[i] < domain_score_cutoff) {
         domains[i].set_name("HYPO" + to_string(good_hmr_count++));
         out << domains[i] << '\n';

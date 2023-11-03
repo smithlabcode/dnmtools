@@ -216,6 +216,7 @@ tag_with_mut(const uint32_t tag, const bool mut) {
 }
 
 
+template <const bool require_covered = false>
 static void
 write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
              const int32_t tid, const string &chrom,
@@ -235,8 +236,11 @@ write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
                                       : counts[i].unconverted_guanine();
       const double converted =
         is_c ? counts[i].converted_cytosine() : counts[i].converted_guanine();
+      const uint32_t n_reads = unconverted + converted;
+
+      if (require_covered && n_reads == 0) continue;
+
       const bool mut = has_mutated(base, counts[i]);
-      const size_t n_reads = unconverted + converted;
       buf.clear();
       // ADS: here is where we make an MSite, but not using MSite
       buf << sam_hdr_tid2name(hdr, tid) << '\t' << i << '\t'
@@ -353,8 +357,10 @@ output_skipped_chromosome(const bool CPG_ONLY, const int32_t tid,
   // reset the counts
   counts.clear();
   counts.resize(chrom_sizes[chrom_idx->second]);
-  write_output(hdr, out, tid, *chrom_itr, counts, CPG_ONLY);
+
+  write_output<false>(hdr, out, tid, *chrom_itr, counts, CPG_ONLY);
 }
+
 
 static bool
 consistent_targets(const bamxx::bam_header &hdr,
@@ -374,12 +380,13 @@ consistent_targets(const bamxx::bam_header &hdr,
   return true;
 }
 
+
+template<const bool require_covered = false>
 static void
 process_reads(const bool VERBOSE, const bool show_progress,
-              const bool compress_output,
-              const size_t n_threads, const string &infile,
-              const string &outfile, const string &chroms_file,
-              const bool CPG_ONLY) {
+              const bool compress_output, const size_t n_threads,
+              const string &infile, const string &outfile,
+              const string &chroms_file, const bool CPG_ONLY) {
   // first get the chromosome names and sequences from the FASTA file
   vector<string> chroms, names;
   read_fasta_file_short_names(chroms_file, names, chroms);
@@ -444,13 +451,16 @@ process_reads(const bool VERBOSE, const bool show_progress,
 
       // write output if there is any; should fail only once
       if (!counts.empty())
-        write_output(hdr, out, prev_tid, *chrom_itr, counts, CPG_ONLY);
+        write_output<require_covered>(hdr, out, prev_tid,
+                                      *chrom_itr, counts, CPG_ONLY);
 
       const int32_t tid = get_tid(aln);
       if (tid < prev_tid) throw dnmt_error("SAM file is not sorted");
-      for (auto i = prev_tid + 1; i < tid; ++i)
-        output_skipped_chromosome(CPG_ONLY, i, tid_to_idx, hdr, chroms_beg,
-                                  chrom_sizes, counts, out);
+
+      if (!require_covered)
+        for (auto i = prev_tid + 1; i < tid; ++i)
+          output_skipped_chromosome(CPG_ONLY, i, tid_to_idx, hdr, chroms_beg,
+                                    chrom_sizes, counts, out);
 
       // get the next chrom to process
       auto chrom_idx(tid_to_idx.find(tid));
@@ -469,7 +479,7 @@ process_reads(const bool VERBOSE, const bool show_progress,
     }
   }
   if (!counts.empty())
-    write_output(hdr, out, prev_tid, *chrom_itr, counts, CPG_ONLY);
+    write_output<require_covered>(hdr, out, prev_tid, *chrom_itr, counts, CPG_ONLY);
 
   // ADS: if some chroms might not be covered by reads, we have to
   // iterate over what remains
@@ -487,6 +497,7 @@ main_counts(int argc, const char **argv) {
     bool VERBOSE = false;
     bool show_progress = false;
     bool CPG_ONLY = false;
+    bool require_covered = false;
     bool compress_output = false;
 
     string chroms_file;
@@ -506,6 +517,8 @@ main_counts(int argc, const char **argv) {
                       true , chroms_file);
     opt_parse.add_opt("cpg-only", 'n', "print only CpG context cytosines",
                       false, CPG_ONLY);
+    opt_parse.add_opt("require-covered", 'r', "only output covered sites",
+                      false, require_covered);
     opt_parse.add_opt("zip", 'z', "output gzip format", false, compress_output);
     opt_parse.add_opt("progress", '\0', "show progress", false, show_progress);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
@@ -544,8 +557,14 @@ main_counts(int argc, const char **argv) {
            << "[CpG only mode: " << (CPG_ONLY ? "yes" : "no") << "]" << endl
            << "[command line: \"" << cmd.str() << "\"]" << endl;
 
-    process_reads(VERBOSE, show_progress, compress_output, n_threads,
-                  mapped_reads_file, outfile, chroms_file, CPG_ONLY);
+    if (require_covered)
+      process_reads<true>(VERBOSE, show_progress, compress_output,
+                          n_threads, mapped_reads_file, outfile,
+                          chroms_file, CPG_ONLY);
+    else
+      process_reads(VERBOSE, show_progress, compress_output,
+                    n_threads, mapped_reads_file, outfile,
+                    chroms_file, CPG_ONLY);
   }
   catch (const std::exception &e) {
     cerr << e.what() << endl;

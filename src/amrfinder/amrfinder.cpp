@@ -468,10 +468,10 @@ main_amrfinder(int argc, const char **argv) {
     const auto epistat =
       EpireadStats(low_prob, high_prob, critical_value, max_itr, use_bic);
 
-    bamxx::bam_tpool tp(n_threads);
+    // bamxx::bam_tpool tp(n_threads);
     bgzf_file in(reads_file, "r");
     if (!in) throw runtime_error("failed to open input file: " + reads_file);
-    if (n_threads > 1) tp.set_io(in);
+    // if (n_threads > 1) tp.set_io(in);
 
     vector<GenomicRegion> amrs;
 

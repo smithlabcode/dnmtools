@@ -356,6 +356,7 @@ main_merge_methcounts(int argc, const char **argv) {
     bool write_fractional = false;
     bool radmeth_format = false;
     bool ignore_chroms_order = false;
+    bool add_first_column_header = false;
 
     string header_info;
     string column_name_suffix = "RM";
@@ -368,7 +369,7 @@ main_merge_methcounts(int argc, const char **argv) {
                            "<methcounts-files>");
     opt_parse.add_opt("output", 'o', "output file name (default: stdout)",
                       false, outfile);
-    opt_parse.add_opt("header", 'h',"header to print (ignored for tabular)",
+    opt_parse.add_opt("header", 'H',"header to print (ignored for tabular)",
                       false, header_info);
     opt_parse.add_opt("tabular", 't', "output as table",
                       false, write_tabular_format);
@@ -394,6 +395,9 @@ main_merge_methcounts(int argc, const char **argv) {
     opt_parse.add_opt("mut", 'm',"If any of the sites being merged indicates "
                       "mutated, mark the result has mutated.",
                       false, report_any_mutated);
+    opt_parse.add_opt("first-column-header", '\0',"Add a header for the first "
+                      "to support reading the table using various other tools",
+                      false, add_first_column_header);
     opt_parse.add_opt("verbose", 'v',"print more run info", false, VERBOSE);
     opt_parse.set_show_defaults();
     vector<string> leftover_args;
@@ -458,10 +462,10 @@ main_merge_methcounts(int argc, const char **argv) {
     if (write_tabular_format) {
 
       vector<string> colnames;
-      for (auto &&i : meth_files)
+      for (const auto &i : meth_files)
         colnames.push_back(strip_path(i));
 
-      for (auto &&i : colnames)
+      for (auto &i : colnames)
         i = suffix_to_remove.empty() ?
           remove_extension(i) : remove_suffix(suffix_to_remove, i);
 
@@ -474,6 +478,8 @@ main_merge_methcounts(int argc, const char **argv) {
         swap(tmp, colnames);
       }
 
+      if (add_first_column_header)
+        out << "site\t";
       copy(begin(colnames), end(colnames),
            std::ostream_iterator<string>(out, "\t"));
       out << endl;

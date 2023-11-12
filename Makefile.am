@@ -214,6 +214,7 @@ dnmtools_SOURCES += src/utils/symmetric-cpgs.cpp
 dnmtools_SOURCES += src/utils/merge-methcounts.cpp
 dnmtools_SOURCES += src/utils/lift-filter.cpp
 dnmtools_SOURCES += src/utils/fast-liftover.cpp
+dnmtools_SOURCES += src/utils/covered.cpp
 
 dnmtools_SOURCES += src/amrfinder/allelicmeth.cpp
 dnmtools_SOURCES += src/amrfinder/amrfinder.cpp

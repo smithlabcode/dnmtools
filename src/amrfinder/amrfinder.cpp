@@ -614,11 +614,11 @@ main_amrfinder(int argc, const char **argv) {
       if (!out) runtime_error("failed to open output file: " + outfile);
       copy(cbegin(amrs), cend(amrs),
            ostream_iterator<GenomicRegion>(out, "\n"));
-      if (!summary_file.empty()) {
-        ofstream summary_out(summary_file);
-        if (!summary_out) throw runtime_error("failed to open: " + summary_file);
-        summary_out << amr_summary(amrs).tostring() << endl;
-      }
+    }
+    if (!summary_file.empty()) {
+      ofstream summary_out(summary_file);
+      if (!summary_out) throw runtime_error("failed to open: " + summary_file);
+      summary_out << amr_summary(amrs).tostring() << endl;
     }
   }
   catch (const runtime_error &e) {

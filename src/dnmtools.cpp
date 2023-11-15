@@ -125,6 +125,8 @@ int
 main_symmetric_cpgs(int argc, const char **argv);
 int
 metagene(int argc, const char **argv);
+int
+kmersites(int argc, const char **argv);
 
 void
 print_help(
@@ -192,7 +194,8 @@ main(int argc, const char **argv) {
    {"lc",            "approximate line counts in a file", main_lc_approx},
    {"merge-bsrate",  "merge bisulfite conversion rates files from bsrate", main_merge_bsrate},
    {"merge",         "merge multiple counts files into a counts file or a table", main_merge_methcounts},
-   {"selectsites",   "sites inside a set of genomic intervals", main_selectsites}}}}}};
+   {"selectsites",   "sites inside a set of genomic intervals", main_selectsites},
+   {"kmersites",     "make track file for sites matching kmer", kmersites}}}}}};
 // clang-format on
 
     if (argc < 2) {

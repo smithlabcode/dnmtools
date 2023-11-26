@@ -26,6 +26,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <filesystem>
 
 #include "GenomicRegion.hpp"
 #include "LevelsCounter.hpp"
@@ -48,6 +49,8 @@ using std::unordered_map;
 using std::vector;
 
 using bamxx::bgzf_file;
+
+namespace fs = std::filesystem;
 
 bool
 cmp_within_chrom(const GenomicRegion &r1, const GenomicRegion &r2) {
@@ -299,6 +302,7 @@ get_bed_columns(const string &regions_file) {
   return n_columns;
 }
 
+
 int
 main_roimethstat(int argc, const char **argv) {
   try {
@@ -390,6 +394,10 @@ Columns (beyond the first 6) in the BED format output:
       chrom_order.emplace(i, chrom_order.size());
 
     if (VERBOSE) cerr << "loading regions" << endl;
+
+    if (!fs::is_regular_file(regions_file))
+      // otherwise we could not read the file twice
+      throw runtime_error("regions file must be regular file");
 
     // MAGIC: below allow for ==3 or >=6 columns in the bed format
     const auto n_columns = get_bed_columns(regions_file);

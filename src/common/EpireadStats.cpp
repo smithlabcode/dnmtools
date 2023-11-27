@@ -302,7 +302,8 @@ compute_model_likelihoods(double &single_score, double &pair_score,
 
 
 double
-test_asm_lrt(const size_t max_itr, const double low_prob,
+test_asm_lrt(const size_t max_itr, const bool correct_for_read_count,
+             const double low_prob,
              const double high_prob, vector<epi_r> &reads) {
   double single_score = num_lim<double>::min();
   double pair_score = num_lim<double>::min();
@@ -319,14 +320,20 @@ test_asm_lrt(const size_t max_itr, const double low_prob,
   // minus n_cpgs for one-allele model
   const size_t df = n_cpgs;
 
+  // correction for numbers of reads
+  if (correct_for_read_count)
+    pair_score += size(reads)*log(0.5);
+
   const double llr_stat = -2*(single_score - pair_score);
   const double p_value = 1.0 - gsl_cdf_chisq_P(llr_stat, df);
+
   return p_value;
 }
 
 
 double
-test_asm_bic(const size_t max_itr, const double low_prob,
+test_asm_bic(const size_t max_itr, const bool correct_for_read_count,
+             const double low_prob,
              const double high_prob, vector<epi_r> &reads) {
 
   double single_score = num_lim<double>::min();
@@ -336,6 +343,10 @@ test_asm_bic(const size_t max_itr, const double low_prob,
 
   compute_model_likelihoods(single_score, pair_score, max_itr, low_prob,
                             high_prob, n_cpgs, reads);
+
+  // correction for numbers of reads
+  if (correct_for_read_count)
+    pair_score += size(reads)*log(0.5);
 
   for (auto &read : reads)
     read.pos += first_read_offset;

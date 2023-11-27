@@ -468,10 +468,8 @@ main_amrfinder(int argc, const char **argv) {
            << "[test=" << (use_bic ? "BIC" : "LRT") << "] "
            << "[iterations=" << max_itr << "]" << endl;
 
-    const auto epistat =
-      EpireadStats(low_prob, high_prob, critical_value, max_itr, use_bic);
-
-    EpireadStats::set_read_count_correction(correct_for_read_count);
+    const EpireadStats epistat{low_prob, high_prob, critical_value,
+                               max_itr, use_bic, correct_for_read_count};
 
     // bamxx::bam_tpool tp(n_threads);
     bgzf_file in(reads_file, "r");

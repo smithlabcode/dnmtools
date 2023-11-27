@@ -198,11 +198,13 @@ main_amrtester(int argc, const char **argv) {
 
   try {
 
+    static constexpr double critical_value = 0.01;
     static const string fasta_suffix = "fa";
 
     bool VERBOSE = false;
     bool PROGRESS = false;
-    bool USE_BIC = false;
+    bool use_bic = false;
+    bool correct_for_read_count = true;
 
     string outfile;
     string chrom_file;
@@ -217,9 +219,11 @@ main_amrtester(int argc, const char **argv) {
     opt_parse.add_opt("chrom", 'c', "genome sequence file/directory",
                       true, chrom_file);
     opt_parse.add_opt("itr", 'i', "max iterations", false, max_itr);
+    opt_parse.add_opt("nordc", 'r', "turn off read count correction",
+                      false, correct_for_read_count);
+    opt_parse.add_opt("bic", 'b', "use BIC to compare models", false, use_bic);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     opt_parse.add_opt("progress", 'P', "print progress info", false, PROGRESS);
-    opt_parse.add_opt("bic", 'b', "use BIC to compare models", false, USE_BIC);
 
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -244,6 +248,9 @@ main_amrtester(int argc, const char **argv) {
     const string regions_file(leftover_args.front());
     const string reads_file_name(leftover_args.back());
     /****************** END COMMAND LINE OPTIONS *****************/
+
+    const EpireadStats epistat{low_prob, high_prob, critical_value,
+                               max_itr, use_bic, correct_for_read_count};
 
     if (!validate_epiread_file(reads_file_name))
       throw runtime_error("invalid states file: " + reads_file_name);
@@ -299,6 +306,8 @@ main_amrtester(int argc, const char **argv) {
     if (!outfile.empty()) of.open(outfile.c_str());
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
+    bool is_significant = false;
+
     for (size_t i = 0; i < regions.size(); ++i) {
 
       if (PROGRESS)
@@ -326,9 +335,7 @@ main_amrtester(int argc, const char **argv) {
                  converted_region.get_end(), reads);
 
       if (!reads.empty()) {
-        regions[i].set_score((USE_BIC) ?
-                             test_asm_bic(max_itr, low_prob, high_prob, reads):
-                             test_asm_lrt(max_itr, low_prob, high_prob, reads));
+        regions[i].set_score(epistat.test_asm(reads, is_significant));
       }
       else regions[i].set_score(1.0);
 

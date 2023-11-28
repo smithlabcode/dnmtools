@@ -299,6 +299,7 @@ get_n_cpgs(const std::vector<epi_r> &reads) {
 
 template<typename T> static inline vector<pair<T, T>>
 get_block_bounds(const T start_pos, const T end_pos, const T block_size) {
+  if (block_size == 0) return {{start_pos, end_pos}};
   vector<pair<T, T>> blocks;
   auto block_start = start_pos;
   while (block_start < end_pos) {

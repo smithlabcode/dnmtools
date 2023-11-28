@@ -410,6 +410,7 @@ main_amrfinder(int argc, const char **argv) {
     bool use_bic = false;
     bool use_fdr = true;
     bool apply_correction = false;
+    bool correct_for_read_count = true;
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description, "<epireads>");
@@ -428,6 +429,8 @@ main_amrfinder(int argc, const char **argv) {
     opt_parse.add_opt("pvals", 'h', "adjusts p-values using Hochberg step-up",
                       false, apply_correction);
     opt_parse.add_opt("nofdr", 'f', "omits FDR procedure", false, use_fdr);
+    opt_parse.add_opt("nordc", 'r', "turn off read count correction",
+                      false, correct_for_read_count);
     opt_parse.add_opt("bic", 'b', "use BIC to compare models", false, use_bic);
     opt_parse.add_opt("summary", 'S', "write summary output here", false,
                       summary_file);
@@ -465,8 +468,8 @@ main_amrfinder(int argc, const char **argv) {
            << "[test=" << (use_bic ? "BIC" : "LRT") << "] "
            << "[iterations=" << max_itr << "]" << endl;
 
-    const auto epistat =
-      EpireadStats(low_prob, high_prob, critical_value, max_itr, use_bic);
+    const EpireadStats epistat{low_prob, high_prob, critical_value,
+                               max_itr, use_bic, correct_for_read_count};
 
     // bamxx::bam_tpool tp(n_threads);
     bgzf_file in(reads_file, "r");
@@ -510,7 +513,7 @@ main_amrfinder(int argc, const char **argv) {
     // windows_accepted is the number of sliding windows in the
     // methylome that were found to have a significant signal of
     // allele-specific methylation
-    const auto windows_accepted = amrs.size();
+    const auto windows_accepted = size(amrs);
     if (!amrs.empty()) {
       /*
         ADS: there are several "steps" below that are done
@@ -560,7 +563,7 @@ main_amrfinder(int argc, const char **argv) {
       // collapsed_amrs is the number of intervals of consecutive CpG
       // sites that are found to reside in a window among those
       // accepted as significant
-      const auto collapsed_amrs = amrs.size();
+      const auto n_collapsed_amrs = size(amrs);
 
       if (!convert_coordinates(genome_file, amrs)) {
         cerr << "failed converting coordinates" << endl;
@@ -575,7 +578,7 @@ main_amrfinder(int argc, const char **argv) {
       // merged_amrs are the number of intervals that result from
       // merging any collapsed amrs that have a distance of less than
       // gap_limit/2 from each other
-      const auto merged_amrs = amrs.size();
+      const auto n_merged_amrs = size(amrs);
 
       // if BIC was not requested, then eliminate AMRs based on either
       // the p-value cutoff, or with the FDR-based cutoff, if it was
@@ -588,7 +591,7 @@ main_amrfinder(int argc, const char **argv) {
                    cend(amrs));
       }
 
-      const auto amrs_passing_fdr = amrs.size();
+      const auto amrs_passing_fdr = size(amrs);
 
       // ADS: eliminating AMRs based on their size makes sense, but
       // not if that size is tied to the gap between AMRs we would
@@ -601,8 +604,8 @@ main_amrfinder(int argc, const char **argv) {
       if (verbose) {
         cerr << "windows_tested: " << windows_tested << '\n'
              << "windows_accepted: " << windows_accepted << '\n'
-             << "collapsed_amrs: " << collapsed_amrs << '\n'
-             << "merged_amrs: " << merged_amrs << '\n';
+             << "collapsed_amrs: " << n_collapsed_amrs << '\n'
+             << "merged_amrs: " << n_merged_amrs << '\n';
         if (use_fdr)
           cerr << "fdr_cutoff: " << fdr_cutoff << '\n'
                << "amrs_passing_fdr: " << amrs_passing_fdr << '\n';

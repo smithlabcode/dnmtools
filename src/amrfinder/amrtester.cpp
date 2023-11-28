@@ -1,7 +1,7 @@
 /* amrtester: A program for testing whether a genomic region has
  * allele-specific methylation
  *
- * Copyright (C) 2014-2022 University of Southern California and
+ * Copyright (C) 2014-2023 University of Southern California and
  *                         Benjamin E Decato and Andrew D. Smith and Fang Fang
  *
  * Authors: Andrew D. Smith and Benjamin E Decato and Fang Fang
@@ -126,14 +126,13 @@ load_reads(const string &reads_file_name,
 static void
 convert_coordinates(const vector<size_t> &cpg_positions,
                     GenomicRegion &region) {
-
   const size_t start_pos =
-    lower_bound(begin(cpg_positions), end(cpg_positions),
-                region.get_start()) - begin(cpg_positions);
+    lower_bound(cbegin(cpg_positions), cend(cpg_positions),
+                region.get_start()) - cbegin(cpg_positions);
 
   const size_t end_pos =
-    lower_bound(begin(cpg_positions), end(cpg_positions),
-                region.get_end()) - begin(cpg_positions);
+    lower_bound(cbegin(cpg_positions), cend(cpg_positions),
+                region.get_end()) - cbegin(cpg_positions);
 
   region.set_start(start_pos);
   region.set_end(end_pos);
@@ -177,19 +176,13 @@ clip_reads(const size_t start_pos, const size_t end_pos,
 }
 
 
+// give names to regions if they do not exist
 static void
-get_chrom(const string &chrom_name,
-          const vector<string> &all_chroms,
-          const unordered_map<string, size_t> &chrom_lookup,
-          string &chrom) {
-
-  auto the_chrom = chrom_lookup.find(chrom_name);
-  if (the_chrom == end(chrom_lookup))
-    throw runtime_error("could not find chrom: " + chrom_name);
-
-  chrom = all_chroms[the_chrom->second];
-  if (chrom.empty())
-    throw runtime_error("problem with chrom: " + chrom_name);
+ensure_regions_are_named(vector<GenomicRegion> &regions) {
+  auto region_name_idx = 0u;
+  for (auto region: regions)
+    if (region.get_name().empty())
+      region.set_name("region" + std::to_string(++region_name_idx));
 }
 
 
@@ -201,8 +194,8 @@ main_amrtester(int argc, const char **argv) {
     static constexpr double critical_value = 0.01;
     static const string fasta_suffix = "fa";
 
-    bool VERBOSE = false;
-    bool PROGRESS = false;
+    bool verbose = false;
+    bool show_progress = false;
     bool use_bic = false;
     bool correct_for_read_count = true;
 
@@ -216,14 +209,14 @@ main_amrtester(int argc, const char **argv) {
     OptionParser opt_parse(strip_path(argv[0]), "resolve epi-alleles",
                            "<bed-regions> <mapped-reads>");
     opt_parse.add_opt("output", 'o', "output file", false, outfile);
-    opt_parse.add_opt("chrom", 'c', "genome sequence file/directory",
+    opt_parse.add_opt("chrom", 'c', "reference genome fasta file",
                       true, chrom_file);
     opt_parse.add_opt("itr", 'i', "max iterations", false, max_itr);
     opt_parse.add_opt("nordc", 'r', "turn off read count correction",
                       false, correct_for_read_count);
     opt_parse.add_opt("bic", 'b', "use BIC to compare models", false, use_bic);
-    opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
-    opt_parse.add_opt("progress", 'P', "print progress info", false, PROGRESS);
+    opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
+    opt_parse.add_opt("progress", 'P', "show progress", false, show_progress);
 
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -255,31 +248,17 @@ main_amrtester(int argc, const char **argv) {
     if (!validate_epiread_file(reads_file_name))
       throw runtime_error("invalid states file: " + reads_file_name);
 
-    vector<string> chrom_files;
-    if (isdir(chrom_file.c_str()))
-      read_dir(chrom_file, fasta_suffix, chrom_files);
-    else chrom_files.push_back(chrom_file);
-
-    if (VERBOSE)
-      cerr << "n_chrom_files:\t" << chrom_files.size() << endl;
-
     /* first load in all the chromosome sequences and names, and make
        a map from chromosome name to the location of the chromosome
        itself */
-    vector<string> all_chroms;
+    vector<string> chroms;
     vector<string> chrom_names;
     unordered_map<string, size_t> chrom_lookup;
-    for (auto i(begin(chrom_files)); i != end(chrom_files); ++i) {
-      vector<string> tmp_chroms, tmp_names;
-      read_fasta_file_short_names(*i, tmp_names, tmp_chroms);
-      for (size_t j = 0; j < tmp_chroms.size(); ++j) {
-        if (chrom_lookup.find(tmp_names[j]) != end(chrom_lookup))
-          throw runtime_error("repeated chromosome or name: " + tmp_names[j]);
-        chrom_names.push_back(tmp_names[j]);
-        chrom_lookup[chrom_names.back()] = all_chroms.size();
-        all_chroms.push_back("");
-        all_chroms.back().swap(tmp_chroms[j]);
-      }
+    read_fasta_file_short_names(chrom_file, chrom_names, chroms);
+    for (auto i = 0u; i < size(chroms); ++i) {
+      if (chrom_lookup.find(chrom_names[i]) != cend(chrom_lookup))
+        throw runtime_error("repeated chromosome name: " + chrom_names[i]);
+      chrom_lookup[chrom_names[i]] = i;
     }
 
     vector<GenomicRegion> regions;
@@ -287,62 +266,55 @@ main_amrtester(int argc, const char **argv) {
     if (!check_sorted(regions))
       throw runtime_error("regions not sorted in: " + regions_file);
 
-    // Give names to regions if they do not exist
-    for (size_t i = 0; i < regions.size(); ++i)
-      if (regions[i].get_name().empty())
-        regions[i].set_name("region" + std::to_string(i));
+    ensure_regions_are_named(regions);
 
-    size_t n_regions  = regions.size();
-    if (VERBOSE)
-      cerr << "NUMBER OF REGIONS: " << n_regions << endl;
+    auto n_regions = size(regions);
+    if (verbose)
+      cerr << "number of regions: " << n_regions << endl;
 
     string chrom_name;
-    string chrom;
-    vector<size_t> cpg_positions;
-
-    vector<GenomicRegion> amrs;
+    vector<uint64_t> cpg_positions;
 
     std::ofstream of;
-    if (!outfile.empty()) of.open(outfile.c_str());
+    if (!outfile.empty()) of.open(outfile);
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
     bool is_significant = false;
 
-    for (size_t i = 0; i < regions.size(); ++i) {
+    ProgressBar progress(size(regions));
+    auto progress_idx = 0u;
 
-      if (PROGRESS)
-        cerr << '\r' << percent(i, n_regions) << "%\r";
+    for (auto &region : regions) {
+
+      if (show_progress && progress.time_to_report(progress_idx))
+        progress.report(cerr, progress_idx);
+      ++progress_idx;
 
       // get the correct chrom if it has changed
-      if (regions[i].get_chrom() != chrom_name) {
-        chrom_name = regions[i].get_chrom();
-        if (VERBOSE)
-          cerr << "processing " << chrom_name << endl;
-
-        get_chrom(chrom_name, all_chroms, chrom_lookup, chrom);
+      if (region.get_chrom() != chrom_name) {
+        chrom_name = region.get_chrom();
+        auto the_chrom = chrom_lookup.find(chrom_name);
+        if (the_chrom == end(chrom_lookup))
+          throw runtime_error("could not find chrom: " + chrom_name);
 
         cpg_positions.clear();
-        collect_cpgs(chrom, cpg_positions);
+        collect_cpgs(chroms[the_chrom->second], cpg_positions);
       }
 
-      GenomicRegion converted_region(regions[i]);
-      convert_coordinates(cpg_positions, converted_region);
+      GenomicRegion conv_region(region);
+      convert_coordinates(cpg_positions, conv_region);
 
       vector<epi_r> reads;
-      load_reads(reads_file_name, converted_region, reads);
+      load_reads(reads_file_name, conv_region, reads);
 
-      clip_reads(converted_region.get_start(),
-                 converted_region.get_end(), reads);
+      clip_reads(conv_region.get_start(), conv_region.get_end(), reads);
 
-      if (!reads.empty()) {
-        regions[i].set_score(epistat.test_asm(reads, is_significant));
-      }
-      else regions[i].set_score(1.0);
-
-      regions[i].set_name(regions[i].get_name() + ":" + toa(reads.size()));
-      out << regions[i] << endl;
+      const auto score = reads.empty() ? 1.0 : epistat.test_asm(reads, is_significant);
+      region.set_score(score);
+      region.set_name(region.get_name() + ":" + toa(reads.size()));
+      out << region << '\n';
     }
-    if (PROGRESS) cerr << "\r100%" << endl;
+    if (show_progress) cerr << "\r100%" << endl;
   }
   catch (const runtime_error &e) {
     cerr << e.what() << endl;

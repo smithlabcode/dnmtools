@@ -269,7 +269,8 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   int32_t prev_chrom_idx = -1;
   uint64_t pos = num_lim<uint64_t>::max();
 
-  int32_t chrom_idx = 0;
+  // ADS: this is probably a poor strategy since we already would know
+  // the index of the chrom sequence in the vector.
   chrom_itr_t chrom_itr;
 
   while (read_site(in, site)) {

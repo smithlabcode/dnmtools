@@ -83,6 +83,7 @@ verify_chrom_orders(const bool verbose, const uint32_t n_threads,
       if (idx < prev_idx)
         throw runtime_error("inconsistent chromosome order at: " + line);
 
+      prev_idx = idx;
       std::swap(line, prev_chrom);
     }
   }

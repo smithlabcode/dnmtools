@@ -88,8 +88,8 @@ main_covered(int argc, const char **argv) {
     }
 
     MSite site;
-    while (read_site(in, site))
-      if (site.n_reads > 0)
+    while (read_site(in, site)) 
+      if (site.n_reads > 0 || site.is_mutated()) 
         write_site(out, site);
   }
   catch (const std::runtime_error &e) {

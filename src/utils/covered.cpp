@@ -26,14 +26,51 @@
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 
-#include "MSite.hpp"
-
 using std::string;
 using std::cout;
 using std::cerr;
 using std::endl;
+using std::runtime_error;
 
 using bamxx::bgzf_file;
+
+
+inline auto
+getline(bgzf_file &file, kstring_t &line) -> bgzf_file & {
+  if (file.f == nullptr) return file;
+  const int x = bgzf_getline(file.f, '\n', &line);
+  if (x == -1) {
+    file.destroy();
+    free(line.s);
+    line = {0, 0, nullptr};
+  }
+  if (x < -1) {
+    file.destroy();
+    free(line.s);
+    line = {0, 0, nullptr};
+  }
+  return file;
+}
+
+
+static inline
+bool get_is_mutated(const kstring_t &line) {
+  const auto end_itr = line.s + line.l;
+  return std::find(line.s, end_itr, 'x') != end_itr;
+}
+
+
+static inline
+uint32_t get_n_reads(const kstring_t &line) {
+  const auto end_itr = std::make_reverse_iterator(line.s + line.l);
+  const auto beg_itr = std::make_reverse_iterator(line.s);
+  auto n_reads_pos = std::find_if(end_itr, beg_itr, [](const char c) {
+    return c == ' ' || c == '\t';
+  });
+  ++n_reads_pos;
+  return atoi(n_reads_pos.base());
+}
+
 
 int
 main_covered(int argc, const char **argv) {
@@ -76,21 +113,34 @@ main_covered(int argc, const char **argv) {
 
     // const bool show_progress = VERBOSE && isatty(fileno(stderr));
     bgzf_file in(filename, "r");
-    if (!in) throw std::runtime_error("could not open file: " + filename);
+    if (!in) throw runtime_error("could not open file: " + filename);
 
     // open the output file
-    bamxx::bgzf_file out(outfile, "w");
-    if (!out) throw std::runtime_error("error opening output file: " + outfile);
+    bgzf_file out(outfile, "w");
+    if (!out) throw runtime_error("error opening output file: " + outfile);
 
     if (n_threads > 1) {
-      tpool.set_io(in);
+      // ADS: something breaks when we use the thread for the input
+      // tpool.set_io(in);
       tpool.set_io(out);
     }
 
-    MSite site;
-    while (read_site(in, site)) 
-      if (site.n_reads > 0 || site.is_mutated()) 
-        write_site(out, site);
+    kstring_t line{0, 0, nullptr};
+    const int ret = ks_resize(&line, 1024);
+    if (ret) throw runtime_error("failed to acquire buffer");
+
+    while (getline(in, line)) {
+      const bool is_mutated = get_is_mutated(line);
+      const uint32_t n_reads = get_n_reads(line);
+      if (n_reads > 0u || is_mutated) {
+        line.s[line.l++] = '\n';
+        const int64_t r = bgzf_write(out.f, line.s, line.l);
+        if (r < static_cast<int64_t>(line.l)) {
+          cerr << "failed writing to: " << outfile << '\n';
+          return EXIT_FAILURE;
+        }
+      }
+    }
   }
   catch (const std::runtime_error &e) {
     cerr << e.what() << endl;

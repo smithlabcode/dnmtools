@@ -58,7 +58,7 @@ using bamxx::bgzf_file;
 struct amr_summary {
   amr_summary(const vector<GenomicRegion> &amrs) {
     amr_count = size(amrs);
-    amr_total_size = accumulate(cbegin(amrs), cend(amrs), 0u,
+    amr_total_size = accumulate(cbegin(amrs), cend(amrs), 0ul,
                                 [](const uint64_t t, const GenomicRegion &p) {
                                   return t + p.get_width();
                                 });

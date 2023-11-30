@@ -55,7 +55,7 @@ using bamxx::bgzf_file;
 struct hmr_summary {
   hmr_summary(const vector<GenomicRegion> &hmrs) {
     hmr_count = hmrs.size();
-    hmr_total_size = accumulate(cbegin(hmrs), cend(hmrs), 0,
+    hmr_total_size = accumulate(cbegin(hmrs), cend(hmrs), 0ul,
                                 [](const uint64_t t, const GenomicRegion &p) {
                                   return t + p.get_width(); });
     hmr_mean_size =

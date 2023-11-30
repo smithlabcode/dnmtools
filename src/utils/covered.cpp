@@ -45,6 +45,8 @@ getline(bgzf_file &file, kstring_t &line) -> bgzf_file & {
     line = {0, 0, nullptr};
   }
   if (x < -1) {
+    // ADS: this is an error condition and should be handled
+    // differently from the EOF above.
     file.destroy();
     free(line.s);
     line = {0, 0, nullptr};
@@ -78,15 +80,17 @@ main_covered(int argc, const char **argv) {
 
     size_t n_threads = 1;
 
-    string outfile;
+    string outfile{"-"};
     const string description =
       "filter counts files so they only have covered sites";
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description,
-                           "<methcounts-file>");
-    opt_parse.add_opt("output", 'o', "output file (required)", true, outfile);
-    opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
+                           "<methcounts-file> (\"-\" for standard input)", 1);
+    opt_parse.add_opt("output", 'o', "output file (default is standard out)",
+                      false, outfile);
+    opt_parse.add_opt("threads", 't', "threads for compression (use few)",
+                      false, n_threads);
     std::vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
@@ -111,11 +115,9 @@ main_covered(int argc, const char **argv) {
 
     bamxx::bam_tpool tpool(n_threads);
 
-    // const bool show_progress = VERBOSE && isatty(fileno(stderr));
     bgzf_file in(filename, "r");
     if (!in) throw runtime_error("could not open file: " + filename);
 
-    // open the output file
     bgzf_file out(outfile, "w");
     if (!out) throw runtime_error("error opening output file: " + outfile);
 
@@ -125,21 +127,24 @@ main_covered(int argc, const char **argv) {
       tpool.set_io(out);
     }
 
+    // use the kstring_t type to more directly use the BGZF file
     kstring_t line{0, 0, nullptr};
     const int ret = ks_resize(&line, 1024);
     if (ret) throw runtime_error("failed to acquire buffer");
 
-    while (getline(in, line)) {
+    bool write_ok = true;
+    while (getline(in, line) && write_ok) {
       const bool is_mutated = get_is_mutated(line);
       const uint32_t n_reads = get_n_reads(line);
       if (n_reads > 0u || is_mutated) {
         line.s[line.l++] = '\n';
-        const int64_t r = bgzf_write(out.f, line.s, line.l);
-        if (r < static_cast<int64_t>(line.l)) {
-          cerr << "failed writing to: " << outfile << '\n';
-          return EXIT_FAILURE;
-        }
+        write_ok =
+          (bgzf_write(out.f, line.s, line.l) == static_cast<int64_t>(line.l));
       }
+    }
+    if (!write_ok) {
+      cerr << "failed writing to: " << outfile << '\n';
+      return EXIT_FAILURE;
     }
   }
   catch (const std::runtime_error &e) {

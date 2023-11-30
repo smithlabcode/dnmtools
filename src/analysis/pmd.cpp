@@ -60,7 +60,7 @@ template<typename T> using num_lim = std::numeric_limits<T>;
 struct pmd_summary {
   pmd_summary(const vector<GenomicRegion> &pmds) {
     pmd_count = pmds.size();
-    pmd_total_size = accumulate(cbegin(pmds), cend(pmds), 0,
+    pmd_total_size = accumulate(cbegin(pmds), cend(pmds), 0ul,
                                 [](const uint64_t t, const GenomicRegion &p) {
                                   return t + p.get_width(); });
     pmd_mean_size =

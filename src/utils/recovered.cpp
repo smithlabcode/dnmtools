@@ -115,7 +115,7 @@ struct quick_buf : public std::ostringstream,
    then one needs this. Also, Qiang should be consulted on this
    because he spent much time thinking about it in the context of
    plants. */
-static bool
+static inline bool
 is_chh(const std::string &s, size_t i) {
   return (i < (s.length() - 2)) &&
     is_cytosine(s[i]) &&
@@ -124,7 +124,7 @@ is_chh(const std::string &s, size_t i) {
 }
 
 
-static bool
+static inline bool
 is_ddg(const std::string &s, size_t i) {
   return (i < (s.length() - 2)) &&
     !is_cytosine(s[i]) &&
@@ -133,7 +133,7 @@ is_ddg(const std::string &s, size_t i) {
 }
 
 
-static bool
+static inline bool
 is_c_at_g(const std::string &s, size_t i) {
   return (i < (s.length() - 2)) &&
     is_cytosine(s[i]) &&
@@ -148,7 +148,7 @@ is_c_at_g(const std::string &s, size_t i) {
  * works as long as the chromosome size is not the maximum size of a
  * size_t.
  */
-static uint32_t
+static inline uint32_t
 get_tag_from_genome_c(const string &s, const size_t pos) {
   if (is_cpg(s, pos)) return 0;
   else if (is_chh(s, pos)) return 1;
@@ -156,7 +156,7 @@ get_tag_from_genome_c(const string &s, const size_t pos) {
   return 3;
 }
 
-static uint32_t
+static inline uint32_t
 get_tag_from_genome_g(const string &s, const size_t pos) {
   if (is_cpg(s, pos - 1)) return 0;
   else if (is_ddg(s, pos - 2)) return 1;

@@ -42,15 +42,24 @@ using std::unordered_set;
 using bamxx::bgzf_file;
 
 static inline bool
-found_symmetric(const MSite &prev_cpg, const MSite &curr_cpg) {
+found_symmetric(const MSite &prev, const MSite &curr) {
   // assumes check for CpG already done
-  return (prev_cpg.strand == '+' && curr_cpg.strand == '-' &&
-          prev_cpg.pos + 1 == curr_cpg.pos);
+  return (prev.pos + 1 == curr.pos &&
+          prev.strand == '+' && curr.strand == '-');
 }
+
+
+static inline void
+ensure_positive_cpg(MSite &s) {
+  s.pos -= (s.strand == '-');
+  s.strand = '+';
+}
+
 
 template<class T> static bool
 process_sites(bgzf_file &in, T &out) {
   MSite prev_site, curr_site;
+
   bool prev_is_cpg = false;
   if (read_site(in, prev_site))
     if (prev_site.is_cpg()) prev_is_cpg = true;
@@ -59,29 +68,35 @@ process_sites(bgzf_file &in, T &out) {
   bool sites_are_sorted = true;
 
   while (read_site(in, curr_site)) {
-    if (curr_site.is_cpg()) {
-      if (curr_site.chrom != prev_site.chrom) {
-        const auto chrom_itr = chroms_seen.find(curr_site.chrom);
-        if (chrom_itr != cend(chroms_seen)) {
-          sites_are_sorted = false;
-          break;
+    const bool same_chrom = prev_site.chrom == curr_site.chrom;
+    if (same_chrom) {
+      if (curr_site.pos <= prev_site.pos)
+        return false;
+      if (prev_is_cpg) {
+        if (curr_site.is_mate_of(prev_site))
+          curr_site.add(prev_site);
+        else {
+          ensure_positive_cpg(prev_site);
+          write_site(out, prev_site);
         }
-        else
-          chroms_seen.insert(curr_site.chrom);
       }
-      else if (curr_site.pos <= prev_site.pos) {
-        sites_are_sorted = false;
-        break;
-      }
-      if (prev_is_cpg && found_symmetric(prev_site, curr_site)) {
-        prev_site.add(curr_site);
+    }
+    else {
+      if (chroms_seen.find(curr_site.chrom) != cend(chroms_seen))
+        return false;
+      chroms_seen.insert(curr_site.chrom);
+
+      if (prev_is_cpg) {
+        ensure_positive_cpg(prev_site);
         write_site(out, prev_site);
       }
-      prev_is_cpg = true;
     }
-    else
-      prev_is_cpg = false;
     std::swap(prev_site, curr_site);
+    prev_is_cpg = prev_site.is_cpg();
+  }
+  if (prev_is_cpg) {
+    ensure_positive_cpg(prev_site);
+    write_site(out, prev_site);
   }
 
   return sites_are_sorted;

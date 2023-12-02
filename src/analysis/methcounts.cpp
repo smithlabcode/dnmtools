@@ -483,10 +483,10 @@ process_reads(const bool VERBOSE, const bool show_progress,
 
   // ADS: if some chroms might not be covered by reads, we have to
   // iterate over what remains
-  const int32_t tid = hdr.h->n_targets;
-  for (auto i = prev_tid + 1; i < tid; ++i)
-    output_skipped_chromosome(CPG_ONLY, i, tid_to_idx, hdr,
-                              chroms_beg, chrom_sizes, counts, out);
+  if (!require_covered)
+    for (auto i = prev_tid + 1; i < hdr.h->n_targets; ++i)
+      output_skipped_chromosome(CPG_ONLY, i, tid_to_idx, hdr,
+                                chroms_beg, chrom_sizes, counts, out);
 }
 
 int

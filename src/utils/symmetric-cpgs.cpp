@@ -38,6 +38,7 @@ using std::cout;
 using std::cerr;
 using std::endl;
 using std::unordered_set;
+using std::runtime_error;
 
 using bamxx::bgzf_file;
 
@@ -106,9 +107,10 @@ int
 main_symmetric_cpgs(int argc, const char **argv) {
   try {
     // file types from HTSlib use "-" for the filename to go to stdout
-    string outfile("-");
+    string outfile{"-"};
     // (not used) bool VERBOSE = false;
     bool compress_output = false;
+    int32_t n_threads = 1;
 
     const string description =
       "Get CpG sites and make methylation levels symmetric.";
@@ -118,6 +120,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
                            "<methcounts-file>");
     opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
                       outfile);
+    opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("zip", 'z', "output gzip format", false, compress_output);
     // opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     std::vector<string> leftover_args;
@@ -142,18 +145,24 @@ main_symmetric_cpgs(int argc, const char **argv) {
     const string filename(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    if (n_threads <= 0) throw runtime_error("threads must be positive");
+    bamxx::bam_tpool tp(n_threads);
+
     // const bool show_progress = VERBOSE && isatty(fileno(stderr));
     bgzf_file in(filename, "r");
-    if (!in) throw std::runtime_error("could not open file: " + filename);
-
-    bool sites_are_sorted = true;
+    if (!in) throw runtime_error("could not open file: " + filename);
 
     // open the output file
     const string output_mode = compress_output ? "w" : "wu";
     bamxx::bgzf_file out(outfile, output_mode);
-    if (!out) throw std::runtime_error("error opening output file: " + outfile);
+    if (!out) throw runtime_error("error opening output file: " + outfile);
 
-    sites_are_sorted = process_sites(in, out);
+    if (n_threads > 1) {
+      tp.set_io(in);
+      tp.set_io(out);
+    }
+
+    const bool sites_are_sorted = process_sites(in, out);
 
     if (!sites_are_sorted) {
       namespace fs = std::filesystem;
@@ -164,7 +173,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
       return EXIT_FAILURE;
     }
   }
-  catch (const std::runtime_error &e) {
+  catch (const runtime_error &e) {
     cerr << e.what() << endl;
     return EXIT_FAILURE;
   }

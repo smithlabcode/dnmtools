@@ -15,25 +15,25 @@
  * General Public License for more details.
  */
 
-#include <string>
-#include <vector>
+#include <bamxx.hpp>
+
 #include <iostream>
 #include <stdexcept>
-#include <bamxx.hpp>
+#include <string>
+#include <vector>
 
 // from smithlab_cpp
 #include "OptionParser.hpp"
-#include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
 
-using std::string;
-using std::cout;
 using std::cerr;
+using std::cout;
 using std::endl;
 using std::runtime_error;
+using std::string;
 
 using bamxx::bgzf_file;
-
 
 inline auto
 getline(bgzf_file &file, kstring_t &line) -> bgzf_file & {
@@ -54,30 +54,25 @@ getline(bgzf_file &file, kstring_t &line) -> bgzf_file & {
   return file;
 }
 
-
-static inline
-bool get_is_mutated(const kstring_t &line) {
+static inline bool
+get_is_mutated(const kstring_t &line) {
   const auto end_itr = line.s + line.l;
   return std::find(line.s, end_itr, 'x') != end_itr;
 }
 
-
-static inline
-uint32_t get_n_reads(const kstring_t &line) {
+static inline uint32_t
+get_n_reads(const kstring_t &line) {
   const auto end_itr = std::make_reverse_iterator(line.s + line.l);
   const auto beg_itr = std::make_reverse_iterator(line.s);
-  auto n_reads_pos = std::find_if(end_itr, beg_itr, [](const char c) {
-    return c == ' ' || c == '\t';
-  });
+  auto n_reads_pos = std::find_if(
+    end_itr, beg_itr, [](const char c) { return c == ' ' || c == '\t'; });
   ++n_reads_pos;
   return atoi(n_reads_pos.base());
 }
 
-
 int
 main_covered(int argc, const char **argv) {
   try {
-
     size_t n_threads = 1;
 
     string outfile{"-"};
@@ -117,7 +112,6 @@ main_covered(int argc, const char **argv) {
 
     bgzf_file in(filename, "r");
     if (!in) throw runtime_error("could not open file: " + filename);
-
 
     const auto outfile_mode = in.compression() ? "w" : "wu";
 

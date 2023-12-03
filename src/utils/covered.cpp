@@ -118,12 +118,15 @@ main_covered(int argc, const char **argv) {
     bgzf_file in(filename, "r");
     if (!in) throw runtime_error("could not open file: " + filename);
 
-    bgzf_file out(outfile, "w");
+
+    const auto outfile_mode = in.compression() ? "w" : "wu";
+
+    bgzf_file out(outfile, outfile_mode);
     if (!out) throw runtime_error("error opening output file: " + outfile);
 
     if (n_threads > 1) {
       // ADS: something breaks when we use the thread for the input
-      // tpool.set_io(in);
+      tpool.set_io(in);
       tpool.set_io(out);
     }
 

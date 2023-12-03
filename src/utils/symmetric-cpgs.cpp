@@ -159,7 +159,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
 
     if (n_threads > 1) {
       tp.set_io(in);
-      tp.set_io(in);
+      tp.set_io(out);
     }
 
     const bool sites_are_sorted = process_sites(in, out);

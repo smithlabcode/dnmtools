@@ -130,6 +130,8 @@ main_covered(int argc, const char **argv);
 int
 main_xcounts(int argc, const char **argv);
 int
+main_unxcounts(int argc, const char **argv);
+int
 main_recovered(int argc, const char **argv);
 int
 kmersites(int argc, const char **argv);
@@ -203,6 +205,7 @@ main(int argc, const char **argv) {
    {"covered",       "filter a counts file for only covered sites", main_covered},
    {"recovered",     "replace missing sites in a counts file", main_recovered},
    {"xcounts",       "compress counts files by removing information", main_xcounts},
+   {"unxcounts",     "reverse the xcounts process yielding a counts file", main_unxcounts},
    {"selectsites",   "sites inside a set of genomic intervals", main_selectsites},
    {"kmersites",     "make track file for sites matching kmer", kmersites}}}}}};
 // clang-format on

@@ -263,6 +263,11 @@ sam_hdr_tid2name(const bamxx::bam_header &hdr, const int32_t tid) {
   return std::string(sam_hdr_tid2name(hdr.h, tid));
 }
 
+inline uint32_t
+sam_hdr_tid2len(const bamxx::bam_header &hdr, const int32_t tid) {
+  return sam_hdr_tid2len(hdr.h, tid);
+}
+
 inline std::string
 sam_hdr_tid2name(const bamxx::bam_header &hdr, const bamxx::bam_rec &aln) {
   return std::string(sam_hdr_tid2name(hdr.h, aln.b->core.tid));

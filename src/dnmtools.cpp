@@ -128,6 +128,8 @@ metagene(int argc, const char **argv);
 int
 main_covered(int argc, const char **argv);
 int
+main_xcounts(int argc, const char **argv);
+int
 main_recovered(int argc, const char **argv);
 int
 kmersites(int argc, const char **argv);
@@ -200,6 +202,7 @@ main(int argc, const char **argv) {
    {"merge",         "merge multiple counts files into a counts file or a table", main_merge_methcounts},
    {"covered",       "filter a counts file for only covered sites", main_covered},
    {"recovered",     "replace missing sites in a counts file", main_recovered},
+   {"xcounts",       "compress counts files by removing information", main_xcounts},
    {"selectsites",   "sites inside a set of genomic intervals", main_selectsites},
    {"kmersites",     "make track file for sites matching kmer", kmersites}}}}}};
 // clang-format on

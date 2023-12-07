@@ -17,38 +17,36 @@
  * General Public License for more details.
  */
 
-#include <string>
-#include <vector>
-#include <iostream>
-#include <fstream>
-#include <stdexcept>
-#include <unordered_set>
-#include <filesystem>
 #include <bamxx.hpp>
 
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
 // from smithlab_cpp
-#include "OptionParser.hpp"
-#include "smithlab_utils.hpp"
-#include "smithlab_os.hpp"
-
 #include "MSite.hpp"
+#include "OptionParser.hpp"
+#include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
 
-using std::string;
-using std::cout;
 using std::cerr;
+using std::cout;
 using std::endl;
-using std::unordered_set;
 using std::runtime_error;
+using std::string;
+using std::unordered_set;
 
 using bamxx::bgzf_file;
 
 static inline bool
 found_symmetric(const MSite &prev, const MSite &curr) {
   // assumes check for CpG already done
-  return (prev.pos + 1 == curr.pos &&
-          prev.strand == '+' && curr.strand == '-');
+  return (prev.pos + 1 == curr.pos && prev.strand == '+' && curr.strand == '-');
 }
-
 
 static inline void
 ensure_positive_cpg(MSite &s) {
@@ -56,23 +54,42 @@ ensure_positive_cpg(MSite &s) {
   s.strand = '+';
 }
 
+template<class T> static std::tuple<MSite, bool>
+get_first_site(T &in, T &out) {
+  bool prev_is_cpg = false;
+  MSite prev_site;
+  string line;
+  bool within_header = true;
+  while (within_header && getline(in, line)) {
+    if (line[0] == '#') {
+      line += '\n';
+      out.write(line);
+    }
+    else {
+      prev_site.initialize(line.data(), line.data() + size(line));
+      if (prev_site.is_cpg()) prev_is_cpg = true;
+      within_header = false;
+    }
+  }
+  return {prev_site, prev_is_cpg};
+}
 
 template<class T> static bool
-process_sites(bgzf_file &in, T &out) {
-  MSite prev_site, curr_site;
+process_sites(T &in, T &out) {
 
-  bool prev_is_cpg = false;
-  if (read_site(in, prev_site))
-    if (prev_site.is_cpg()) prev_is_cpg = true;
+  // get the first site while dealing with the header
+  auto [prev_site, prev_is_cpg] = get_first_site(in, out);
 
+  // setup to verfiy that chromosomes are together
   unordered_set<string> chroms_seen;
+  chroms_seen.insert(prev_site.chrom);
   bool sites_are_sorted = true;
 
+  MSite curr_site;
   while (read_site(in, curr_site)) {
     const bool same_chrom = prev_site.chrom == curr_site.chrom;
     if (same_chrom) {
-      if (curr_site.pos <= prev_site.pos)
-        return false;
+      if (curr_site.pos <= prev_site.pos) return false;
       if (prev_is_cpg) {
         if (curr_site.is_mate_of(prev_site))
           curr_site.add(prev_site);
@@ -83,8 +100,7 @@ process_sites(bgzf_file &in, T &out) {
       }
     }
     else {
-      if (chroms_seen.find(curr_site.chrom) != cend(chroms_seen))
-        return false;
+      if (chroms_seen.find(curr_site.chrom) != cend(chroms_seen)) return false;
       chroms_seen.insert(curr_site.chrom);
 
       if (prev_is_cpg) {
@@ -168,8 +184,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
       namespace fs = std::filesystem;
       cerr << "sites are not sorted in: " << filename << endl;
       const fs::path outpath{outfile};
-      if (fs::exists(outpath))
-        fs::remove(outpath);
+      if (fs::exists(outpath)) fs::remove(outpath);
       return EXIT_FAILURE;
     }
   }

@@ -81,7 +81,7 @@ main_covered(int argc, const char **argv) {
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description,
-                           "<methcounts-file> (\"-\" for standard input)", 1);
+                           "<counts-file> (\"-\" for standard input)", 1);
     opt_parse.add_opt("output", 'o', "output file (default is standard out)",
                       false, outfile);
     opt_parse.add_opt("threads", 't', "threads for compression (use few)",

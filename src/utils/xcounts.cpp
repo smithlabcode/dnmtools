@@ -71,8 +71,6 @@ fill_output_buffer(const uint32_t offset, const MSite &s, T &buf) {
   *res.ptr++ = '\t';
   res = to_chars(res.ptr, buf_end, s.n_unmeth());
   *res.ptr++ = '\n';
-  *res.ptr = '\0';
-  // if (res.ec != std::errc()) res.ptr = buf.data();
   return std::distance(buf.data(), res.ptr);
 }
 
@@ -136,11 +134,7 @@ main_xcounts(int argc, const char **argv) {
     const int ret = ks_resize(&line, 1024);
     if (ret) throw runtime_error("failed to acquire buffer");
 
-    vector<char> buf(1024);
-
-    // MAKE A HEADER IN THE COMPRESSED COUNTS FILE THAT IDENTIFIES THE
-    // GENOME WITH CHROMOSOME NAMES AND A HASH FOR EACH CHROMOSOME
-    // INCLUDING THE NUMBER OF SITES OF EACH TYPE.
+    vector<char> buf(128);
 
     uint32_t offset = 0;
     string prev_chrom;
@@ -159,7 +153,6 @@ main_xcounts(int argc, const char **argv) {
       if (!status_ok) break;
 
       if (site.chrom != prev_chrom) {
-        cerr << site.chrom << endl;
         prev_chrom = site.chrom;
         offset = 0;
 

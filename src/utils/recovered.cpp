@@ -67,6 +67,7 @@ verify_chrom_orders(const bool verbose, const uint32_t n_threads,
   int32_t prev_idx = -1;
 
   while (getline(in, line)) {
+    if (line[0] == '#') continue;
     line.resize(line.find_first_of(" \t"));
     if (line != prev_chrom) {
       if (verbose) cerr << "verifying: " << line << endl;
@@ -273,8 +274,11 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   // ADS: this is probably a poor strategy since we already would know
   // the index of the chrom sequence in the vector.
   chrom_itr_t chrom_itr;
+  string line;
 
-  while (read_site(in, site)) {
+  while (getline(in, line)) {
+    if (line[0] == '#') continue;
+    site.initialize(line.data(), line.data() + size(line));
     if (site.chrom != chrom_name) {
 
       if (pos != num_lim<uint64_t>::max())

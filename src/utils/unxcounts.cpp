@@ -22,6 +22,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
+#include <charconv>
 #include <bamxx.hpp>
 
 // from smithlab_cpp
@@ -43,10 +44,37 @@ using std::unordered_set;
 using std::pair;
 using std::numeric_limits;
 using std::runtime_error;
+using std::from_chars;
+using std::to_chars;
+using std::cbegin;
+using std::cend;
+using std::copy;
+using std::copy_n;
 
 using bamxx::bgzf_file;
 
 template<typename T> using num_lim = std::numeric_limits<T>;
+
+
+inline auto
+getline(bgzf_file &file, kstring_t &line) -> bgzf_file & {
+  if (file.f == nullptr) return file;
+  const int x = bgzf_getline(file.f, '\n', &line);
+  if (x == -1) {
+    file.destroy();
+    free(line.s);
+    line = {0, 0, nullptr};
+  }
+  if (x < -1) {
+    // ADS: this is an error condition and should be handled
+    // differently from the EOF above.
+    file.destroy();
+    free(line.s);
+    line = {0, 0, nullptr};
+  }
+  return file;
+}
+
 
 static void
 verify_chrom_orders(const bool verbose, const uint32_t n_threads,
@@ -61,108 +89,34 @@ verify_chrom_orders(const bool verbose, const uint32_t n_threads,
     tp.set_io(in);
 
   unordered_set<int32_t> chroms_seen;
-  string line;
-  string prev_chrom;
-
   int32_t prev_idx = -1;
 
+  kstring_t line{0, 0, nullptr};
+  const int ret = ks_resize(&line, 1024);
+  if (ret) throw runtime_error("failed to acquire buffer");
+
   while (getline(in, line)) {
-    if (line[0] == '#') continue;
-    if (line.find_first_of(" \t") != string::npos) continue;
-    if (line != prev_chrom) {
-      if (verbose) cerr << "verifying: " << line << endl;
+    if (line.s[0] == '#') continue;
+    if (std::isdigit(line.s[0])) continue;
 
-      const auto idx_itr = chroms_order.find(line);
-      if (idx_itr == cend(chroms_order))
-        throw runtime_error("chrom not found genome file: " + line);
-      const auto idx = idx_itr->second;
+    string chrom{line.s};
+    if (verbose) cerr << "verifying: " << chrom << endl;
 
-      if (chroms_seen.find(idx) != end(chroms_seen))
-        throw runtime_error("chroms out of order in: " + filename);
-      chroms_seen.insert(idx);
+    const auto idx_itr = chroms_order.find(chrom);
+    if (idx_itr == cend(chroms_order))
+      throw runtime_error("chrom not found genome file: " + chrom);
+    const auto idx = idx_itr->second;
 
-      if (idx < prev_idx)
-        throw runtime_error("inconsistent chromosome order at: " + line);
+    if (chroms_seen.find(idx) != end(chroms_seen))
+      throw runtime_error("chroms out of order in: " + filename);
+    chroms_seen.insert(idx);
 
-      prev_idx = idx;
-      std::swap(line, prev_chrom);
-    }
+    if (idx < prev_idx)
+      throw runtime_error("inconsistent chromosome order at: " + chrom);
+
+    prev_idx = idx;
   }
   if (verbose) cerr << "chrom orders are consistent" << endl;
-}
-
-struct quick_buf : public std::ostringstream,
-                   public std::basic_stringbuf<char> {
-  // ADS: By user ecatmur on SO; very fast. Seems to work...
-  quick_buf() {
-    // ...but this seems to depend on data layout
-    static_cast<std::basic_ios<char>&>(*this).rdbuf(this);
-  }
-  void clear() {
-    // reset buffer pointers (member functions)
-    setp(pbase(), pbase());
-  }
-  char const* c_str() {
-    /* between c_str and insertion make sure to clear() */
-    *pptr() = '\0';
-    return pbase();
-  }
-};
-
-
-/* The three functions below here should probably be moved into
-   bsutils.hpp. I am not sure if the DDG function is needed, but it
-   seems like if one considers strand, and the CHH is not symmetric,
-   then one needs this. Also, Qiang should be consulted on this
-   because he spent much time thinking about it in the context of
-   plants. */
-static inline bool
-is_chh(const std::string &s, size_t i) {
-  return (i < (s.length() - 2)) &&
-    is_cytosine(s[i]) &&
-    !is_guanine(s[i + 1]) &&
-    !is_guanine(s[i + 2]);
-}
-
-
-static inline bool
-is_ddg(const std::string &s, size_t i) {
-  return (i < (s.length() - 2)) &&
-    !is_cytosine(s[i]) &&
-    !is_cytosine(s[i + 1]) &&
-    is_guanine(s[i + 2]);
-}
-
-
-static inline bool
-is_c_at_g(const std::string &s, size_t i) {
-  return (i < (s.length() - 2)) &&
-    is_cytosine(s[i]) &&
-    !is_cytosine(s[i + 1]) &&
-    !is_guanine(s[i + 1]) &&
-    is_guanine(s[i + 2]);
-}
-
-/* The "tag" returned by this function should be exclusive, so that
- * the order of checking conditions doesn't matter. There is also a
- * bit of a hack in that the unsigned "pos" could wrap, but this still
- * works as long as the chromosome size is not the maximum size of a
- * size_t.
- */
-static inline uint32_t
-get_tag_from_genome_c(const string &s, const size_t pos) {
-  if (is_cpg(s, pos)) return 0;
-  else if (is_chh(s, pos)) return 1;
-  else if (is_c_at_g(s, pos)) return 2;
-  return 3;
-}
-
-static inline uint32_t
-get_tag_from_genome_g(const string &s, const size_t pos) {
-  if (is_cpg(s, pos - 1)) return 0;
-  else if (is_ddg(s, pos - 2)) return 1;
-  else if (is_c_at_g(s, pos - 2)) return 2;
-  return 3;
 }
 
 static const char *tag_values[] = {
@@ -173,57 +127,129 @@ static const char *tag_values[] = {
   "N"    // 4
 };
 
-static void
+static const int tag_sizes[] = {3, 3, 3, 3, 1};
+
+// ADS: the values below allow for things like CHH where the is a N in
+// the triplet; I'm allowing that for consistency with the weird logic
+// from earlier versions.
+const uint32_t context_codes[] = {
+  /*CAA CHH*/   1,
+  /*CAC CHH*/   1,
+  /*CAG CXG*/   2,
+  /*CAT CHH*/   1,
+  /*CAN ---*/   1, //4,
+  /*CCA CHH*/   1,
+  /*CCC CHH*/   1,
+  /*CCG CCG*/   3,
+  /*CCT CHH*/   1,
+  /*CCN ---*/   1, //4,
+  /*CGA CpG*/   0,
+  /*CGC CpG*/   0,
+  /*CGG CpG*/   0,
+  /*CGT CpG*/   0,
+  /*CGN CpG*/   0,
+  /*CTA CHH*/   1,
+  /*CTC CHH*/   1,
+  /*CTG CXG*/   2,
+  /*CTT CHH*/   1,
+  /*CTN ---*/   1, //4,
+  /*CNA ---*/   1, //4,
+  /*CNC ---*/   1, //4,
+  /*CNG ---*/   2,
+  /*CNT ---*/   1, //4,
+  /*CNN ---*/   1  //4
+};
+
+static inline uint32_t
+get_tag_from_genome_c(const string &s, const size_t pos) {
+  const auto val = base2int(s[pos + 1])*5 + base2int(s[pos + 2]);
+  return context_codes[val];
+}
+
+static inline uint32_t
+get_tag_from_genome_g(const string &s, const size_t pos) {
+  const auto val = base2int(complement(s[pos - 1]))*5 +
+    base2int(complement(s[pos - 2]));
+  return context_codes[val];
+}
+
+static bool
 write_missing_sites(const string &name, const string &chrom,
-                const uint64_t start_pos, const uint64_t end_pos,
-                bgzf_file &out) {
-  const string name_tab = name + "\t";
-  quick_buf buf;
+                    const uint64_t start_pos, const uint64_t end_pos,
+                    vector<char> &buf, bgzf_file &out) {
+  static constexpr auto zeros = "\t0\t0\n";
+  static constexpr auto pos_strand = "\t+\t";
+  static constexpr auto neg_strand = "\t-\t";
+  const auto buf_end = buf.data() + size(buf);
+  // chrom name is already in the buffer so move past it
+  auto cursor = buf.data() + size(name) + 1;
   for (auto pos = start_pos; pos < end_pos; ++pos) {
     const char base = chrom[pos];
     if (is_cytosine(base) || is_guanine(base)) {
       const bool is_c = is_cytosine(base);
       const uint32_t the_tag = is_c ? get_tag_from_genome_c(chrom, pos)
                                     : get_tag_from_genome_g(chrom, pos);
-      buf.clear();
-      buf << name_tab << pos
-          << (is_c ? "\t+\t" : "\t-\t")
-          << tag_values[the_tag]
-          << "\t0\t0\n";
-      if (!out.write(buf.c_str(), buf.tellp()))
-        throw dnmt_error("error writing output");
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wstringop-overflow=0"
+      auto [ptr, ec] = to_chars(cursor, buf_end, pos);
+      ptr = copy_n(is_c ? pos_strand : neg_strand, 3, ptr);
+      ptr = copy_n(tag_values[the_tag], tag_sizes[the_tag], ptr);
+      ptr = copy_n(zeros, 5, ptr);
+      const auto sz = std::distance(buf.data(), ptr);
+#pragma GCC diagnostic push
+
+      if (bgzf_write(out.f, buf.data(), sz) != sz)
+        return false;
     }
   }
+  return true;
 }
 
 
-static void
+static bool
 write_site(const string &name, const string &chrom,
            const uint32_t pos, const uint32_t n_meth,
-           const uint32_t n_unmeth, bgzf_file &out) {
+           const uint32_t n_unmeth, vector<char> &buf, bgzf_file &out) {
+  static constexpr auto pos_strand = "\t+\t";
+  static constexpr auto neg_strand = "\t-\t";
+  static constexpr auto fmt = std::chars_format::general;
+
+  const auto buf_end = buf.data() + size(buf);
   const char base = chrom[pos];
   assert(is_cytosine(base) || is_guanine(base));
   const bool is_c = is_cytosine(base);
   const uint32_t the_tag = is_c ? get_tag_from_genome_c(chrom, pos)
                                 : get_tag_from_genome_g(chrom, pos);
   const auto n_reads = n_meth + n_unmeth;
-  quick_buf buf;
-  buf << name << '\t' << pos
-      << (is_c ? "\t+\t" : "\t-\t")
-      << tag_values[the_tag] << '\t'
-      << static_cast<double>(n_meth)/std::max(n_reads, 1u) << '\t'
-      << n_reads << '\n';
-  if (!out.write(buf.c_str(), buf.tellp()))
-    throw dnmt_error("error writing output");
-}
+  const auto meth = static_cast<double>(n_meth)/std::max(n_reads, 1u);
 
-// static void
-// write_current_site(const MSite &site, bgzf_file &out) {
-//   quick_buf buf; // keep underlying buffer space?
-//   buf << site << '\n';
-//   if (!out.write(buf.c_str(), buf.tellp()))
-//     throw dnmt_error("error writing site: " + site.tostring());
-// }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wstringop-overflow=0"
+  // chrom name is already in the buffer so move past it
+  auto cursor = buf.data() + size(name) + 1;
+  {
+  auto [ptr, ec] = to_chars(cursor, buf_end, pos);
+  cursor = ptr;
+  }
+  cursor = copy_n(is_c ? pos_strand : neg_strand, 3, cursor);
+  cursor = copy_n(tag_values[the_tag], tag_sizes[the_tag], cursor);
+  *cursor++ = '\t';
+  {
+  // use default precision, 6, same as cout default
+  auto [ptr, ec] = to_chars(cursor, buf_end, meth, fmt, 6);
+  cursor = ptr;
+  }
+  *cursor++ = '\t';
+  {
+  auto [ptr, ec] = to_chars(cursor, buf_end, n_reads);
+  cursor = ptr;
+  }
+  *cursor++ = '\n';
+#pragma GCC diagnostic push
+
+  const auto sz = std::distance(buf.data(), cursor);
+  return bgzf_write(out.f, buf.data(), sz) == sz;
+}
 
 typedef vector<string>::const_iterator chrom_itr_t;
 
@@ -287,8 +313,12 @@ process_sites(const bool verbose, const bool add_missing_chroms,
     tp.set_io(out);
   }
 
-  string line;
-  MSite site;
+  vector<char> buf(1024, '\0');
+
+  kstring_t line{0, 0, nullptr};
+  const int ret = ks_resize(&line, 1024);
+  if (ret) throw runtime_error("failed to acquire buffer");
+
   string chrom_name;
   int32_t prev_chrom_idx = -1;
   uint64_t pos = num_lim<uint64_t>::max();
@@ -298,60 +328,64 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   chrom_itr_t chrom_itr;
 
   while (getline(in, line)) {
-    if (line[0] == '#') {
-      line += '\n';
-      out.write(line);
+    if (line.s[0] == '#') {
+      line.s[line.l++] = '\n';
+      if (bgzf_write(out.f, line.s, line.l) != static_cast<int64_t>(line.l))
+        throw runtime_error("failed to convert");
       continue;
     }
 
-    if (line.find_first_of(" \t") == string::npos) {
+    if (!std::isdigit(line.s[0])) {
 
       if (pos != num_lim<uint64_t>::max())
-        write_missing_sites(chrom_name, *chrom_itr, pos, size(*chrom_itr), out);
+        write_missing_sites(chrom_name, *chrom_itr, pos + 1, size(*chrom_itr), buf, out);
 
-      const int32_t chrom_idx = get_chrom_idx(name_to_idx, line);
+      chrom_name = string{line.s};
+      const int32_t chrom_idx = get_chrom_idx(name_to_idx, chrom_name);
 
       if (add_missing_chroms)
         for (auto i = prev_chrom_idx + 1; i < chrom_idx; ++i) {
+          auto res = copy(cbegin(names[i]), cend(names[i]), buf.data());
+          *res = '\t';
           if (verbose)
             cerr << "processing: " << names[i] << " (missing)" << endl;
-          write_missing_sites(names[i], chroms[i], 0u, size(chroms[i]), out);
+          write_missing_sites(names[i], chroms[i], 0u, size(chroms[i]), buf, out);
         }
 
-      chrom_name = line;
       chrom_itr = get_chrom(chrom_lookup, chrom_name);
       pos = 0;
       prev_chrom_idx = chrom_idx;
       if (verbose)
         cerr << "processing: " << chrom_name << endl;
-      site.chrom = chrom_name;
+
+      auto res = copy(cbegin(chrom_name), cend(chrom_name), buf.data());
+      *res = '\t';
     }
     else {
-
-      uint32_t pos_step = 0;
-      uint32_t n_meth = 0;
-      uint32_t n_unmeth = 0;
-
-      std::istringstream iss(line);
-      if (!(iss >> pos_step >> n_meth >> n_unmeth))
-        throw dnmt_error("invalid line: " + line);
+      uint32_t pos_step = 0, n_meth = 0, n_unmeth = 0;
+      const auto end_line = line.s + line.l;
+      auto res = from_chars(line.s, end_line, pos_step);
+      res = from_chars(res.ptr + 1, end_line, n_meth);
+      res = from_chars(res.ptr + 1, end_line, n_unmeth);
 
       const auto curr_pos = pos + pos_step;
       if (pos + 1 < curr_pos)
-        write_missing_sites(chrom_name, *chrom_itr, pos + 1, curr_pos, out);
+        write_missing_sites(chrom_name, *chrom_itr, pos + 1, curr_pos, buf, out);
 
-      write_site(chrom_name, *chrom_itr, curr_pos, n_meth, n_unmeth, out);
+      write_site(chrom_name, *chrom_itr, curr_pos, n_meth, n_unmeth, buf, out);
       pos = curr_pos;
     }
   }
-  write_missing_sites(chrom_name, *chrom_itr, pos, size(*chrom_itr), out);
+  write_missing_sites(chrom_name, *chrom_itr, pos + 1, size(*chrom_itr), buf, out);
 
   if (add_missing_chroms) {
     const int32_t chrom_idx = size(chroms);
     for (auto i = prev_chrom_idx + 1; i < chrom_idx; ++i) {
+      auto res = copy(cbegin(names[i]), cend(names[i]), buf.data());
+      *res = '\t';
       if (verbose)
         cerr << "processing: " << names[i] << " (missing)" << endl;
-      write_missing_sites(names[i], chroms[i], 0u, size(chroms[i]), out);
+      write_missing_sites(names[i], chroms[i], 0u, size(chroms[i]), buf, out);
     }
   }
 }
@@ -369,7 +403,7 @@ main_unxcounts(int argc, const char **argv) {
     string outfile;
     string chroms_file;
     const string description =
-      "add sites that are missing as non-covered sites";
+      "convert compressed counts format back to full counts";
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description,

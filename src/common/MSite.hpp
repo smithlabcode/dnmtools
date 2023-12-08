@@ -35,6 +35,9 @@ struct MSite {
     chrom(_chrom), pos(_pos), strand(_strand),
     context(_context), meth(_meth), n_reads(_n_reads) {}
   explicit MSite(const std::string &line);
+  explicit MSite(const char *line, const int n);
+
+  bool initialize(const char *c, const char *c_end);
 
   std::string chrom;
   size_t pos;

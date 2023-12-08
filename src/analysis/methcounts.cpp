@@ -48,6 +48,8 @@ using std::unordered_set;
 using std::unordered_map;
 
 using bamxx::bam_rec;
+using bamxx::bam_header;
+using bamxx::bgzf_file;
 
 struct quick_buf : public std::ostringstream,
                    public std::basic_stringbuf<char> {
@@ -218,7 +220,7 @@ tag_with_mut(const uint32_t tag, const bool mut) {
 
 template <const bool require_covered = false>
 static void
-write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
+write_output(const bam_header &hdr, bgzf_file &out,
              const int32_t tid, const string &chrom,
              const vector<CountSet> &counts, bool CPG_ONLY) {
 
@@ -322,7 +324,7 @@ count_states_neg(const bam_rec &aln, vector<CountSet> &counts) {
 
 
 static unordered_map<int32_t, size_t>
-get_tid_to_idx(const bamxx::bam_header &hdr,
+get_tid_to_idx(const bam_header &hdr,
                const unordered_map<string, size_t> name_to_idx) {
   unordered_map<int32_t, size_t> tid_to_idx;
   for (int32_t i = 0; i < hdr.h->n_targets; ++i) {
@@ -342,15 +344,15 @@ template <class CS>
 static void
 output_skipped_chromosome(const bool CPG_ONLY, const int32_t tid,
                           const unordered_map<int32_t, size_t> &tid_to_idx,
-                          const bamxx::bam_header &hdr,
+                          const bam_header &hdr,
                           const vector<string>::const_iterator chroms_beg,
                           const vector<size_t> &chrom_sizes,
-                          vector<CS> &counts, bamxx::bgzf_file &out) {
+                          vector<CS> &counts, bgzf_file &out) {
 
   // get the index of the next chrom sequence
   const auto chrom_idx = tid_to_idx.find(tid);
   if (chrom_idx == cend(tid_to_idx))
-    throw dnmt_error("chrom not found: " + string(sam_hdr_tid2name(hdr, tid)));
+    throw dnmt_error("chrom not found: " + sam_hdr_tid2name(hdr, tid));
 
   const auto chrom_itr = chroms_beg + chrom_idx->second;
 
@@ -363,15 +365,15 @@ output_skipped_chromosome(const bool CPG_ONLY, const int32_t tid,
 
 
 static bool
-consistent_targets(const bamxx::bam_header &hdr,
+consistent_targets(const bam_header &hdr,
                    const unordered_map<int32_t, size_t> &tid_to_idx,
                    const vector<string> &names, const vector<size_t> &sizes) {
   const size_t n_targets = hdr.h->n_targets;
   if (n_targets != names.size()) return false;
 
   for (size_t tid = 0; tid < n_targets; ++tid) {
-    const string tid_name_sam = sam_hdr_tid2name(hdr.h, tid);
-    const size_t tid_size_sam = sam_hdr_tid2len(hdr.h, tid);
+    const string tid_name_sam = sam_hdr_tid2name(hdr, tid);
+    const size_t tid_size_sam = sam_hdr_tid2len(hdr, tid);
     const auto idx_itr = tid_to_idx.find(tid);
     if (idx_itr == cend(tid_to_idx)) return false;
     const auto idx = idx_itr->second;
@@ -380,13 +382,24 @@ consistent_targets(const bamxx::bam_header &hdr,
   return true;
 }
 
-
-template<const bool require_covered = false>
 static void
+write_header(const bam_header &hdr, bgzf_file &out) {
+  for (auto i = 0; i < hdr.h->n_targets; ++i) {
+    const size_t tid_size = sam_hdr_tid2len(hdr, i);
+    const string tid_name = sam_hdr_tid2name(hdr, i);
+    std::ostringstream oss;
+    oss << "# " << tid_name << ' ' << tid_size << '\n';
+    out.write(oss.str());
+  }
+  out.write("# end_header\n");
+}
+
+template<const bool require_covered = false> static void
 process_reads(const bool VERBOSE, const bool show_progress,
-              const bool compress_output, const size_t n_threads,
-              const string &infile, const string &outfile,
-              const string &chroms_file, const bool CPG_ONLY) {
+              const bool compress_output, const bool include_header,
+              const size_t n_threads, const string &infile,
+              const string &outfile, const string &chroms_file,
+              const bool CPG_ONLY) {
   // first get the chromosome names and sequences from the FASTA file
   vector<string> chroms, names;
   read_fasta_file_short_names(chroms_file, names, chroms);
@@ -410,7 +423,7 @@ process_reads(const bool VERBOSE, const bool show_progress,
   bamxx::bam_in hts(infile);
   if (!hts) throw dnmt_error("failed to open input file");
   // load the input file's header
-  bamxx::bam_header hdr(hts);
+  bam_header hdr(hts);
   if (!hdr) throw dnmt_error("failed to read header");
 
   unordered_map<int32_t, size_t> tid_to_idx = get_tid_to_idx(hdr, name_to_idx);
@@ -420,7 +433,7 @@ process_reads(const bool VERBOSE, const bool show_progress,
 
   // open the output file
   const string output_mode = compress_output ? "w" : "wu";
-  bamxx::bgzf_file out(outfile, output_mode);
+  bgzf_file out(outfile, output_mode);
   if (!out) throw dnmt_error("error opening output file: " + outfile);
 
   // set the threads for the input file decompression
@@ -428,6 +441,9 @@ process_reads(const bool VERBOSE, const bool show_progress,
     tp.set_io(hts);
     tp.set_io(out);
   }
+
+  if (include_header)
+    write_header(hdr, out);
 
   // now iterate over the reads, switching chromosomes and writing
   // output as needed
@@ -499,6 +515,7 @@ main_counts(int argc, const char **argv) {
     bool CPG_ONLY = false;
     bool require_covered = false;
     bool compress_output = false;
+    bool include_header = false;
 
     string chroms_file;
     string outfile;
@@ -519,6 +536,8 @@ main_counts(int argc, const char **argv) {
                       false, CPG_ONLY);
     opt_parse.add_opt("require-covered", 'r', "only output covered sites",
                       false, require_covered);
+    opt_parse.add_opt("header", 'H', "add a header to identify the reference",
+                      false, include_header);
     opt_parse.add_opt("zip", 'z', "output gzip format", false, compress_output);
     opt_parse.add_opt("progress", '\0', "show progress", false, show_progress);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
@@ -559,12 +578,12 @@ main_counts(int argc, const char **argv) {
 
     if (require_covered)
       process_reads<true>(VERBOSE, show_progress, compress_output,
-                          n_threads, mapped_reads_file, outfile,
+                          include_header, n_threads, mapped_reads_file, outfile,
                           chroms_file, CPG_ONLY);
     else
-      process_reads(VERBOSE, show_progress, compress_output,
-                    n_threads, mapped_reads_file, outfile,
-                    chroms_file, CPG_ONLY);
+      process_reads(VERBOSE, show_progress, compress_output, include_header,
+                    n_threads, mapped_reads_file, outfile, chroms_file,
+                    CPG_ONLY);
   }
   catch (const std::exception &e) {
     cerr << e.what() << endl;

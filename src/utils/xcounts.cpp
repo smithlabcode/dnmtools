@@ -1,4 +1,5 @@
-/* covered: filter counts files so they only have covered sites.
+/* xcounts: reformat counts so they only give the m and u counts in a
+ * wig format
  *
  * Copyright (C) 2023 Andrew D. Smith
  *
@@ -21,17 +22,22 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <charconv>
+#include <system_error>
 
 // from smithlab_cpp
 #include "OptionParser.hpp"
 #include "smithlab_os.hpp"
 #include "smithlab_utils.hpp"
+#include "MSite.hpp"
 
 using std::cerr;
 using std::cout;
 using std::endl;
 using std::runtime_error;
 using std::string;
+using std::to_chars;
+using std::vector;
 
 using bamxx::bgzf_file;
 
@@ -54,30 +60,29 @@ getline(bgzf_file &file, kstring_t &line) -> bgzf_file & {
   return file;
 }
 
-static inline bool
-get_is_mutated(const kstring_t &line) {
-  const auto end_itr = line.s + line.l;
-  return std::find(line.s, end_itr, 'x') != end_itr;
+
+template<typename T>
+static inline uint32_t
+fill_output_buffer(const uint32_t offset, const MSite &s, T &buf) {
+  auto buf_end = buf.data() + buf.size();
+  auto res = to_chars(buf.data(), buf_end, s.pos - offset);
+  *res.ptr++ = '\t';
+  res = to_chars(res.ptr, buf_end, s.n_meth());
+  *res.ptr++ = '\t';
+  res = to_chars(res.ptr, buf_end, s.n_unmeth());
+  *res.ptr++ = '\n';
+  return std::distance(buf.data(), res.ptr);
 }
 
-static inline uint32_t
-get_n_reads(const kstring_t &line) {
-  const auto end_itr = std::make_reverse_iterator(line.s + line.l);
-  const auto beg_itr = std::make_reverse_iterator(line.s);
-  auto n_reads_pos = std::find_if(
-    end_itr, beg_itr, [](const char c) { return c == ' ' || c == '\t'; });
-  ++n_reads_pos;
-  return atoi(n_reads_pos.base());
-}
 
 int
-main_covered(int argc, const char **argv) {
+main_xcounts(int argc, const char **argv) {
   try {
     size_t n_threads = 1;
 
     string outfile{"-"};
     const string description =
-      "filter counts files so they only have covered sites";
+      "compress counts files by removing context information";
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description,
@@ -129,18 +134,41 @@ main_covered(int argc, const char **argv) {
     const int ret = ks_resize(&line, 1024);
     if (ret) throw runtime_error("failed to acquire buffer");
 
-    bool write_ok = true;
-    while (getline(in, line) && write_ok) {
-      const bool is_mutated = get_is_mutated(line);
-      const uint32_t n_reads = get_n_reads(line);
-      if (n_reads > 0u || is_mutated) {
-        line.s[line.l++] = '\n';
-        write_ok =
-          (bgzf_write(out.f, line.s, line.l) == static_cast<int64_t>(line.l));
+    vector<char> buf(128);
+
+    uint32_t offset = 0;
+    string prev_chrom;
+    bool status_ok = true;
+    int64_t sz = 0;
+
+    MSite site;
+    while (status_ok && getline(in, line)) {
+      if (line.s[0] == '#') {
+        const auto header_line = string(line.s) + "\n";
+        sz = size(header_line);
+        status_ok = bgzf_write(out.f, header_line.data(), sz) == sz;
+        continue;
+      }
+      status_ok = site.initialize(line.s, line.s + line.l);
+      if (!status_ok) break;
+
+      if (site.chrom != prev_chrom) {
+        prev_chrom = site.chrom;
+        offset = 0;
+
+        site.chrom += '\n';
+        sz = size(site.chrom);
+        status_ok = bgzf_write(out.f, site.chrom.data(), sz) == sz;
+      }
+      if (site.n_reads > 0 || site.is_mutated()) {
+        sz = fill_output_buffer(offset, site, buf);
+        status_ok = bgzf_write(out.f, buf.data(), sz) == sz;
+        offset = site.pos;
       }
     }
-    if (!write_ok) {
-      cerr << "failed writing to: " << outfile << '\n';
+    if (!status_ok) {
+      cerr << "failed converting "
+           << filename << " to " << outfile << endl;
       return EXIT_FAILURE;
     }
   }

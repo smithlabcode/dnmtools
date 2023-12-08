@@ -217,6 +217,8 @@ dnmtools_SOURCES += src/utils/fast-liftover.cpp
 dnmtools_SOURCES += src/utils/covered.cpp
 dnmtools_SOURCES += src/utils/recovered.cpp
 dnmtools_SOURCES += src/utils/kmersites.cpp
+dnmtools_SOURCES += src/utils/xcounts.cpp
+dnmtools_SOURCES += src/utils/unxcounts.cpp
 
 dnmtools_SOURCES += src/amrfinder/allelicmeth.cpp
 dnmtools_SOURCES += src/amrfinder/amrfinder.cpp

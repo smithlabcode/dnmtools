@@ -349,6 +349,7 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   while (getline(in, line)) {
     if (line.s[0] == '#') {
       string header_line{line.s};
+      if (header_line == "# end_header") continue;
       if (!verify_chrom(header_line, name_to_idx, chrom_sizes))
         throw runtime_error("failed to verify header for: " + header_line);
       line.s[line.l++] = '\n';

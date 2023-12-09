@@ -33,6 +33,8 @@
 #include "smithlab_os.hpp"
 #include "smithlab_utils.hpp"
 
+#include "counts_header.hpp"
+
 using std::cerr;
 using std::cout;
 using std::endl;
@@ -61,9 +63,8 @@ get_first_site(T &in, T &out) {
   string line;
   bool within_header = true;
   while (within_header && getline(in, line)) {
-    if (line[0] == '#') {
-      line += '\n';
-      out.write(line);
+    if (is_counts_header_line(line)) {
+      write_counts_header_line(line, out);
     }
     else {
       prev_site.initialize(line.data(), line.data() + size(line));

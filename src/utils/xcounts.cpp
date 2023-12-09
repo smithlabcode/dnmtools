@@ -202,7 +202,7 @@ main_xcounts(int argc, const char **argv) {
     int64_t sz = 0;
 
     MSite site;
-    while (status_ok && (status_ok = bool(getline(in, line)))) {
+    while (status_ok && getline(in, line)) {
       if (line.s[0] == '#') {
         if (!genome_file.empty()) continue;
         const auto header_line = string(line.s) + "\n";

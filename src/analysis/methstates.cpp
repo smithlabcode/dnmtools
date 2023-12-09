@@ -254,13 +254,16 @@ main_methstates(int argc, const char **argv) {
     bamxx::bam_header hdr(in);
     if (!hdr) throw dnmt_error("cannot read heade" + mapped_reads_file);
 
-    /* set the threads for the input file decompression */
-    if (n_threads > 1) tp.set_io(in);
-
     // open the output file
     const string output_mode = compress_output ? "w" : "wu";
     bamxx::bgzf_file out(outfile, output_mode);
     if (!out) throw dnmt_error("error opening output file: " + outfile);
+
+    /* set the threads for the input file decompression */
+    if (n_threads > 1) {
+      tp.set_io(in);
+      tp.set_io(out);
+    }
 
     vector<uint64_t> cpgs;
 

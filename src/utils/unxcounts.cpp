@@ -393,14 +393,14 @@ process_sites(const bool verbose, const bool add_missing_chroms,
       res = from_chars(res.ptr + 1, end_line, n_unmeth);
 
       const auto curr_pos = pos + pos_step;
-      if (require_covered && pos + 1 < curr_pos)
+      if (!require_covered && pos + 1 < curr_pos)
         write_missing_sites(chrom_name, *chrom_itr, pos + 1, curr_pos, buf, out);
 
       write_site(chrom_name, *chrom_itr, curr_pos, n_meth, n_unmeth, buf, out);
       pos = curr_pos;
     }
   }
-  if (require_covered)
+  if (!require_covered)
     write_missing_sites(chrom_name, *chrom_itr, pos + 1, size(*chrom_itr), buf, out);
 
   if (add_missing_chroms) {

@@ -31,6 +31,7 @@
 #include "smithlab_os.hpp"
 #include "bsutils.hpp"
 #include "dnmt_error.hpp"
+#include "counts_header.hpp"
 
 #include "MSite.hpp"
 
@@ -97,7 +98,7 @@ verify_chrom_orders(const bool verbose, const uint32_t n_threads,
   if (ret) throw runtime_error("failed to acquire buffer");
 
   while (getline(in, line)) {
-    if (line.s[0] == '#') continue;
+    if (is_counts_header_line(line.s)) continue;
     if (std::isdigit(line.s[0])) continue;
 
     string chrom{line.s};
@@ -252,7 +253,9 @@ write_site(const string &name, const string &chrom,
   return bgzf_write(out.f, buf.data(), sz) == sz;
 }
 
+
 typedef vector<string>::const_iterator chrom_itr_t;
+
 
 static chrom_itr_t
 get_chrom(const unordered_map<string, chrom_itr_t> &chrom_lookup,
@@ -262,6 +265,7 @@ get_chrom(const unordered_map<string, chrom_itr_t> &chrom_lookup,
     throw dnmt_error("chromosome not found: " + chrom_name);
   return chrom_idx->second;
 }
+
 
 static int32_t
 get_chrom_idx(const unordered_map<string, int32_t> &name_to_idx,
@@ -277,6 +281,8 @@ static bool
 verify_chrom(const string &header_line,
              const unordered_map<string, int32_t> &name_to_idx,
              vector<uint64_t> &chrom_sizes) {
+  if (is_counts_header_version_line(header_line))
+    return true;
   std::istringstream iss(header_line.substr(1));
   string name;
   uint64_t chrom_size = 0;
@@ -348,14 +354,12 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   chrom_itr_t chrom_itr;
 
   while (getline(in, line)) {
-    if (line.s[0] == '#') {
+    if (is_counts_header_line(line.s)) {
       string header_line{line.s};
-      if (!verify_chrom(header_line, name_to_idx, chrom_sizes))
+      if (size(header_line) > 1 && !verify_chrom(header_line, name_to_idx, chrom_sizes))
         throw runtime_error("failed to verify header for: " + header_line);
-      line.s[line.l++] = '\n';
-      const int64_t ret = bgzf_write(out.f, line.s, line.l);
-      if (ret != static_cast<int64_t>(line.l))
-        throw runtime_error("failed to convert: " + to_string(ret));
+      if (!write_counts_header_line(header_line, out))
+        throw runtime_error("failed to write header line: " + header_line);
       continue;
     }
 

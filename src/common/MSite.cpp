@@ -24,6 +24,7 @@
 #include <charconv>
 
 #include "smithlab_utils.hpp"
+#include "counts_header.hpp"
 
 using std::string;
 using std::runtime_error;
@@ -361,7 +362,8 @@ is_msite_file(const string &file) {
   if (!in) throw runtime_error("cannot open file: " + file);
 
   string line;
-  if (!getline(in, line)) return false;
+  while (getline(in, line) && is_counts_header_line(line))
+    ;
 
   return is_msite_line(line);
 }

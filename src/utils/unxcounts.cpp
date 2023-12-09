@@ -350,7 +350,7 @@ process_sites(const bool verbose, const bool add_missing_chroms,
     if (line.s[0] == '#') {
       string header_line{line.s};
       if (!verify_chrom(header_line, name_to_idx, chrom_sizes))
-        throw runtime_error("failed to convert");
+        throw runtime_error("failed to verify header for: " + header_line);
       line.s[line.l++] = '\n';
       if (bgzf_write(out.f, line.s, line.l) != static_cast<int64_t>(line.l))
         throw runtime_error("failed to convert");

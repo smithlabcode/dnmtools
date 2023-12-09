@@ -145,6 +145,7 @@ noinst_LIBRARIES = libdnmtools.a
 libdnmtools_a_SOURCES = \
         src/common/dnmtools_gaussinv.cpp \
         src/common/bam_record_utils.cpp \
+        src/common/counts_header.cpp \
         src/common/BetaBin.cpp \
         src/common/EmissionDistribution.cpp \
         src/common/Epiread.cpp \
@@ -163,6 +164,7 @@ libdnmtools_a_SOURCES += \
 	src/bamxx/bamxx.hpp \
         src/common/dnmtools_gaussinv.hpp \
 	src/common/bam_record_utils.hpp \
+	src/common/counts_header.hpp \
         src/common/BetaBin.hpp \
         src/common/EmissionDistribution.hpp \
         src/common/Epiread.hpp \

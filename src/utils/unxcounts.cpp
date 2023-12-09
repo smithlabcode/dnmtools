@@ -50,6 +50,7 @@ using std::cbegin;
 using std::cend;
 using std::copy;
 using std::copy_n;
+using std::to_string;
 
 using bamxx::bgzf_file;
 
@@ -349,12 +350,12 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   while (getline(in, line)) {
     if (line.s[0] == '#') {
       string header_line{line.s};
-      if (header_line == "# end_header") continue;
       if (!verify_chrom(header_line, name_to_idx, chrom_sizes))
         throw runtime_error("failed to verify header for: " + header_line);
       line.s[line.l++] = '\n';
-      if (bgzf_write(out.f, line.s, line.l) != static_cast<int64_t>(line.l))
-        throw runtime_error("failed to convert");
+      const int64_t ret = bgzf_write(out.f, line.s, line.l);
+      if (ret != static_cast<int64_t>(line.l))
+        throw runtime_error("failed to convert: " + to_string(ret));
       continue;
     }
 

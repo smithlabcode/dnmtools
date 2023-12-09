@@ -36,6 +36,7 @@
 #include "bsutils.hpp"
 #include "dnmt_error.hpp"
 #include "bam_record_utils.hpp"
+#include "counts_header.hpp"
 
 /* HTSlib */
 #include <htslib/sam.h>
@@ -382,16 +383,6 @@ consistent_targets(const bam_header &hdr,
   return true;
 }
 
-static void
-write_header(const bam_header &hdr, bgzf_file &out) {
-  for (auto i = 0; i < hdr.h->n_targets; ++i) {
-    const size_t tid_size = sam_hdr_tid2len(hdr, i);
-    const string tid_name = sam_hdr_tid2name(hdr, i);
-    std::ostringstream oss;
-    oss << "#" << tid_name << ' ' << tid_size << '\n';
-    out.write(oss.str());
-  }
-}
 
 template<const bool require_covered = false> static void
 process_reads(const bool VERBOSE, const bool show_progress,
@@ -442,7 +433,7 @@ process_reads(const bool VERBOSE, const bool show_progress,
   }
 
   if (include_header)
-    write_header(hdr, out);
+    write_counts_header_from_bam_header(hdr, out);
 
   // now iterate over the reads, switching chromosomes and writing
   // output as needed

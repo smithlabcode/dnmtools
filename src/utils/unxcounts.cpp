@@ -361,7 +361,7 @@ process_sites(const bool verbose, const bool add_missing_chroms,
 
     if (!std::isdigit(line.s[0])) {
 
-      if (pos != num_lim<uint64_t>::max())
+      if (!require_covered && pos != num_lim<uint64_t>::max())
         write_missing_sites(chrom_name, *chrom_itr, pos + 1, size(*chrom_itr), buf, out);
 
       chrom_name = string{line.s};

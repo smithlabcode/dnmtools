@@ -291,6 +291,7 @@ verify_chrom(const string &header_line,
 
 static void
 process_sites(const bool verbose, const bool add_missing_chroms,
+              const bool require_covered,
               const bool compress_output, const size_t n_threads,
               const string &infile, const string &outfile,
               const string &chroms_file) {
@@ -390,14 +391,15 @@ process_sites(const bool verbose, const bool add_missing_chroms,
       res = from_chars(res.ptr + 1, end_line, n_unmeth);
 
       const auto curr_pos = pos + pos_step;
-      if (pos + 1 < curr_pos)
+      if (require_covered && pos + 1 < curr_pos)
         write_missing_sites(chrom_name, *chrom_itr, pos + 1, curr_pos, buf, out);
 
       write_site(chrom_name, *chrom_itr, curr_pos, n_meth, n_unmeth, buf, out);
       pos = curr_pos;
     }
   }
-  write_missing_sites(chrom_name, *chrom_itr, pos + 1, size(*chrom_itr), buf, out);
+  if (require_covered)
+    write_missing_sites(chrom_name, *chrom_itr, pos + 1, size(*chrom_itr), buf, out);
 
   if (add_missing_chroms) {
     const int32_t chrom_idx = size(chroms);
@@ -418,6 +420,7 @@ main_unxcounts(int argc, const char **argv) {
 
     bool verbose = false;
     bool add_missing_chroms = false;
+    bool require_covered = false;
     bool compress_output = false;
     size_t n_threads = 1;
 
@@ -431,6 +434,8 @@ main_unxcounts(int argc, const char **argv) {
                            "<xcounts-file>");
     opt_parse.add_opt("output", 'o', "output file (required)", true, outfile);
     opt_parse.add_opt("missing", 'm', "add missing chroms", false, add_missing_chroms);
+    opt_parse.add_opt("reads", 'r', "report only sites with reads", false,
+                      require_covered);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("chrom", 'c', "reference genome file (FASTA format)",
                       true , chroms_file);
@@ -455,11 +460,20 @@ main_unxcounts(int argc, const char **argv) {
       cerr << opt_parse.help_message() << endl;
       return EXIT_SUCCESS;
     }
+    if (require_covered && add_missing_chroms) {
+      cerr << "options mutually exclusive: reads and missing" << endl;
+      return EXIT_FAILURE;
+    }
     const string filename(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    process_sites(verbose, add_missing_chroms, compress_output, n_threads,
-                  filename, outfile, chroms_file);
+    if (require_covered && add_missing_chroms) {
+      cerr << "options mutually exclusive: reads and missing" << endl;
+      return EXIT_FAILURE;
+    }
+
+    process_sites(verbose, add_missing_chroms, require_covered, compress_output,
+                  n_threads, filename, outfile, chroms_file);
   }
   catch (const std::runtime_error &e) {
     cerr << e.what() << endl;

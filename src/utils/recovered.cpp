@@ -30,6 +30,7 @@
 #include "smithlab_os.hpp"
 #include "bsutils.hpp"
 #include "dnmt_error.hpp"
+#include "counts_header.hpp"
 
 #include "MSite.hpp"
 
@@ -67,7 +68,7 @@ verify_chrom_orders(const bool verbose, const uint32_t n_threads,
   int32_t prev_idx = -1;
 
   while (getline(in, line)) {
-    if (line[0] == '#') continue;
+    if (is_counts_header_line(line)) continue;
     line.resize(line.find_first_of(" \t"));
     if (line != prev_chrom) {
       if (verbose) cerr << "verifying: " << line << endl;
@@ -277,7 +278,10 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   string line;
 
   while (getline(in, line)) {
-    if (line[0] == '#') continue;
+    if (is_counts_header_line(line)) {
+      write_counts_header_line(line, out);
+      continue;
+    }
     site.initialize(line.data(), line.data() + size(line));
     if (site.chrom != chrom_name) {
 

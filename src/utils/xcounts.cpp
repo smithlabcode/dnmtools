@@ -221,7 +221,7 @@ main_xcounts(int argc, const char **argv) {
         sz = size(site.chrom);
         status_ok = bgzf_write(out.f, site.chrom.data(), sz) == sz;
       }
-      if (site.n_reads > 0 || site.is_mutated()) {
+      if (site.n_reads > 0) {
         sz = fill_output_buffer(offset, site, buf);
         status_ok = bgzf_write(out.f, buf.data(), sz) == sz;
         offset = site.pos;

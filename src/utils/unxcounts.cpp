@@ -271,6 +271,24 @@ get_chrom_idx(const unordered_map<string, int32_t> &name_to_idx,
   return chrom_idx->second;
 }
 
+
+static bool
+verify_chrom(const string &header_line,
+             const unordered_map<string, int32_t> &name_to_idx,
+             vector<uint64_t> &chrom_sizes) {
+  std::istringstream iss(header_line.substr(1));
+  string name;
+  uint64_t chrom_size = 0;
+  if (!(iss >> name >> chrom_size))
+    return false;
+
+  const auto idx = name_to_idx.find(name);
+  if (idx == cend(name_to_idx)) return false;
+
+  return chrom_size == chrom_sizes[idx->second];
+}
+
+
 static void
 process_sites(const bool verbose, const bool add_missing_chroms,
               const bool compress_output, const size_t n_threads,
@@ -309,7 +327,7 @@ process_sites(const bool verbose, const bool add_missing_chroms,
 
   // set the threads for the input file decompression
   if (n_threads > 1) {
-    tp.set_io(in);
+    if (in.is_bgzf()) tp.set_io(in);
     tp.set_io(out);
   }
 
@@ -329,6 +347,9 @@ process_sites(const bool verbose, const bool add_missing_chroms,
 
   while (getline(in, line)) {
     if (line.s[0] == '#') {
+      string header_line{line.s};
+      if (!verify_chrom(header_line, name_to_idx, chrom_sizes))
+        throw runtime_error("failed to convert");
       line.s[line.l++] = '\n';
       if (bgzf_write(out.f, line.s, line.l) != static_cast<int64_t>(line.l))
         throw runtime_error("failed to convert");

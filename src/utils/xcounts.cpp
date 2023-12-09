@@ -19,6 +19,7 @@
 #include <bamxx.hpp>
 
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -77,34 +78,42 @@ fill_output_buffer(const uint32_t offset, const MSite &s, T &buf) {
 
 
 static void
-get_chrom_sizes(const uint32_t n_threads, const string &filename,
+get_chrom_sizes(//const uint32_t n_threads,
+                const string &filename,
                 vector<string> &chrom_names, vector<uint64_t> &chrom_sizes) {
 
-  bamxx::bam_tpool tpool(n_threads);
+  // bamxx::bam_tpool tpool(n_threads);
 
-  bgzf_file in(filename, "r");
+  std::ifstream in(filename);
+  // bgzf_file in(filename, "r");
   if (!in) throw runtime_error("could not open file: " + filename);
-  if (n_threads > 1)
-    tpool.set_io(in);
+  // if (n_threads > 1)
+  //   tpool.set_io(in);
 
   chrom_names.clear();
   chrom_sizes.clear();
 
   // use the kstring_t type to more directly use the BGZF file
-  kstring_t line{0, 0, nullptr};
-  const int ret = ks_resize(&line, 1024);
-  if (ret) throw runtime_error("failed to acquire buffer");
+  string line;
+  // kstring_t line{0, 0, nullptr};
+  // const int ret = ks_resize(&line, 1024);
+  // if (ret) throw runtime_error("failed to acquire buffer");
 
   uint64_t chrom_size = 0;
   while (getline(in, line)) {
-    if (line.s[0] == '>') {
+    // if (line.s[0] == '>') {
+    if (line[0] == '>') {
       if (!chrom_names.empty()) chrom_sizes.push_back(chrom_size);
-      chrom_names.emplace_back(line.s + 1);
+      // chrom_names.emplace_back(line.s + 1);
+      chrom_names.emplace_back(line.substr(1));
       chrom_size = 0;
     }
-    else chrom_size += line.l;
+    // else chrom_size += line.l;
+    else chrom_size += size(line);
   }
   if (!chrom_names.empty()) chrom_sizes.push_back(chrom_size);
+
+  // ks_free(&line);
 
   assert(size(chrom_names) == size(chrom_sizes));
 }
@@ -164,7 +173,8 @@ main_xcounts(int argc, const char **argv) {
     vector<string> chrom_names;
     vector<uint64_t> chrom_sizes;
     if (!genome_file.empty())
-      get_chrom_sizes(n_threads, genome_file, chrom_names, chrom_sizes);
+      get_chrom_sizes(//n_threads,
+                      genome_file, chrom_names, chrom_sizes);
 
     bamxx::bam_tpool tpool(n_threads);
 
@@ -223,6 +233,8 @@ main_xcounts(int argc, const char **argv) {
         offset = site.pos;
       }
     }
+    ks_free(&line);
+
     if (!status_ok) {
       cerr << "failed converting "
            << filename << " to " << outfile << endl;

@@ -33,6 +33,7 @@
 #include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
 #include "bsutils.hpp"
+#include "counts_header.hpp"
 
 #include "TwoStateHMM_PMD.hpp"
 #include "MSite.hpp"
@@ -240,8 +241,11 @@ get_optimized_boundary_likelihoods(const vector<string> &cpgs_file,
   static const double array_coverage_constant = 10;
 
   vector<bgzf_file*> in(cpgs_file.size());
-  for (size_t i = 0; i < cpgs_file.size(); ++i)
+  for (size_t i = 0; i < cpgs_file.size(); ++i) {
     in[i] = new bgzf_file(cpgs_file[i], "r");
+    if (has_counts_header(cpgs_file[i]))
+      skip_counts_header(*in[i]);
+  }
 
   std::map<size_t, pair<size_t, size_t> > pos_meth_tot;
   size_t n_meth = 0ul, n_reads = 0ul;
@@ -344,8 +348,11 @@ find_exact_boundaries(const vector<string> &cpgs_file,
   static const double array_coverage_constant = 10;
 
   vector<bgzf_file*> in(cpgs_file.size());
-  for (size_t i = 0; i < cpgs_file.size(); ++i)
+  for (size_t i = 0; i < cpgs_file.size(); ++i) {
     in[i] = new bgzf_file(cpgs_file[i], "r");
+    if (has_counts_header(cpgs_file[i]))
+      skip_counts_header(*in[i]);
+  }
 
   std::map<size_t, pair<size_t, size_t> > pos_meth_tot;
   size_t n_meth = 0ul, n_reads = 0ul;
@@ -653,6 +660,7 @@ shuffle_bins(const size_t rng_seed,
   sort(begin(domain_scores), end(domain_scores));
 }
 
+
 static void
 assign_p_values(const vector<double> &random_scores,
                 const vector<double> &observed_scores,
@@ -664,6 +672,7 @@ assign_p_values(const vector<double> &random_scores,
     p_values.push_back(std::distance(scr_itr, cend(random_scores)) / n_randoms);
   }
 }
+
 
 static void
 read_params_file(const bool VERBOSE,
@@ -759,6 +768,9 @@ check_if_array_data(const string &infile) {
   bgzf_file in(infile, "r");
   if (!in) throw std::runtime_error("bad file: " + infile);
 
+  if (has_counts_header(infile))
+    skip_counts_header(in);
+
   std::string line;
   getline(in, line);
   std::istringstream iss(line);
@@ -779,6 +791,10 @@ load_array_data(const size_t bin_size,
 
   bgzf_file in(cpgs_file, "r");
   if (!in) throw std::runtime_error("bad sites file: " + cpgs_file);
+
+  if (has_counts_header(cpgs_file))
+    skip_counts_header(in);
+
   string curr_chrom;
   size_t prev_pos = 0ul, curr_pos = 0ul;
   double array_meth_bin = 0.0;
@@ -872,6 +888,9 @@ load_wgbs_data(const size_t bin_size, const string &cpgs_file,
   bgzf_file in(cpgs_file, "r");
   if (!in) throw runtime_error("bad sites file: " + cpgs_file);
 
+  if (has_counts_header(cpgs_file))
+    skip_counts_header(in);
+
   // keep track of the chroms we've seen
   string curr_chrom;
   std::unordered_set<string> chroms_seen;
@@ -947,6 +966,9 @@ load_read_counts(const string &cpgs_file, const size_t bin_size,
   bgzf_file in(cpgs_file, "r");
   if (!in) throw runtime_error("bad methcounts file: " + cpgs_file);
 
+  if (has_counts_header(cpgs_file))
+    skip_counts_header(in);
+
   // keep track of where we are and what we've seen
   size_t bin_start = 0ul;
   string curr_chrom;
@@ -969,6 +991,7 @@ load_read_counts(const string &cpgs_file, const size_t bin_size,
     reads.back() += site.n_reads;
   }
 }
+
 
 static double
 good_bins_frac(const vector<size_t> &cumulative, const size_t min_bin_size,

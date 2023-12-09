@@ -388,10 +388,9 @@ write_header(const bam_header &hdr, bgzf_file &out) {
     const size_t tid_size = sam_hdr_tid2len(hdr, i);
     const string tid_name = sam_hdr_tid2name(hdr, i);
     std::ostringstream oss;
-    oss << "# " << tid_name << ' ' << tid_size << '\n';
+    oss << "#" << tid_name << ' ' << tid_size << '\n';
     out.write(oss.str());
   }
-  out.write("# end_header\n");
 }
 
 template<const bool require_covered = false> static void

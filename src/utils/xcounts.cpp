@@ -117,10 +117,9 @@ write_header(const vector<string> &chrom_names,
              const vector<uint64_t> &chrom_sizes, bgzf_file &out) {
   for (auto i = 0u; i < size(chrom_sizes); ++i) {
     const string tmp =
-      "# " + chrom_names[i] + "\t" + to_string(chrom_sizes[i]) + "\n";
+      "#" + chrom_names[i] + " " + to_string(chrom_sizes[i]) + "\n";
     out.write(tmp.c_str());
   }
-  out.write("# end_header\n");
 }
 
 int

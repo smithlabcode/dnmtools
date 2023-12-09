@@ -57,7 +57,7 @@ verify_chrom_orders(const bool verbose, const uint32_t n_threads,
 
   bamxx::bam_tpool tp(n_threads);
   // set the threads for the input file decompression
-  if (n_threads > 1)
+  if (n_threads > 1 && in.is_bgzf())
     tp.set_io(in);
 
   unordered_set<int32_t> chroms_seen;

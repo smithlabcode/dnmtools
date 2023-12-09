@@ -19,7 +19,6 @@
 #include <bamxx.hpp>
 
 #include <iostream>
-#include <fstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -78,42 +77,37 @@ fill_output_buffer(const uint32_t offset, const MSite &s, T &buf) {
 
 
 static void
-get_chrom_sizes(//const uint32_t n_threads,
+get_chrom_sizes(const uint32_t n_threads,
                 const string &filename,
                 vector<string> &chrom_names, vector<uint64_t> &chrom_sizes) {
 
-  // bamxx::bam_tpool tpool(n_threads);
+  bamxx::bam_tpool tpool(n_threads);
 
-  std::ifstream in(filename);
-  // bgzf_file in(filename, "r");
+  bgzf_file in(filename, "r");
   if (!in) throw runtime_error("could not open file: " + filename);
-  // if (n_threads > 1)
-  //   tpool.set_io(in);
+  if (n_threads > 1 && in.is_bgzf())
+    tpool.set_io(in);
 
   chrom_names.clear();
   chrom_sizes.clear();
 
   // use the kstring_t type to more directly use the BGZF file
-  string line;
-  // kstring_t line{0, 0, nullptr};
-  // const int ret = ks_resize(&line, 1024);
-  // if (ret) throw runtime_error("failed to acquire buffer");
+  kstring_t line{0, 0, nullptr};
+  const int ret = ks_resize(&line, 1024);
+  if (ret) throw runtime_error("failed to acquire buffer");
 
   uint64_t chrom_size = 0;
   while (getline(in, line)) {
-    // if (line.s[0] == '>') {
-    if (line[0] == '>') {
+    if (line.s[0] == '>') {
       if (!chrom_names.empty()) chrom_sizes.push_back(chrom_size);
-      // chrom_names.emplace_back(line.s + 1);
-      chrom_names.emplace_back(line.substr(1));
+      chrom_names.emplace_back(line.s + 1);
       chrom_size = 0;
     }
-    // else chrom_size += line.l;
-    else chrom_size += size(line);
+    else chrom_size += line.l;
   }
   if (!chrom_names.empty()) chrom_sizes.push_back(chrom_size);
 
-  // ks_free(&line);
+  ks_free(&line);
 
   assert(size(chrom_names) == size(chrom_sizes));
 }
@@ -173,22 +167,22 @@ main_xcounts(int argc, const char **argv) {
     vector<string> chrom_names;
     vector<uint64_t> chrom_sizes;
     if (!genome_file.empty())
-      get_chrom_sizes(//n_threads,
-                      genome_file, chrom_names, chrom_sizes);
+      get_chrom_sizes(n_threads, genome_file, chrom_names, chrom_sizes);
 
     bamxx::bam_tpool tpool(n_threads);
 
     bgzf_file in(filename, "r");
     if (!in) throw runtime_error("could not open file: " + filename);
 
-    const auto outfile_mode = in.compression() ? "w" : "wu";
+    const auto outfile_mode = in.is_compressed() ? "w" : "wu";
 
     bgzf_file out(outfile, outfile_mode);
     if (!out) throw runtime_error("error opening output file: " + outfile);
 
     if (n_threads > 1) {
       // ADS: something breaks when we use the thread for the input
-      tpool.set_io(in);
+      if (in.is_bgzf())
+        tpool.set_io(in);
       tpool.set_io(out);
     }
 
@@ -208,7 +202,7 @@ main_xcounts(int argc, const char **argv) {
     int64_t sz = 0;
 
     MSite site;
-    while (status_ok && getline(in, line)) {
+    while (status_ok && (status_ok = bool(getline(in, line)))) {
       if (line.s[0] == '#') {
         if (!genome_file.empty()) continue;
         const auto header_line = string(line.s) + "\n";

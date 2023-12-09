@@ -174,7 +174,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
     if (!out) throw runtime_error("error opening output file: " + outfile);
 
     if (n_threads > 1) {
-      tp.set_io(in);
+      if (in.is_bgzf()) tp.set_io(in);
       tp.set_io(out);
     }
 

@@ -197,9 +197,10 @@ process_buffer(const bool add_dup_count, rd_stats &rs_out, size_t &reads_duped,
 }
 
 static void
-uniq(const bool add_dup_count, const size_t n_threads,
-     const string &cmd, const string &infile, const string &statfile,
-     const string &histfile, const bool bam_format, const string &outfile) {
+uniq(const bool add_dup_count, const uint32_t max_buffer_size,
+     const size_t n_threads, const string &cmd, const string &infile,
+     const string &statfile, const string &histfile, const bool bam_format,
+     const string &outfile) {
   // values to tabulate stats; no real cost
   rd_stats rs_in, rs_out;
   size_t reads_duped = 0;
@@ -254,7 +255,10 @@ uniq(const bool add_dup_count, const size_t n_threads,
       if (!equivalent_chrom_and_start(buffer[0], aln))
         process_buffer(add_dup_count, rs_out, reads_duped, hist, buffer, hdr,
                        out);
-      buffer.push_back(aln);
+      if (size(buffer) < max_buffer_size || add_dup_count)
+        buffer.push_back(aln);
+      else if (!add_dup_count)
+        std::swap(buffer[uniq_random::rand() % max_buffer_size], aln);
     }
     process_buffer(add_dup_count, rs_out, reads_duped, hist, buffer, hdr, out);
   }
@@ -266,6 +270,7 @@ uniq(const bool add_dup_count, const size_t n_threads,
 int
 main_uniq(int argc, const char **argv) {
   try {
+    uint32_t max_buffer_size = std::numeric_limits<uint32_t>::max();
     bool VERBOSE = false;
 
     bool bam_format = false;
@@ -297,6 +302,8 @@ main_uniq(int argc, const char **argv) {
     opt_parse.add_opt("stdout", '\0', "write to standard output", false,
                       use_stdout);
     opt_parse.add_opt("seed", 's', "random seed", false, the_seed);
+    opt_parse.add_opt("max", 'm', "max duplicates to consider",
+                      false, max_buffer_size);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     opt_parse.set_show_defaults();
     vector<string> leftover_args;
@@ -344,7 +351,7 @@ main_uniq(int argc, const char **argv) {
            << "[command line: \"" << cmd.str() << "\"]" << endl
            << "[random number seed: " << the_seed << "]" << endl;
 
-    uniq(add_dup_count, n_threads, cmd.str(), infile, statfile,
+    uniq(add_dup_count, max_buffer_size, n_threads, cmd.str(), infile, statfile,
          histfile, bam_format, outfile);
   }
   catch (const runtime_error &e) {

@@ -1,20 +1,20 @@
-/*    dmr: computes DMRs based on HMRs and probability of differences
- *    at individual CpGs
+/* dmr: computes DMRs based on HMRs and probability of differences at
+ * individual CpGs
  *
- *    Copyright (C) 2012-2022 University of Southern California and
- *                       Andrew D. Smith
+ * Copyright (C) 2012-2023 University of Southern California and
+ *                         Andrew D. Smith
  *
- *    Authors: Andrew D. Smith
+ * Authors: Andrew D. Smith
  *
- *    This program is free software: you can redistribute it and/or modify
- *    it under the terms of the GNU General Public License as published by
- *    the Free Software Foundation, either version 3 of the License, or
- *    (at your option) any later version.
+ * This program is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
  *
- *    This program is distributed in the hope that it will be useful,
- *    but WITHOUT ANY WARRANTY; without even the implied warranty of
- *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *    GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
  */
 
 #include <string>
@@ -23,11 +23,15 @@
 #include <fstream>
 #include <algorithm>
 #include <stdexcept>
+#include <charconv>
 
 #include "OptionParser.hpp"
 #include "smithlab_utils.hpp"
 #include "smithlab_os.hpp"
 #include "GenomicRegion.hpp"
+#include "MSite.hpp"
+
+#include <bamxx.hpp>
 
 using std::string;
 using std::vector;
@@ -38,32 +42,141 @@ using std::pair;
 using std::max;
 using std::ifstream;
 using std::runtime_error;
+using std::from_chars;
+using std::find_if;
+
+using bamxx::bgzf_file;
 
 
-static void
-read_diffs_file(const bool VERBOSE, const string &diffs_file,
-                vector<GenomicRegion> &cpgs) {
+static bool
+parse_methdiff_line(const char *c, const char *c_end,
+                    string &chrom, uint32_t &pos, char &strand,
+                    string &context, double &diffscore,
+                    uint32_t &n_meth_a, uint32_t &n_unmeth_a,
+                    uint32_t &n_meth_b, uint32_t &n_unmeth_b) {
+  constexpr auto is_sep = [](const char x) { return x == ' ' || x == '\t'; };
+  constexpr auto not_sep = [](const char x) { return x != ' ' && x != '\t'; };
 
-  cpgs.clear();
+  auto field_s = c;
+  auto field_e = find_if(field_s + 1, c_end, is_sep);
+  bool failed = field_e == c_end;
 
-  std::ifstream in(diffs_file);
-  string chrom, strand, name;
-  double diffscore;
-  size_t pos, meth_a, unmeth_a, meth_b, unmeth_b;
+  // chromosome name
+  {
+    const uint32_t d = std::distance(field_s, field_e);
+    chrom = string{field_s, d};
+  }
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || field_e == c_end;
+
+  // position
+  {
+    const auto [ptr, ec] = from_chars(field_s, field_e, pos);
+    failed = failed || ec != std::errc();
+  }
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  // below because strand is 1 base wide
+  failed = failed || field_e != field_s + 1 || field_e == c_end;
+
+  // strand
+  strand = *field_s;
+  failed = failed || (strand != '-' && strand != '+');
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || field_e == c_end;
+
+  // context
+  {
+    const uint32_t d = std::distance(field_s, field_e);
+    context = string{field_s, d};
+  }
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || field_e == c_end;
+
+  // score for difference in methylation (contingency table p-value)
+  {
+#ifdef __APPLE__
+    const int ret = std::sscanf(field_s, "%lf", &diffscore);
+    failed = failed || ret < 1;
+#else
+    const auto [ptr, ec] = from_chars(field_s, field_e, diffscore);
+    failed = failed || ec != std::errc();
+#endif
+  }
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || (field_e == c_end);
+
+  // counts methylated in methylome "a"
+  {
+    const auto [ptr, ec] = from_chars(field_s, c_end, n_meth_a);
+    failed = failed || ec != std::errc();
+  }
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || field_e == c_end;
+
+  // counts unmethylated in methylome "a"
+  {
+    const auto [ptr, ec] = from_chars(field_s, c_end, n_unmeth_a);
+    failed = failed || ec != std::errc();
+  }
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+  field_e = find_if(field_s + 1, c_end, is_sep);
+  failed = failed || field_e == c_end;
+
+  // counts methylated in methylome "b"
+  {
+    const auto [ptr, ec] = from_chars(field_s, c_end, n_meth_b);
+    failed = failed || ec != std::errc();
+  }
+
+  field_s = find_if(field_e + 1, c_end, not_sep);
+
+  // counts unmethylated in methylome "a"
+  {
+    const auto [ptr, ec] = from_chars(field_s, c_end, n_unmeth_b);
+    // final field needs to fail if we haven't reached the end
+    failed = failed || ec != std::errc() || ptr != c_end;
+  }
+
+  return !failed;
+}
+
+
+static vector<MSite>
+read_diffs_file(const string &diffs_file) {
+
+  bgzf_file in(diffs_file, "r");
+  if (!in) throw runtime_error("could not open file: " + diffs_file);
+
+  string chrom, name;
+  char strand{};
+  double diffscore{};
+  uint32_t pos{}, meth_a{}, unmeth_a{}, meth_b{}, unmeth_b{};
+
+  vector<MSite> cpgs;
   string line;
   while (getline(in, line)) {
 
-    std::istringstream iss(line);
-    if (!(iss >> chrom >> pos >> strand >> name >>
-          diffscore >> meth_a >> unmeth_a >> meth_b >> unmeth_b))
+    if (!parse_methdiff_line(line.data(), line.data() + size(line),
+                             chrom, pos, strand, name, diffscore,
+                             meth_a, unmeth_a, meth_b, unmeth_b))
       throw runtime_error("bad methdiff line: " + line);
 
-    cpgs.push_back(GenomicRegion(chrom, pos, pos + 1,
-                                 name, diffscore, strand[0]));
+    cpgs.emplace_back(chrom, pos, strand, name, diffscore, 1);
   }
-  if (VERBOSE)
-    cerr << "[read " << cpgs.size()
-         << " sites from " + diffs_file << "]" << endl;
+  return cpgs;
 }
 
 static void
@@ -80,29 +193,27 @@ complement_regions(const size_t max_end, const vector<GenomicRegion> &a,
   cmpl.back().set_end(max_end);
 }
 
-
-static void
-get_chrom_ends(const vector<GenomicRegion> &r, vector<size_t> &ends) {
+static vector<size_t>
+get_chrom_ends(const vector<GenomicRegion> &r) {
+  vector<size_t> ends;
   for (size_t i = 0; i < r.size() - 1; ++i)
     if (!r[i].same_chrom(r[i+1]))
       ends.push_back(i+1);
   ends.push_back(r.size());
+  return ends;
 }
 
-
-static void
-complement_regions(const size_t max_end,
-                   const vector<GenomicRegion> &r, vector<GenomicRegion> &r_cmpl) {
-
-  vector<size_t> r_chroms;
-  get_chrom_ends(r, r_chroms);
+static vector<GenomicRegion>
+complement_regions(const size_t max_end, const vector<GenomicRegion> &r) {
+  vector<size_t> r_chroms = get_chrom_ends(r);
+  vector<GenomicRegion> r_cmpl;
   size_t t = 0;
-  for (size_t i = 0; i < r_chroms.size(); ++i) {
+  for (size_t i = 0; i < size(r_chroms); ++i) {
     complement_regions(max_end, r, t, r_chroms[i], r_cmpl);
     t = r_chroms[i];
   }
+  return r_cmpl;
 }
-
 
 static bool
 check_no_overlap(const vector<GenomicRegion> &regions) {
@@ -114,49 +225,50 @@ check_no_overlap(const vector<GenomicRegion> &regions) {
 }
 
 
-static void
+static inline MSite
+get_left_msite(const GenomicRegion &r) {
+  return {r.get_chrom(), r.get_start(), r.get_strand(), r.get_name(), 0.0, 1u};
+}
+
+
+static inline MSite
+get_right_msite(const GenomicRegion &r) {
+  return {r.get_chrom(), r.get_end(), r.get_strand(), r.get_name(), 0.0, 1u};
+}
+
+
+static vector<pair<size_t, size_t> >
 separate_sites(const vector<GenomicRegion> &dmrs,
-               const vector<GenomicRegion> &sites,
-               vector<pair<size_t, size_t> > &sep_sites) {
-  const size_t n_dmrs = dmrs.size();
-
-  for (size_t i = 0; i < n_dmrs; ++i) {
-    GenomicRegion a(dmrs[i]);
-    a.set_end(a.get_start() + 1);
-    GenomicRegion b(dmrs[i]);
-    b.set_start(b.get_end());
-    b.set_end(b.get_end() + 1);
-
-    auto a_insert = lower_bound(begin(sites), end(sites), a);
-    auto b_insert = lower_bound(begin(sites), end(sites), b);
-
-    sep_sites.push_back(std::make_pair(a_insert - begin(sites),
-                                       b_insert - begin(sites)));
+               const vector<MSite> &sites) {
+  vector<pair<size_t, size_t>> sep_sites;
+  for (const auto &dmr: dmrs) {
+    const auto a = get_left_msite(dmr);
+    const auto b = get_right_msite(dmr);
+    const auto a_insert = lower_bound(cbegin(sites), cend(sites), a);
+    const auto b_insert = lower_bound(cbegin(sites), cend(sites), b);
+    sep_sites.emplace_back(distance(cbegin(sites), a_insert),
+                           distance(cbegin(sites), b_insert));
   }
+  return sep_sites;
 }
 
 
-template <class T> bool
-starts_before(const T &a, const T &b) {
-  return (a.get_chrom() < b.get_chrom()) ||
-    (a.same_chrom(b) && a.get_start() < b.get_start());
-}
-
-template <class T> bool
-same_start(const T &a, const T &b) {
-  return a.same_chrom(b) && a.get_start() == b.get_start();
+static inline double
+pval_from_msite(const MSite &s) {
+  return s.meth; // abused as a p-value here
 }
 
 
 static void
 get_cpg_stats(const bool LOW_CUTOFF, const double sig_cutoff,
-              const vector<GenomicRegion> &cpgs,
+              const vector<MSite> &cpgs,
               const size_t start_idx, const size_t end_idx,
               size_t &total_cpgs, size_t &total_sig) {
   total_cpgs = end_idx - start_idx;
   for (size_t i = start_idx; i < end_idx; ++i) {
-    if ((LOW_CUTOFF && (cpgs[i].get_score() < sig_cutoff)) ||
-        (!LOW_CUTOFF && (cpgs[i].get_score() > 1.0 - sig_cutoff)))
+    const auto pval = pval_from_msite(cpgs[i]);
+    if ((LOW_CUTOFF && (pval < sig_cutoff)) ||
+        (!LOW_CUTOFF && (pval > 1.0 - sig_cutoff)))
       ++total_sig;
   }
 }
@@ -232,16 +344,12 @@ main_dmr(int argc, const char **argv) {
     if (VERBOSE)
       cerr << "[COMPUTING SYMMETRIC DIFFERENCE]" << endl;
 
-
     size_t max_end = 0;
-    for (size_t i = 0; i < regions_a.size(); ++i)
-      max_end = max(max_end, regions_a[i].get_end());
-    for (size_t i = 0; i < regions_b.size(); ++i)
-      max_end = max(max_end, regions_b[i].get_end());
+    for (const auto &r: regions_a) max_end = max(max_end, r.get_end());
+    for (const auto &r: regions_b) max_end = max(max_end, r.get_end());
 
-    vector<GenomicRegion> a_cmpl, b_cmpl;
-    complement_regions(max_end, regions_a, a_cmpl);
-    complement_regions(max_end, regions_b, b_cmpl);
+    const auto a_cmpl = complement_regions(max_end, regions_a);
+    const auto b_cmpl = complement_regions(max_end, regions_b);
 
     vector<GenomicRegion> dmrs_a, dmrs_b;
     genomic_region_intersection_by_base(regions_a, b_cmpl, dmrs_a);
@@ -250,15 +358,17 @@ main_dmr(int argc, const char **argv) {
     // separate the regions by chrom and by desert
     if (VERBOSE)
       cerr << "[READING CPG METH DIFFS]" << endl;
-    vector<GenomicRegion> cpgs;
-    read_diffs_file(VERBOSE, diffs_file, cpgs);
+    const auto cpgs = read_diffs_file(diffs_file);
+    if (VERBOSE)
+      cerr << "[read " << size(cpgs)
+           << " sites from " + diffs_file << "]" << endl;
+
     if (!check_sorted(cpgs))
       throw runtime_error("CpGs not sorted in: " + diffs_file);
     if (VERBOSE)
       cerr << "[TOTAL CPGS]: " << cpgs.size() << endl;
 
-    vector<pair<size_t, size_t> > sep_sites;
-    separate_sites(dmrs_a, cpgs, sep_sites);
+    auto sep_sites = separate_sites(dmrs_a, cpgs);
 
     for (size_t i = 0; i < dmrs_a.size(); ++i) {
       size_t total_cpgs = 0, total_sig = 0;
@@ -269,8 +379,7 @@ main_dmr(int argc, const char **argv) {
       dmrs_a[i].set_score(total_sig);
     }
 
-    sep_sites.clear();
-    separate_sites(dmrs_b, cpgs, sep_sites);
+    sep_sites = separate_sites(dmrs_b, cpgs);
 
     for (size_t i = 0; i < dmrs_b.size(); ++i) {
       size_t total_cpgs = 0, total_sig = 0;
@@ -282,11 +391,11 @@ main_dmr(int argc, const char **argv) {
     }
 
     std::ofstream out_a(outfile_a);
-    copy(begin(dmrs_a), end(dmrs_a),
+    copy(cbegin(dmrs_a), cend(dmrs_a),
          std::ostream_iterator<GenomicRegion>(out_a, "\n"));
 
     std::ofstream out_b(outfile_b);
-    copy(begin(dmrs_b), end(dmrs_b),
+    copy(cbegin(dmrs_b), cend(dmrs_b),
          std::ostream_iterator<GenomicRegion>(out_b, "\n"));
 
     if (VERBOSE)

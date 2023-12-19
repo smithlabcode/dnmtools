@@ -85,6 +85,7 @@ main_xcounts(int argc, const char **argv) {
     bool require_coverage = false;
     size_t n_threads = 1;
     string genome_file;
+    string header_file;
 
     string outfile{"-"};
     const string description =
@@ -99,6 +100,8 @@ main_xcounts(int argc, const char **argv) {
                       false, genome_file);
     opt_parse.add_opt("reads", 'r', "ouput only sites with reads",
                       false, require_coverage);
+    opt_parse.add_opt("header", 'h', "use this file to generate header",
+                      false, header_file);
     opt_parse.add_opt("threads", 't', "threads for compression (use few)",
                       false, n_threads);
     std::vector<string> leftover_args;
@@ -151,8 +154,10 @@ main_xcounts(int argc, const char **argv) {
       tpool.set_io(out);
     }
 
-    if (!genome_file.empty())
-      write_counts_header_from_chom_sizes(chrom_names, chrom_sizes, out);
+    if (!header_file.empty())
+      write_counts_header_from_file(header_file, out);
+    else if (!genome_file.empty())
+      write_counts_header_from_chrom_sizes(chrom_names, chrom_sizes, out);
 
     // use the kstring_t type to more directly use the BGZF file
     kstring_t line{0, 0, nullptr};

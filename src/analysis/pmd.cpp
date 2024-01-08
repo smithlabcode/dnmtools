@@ -1064,8 +1064,7 @@ binsize_selection(const size_t resolution, const size_t min_bin_sz,
     if (frac_passed < min_frac_passed)
       bin_size += resolution;
   }
-  return frac_passed <= num_lim<double>::min() ?
-    num_lim<size_t>::max() : bin_size;
+  return frac_passed < min_frac_passed ? num_lim<size_t>::max() : bin_size;
 }
 
 

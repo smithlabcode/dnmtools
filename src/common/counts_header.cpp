@@ -38,9 +38,9 @@ using std::to_string;
 using bamxx::bgzf_file;
 
 void
-write_counts_header_from_chom_sizes(const vector<string> &chrom_names,
-                                    const vector<uint64_t> &chrom_sizes,
-                                    bgzf_file &out) {
+write_counts_header_from_chrom_sizes(const vector<string> &chrom_names,
+                                     const vector<uint64_t> &chrom_sizes,
+                                     bgzf_file &out) {
   const auto version = "#DNMTOOLS " + string(VERSION) + "\n";
   out.write(version.c_str());
   for (auto i = 0u; i < size(chrom_sizes); ++i) {

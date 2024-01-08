@@ -1,5 +1,5 @@
 /* xcounts: reformat counts so they only give the m and u counts in a
- * wig format
+ * dynamic step wig format
  *
  * Copyright (C) 2023 Andrew D. Smith
  *
@@ -145,14 +145,13 @@ main_xcounts(int argc, const char **argv) {
     if (!out) throw dnmt_error("error opening output file: " + outfile);
 
     if (n_threads > 1) {
-      // ADS: something breaks when we use the thread for the input
       if (in.is_bgzf())
         tpool.set_io(in);
       tpool.set_io(out);
     }
 
     if (!genome_file.empty())
-      write_counts_header_from_chom_sizes(chrom_names, chrom_sizes, out);
+      write_counts_header_from_chrom_sizes(chrom_names, chrom_sizes, out);
 
     // use the kstring_t type to more directly use the BGZF file
     kstring_t line{0, 0, nullptr};

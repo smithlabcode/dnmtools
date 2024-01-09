@@ -1,5 +1,5 @@
 /* xcounts: reformat counts so they only give the m and u counts in a
- * wig format
+ * dynamic step wig format
  *
  * Copyright (C) 2023 Andrew D. Smith
  *
@@ -148,7 +148,6 @@ main_xcounts(int argc, const char **argv) {
     if (!out) throw dnmt_error("error opening output file: " + outfile);
 
     if (n_threads > 1) {
-      // ADS: something breaks when we use the thread for the input
       if (in.is_bgzf())
         tpool.set_io(in);
       tpool.set_io(out);

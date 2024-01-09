@@ -31,7 +31,7 @@ write_counts_header_from_chrom_sizes(const std::vector<std::string> &chrom_names
                                      bamxx::bgzf_file &out);
 
 void
-write_counts_header_from_file(const std::string &header_file, 
+write_counts_header_from_file(const std::string &header_file,
                               bamxx::bgzf_file &out);
 
 // returns -1 on failure, 0 on success

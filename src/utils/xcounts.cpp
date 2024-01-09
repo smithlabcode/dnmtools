@@ -169,17 +169,20 @@ main_xcounts(int argc, const char **argv) {
     uint32_t offset = 0;
     string prev_chrom;
     bool status_ok = true;
+    bool found_header = (!genome_file.empty() || !header_file.empty());
 
     MSite site;
     while (status_ok && getline(in, line)) {
       if (is_counts_header_line(line.s)) {
-        if (!genome_file.empty()) continue;
+        if (!genome_file.empty() || !header_file.empty()) continue;
+        found_header = true;
         const string header_line{line.s};
         write_counts_header_line(header_line, out);
         continue;
       }
+
       status_ok = site.initialize(line.s, line.s + line.l);
-      if (!status_ok) break;
+      if (!status_ok || !found_header) break;
 
       if (site.chrom != prev_chrom) {
         prev_chrom = site.chrom;
@@ -200,6 +203,10 @@ main_xcounts(int argc, const char **argv) {
     if (!status_ok) {
       cerr << "failed converting "
            << filename << " to " << outfile << endl;
+      return EXIT_FAILURE;
+    }
+    if (!found_header) {
+      cerr << "no header provided or found" << endl;
       return EXIT_FAILURE;
     }
   }

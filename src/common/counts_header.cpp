@@ -18,6 +18,8 @@
 
 #include "counts_header.hpp"
 
+#include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <cassert>
@@ -30,6 +32,7 @@
 #include <config.h>
 
 #include "bamxx.hpp"
+#include "dnmt_error.hpp"
 
 using std::vector;
 using std::string;
@@ -49,6 +52,20 @@ write_counts_header_from_chrom_sizes(const vector<string> &chrom_names,
     out.write(tmp.c_str());
   }
   out.write("#\n");
+}
+
+
+void
+write_counts_header_from_file(const string &header_file, bgzf_file &out) {
+  std::ifstream in(header_file);
+  if (!in.is_open()) {
+      throw dnmt_error("failed to open header file: " + header_file);
+  }
+  string line;
+  while(getline(in, line)) {
+    out.write(line + '\n');
+  }
+  in.close();
 }
 
 

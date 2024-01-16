@@ -330,7 +330,9 @@ process_chrom(const bool verbose, const uint32_t n_threads,
 
   const auto n_blocks = n_threads*blocks_per_thread;
 
-  const uint64_t lim = n_cpgs - window_size + 1;
+  const uint64_t lim = (n_cpgs >= window_size) ? 
+                       n_cpgs - window_size + 1 : 0;
+                                                    ;
   const auto blocks = get_block_bounds(static_cast<uint64_t>(0),
                                        lim, lim/n_blocks);
 

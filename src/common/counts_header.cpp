@@ -18,6 +18,8 @@
 
 #include "counts_header.hpp"
 
+#include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <cassert>
@@ -30,6 +32,7 @@
 #include <config.h>
 
 #include "bamxx.hpp"
+#include "dnmt_error.hpp"
 
 using std::vector;
 using std::string;
@@ -38,9 +41,9 @@ using std::to_string;
 using bamxx::bgzf_file;
 
 void
-write_counts_header_from_chom_sizes(const vector<string> &chrom_names,
-                                    const vector<uint64_t> &chrom_sizes,
-                                    bgzf_file &out) {
+write_counts_header_from_chrom_sizes(const vector<string> &chrom_names,
+                                     const vector<uint64_t> &chrom_sizes,
+                                     bgzf_file &out) {
   const auto version = "#DNMTOOLS " + string(VERSION) + "\n";
   out.write(version.c_str());
   for (auto i = 0u; i < size(chrom_sizes); ++i) {
@@ -49,6 +52,20 @@ write_counts_header_from_chom_sizes(const vector<string> &chrom_names,
     out.write(tmp.c_str());
   }
   out.write("#\n");
+}
+
+
+void
+write_counts_header_from_file(const string &header_file, bgzf_file &out) {
+  std::ifstream in(header_file);
+  if (!in.is_open()) {
+      throw dnmt_error("failed to open header file: " + header_file);
+  }
+  string line;
+  while(getline(in, line)) {
+    out.write(line + '\n');
+  }
+  in.close();
 }
 
 

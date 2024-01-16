@@ -1,5 +1,5 @@
 /* xcounts: reformat counts so they only give the m and u counts in a
- * wig format
+ * dynamic step wig format
  *
  * Copyright (C) 2023 Andrew D. Smith
  *
@@ -85,6 +85,7 @@ main_xcounts(int argc, const char **argv) {
     bool require_coverage = false;
     size_t n_threads = 1;
     string genome_file;
+    string header_file;
 
     string outfile{"-"};
     const string description =
@@ -99,6 +100,8 @@ main_xcounts(int argc, const char **argv) {
                       false, genome_file);
     opt_parse.add_opt("reads", 'r', "ouput only sites with reads",
                       false, require_coverage);
+    opt_parse.add_opt("header", 'h', "use this file to generate header",
+                      false, header_file);
     opt_parse.add_opt("threads", 't', "threads for compression (use few)",
                       false, n_threads);
     std::vector<string> leftover_args;
@@ -145,14 +148,15 @@ main_xcounts(int argc, const char **argv) {
     if (!out) throw dnmt_error("error opening output file: " + outfile);
 
     if (n_threads > 1) {
-      // ADS: something breaks when we use the thread for the input
       if (in.is_bgzf())
         tpool.set_io(in);
       tpool.set_io(out);
     }
 
-    if (!genome_file.empty())
-      write_counts_header_from_chom_sizes(chrom_names, chrom_sizes, out);
+    if (!header_file.empty())
+      write_counts_header_from_file(header_file, out);
+    else if (!genome_file.empty())
+      write_counts_header_from_chrom_sizes(chrom_names, chrom_sizes, out);
 
     // use the kstring_t type to more directly use the BGZF file
     kstring_t line{0, 0, nullptr};
@@ -164,17 +168,20 @@ main_xcounts(int argc, const char **argv) {
     uint32_t offset = 0;
     string prev_chrom;
     bool status_ok = true;
+    bool found_header = (!genome_file.empty() || !header_file.empty());
 
     MSite site;
     while (status_ok && getline(in, line)) {
       if (is_counts_header_line(line.s)) {
-        if (!genome_file.empty()) continue;
+        if (!genome_file.empty() || !header_file.empty()) continue;
+        found_header = true;
         const string header_line{line.s};
         write_counts_header_line(header_line, out);
         continue;
       }
+
       status_ok = site.initialize(line.s, line.s + line.l);
-      if (!status_ok) break;
+      if (!status_ok || !found_header) break;
 
       if (site.chrom != prev_chrom) {
         prev_chrom = site.chrom;
@@ -195,6 +202,10 @@ main_xcounts(int argc, const char **argv) {
     if (!status_ok) {
       cerr << "failed converting "
            << filename << " to " << outfile << endl;
+      return EXIT_FAILURE;
+    }
+    if (!found_header) {
+      cerr << "no header provided or found" << endl;
       return EXIT_FAILURE;
     }
   }

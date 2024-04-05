@@ -59,19 +59,19 @@ struct amr_summary {
   amr_summary(const vector<GenomicRegion> &amrs) {
     amr_count = size(amrs);
     amr_total_size = accumulate(cbegin(amrs), cend(amrs), 0ul,
-                                [](const uint64_t t, const GenomicRegion &p) {
+                                [](const size_t t, const GenomicRegion &p) {
                                   return t + p.get_width();
                                 });
     amr_mean_size = static_cast<double>(amr_total_size) /
-                    std::max(amr_count, static_cast<uint64_t>(1));
+                    std::max(amr_count, static_cast<size_t>(1));
   }
 
   // amr_count is the number of identified AMRs, which are the merged
   // AMRs that are found to be significant when tested as a single
   // interval
-  uint64_t amr_count{};
+  size_t amr_count{};
   // total_amr_size is the sum of the sizes of the identified AMRs
-  uint64_t amr_total_size{};
+  size_t amr_total_size{};
   // mean_amr_size is the mean size of the identified AMRs
   double amr_mean_size{};
 
@@ -115,7 +115,7 @@ using epi_r = small_epiread;
 
 /* merges amrs within some pre-defined distance */
 static void
-merge_amrs(const uint64_t gap_limit, vector<GenomicRegion> &amrs) {
+merge_amrs(const size_t gap_limit, vector<GenomicRegion> &amrs) {
   auto j = begin(amrs);
   for (const auto &a : amrs)
     // check distance between two amrs is greater than gap limit
@@ -251,7 +251,7 @@ clip_read(const size_t start_pos, const size_t end_pos, epi_r r) {
 static vector<epi_r>
 get_current_epireads(const vector<epi_r> &epireads, const size_t max_len,
                      const size_t cpg_window, const size_t start_pos,
-                     uint64_t &read_id) {
+                     size_t &read_id) {
 
   // assert(is_sorted(cbegin(epireads), cend(epireads),
   //                  [](const epi_r &a, const epi_r &b) {
@@ -274,9 +274,9 @@ get_current_epireads(const vector<epi_r> &epireads, const size_t max_len,
   return current_epireads;
 }
 
-static inline uint64_t
+static inline size_t
 total_states(const vector<epi_r> &epireads) {
-  uint64_t tot = 0;
+  size_t tot = 0;
   for (auto &e : epireads) tot += e.length();
   return tot;
 }
@@ -290,10 +290,10 @@ add_amr(const string &chrom_name, const size_t start_cpg,
   amrs.emplace_back(chrom_name, start_cpg, end_cpg, rds, score, '+');
 }
 
-static inline uint64_t
+static inline size_t
 get_n_cpgs(const std::vector<epi_r> &reads) {
-  uint64_t n_cpgs = 0;
-  for (auto &r : reads) n_cpgs = max(n_cpgs, static_cast<uint64_t>(r.end()));
+  size_t n_cpgs = 0;
+  for (auto &r : reads) n_cpgs = max(n_cpgs, static_cast<size_t>(r.end()));
   return n_cpgs;
 }
 
@@ -330,8 +330,8 @@ process_chrom(const bool verbose, const uint32_t n_threads,
 
   const auto n_blocks = n_threads*blocks_per_thread;
 
-  const uint64_t lim = n_cpgs - window_size + 1;
-  const auto blocks = get_block_bounds(static_cast<uint64_t>(0),
+  const size_t lim = n_cpgs - window_size + 1;
+  const auto blocks = get_block_bounds(static_cast<size_t>(0),
                                        lim, lim/n_blocks);
 
   std::atomic_ulong windows_tested = 0;
@@ -341,8 +341,8 @@ process_chrom(const bool verbose, const uint32_t n_threads,
 #pragma omp parallel for
   for (const auto &b : blocks) {
     vector<GenomicRegion> curr_amrs;
-    uint64_t start_idx = 0;
-    uint64_t windows_tested_block = 0;
+    size_t start_idx = 0;
+    size_t windows_tested_block = 0;
     for (auto i = b.first; i < b.second && start_idx < size(epireads); ++i) {
       // ADS: below, we could do binary search, but this does not seem
       // to be a bottleneck
@@ -397,7 +397,7 @@ main_amrfinder(int argc, const char **argv) {
 
     uint32_t max_itr = 10;
     uint32_t window_size = 10;
-    uint64_t gap_limit = 1000;
+    size_t gap_limit = 1000;
 
     double high_prob = 0.75, low_prob = 0.25;
     uint32_t min_obs_per_cpg = 4;
@@ -482,7 +482,7 @@ main_amrfinder(int argc, const char **argv) {
     // windows_tested is the number of sliding windows in the
     // methylome that were tested for a signal of significant
     // allele-specific methylation
-    uint64_t windows_tested = 0;
+    size_t windows_tested = 0;
     epiread er;
     vector<epi_r> epireads;
     string prev_chrom, curr_chrom, tmp_states;

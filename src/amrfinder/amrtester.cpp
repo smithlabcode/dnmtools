@@ -273,7 +273,7 @@ main_amrtester(int argc, const char **argv) {
       cerr << "number of regions: " << n_regions << endl;
 
     string chrom_name;
-    vector<uint64_t> cpg_positions;
+    vector<size_t> cpg_positions;
 
     std::ofstream of;
     if (!outfile.empty()) of.open(outfile);

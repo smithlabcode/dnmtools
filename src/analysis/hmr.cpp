@@ -574,15 +574,20 @@ main_hmr(int argc, const char **argv) {
       build_domains(cpgs, reset_points, state_ids, domains);
 
     std::ofstream of;
-    if (!outfile.empty()) of.open(outfile.c_str());
+    if (!outfile.empty()) of.open(outfile);
     std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
     size_t good_hmr_count = 0;
     for (auto i = 0u; i < size(domains); ++i)
       if (p_values[i] < domain_score_cutoff) {
-        domains[i].set_name("HYPO" + to_string(good_hmr_count++));
-        out << domains[i] << '\n';
+        domains[good_hmr_count] = domains[i];
+        domains[good_hmr_count].set_name("HYPO" + to_string(good_hmr_count));
+        ++good_hmr_count;
       }
+    domains.resize(good_hmr_count);
+
+    for (const auto &d: domains)
+      out << d << '\n';
 
     if (!hypo_post_outfile.empty()) {
       if (verbose)

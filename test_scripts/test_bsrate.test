@@ -10,5 +10,6 @@ if [[ -e "${infile1}" && -e "${infile2}" ]]; then
         exit 1;
     fi
 else
-    exit 1;
+    echo "${infile1} and ${infile2} not found; skipping dependent tests";
+    exit 77;
 fi

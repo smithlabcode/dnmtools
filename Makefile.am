@@ -1,6 +1,6 @@
 # This file is part of dnmtools
 #
-# Copyright (C) 2023 Andrew D. Smith
+# Copyright (C) 2023-2024 Andrew D. Smith
 #
 # Authors: Andrew D. Smith
 #

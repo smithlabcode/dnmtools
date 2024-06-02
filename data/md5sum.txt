@@ -16,7 +16,7 @@ bcbf01be810cbf4051292813eb6b9225  tests/tRex1.idx
 ec6a686617cad31e9f7a37a3d378e6ed  tests/two_epialleles.states
 93e38b20d162062a5d147c4290095a13  tests/mlml.out
 d947fe3d61ef7b1564558a69608f0e64  tests/methylome.pmd
-7d481d31e4316e97d519838f4887b10d  tests/reads.sam
-466e2715f0c677593e84b3790efbec6e  tests/reads.fmt.sam
-5583ebe1b689159f8eb0a93f32e2fd48  tests/reads.fmt.srt.uniq.sam
 d41d8cd98f00b204e9800998ecf8427e  tests/two_epialleles.amr
+7fff91916ffd22d4a934b74acf0c01a2  tests/reads.fmt.sam
+f963e689859dcf38a26acda9a65a6431  tests/reads.sam
+091eee8aa30193dafe9116120f72cec8  tests/reads.fmt.srt.uniq.sam

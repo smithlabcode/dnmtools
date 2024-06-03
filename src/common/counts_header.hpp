@@ -52,7 +52,7 @@ bamxx::bgzf_file &
 skip_counts_header(bamxx::bgzf_file &in);
 
 bool
-has_counts_header(const std::string &filename);
+get_has_counts_header(const std::string &filename);
 
 inline bool
 is_counts_header_version_line(const std::string &line) {

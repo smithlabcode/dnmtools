@@ -243,7 +243,7 @@ get_optimized_boundary_likelihoods(const vector<string> &cpgs_file,
   vector<bgzf_file*> in(cpgs_file.size());
   for (size_t i = 0; i < cpgs_file.size(); ++i) {
     in[i] = new bgzf_file(cpgs_file[i], "r");
-    if (has_counts_header(cpgs_file[i]))
+    if (get_has_counts_header(cpgs_file[i]))
       skip_counts_header(*in[i]);
   }
 
@@ -350,7 +350,7 @@ find_exact_boundaries(const vector<string> &cpgs_file,
   vector<bgzf_file*> in(cpgs_file.size());
   for (size_t i = 0; i < cpgs_file.size(); ++i) {
     in[i] = new bgzf_file(cpgs_file[i], "r");
-    if (has_counts_header(cpgs_file[i]))
+    if (get_has_counts_header(cpgs_file[i]))
       skip_counts_header(*in[i]);
   }
 
@@ -768,7 +768,7 @@ check_if_array_data(const string &infile) {
   bgzf_file in(infile, "r");
   if (!in) throw std::runtime_error("bad file: " + infile);
 
-  if (has_counts_header(infile))
+  if (get_has_counts_header(infile))
     skip_counts_header(in);
 
   std::string line;
@@ -792,7 +792,7 @@ load_array_data(const size_t bin_size,
   bgzf_file in(cpgs_file, "r");
   if (!in) throw std::runtime_error("bad sites file: " + cpgs_file);
 
-  if (has_counts_header(cpgs_file))
+  if (get_has_counts_header(cpgs_file))
     skip_counts_header(in);
 
   string curr_chrom;
@@ -888,7 +888,7 @@ load_wgbs_data(const size_t bin_size, const string &cpgs_file,
   bgzf_file in(cpgs_file, "r");
   if (!in) throw runtime_error("bad sites file: " + cpgs_file);
 
-  if (has_counts_header(cpgs_file))
+  if (get_has_counts_header(cpgs_file))
     skip_counts_header(in);
 
   // keep track of the chroms we've seen
@@ -966,7 +966,7 @@ load_read_counts(const string &cpgs_file, const size_t bin_size,
   bgzf_file in(cpgs_file, "r");
   if (!in) throw runtime_error("bad methcounts file: " + cpgs_file);
 
-  if (has_counts_header(cpgs_file))
+  if (get_has_counts_header(cpgs_file))
     skip_counts_header(in);
 
   // keep track of where we are and what we've seen

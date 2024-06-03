@@ -171,7 +171,7 @@ write_counts_header_line(string line, bgzf_file &out) {
 }
 
 bool
-has_counts_header(const string &filename) {
+get_has_counts_header(const string &filename) {
   bgzf_file in(filename, "r");
   if (!in) return false;
   string line;

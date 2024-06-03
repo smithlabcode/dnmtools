@@ -28,6 +28,16 @@
  * General Public License for more details.
  */
 
+#include "LevelsCounter.hpp"
+#include "MSite.hpp"
+#include "OptionParser.hpp"
+#include "bsutils.hpp"
+#include "counts_header.hpp"
+#include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
+
+#include <bamxx.hpp>
+
 #include <cmath>
 #include <exception>
 #include <fstream>
@@ -36,20 +46,11 @@
 #include <string>
 #include <vector>
 
-#include <bamxx.hpp>
-#include "LevelsCounter.hpp"
-#include "MSite.hpp"
-#include "OptionParser.hpp"
-#include "bsutils.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
-
 using std::cerr;
-using std::cout;
 using std::endl;
+using std::ios_base;
 using std::runtime_error;
 using std::string;
-using std::to_string;
 using std::vector;
 
 using bamxx::bgzf_file;
@@ -58,14 +59,17 @@ enum class counts_file_format { ordinary, asym_cpg, sym_cpg };
 
 static counts_file_format
 guess_counts_file_format(const string &filename) {
-  static const size_t n_lines_to_check = 10000;
+  static const uint64_t n_lines_to_check = 10000;
 
+  const bool has_counts_header = get_has_counts_header(filename);
   bgzf_file in(filename, "r");
-  if (!in) throw std::runtime_error("bad input file: " + filename);
+  if (!in) throw ios_base::failure{"bad input file: " + filename};
+  if (has_counts_header)
+    skip_counts_header(in);
 
   bool found_non_cpg = false, found_asym_cpg = false;
   MSite curr_site, prev_site;
-  size_t line_count = 0;
+  uint64_t line_count = 0;
 
   while (read_site(in, curr_site) && (!found_non_cpg || !found_asym_cpg) &&
          line_count++ < n_lines_to_check) {
@@ -81,7 +85,7 @@ guess_counts_file_format(const string &filename) {
 int
 main_levels(int argc, const char **argv) {
   try {
-    bool VERBOSE = false;
+    bool verbose = false;
     bool relaxed_mode = false;
     string outfile;
 
@@ -97,7 +101,7 @@ main_levels(int argc, const char **argv) {
     opt_parse.add_opt("relaxed", '\0',
                       "run on data that appears to have sites filtered", false,
                       relaxed_mode);
-    opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
+    opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (opt_parse.help_requested()) {
@@ -121,22 +125,25 @@ main_levels(int argc, const char **argv) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (!is_msite_file(meth_file))
-      throw runtime_error("malformed counts file: " + meth_file);
+      throw runtime_error{"malformed counts file: " + meth_file};
 
     const counts_file_format guessed_format =
       guess_counts_file_format(meth_file);
     if (guessed_format != counts_file_format::ordinary) {
-      if (VERBOSE)
+      if (verbose)
         cerr << "input might be only CpG sites ("
              << (guessed_format == counts_file_format::asym_cpg ? "not " : "")
              << "symmetric)" << endl;
       if (!relaxed_mode)
-        throw runtime_error(
-          "unexpected input format (consider using \"-relaxed\")");
+        throw runtime_error{
+          "unexpected input format (consider using -relaxed)"};
     }
 
+    const bool has_counts_header = get_has_counts_header(meth_file);
     bgzf_file in(meth_file, "r");
     if (!in) throw std::runtime_error("bad input file: " + meth_file);
+    if (has_counts_header)
+      skip_counts_header(in);
 
     LevelsCounter cpg("cpg");
     LevelsCounter cpg_symmetric("cpg_symmetric");
@@ -149,7 +156,7 @@ main_levels(int argc, const char **argv) {
 
     while (read_site(in, site)) {
       if (site.chrom != prev_site.chrom)
-        if (VERBOSE) cerr << "processing " << site.chrom << endl;
+        if (verbose) cerr << "processing " << site.chrom << endl;
 
       cytosines.update(site);
 
@@ -160,10 +167,14 @@ main_levels(int argc, const char **argv) {
           cpg_symmetric.update(site);
         }
       }
-      else if (site.is_chh()) chh.update(site);
-      else if (site.is_ccg()) ccg.update(site);
-      else if (site.is_cxg()) cxg.update(site);
-      else throw runtime_error("bad site context: " + site.context);
+      else if (site.is_chh())
+        chh.update(site);
+      else if (site.is_ccg())
+        ccg.update(site);
+      else if (site.is_cxg())
+        cxg.update(site);
+      else
+        throw runtime_error{"bad site context: " + site.context};
 
       prev_site = site;
     }
@@ -171,16 +182,16 @@ main_levels(int argc, const char **argv) {
     std::ofstream of;
     if (!outfile.empty()) {
       of.open(outfile);
-      if (!of) throw runtime_error("bad output file: " + outfile);
+      if (!of) throw ios_base::failure{"bad output file: " + outfile};
     }
     std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
-    out << cytosines << endl
-        << cpg << endl
-        << cpg_symmetric << endl
-        << chh << endl
-        << ccg << endl
-        << cxg << endl;
+    out << cytosines << '\n'
+        << cpg << '\n'
+        << cpg_symmetric << '\n'
+        << chh << '\n'
+        << ccg << '\n'
+        << cxg << '\n';
   }
   catch (const std::exception &e) {
     cerr << e.what() << endl;

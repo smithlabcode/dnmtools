@@ -338,7 +338,7 @@ load_cpgs(const string &cpgs_file, vector<MSite> &cpgs,
   bgzf_file in(cpgs_file, "r");
   if (!in) throw runtime_error("failed opening file: " + cpgs_file);
 
-  if (has_counts_header(cpgs_file))
+  if (get_has_counts_header(cpgs_file))
     skip_counts_header(in);
 
   MSite prev_site, the_site;

@@ -61,10 +61,11 @@ static counts_file_format
 guess_counts_file_format(const string &filename) {
   static const uint64_t n_lines_to_check = 10000;
 
+  const bool has_counts_header = get_has_counts_header(filename);
   bgzf_file in(filename, "r");
   if (!in) throw ios_base::failure{"bad input file: " + filename};
-
-  skip_counts_header(in);
+  if (has_counts_header)
+    skip_counts_header(in);
 
   bool found_non_cpg = false, found_asym_cpg = false;
   MSite curr_site, prev_site;
@@ -138,10 +139,11 @@ main_levels(int argc, const char **argv) {
           "unexpected input format (consider using -relaxed)"};
     }
 
+    const bool has_counts_header = get_has_counts_header(meth_file);
     bgzf_file in(meth_file, "r");
     if (!in) throw std::runtime_error("bad input file: " + meth_file);
-
-    skip_counts_header(in);
+    if (has_counts_header)
+      skip_counts_header(in);
 
     LevelsCounter cpg("cpg");
     LevelsCounter cpg_symmetric("cpg_symmetric");

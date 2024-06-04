@@ -1143,7 +1143,7 @@ int
 main_pmd(int argc, const char **argv) {
   try {
 
-    static const size_t min_observations_for_inference = 1000;
+    static const size_t min_observations_for_inference = 100;
     static const size_t max_bin_size = 500000;
     static const size_t min_bin_size = 1000;
     size_t resolution = 500;

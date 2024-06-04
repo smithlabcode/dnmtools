@@ -577,13 +577,11 @@ build_domains(const vector<SimpleGenomicRegion> &bins,
 
 //Modified to take multiple replicates
 template <class T, class U> static void
-separate_regions(const bool VERBOSE, const size_t desert_size,
+separate_regions(const size_t desert_size,
                  vector<vector<SimpleGenomicRegion> > &bins,
-                 vector<vector<T> > &meth, vector<vector<U> > &reads,
+                 vector<vector<T> > &meth, vector<vector<U>> &reads,
                  vector<size_t> &reset_points,
                  vector<size_t> &dists_btwn_bins) {
-  if (VERBOSE)
-    cerr << "[SEPARATING BY CPG DESERT]" << endl;
   const size_t n_replicates = bins.size();
 
   // eliminate the zero-read cpg sites if no coverage in any rep
@@ -623,12 +621,8 @@ separate_regions(const bool VERBOSE, const size_t desert_size,
       reset_points.push_back(i);
     prev_cpg = bins[0][i].get_start();
   }
-  assert(reset_points.size() > 0);
+  assert(std::size(reset_points) > 0);
   reset_points.push_back(bins[0].size());
-  if (VERBOSE)
-    cerr << "BINS RETAINED: " << bins[0].size() << endl
-         << "NUMBER OF DISTANCES BETWEEN: " << dists_btwn_bins.size() << endl
-         << "DESERTS REMOVED: " << reset_points.size() - 2 << endl << endl;
 }
 
 
@@ -675,7 +669,7 @@ assign_p_values(const vector<double> &random_scores,
 
 
 static void
-read_params_file(const bool VERBOSE,
+read_params_file(const bool verbose,
                  const string &params_file,
                  double &fg_alpha,
                  double &fg_beta,
@@ -702,7 +696,7 @@ read_params_file(const bool VERBOSE,
      >> jnk >> end_trans[1]
      >> jnk >> fdr_cutoff;
 
-  if (VERBOSE)
+  if (verbose)
     cerr << "Read in params from " << params_file << endl
          << "FG_ALPHA\t" << fg_alpha << endl
          << "FG_BETA\t" << fg_beta << endl
@@ -1134,10 +1128,22 @@ add_missing_bins(const vector<SimpleGenomicRegion> &all_bins,
 }
 
 
+static void
+write_empty_summary(const string &summary_file) {
+  if (!summary_file.empty()) {
+    ofstream summary_out(summary_file);
+    if (!summary_out)
+      throw runtime_error("failed to open: " + summary_file);
+    summary_out << pmd_summary({}).tostring() << endl;
+  }
+}
+
+
 int
 main_pmd(int argc, const char **argv) {
   try {
 
+    static const size_t min_observations_for_inference = 100;
     static const size_t max_bin_size = 500000;
     static const size_t min_bin_size = 1000;
     size_t resolution = 500;
@@ -1152,7 +1158,7 @@ main_pmd(int argc, const char **argv) {
     size_t bin_size = 1000;
     size_t max_iterations = 10;
     // run mode flags
-    bool VERBOSE = false;
+    bool verbose = false;
     bool ARRAY_MODE = false;
     bool fixed_bin_size = false;
 
@@ -1187,7 +1193,7 @@ main_pmd(int argc, const char **argv) {
     opt_parse.add_opt("arraymode",'a', "All samples are array",
                       false, ARRAY_MODE);
     opt_parse.add_opt("itr", 'i', "max iterations", false, max_iterations);
-    opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
+    opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
     opt_parse.add_opt("debug", 'D', "print more run info", false, DEBUG);
     opt_parse.add_opt("params-in", 'P', "HMM parameter files for "
                       "individual methylomes (separated with comma)",
@@ -1246,7 +1252,7 @@ main_pmd(int argc, const char **argv) {
     // Sanity checks input file format and dynamically selects bin
     // size from WGBS samples.
     if (!fixed_bin_size && !ARRAY_MODE) {
-      if (VERBOSE)
+      if (verbose)
         cerr << "[DYNAMICALLY SELECTING BIN SIZE]" << endl;
       double confidence_interval = 0.80;
       double prop_accept = 0.80;
@@ -1278,18 +1284,12 @@ main_pmd(int argc, const char **argv) {
     if (insufficient_data) {
       // ADS: first check for insufficient data; another is needed if
       // fixed bin size is used
-      if (VERBOSE)
-        cerr << "EXITING: INSUFFICIENT DATA" << endl;
-      if (!summary_file.empty()) {
-        ofstream summary_out(summary_file);
-        if (!summary_out)
-          throw runtime_error("failed to open: " + summary_file);
-        summary_out << pmd_summary({}).tostring() << endl;
-      }
+      if (verbose) cerr << "EXITING: INSUFFICIENT DATA" << endl;
+      if (!summary_file.empty()) write_empty_summary(summary_file);
       return EXIT_SUCCESS;
     }
 
-    if (VERBOSE)
+    if (verbose)
       cerr << "[READING IN AT BIN SIZE " << bin_size << "]" << endl;
 
     // separate the regions by chrom and by desert
@@ -1299,7 +1299,7 @@ main_pmd(int argc, const char **argv) {
     vector<bool> array_status;
 
     for (size_t i = 0; i < n_replicates && !insufficient_data; ++i) {
-      if (VERBOSE)
+      if (verbose)
         cerr << "[READING CPGS AND METH PROPS] from " << cpgs_file[i] << endl;
 
       load_bins(bin_size, cpgs_file[i], bins[i], meth[i],
@@ -1308,7 +1308,7 @@ main_pmd(int argc, const char **argv) {
         accumulate(begin(reads[i]), end(reads[i]), 0);
       if (total_observations <= num_lim<double>::min())
         insufficient_data = true;
-      if (VERBOSE)
+      if (verbose)
         cerr << "TOTAL BINS: " << bins[i].size() << endl
              << "MEAN COVERAGE: "
              << total_observations/std::max(1ul, reads[i].size())
@@ -1316,16 +1316,10 @@ main_pmd(int argc, const char **argv) {
     }
 
     if (insufficient_data) {
-      // ADS: first check for insufficient data; another is needed if
-      // fixed bin size is used
-      if (VERBOSE)
-        cerr << "EXITING: INSUFFICIENT DATA" << endl;
-      if (!summary_file.empty()) {
-        ofstream summary_out(summary_file);
-        if (!summary_out)
-          throw runtime_error("failed to open: " + summary_file);
-        summary_out << pmd_summary({}).tostring() << endl;
-      }
+      // ADS: second check for insufficient data; another is needed if
+      // filtered number of bins is too few
+      if (verbose) cerr << "EXITING: INSUFFICIENT DATA" << endl;
+      if (!summary_file.empty()) write_empty_summary(summary_file);
       return EXIT_SUCCESS;
     }
 
@@ -1347,14 +1341,31 @@ main_pmd(int argc, const char **argv) {
     // separate regions by chrom and desert; eliminate isolated Bins
     vector<size_t> reset_points;
     vector<size_t> dists_btwn_bins;
-    separate_regions(VERBOSE, desert_size, bins, meth, reads,
+    if (verbose)
+      cerr << "[separating by CpG desert]" << endl;
+    separate_regions(desert_size, bins, meth, reads,
                      reset_points, dists_btwn_bins);
+    if (size(bins[0]) < min_observations_for_inference)
+      insufficient_data = true;
+
+    if (insufficient_data) {
+      // ADS: final check for sufficient data failed; too few bins
+      // after filtering
+      if (verbose) cerr << "EXITING: INSUFFICIENT DATA" << endl;
+      if (!summary_file.empty()) write_empty_summary(summary_file);
+      return EXIT_SUCCESS;
+    }
+
+    if (verbose)
+      cerr << "bins retained: " << std::size(bins[0]) << endl
+           << "number of distances between: " << std::size(dists_btwn_bins) << endl
+           << "deserts removed: " << size(reset_points) - 2 << endl;
 
     /****************** Read in params *****************/
     vector<double> start_trans(2, 0.5), end_trans(2, 1e-10);
     vector<vector<double> > trans(2, vector<double>(2, 0.01));
     trans[0][0] = trans[1][1] = 0.99;
-    const TwoStateHMM hmm(min_prob, tolerance, max_iterations, VERBOSE, DEBUG);
+    const TwoStateHMM hmm(min_prob, tolerance, max_iterations, verbose, DEBUG);
     vector<double> reps_fg_alpha(n_replicates, 0.05);
     vector<double> reps_fg_beta(n_replicates, 0.95);
     vector<double> reps_bg_alpha(n_replicates, 0.95);
@@ -1363,8 +1374,8 @@ main_pmd(int argc, const char **argv) {
 
     if (!params_in_file.empty()) {
       // read parameters files
-      for (size_t i= 0; i< n_replicates; ++i)
-        read_params_file(VERBOSE, params_in_file[i], reps_fg_alpha[i],
+      for (size_t i= 0; i < n_replicates; ++i)
+        read_params_file(verbose, params_in_file[i], reps_fg_alpha[i],
                          reps_fg_beta[i], reps_bg_alpha[i], reps_bg_beta[i],
                          start_trans, trans, end_trans, score_cutoff_for_fdr);
     }
@@ -1416,7 +1427,7 @@ main_pmd(int argc, const char **argv) {
     vector<double> domain_scores;
     get_domain_scores(classes, meth, reset_points, domain_scores);
 
-    if (VERBOSE)
+    if (verbose)
       cerr << "[RANDOMIZING SCORES FOR FDR]" << endl;
 
     vector<double> random_scores;

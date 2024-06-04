@@ -82,10 +82,11 @@ static void
 verify_chrom_orders(const bool verbose, const uint32_t n_threads,
                     const string &filename,
                     const unordered_map<string, int32_t> &chroms_order) {
+  bamxx::bam_tpool tp(n_threads);
+
   bgzf_file in(filename, "r");
   if (!in) throw runtime_error("bad file: " + filename);
 
-  bamxx::bam_tpool tp(n_threads);
   // set the threads for the input file decompression
   if (n_threads > 1 && in.is_bgzf())
     tp.set_io(in);
@@ -98,8 +99,8 @@ verify_chrom_orders(const bool verbose, const uint32_t n_threads,
   if (ret) throw runtime_error("failed to acquire buffer");
 
   while (getline(in, line)) {
-    if (is_counts_header_line(line.s)) continue;
     if (std::isdigit(line.s[0])) continue;
+    if (is_counts_header_line(line.s)) continue;
 
     string chrom{line.s};
     if (verbose) cerr << "verifying: " << chrom << endl;

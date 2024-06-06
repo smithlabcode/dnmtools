@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+infile1=tests/reads.counts
+infile2=tests/tRex1.fa
+outfile=tests/reads.xcounts
+if [[ -e "${infile1}" && -e "${infile2}" ]]; then
+    ./dnmtools xcounts -c ${infile2} -o ${outfile} ${infile}
+    x=$(md5sum -c tests/md5sum.txt | grep "${outfile}:" | cut -d ' ' -f 2)
+    if [[ "${x}" != "OK" ]]; then
+        exit 1;
+    fi
+else
+    echo "xcounts input file(s) not found; skipping test";
+    exit 77;
+fi

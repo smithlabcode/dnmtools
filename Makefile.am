@@ -99,6 +99,8 @@ EXTRA_DIST = \
              test_scripts/test_amrfinder.test \
              test_scripts/test_hypermr.test \
              test_scripts/test_diff.test \
+             test_scripts/test_xcounts.test \
+             test_scripts/test_unxcounts.test \
              test_scripts/test_mlml.test
 
 ### ADS: Testing with `make check` can be a long process. Testing with
@@ -126,6 +128,8 @@ TESTS = test_scripts/test_abismalidx.test \
         test_scripts/test_amrfinder.test \
         test_scripts/test_hypermr.test \
         test_scripts/test_diff.test \
+        test_scripts/test_xcounts.test \
+        test_scripts/test_unxcounts.test \
         test_scripts/test_mlml.test
 
 TEST_EXTENSIONS = .test
@@ -141,6 +145,8 @@ test_scripts/test_selectsites.log: test_scripts/test_counts.log
 test_scripts/test_sym.log: test_scripts/test_counts.log
 test_scripts/test_hmr.log: test_scripts/test_sym.log
 test_scripts/test_roi.log: test_scripts/test_sym.log
+test_scripts/test_xcounts.log: test_scripts/test_counts.log
+test_scripts/test_unxcounts.log: test_scripts/test_xcounts.log
 
 noinst_LIBRARIES = libdnmtools.a
 libdnmtools_a_SOURCES = \
@@ -262,4 +268,6 @@ CLEANFILES = \
     tests/araTha1_simulated.hypermr \
     tests/methylome_ab.diff \
     tests/methylome.pmd \
+    tests/reads.xcounts \
+    tests/reads.unxcounts \
     tests/mlml.out

@@ -20,3 +20,5 @@ d41d8cd98f00b204e9800998ecf8427e  tests/two_epialleles.amr
 6bbf66748e2a11d5c2736a81efeac270  tests/reads.fmt.sam
 f963e689859dcf38a26acda9a65a6431  tests/reads.sam
 a751b849e0895b2403f8ddd01b647ae1  tests/reads.fmt.srt.uniq.sam
+abb472bdea230af31e0d2b00abb95b02  tests/reads.xcounts
+12e0afdca1387b2805cfee0ea2ddcfea  tests/reads.unxcounts

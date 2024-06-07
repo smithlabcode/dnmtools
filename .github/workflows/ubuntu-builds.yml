@@ -5,28 +5,30 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
     - name: Install dependencies
       run: sudo apt-get install -y libhts-dev libgsl-dev
     - name: Generate configure script
       run: ./autogen.sh
-    - name: configure for GCC
+    - name: Configure for g++
       run: ./configure CXX="g++"
-    - name: make with g++
+    - name: Build with g++
       run: make
-    - name: cleanup after g++
+    - name: Test the g++ build
+      run: make check-TESTS
+    - name: Cleanup after the g++ build
       run: make distclean
-    - name: install Clang dependencies
+    - name: Install Clang/LLVM dependencies
       run: sudo apt-get install -y libomp-dev
-    - name: configure for GCC
+    - name: Configure for clang++
       run: ./configure CXX="clang++"
-    - name: make with Clang
+    - name: Build with clang++
       run: make
-    - name: cleanup after clang++
+    - name: Test the clang++ build
+      run: make
+    - name: Cleanup after the clang++ build
       run: make distclean

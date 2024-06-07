@@ -173,9 +173,9 @@ main(int argc, const char **argv) {
    {"hmr-rep",   "identify hypomethylated regions in a set of replicate methylomes", main_hmr_rep},
    {"hypermr",   "identify hypermethylated regions in plant methylomes", main_hypermr},
    {"entropy",   "compute methylation entropy in sliding window", main_methentropy},
-   {"multistat", "summarize methylation from to genomic intervals in a BED file", main_multimethstat},
    {"pmd",       "identify partially methylated domains", main_pmd},
-   {"roi",       "compute average CpG methylation in each of a set of genomic interval", main_roimethstat},
+   {"roi",       "get average CpG methylation in each of a set of genomic interval", main_roimethstat},
+   {"multistat", "same as roi except for multiple samples/input files", main_multimethstat},
    {"mlml",      "program to estimate hydroxymethylation levels", main_mlml}}}},
 
 {"allele-specific methylation (ASM)",

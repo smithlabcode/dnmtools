@@ -24,27 +24,26 @@
 #include <unordered_map>
 
 struct MSite {
+  std::string chrom{};
+  size_t pos{};
+  char strand{};
+  std::string context{};
+  double meth{};
+  size_t n_reads{};
 
-  MSite() {}
-  MSite(const std::string &_chrom,
-        const size_t _pos,
-        const char _strand,
-        const std::string &_context,
-        const double _meth,
-        const size_t _n_reads) :
-    chrom(_chrom), pos(_pos), strand(_strand),
-    context(_context), meth(_meth), n_reads(_n_reads) {}
+  MSite() = default;
+  MSite(const std::string &chrom,
+        const size_t pos,
+        const char strand,
+        const std::string &context,
+        const double meth,
+        const size_t n_reads) :
+    chrom{chrom}, pos{pos}, strand{strand},
+    context{context}, meth{meth}, n_reads{n_reads} {}
   explicit MSite(const std::string &line);
   explicit MSite(const char *line, const int n);
 
   bool initialize(const char *c, const char *c_end);
-
-  std::string chrom;
-  size_t pos;
-  char strand;
-  std::string context;
-  double meth;
-  size_t n_reads;
 
   bool operator<(const MSite &other) const {
     int r = chrom.compare(other.chrom);

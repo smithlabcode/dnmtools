@@ -373,12 +373,11 @@ main_merge_methcounts(int argc, const char **argv) {
                       false, header_info);
     opt_parse.add_opt("tabular", 't', "output as table",
                       false, write_tabular_format);
-    opt_parse.add_opt("radmeth", '\0', "Format header for radmeth "
-                      "(assumes -tabular and not -fractional)",
+    opt_parse.add_opt("radmeth", '\0', "make radmeth input "
+                      "(use with tabular and without fractional)",
                       false, radmeth_format);
-    opt_parse.add_opt("remove", '\0', "Suffix to remove from filenames when "
-                      "making column names for tabular format. If not "
-                      "specified, suffix including from final dot is removed.",
+    opt_parse.add_opt("remove", '\0', "remove this suffix from filenames when "
+                      "making column names; default removes from final dot",
                       false, suffix_to_remove);
     opt_parse.add_opt("suff", 's',
                       "column name suffixes, one for total reads and one for "
@@ -395,8 +394,7 @@ main_merge_methcounts(int argc, const char **argv) {
     opt_parse.add_opt("mut", 'm',"If any of the sites being merged indicates "
                       "mutated, mark the result has mutated.",
                       false, report_any_mutated);
-    opt_parse.add_opt("first-column-header", '\0',"Add a header for the first "
-                      "to support reading the table using various other tools",
+    opt_parse.add_opt("1st-col-header", '\0',"add name for 1st col in header",
                       false, add_first_column_header);
     opt_parse.add_opt("verbose", 'v',"print more run info", false, VERBOSE);
     opt_parse.set_show_defaults();

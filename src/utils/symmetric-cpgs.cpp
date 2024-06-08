@@ -76,7 +76,7 @@ get_first_site(T &in, T &out) {
 }
 
 template<class T> static bool
-process_sites(T &in, T &out) {
+process_sites(const bool verbose, T &in, T &out) {
 
   // get the first site while dealing with the header
   auto [prev_site, prev_is_cpg] = get_first_site(in, out);
@@ -101,6 +101,8 @@ process_sites(T &in, T &out) {
       }
     }
     else {
+      if (verbose)
+        cerr << "processing: " << curr_site.chrom << endl;
       if (chroms_seen.find(curr_site.chrom) != cend(chroms_seen)) return false;
       chroms_seen.insert(curr_site.chrom);
 
@@ -125,7 +127,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
   try {
     // file types from HTSlib use "-" for the filename to go to stdout
     string outfile{"-"};
-    // (not used) bool VERBOSE = false;
+    bool verbose = false;
     bool compress_output = false;
     int32_t n_threads = 1;
 
@@ -139,7 +141,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
                       outfile);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("zip", 'z', "output gzip format", false, compress_output);
-    // opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
+    opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
     std::vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
@@ -179,11 +181,11 @@ main_symmetric_cpgs(int argc, const char **argv) {
       tp.set_io(out);
     }
 
-    const bool sites_are_sorted = process_sites(in, out);
+    const bool sites_are_sorted = process_sites(verbose, in, out);
 
     if (!sites_are_sorted) {
-      namespace fs = std::filesystem;
       cerr << "sites are not sorted in: " << filename << endl;
+      namespace fs = std::filesystem;
       const fs::path outpath{outfile};
       if (fs::exists(outpath)) fs::remove(outpath);
       return EXIT_FAILURE;

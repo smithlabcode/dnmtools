@@ -82,6 +82,7 @@ fill_output_buffer(const uint32_t offset, const MSite &s, T &buf) {
 int
 main_xcounts(int argc, const char **argv) {
   try {
+    bool verbose = false;
     bool require_coverage = false;
     size_t n_threads = 1;
     string genome_file;
@@ -104,6 +105,7 @@ main_xcounts(int argc, const char **argv) {
                       false, header_file);
     opt_parse.add_opt("threads", 't', "threads for compression (use few)",
                       false, n_threads);
+    opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
     std::vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
@@ -132,20 +134,18 @@ main_xcounts(int argc, const char **argv) {
       const int ret =
         get_chrom_sizes_for_counts_header(n_threads, genome_file,
                                           chrom_names, chrom_sizes);
-      if (ret) throw dnmt_error("failed to get chrom sizes from: " +
-                                genome_file);
+      if (ret)
+        throw dnmt_error{"failed to get chrom sizes from: " + genome_file};
     }
 
-
     bamxx::bam_tpool tpool(n_threads);
-
     bgzf_file in(filename, "r");
-    if (!in) throw dnmt_error("could not open file: " + filename);
+    if (!in) throw dnmt_error{"could not open file: " + filename};
 
     const auto outfile_mode = in.is_compressed() ? "w" : "wu";
 
     bgzf_file out(outfile, outfile_mode);
-    if (!out) throw dnmt_error("error opening output file: " + outfile);
+    if (!out) throw dnmt_error{"error opening output file: " + outfile};
 
     if (n_threads > 1) {
       if (in.is_bgzf())
@@ -184,6 +184,8 @@ main_xcounts(int argc, const char **argv) {
       if (!status_ok || !found_header) break;
 
       if (site.chrom != prev_chrom) {
+        if (verbose)
+          cerr << "processing: " << site.chrom << endl;
         prev_chrom = site.chrom;
         offset = 0;
 

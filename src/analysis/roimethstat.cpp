@@ -172,8 +172,10 @@ is_sorted_within_chrom(const vector<MSite> &sites) {
   };
   auto a = cbegin(sites);
   while (a != cend(sites)) {
-    const auto b = find_if(a, cend(sites),
-                           [a](const MSite &s) { return s.chrom != a->chrom; });
+    const auto a_chrom = a->chrom;
+    const auto b = find_if(a, cend(sites), [&a_chrom](const MSite &s) {
+      return s.chrom != a_chrom;
+    });
     if (!is_sorted(a, b, pos_cmp)) return false;
     a = b;
   }
@@ -306,12 +308,10 @@ get_bed_columns(const string &regions_file) {
 int
 main_roimethstat(int argc, const char **argv) {
   try {
-    // ADS: this information should be somehow presented to the user
-    // when the tool is run without arguments.
     static const string description = R"""(
-
 Compute average site methylation levels in each interval from a given
-set of genomic intervals
+set of genomic intervals. The 5th column (the "score" column in BED
+format) is determined by the '-l' or '-level' argument.
 
 Columns (beyond the first 6) in the BED format output:
 (7) weighted mean methylation
@@ -321,7 +321,6 @@ Columns (beyond the first 6) in the BED format output:
 (11) number of sites covered at least once
 (12) number of observations in reads indicating methylation
 (13) total number of observations from reads in the region
-
 )""";
 
     static const string default_name_prefix = "X";
@@ -337,10 +336,7 @@ Columns (beyond the first 6) in the BED format output:
     string outfile;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]),
-                           "Compute average site "
-                           "methylation levels in each interval from "
-                           "a given set of genomic intervals",
+    OptionParser opt_parse(strip_path(argv[0]), description,
                            "<intervals-bed> <methylation-file>");
     opt_parse.set_show_defaults();
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
@@ -360,12 +356,12 @@ Columns (beyond the first 6) in the BED format output:
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      cerr << opt_parse.help_message()
+           << opt_parse.about_message_raw() << endl;
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      cerr << opt_parse.about_message_raw() << endl;
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {

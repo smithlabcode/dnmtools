@@ -31,11 +31,9 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <map>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 using std::cerr;
@@ -43,13 +41,10 @@ using std::cout;
 using std::distance;
 using std::endl;
 using std::ifstream;
-using std::map;
 using std::ostream;
-using std::pair;
 using std::runtime_error;
 using std::size;
 using std::string;
-using std::to_string;
 using std::unordered_map;
 using std::vector;
 

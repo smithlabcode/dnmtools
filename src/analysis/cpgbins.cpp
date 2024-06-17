@@ -147,7 +147,7 @@ struct xsym_entry {
 };
 
 static unordered_map<string, vector<xsym_entry>>
-read_xsym_by_chrom(const size_t n_threads, const string &xsym_file) {
+read_xsym_by_chrom(const uint32_t n_threads, const string &xsym_file) {
   bamxx::bam_tpool tp(n_threads);
   bamxx::bgzf_file in(xsym_file, "r");
   if (!in) throw runtime_error("failed to open input file");
@@ -219,7 +219,7 @@ process_chrom(const bool report_more_info, const char level_code,
               ostream &out) {
   GenomicRegion r(chrom_name, 0, 0, "CpG", 0.0, '+');
 
-  size_t j = 0;
+  uint64_t j = 0;
   for (auto i = 0ul; i < chrom_size; i += bin_size) {
     while (j < size(sites) && sites[j].pos < i) ++j;
 
@@ -227,13 +227,16 @@ process_chrom(const bool report_more_info, const char level_code,
     while (j < size(sites) && sites[j].pos < i + bin_size)
       update(lc, sites[j++]);
 
-    const double score =
-      level_code == 'w'
-        ? lc.mean_meth_weighted()
-        : (level_code == 'u' ? lc.mean_meth() : lc.fractional_meth());
     r.set_start(i);
     r.set_end(std::min(i + bin_size, chrom_size));
-    r.set_score(score);
+    r.set_score(level_code == 'w' ? lc.mean_meth_weighted()
+                                  : (level_code == 'u' ? lc.mean_meth()
+                                                       : lc.fractional_meth()));
+    r.set_name("CpG_" +
+               std::to_string((level_code == 'w'
+                                 ? lc.coverage()
+                                 : (level_code == 'u' ? lc.sites_covered
+                                                      : lc.total_called()))));
     out << r;
     if (report_more_info) out << '\t' << format_levels_counter(lc);
     out << '\n';
@@ -244,13 +247,14 @@ static void
 process_chrom(const bool report_more_info, const string &chrom_name,
               const uint64_t chrom_size, const uint64_t bin_size,
               ostream &out) {
-  GenomicRegion r(chrom_name, 0, 0, "CpG", 0.0, '+');
+  GenomicRegion r(chrom_name, 0, 0, "CpG_0", 0.0, '+');
   LevelsCounter lc;
+  const string lc_formatted = format_levels_counter(lc);
   for (auto i = 0ul; i < chrom_size; i += bin_size) {
     r.set_start(i);
     r.set_end(std::min(i + bin_size, chrom_size));
     out << r;
-    if (report_more_info) out << '\t' << format_levels_counter(lc);
+    if (report_more_info) out << '\t' << lc_formatted;
     out << '\n';
   }
 }
@@ -276,14 +280,10 @@ Columns (beyond the first 6) in the BED format output:
     static const string default_name_prefix = "X";
 
     bool verbose = false;
-    bool print_numeric_only = false;
     bool report_more_info = false;
-    size_t n_threads = 1;
-
+    uint32_t n_threads = 1;
     uint64_t bin_size = 1000;
-
     string level_code = "w";
-
     string outfile;
 
     /****************** COMMAND LINE OPTIONS ********************/
@@ -293,8 +293,6 @@ Columns (beyond the first 6) in the BED format output:
     opt_parse.add_opt("output", 'o', "name of output file (default: stdout)",
                       false, outfile);
     opt_parse.add_opt("bin", 'b', "bin size in base pairs", false, bin_size);
-    opt_parse.add_opt("numeric", 'N', "print numeric values only (not NAs)",
-                      false, print_numeric_only);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("level", 'l',
                       "the level to report as score column "

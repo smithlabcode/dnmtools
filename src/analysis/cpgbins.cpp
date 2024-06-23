@@ -75,25 +75,6 @@ format_levels_counter(const LevelsCounter &lc) {
   return oss.str();
 }
 
-inline auto
-getline(bgzf_file &file, kstring_t &line) -> bgzf_file & {
-  if (file.f == nullptr) return file;
-  const int x = bgzf_getline(file.f, '\n', &line);
-  if (x == -1) {
-    file.destroy();
-    free(line.s);
-    line = {0, 0, nullptr};
-  }
-  if (x < -1) {
-    // ADS: this is an error condition and should be handled
-    // differently from the EOF above.
-    file.destroy();
-    free(line.s);
-    line = {0, 0, nullptr};
-    throw runtime_error{"failed reading bgzf file"};
-  }
-  return file;
-}
 
 static unordered_map<string, uint64_t>
 get_chrom_sizes(const string &chrom_sizes_file) {
@@ -163,7 +144,7 @@ read_xsym_by_chrom(const uint32_t n_threads, const string &xsym_file) {
 
   vector<xsym_entry> curr_chrom;
 
-  while (getline(in, line)) {
+  while (bamxx::getline(in, line)) {
     if (is_counts_header_line(line.s)) continue;  // ADS: early loop exit
 
     if (!std::isdigit(line.s[0])) {  // check if we have a chrom line

@@ -45,25 +45,6 @@ using std::to_string;
 
 using bamxx::bgzf_file;
 
-inline auto
-getline(bgzf_file &file, kstring_t &line) -> bgzf_file & {
-  if (file.f == nullptr) return file;
-  const int x = bgzf_getline(file.f, '\n', &line);
-  if (x == -1) {
-    file.destroy();
-    free(line.s);
-    line = {0, 0, nullptr};
-  }
-  if (x < -1) {
-    // ADS: this is an error condition and should be handled
-    // differently from the EOF above.
-    file.destroy();
-    free(line.s);
-    line = {0, 0, nullptr};
-  }
-  return file;
-}
-
 
 template<typename T>
 static inline uint32_t
@@ -171,7 +152,7 @@ main_xcounts(int argc, const char **argv) {
     bool found_header = (!genome_file.empty() || !header_file.empty());
 
     MSite site;
-    while (status_ok && getline(in, line)) {
+    while (status_ok && bamxx::getline(in, line)) {
       if (is_counts_header_line(line.s)) {
         if (!genome_file.empty() || !header_file.empty()) continue;
         found_header = true;

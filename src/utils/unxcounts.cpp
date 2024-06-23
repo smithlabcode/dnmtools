@@ -69,25 +69,6 @@ read_fasta_file_short_names_uppercase(const string &chroms_file,
               [](const char c) { return std::toupper(c); });
 }
 
-inline auto
-getline(bgzf_file &file, kstring_t &line) -> bgzf_file & {
-  if (file.f == nullptr) return file;
-  const int x = bgzf_getline(file.f, '\n', &line);
-  if (x == -1) {
-    file.destroy();
-    free(line.s);
-    line = {0, 0, nullptr};
-  }
-  if (x < -1) {
-    // ADS: this is an error condition and should be handled
-    // differently from the EOF above.
-    file.destroy();
-    free(line.s);
-    line = {0, 0, nullptr};
-    throw runtime_error{"failed reading bgzf file"};
-  }
-  return file;
-}
 
 static void
 verify_chrom_orders(const bool verbose, const uint32_t n_threads,
@@ -108,7 +89,7 @@ verify_chrom_orders(const bool verbose, const uint32_t n_threads,
   const int ret = ks_resize(&line, 1024);
   if (ret) throw runtime_error("failed to acquire buffer");
 
-  while (getline(in, line)) {
+  while (bamxx::getline(in, line)) {
     if (std::isdigit(line.s[0])) continue;
     if (is_counts_header_line(line.s)) continue;
 

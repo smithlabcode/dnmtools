@@ -69,26 +69,6 @@ write_counts_header_from_file(const string &header_file, bgzf_file &out) {
 }
 
 
-inline bgzf_file &
-getline(bgzf_file &file, kstring_t &line) {
-  if (file.f == nullptr) return file;
-  const int x = bgzf_getline(file.f, '\n', &line);
-  if (x == -1) {
-    file.destroy();
-    free(line.s);
-    line = {0, 0, nullptr};
-  }
-  if (x < -1) {
-    // ADS: this is an error condition and should be handled
-    // differently from the EOF above.
-    file.destroy();
-    free(line.s);
-    line = {0, 0, nullptr};
-  }
-  return file;
-}
-
-
 bamxx::bgzf_file &
 skip_counts_header(bamxx::bgzf_file &in) {
 
@@ -97,7 +77,7 @@ skip_counts_header(bamxx::bgzf_file &in) {
   const int ret = ks_resize(&line, 1024);
   if (ret) return in;
 
-  while (getline(in, line) && line.s[0] == '#') {
+  while (bamxx::getline(in, line) && line.s[0] == '#') {
     if (line.s[0] == '#' && line.l == 1)
       return in;
   }

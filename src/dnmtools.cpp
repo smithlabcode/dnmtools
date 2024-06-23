@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-2023 Andrew D. Smith and Guilherme Sena
+/* Copyright (C) 2022-2024 Andrew D. Smith and Guilherme Sena
  *
  * Authors: Andrew D. Smith and Guilherme Sena
  *
@@ -90,6 +90,8 @@ main_pmd(int argc, const char **argv);
 int
 main_roimethstat(int argc, const char **argv);
 int
+main_cpgbins(int argc, const char **argv);
+int
 main_mlml(int argc, const char **argv);
 int
 main_dmr(int argc, const char **argv);
@@ -175,6 +177,7 @@ main(int argc, const char **argv) {
    {"entropy",   "compute methylation entropy in sliding window", main_methentropy},
    {"pmd",       "identify partially methylated domains", main_pmd},
    {"roi",       "get average CpG methylation in each of a set of genomic interval", main_roimethstat},
+   {"cpgbins",    "get average CpG methylation in genomic bins", main_cpgbins},
    {"multistat", "same as roi except for multiple samples/input files", main_multimethstat},
    {"mlml",      "program to estimate hydroxymethylation levels", main_mlml}}}},
 

@@ -109,7 +109,7 @@ get_chrom_sizes_for_counts_header(const uint32_t n_threads,
   if (ret) return -1;
 
   uint64_t chrom_size = 0;
-  while (getline(in, line)) {
+  while (bamxx::getline(in, line)) {
     if (line.s[0] == '>') {
       if (!chrom_names.empty()) chrom_sizes.push_back(chrom_size);
       chrom_names.emplace_back(line.s + 1);
@@ -155,6 +155,6 @@ get_has_counts_header(const string &filename) {
   bgzf_file in(filename, "r");
   if (!in) return false;
   string line;
-  if (!getline(in, line)) return false;
+  if (!bamxx::getline(in, line)) return false;
   return line[0] == '#';
 }

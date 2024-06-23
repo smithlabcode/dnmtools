@@ -1,6 +1,6 @@
 /* roimethstat: average methylation in each of a set of regions
  *
- * Copyright (C) 2014-2023 Andrew D. Smith
+ * Copyright (C) 2014-2024 Andrew D. Smith
  *
  * Authors: Andrew D. Smith and Masaru Nakajima
  *
@@ -24,9 +24,11 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include <filesystem>
+#include <charconv>
 
 #include "GenomicRegion.hpp"
 #include "LevelsCounter.hpp"
@@ -34,6 +36,7 @@
 #include "OptionParser.hpp"
 #include "bsutils.hpp"
 #include "smithlab_utils.hpp"
+#include "xcounts_utils.hpp"
 
 using std::cerr;
 using std::cout;
@@ -46,11 +49,143 @@ using std::runtime_error;
 using std::string;
 using std::to_string;
 using std::unordered_map;
+using std::unordered_set;
 using std::vector;
+using std::from_chars;
+using std::size;
+using std::cend;
+using std::ostream;
+using std::size;
 
 using bamxx::bgzf_file;
 
 namespace fs = std::filesystem;
+
+
+static string
+format_levels_counter(const LevelsCounter &lc) {
+  // ...
+  // (7) weighted mean methylation
+  // (8) unweighted mean methylation
+  // (9) fractional methylation
+  // (10) number of sites in the region
+  // (11) number of sites covered at least once
+  // (12) number of observations in reads indicating methylation
+  // (13) total number of observations from reads in the region
+  std::ostringstream oss;
+  // clang-format off
+  oss << lc.mean_meth_weighted() << '\t'
+      << lc.mean_meth() << '\t'
+      << lc.fractional_meth() << '\t'
+      << lc.total_sites << '\t'
+      << lc.sites_covered << '\t'
+      << lc.total_c << '\t'
+      << (lc.total_c + lc.total_t);
+  // clang-format on
+  return oss.str();
+}
+
+
+struct genomic_interval {
+  string chrom{};
+  uint64_t start_pos{};
+  uint64_t end_pos{};
+};
+
+
+static void
+update(LevelsCounter &lc, const xcounts_entry &xse) {
+  const uint64_t n_reads = xse.n_meth + xse.n_unmeth;
+  if (n_reads > 0) {
+    ++lc.sites_covered;
+    lc.max_depth = std::max(lc.max_depth, n_reads);
+    lc.total_c += xse.n_meth;
+    lc.total_t += xse.n_unmeth;
+    const auto meth = static_cast<double>(xse.n_unmeth) / n_reads;
+    lc.total_meth += meth;
+    double lower = 0.0, upper = 0.0;
+    wilson_ci_for_binomial(lc.alpha, n_reads, meth, lower, upper);
+    lc.called_meth += (lower > 0.5);
+    lc.called_unmeth += (upper < 0.5);
+  }
+  ++lc.total_sites;
+}
+
+static void
+process_chrom(const bool report_more_info, const char level_code,
+              const vector<GenomicRegion> &intervals,
+              const vector<xcounts_entry> &sites,
+              ostream &out) {
+
+  uint64_t j = 0;
+  for (auto i = 0ul; i < intervals.size(); ++i) {
+    while (j < size(sites) && sites[j].pos < intervals[i].get_start()) ++j;
+
+    LevelsCounter lc;
+    while (j < size(sites) && sites[j].pos < intervals[i].get_end())
+      update(lc, sites[j++]);
+
+    GenomicRegion r(intervals[i]);
+    r.set_score(level_code == 'w' ? lc.mean_meth_weighted()
+                : (level_code == 'u' ? lc.mean_meth()
+                   : lc.fractional_meth()));
+    r.set_name("X_" +
+               std::to_string((level_code == 'w'
+                               ? lc.coverage()
+                               : (level_code == 'u' ? lc.sites_covered
+                                  : lc.total_called()))));
+    out << r;
+    if (report_more_info) out << '\t' << format_levels_counter(lc);
+    out << '\n';
+  }
+}
+
+static void
+process_chrom(const bool report_more_info,
+              const vector<GenomicRegion> &intervals,
+              ostream &out) {
+  LevelsCounter lc;
+  const string lc_formatted = format_levels_counter(lc);
+  for (const auto &r: intervals) {
+    out << r;
+    if (report_more_info) out << '\t' << lc_formatted;
+    out << '\n';
+  }
+}
+
+
+static void
+process_from_xcounts(const uint32_t n_threads,
+                     const bool report_more_info,
+                     const char level_code, const string &xsym_file,
+                     const vector<GenomicRegion> &intervals,
+                     ostream &out) {
+
+  const auto sites_by_chrom = read_xcounts_by_chrom(n_threads, xsym_file);
+  // const auto intervals = get_GenomicRegions(intervals_file);
+
+  vector<vector<GenomicRegion>> intervals_by_chrom;
+  string prev_chrom;
+  for (auto i = 0u; i < size(intervals); ++i) {
+    if (intervals[i].get_chrom() != prev_chrom) {
+      intervals_by_chrom.push_back(vector<GenomicRegion>());
+      prev_chrom = intervals[i].get_chrom();
+    }
+    intervals_by_chrom.back().push_back(intervals[i]);
+  }
+
+  for (const auto &intervals : intervals_by_chrom) {
+    const auto chrom_name = intervals.front().get_chrom();
+    const auto sites = sites_by_chrom.find(chrom_name);
+    if (sites != cend(sites_by_chrom))
+      process_chrom(report_more_info, level_code,
+                    intervals, sites->second, out);
+    else
+      process_chrom(report_more_info, intervals, out);
+  }
+}
+
+
 
 bool
 cmp_within_chrom(const GenomicRegion &r1, const GenomicRegion &r2) {
@@ -142,28 +277,6 @@ region_bounds(const unordered_map<string, uint32_t> &chrom_order,
   return {lower_bound(first, last, a, cmp), lower_bound(first, last, b, cmp)};
 }
 
-static string
-format_levels_counter(const LevelsCounter &lc) {
-  // ...
-  // (7) weighted mean methylation
-  // (8) unweighted mean methylation
-  // (9) fractional methylation
-  // (10) number of sites in the region
-  // (11) number of sites covered at least once
-  // (12) number of observations in reads indicating methylation
-  // (13) total number of observations from reads in the region
-  std::ostringstream oss;
-  // clang-format off
-  oss << lc.mean_meth_weighted() << '\t'
-      << lc.mean_meth() << '\t'
-      << lc.fractional_meth() << '\t'
-      << lc.total_sites << '\t'
-      << lc.sites_covered << '\t'
-      << lc.total_c << '\t'
-      << (lc.total_c + lc.total_t);
-  // clang-format on
-  return oss.str();
-}
 
 static bool
 is_sorted_within_chrom(const vector<MSite> &sites) {
@@ -194,10 +307,10 @@ read_sites(const string &filename) {
 }
 
 static void
-process_preloaded(const bool VERBOSE, const bool report_more_information,
+process_preloaded(const bool VERBOSE, const bool report_more_info,
                   const char level_code, const string &sites_file,
                   const unordered_map<string, uint32_t> &chrom_order,
-                  const vector<GenomicRegion> &regions, std::ostream &out) {
+                  const vector<GenomicRegion> &regions, ostream &out) {
 
   const auto sites = read_sites(sites_file);
   if (sites.empty()) throw runtime_error("failed to read sites: " + sites_file);
@@ -219,7 +332,7 @@ process_preloaded(const bool VERBOSE, const bool report_more_information,
     GenomicRegion r_scored{r};
     r_scored.set_score(score);
     out << r_scored;
-    if (report_more_information)
+    if (report_more_info)
       out << '\t' << format_levels_counter(lc);
     out << '\n';
   }
@@ -266,10 +379,10 @@ calc_site_stats(ifstream &sites_in, const GenomicRegion &region,
 }
 
 static void
-process_on_disk(const bool report_more_information, const char level_code,
+process_on_disk(const bool report_more_info, const char level_code,
                 const string &sites_file,
                 const unordered_map<string, uint32_t> &chrom_order,
-                const vector<GenomicRegion> &regions, std::ostream &out) {
+                const vector<GenomicRegion> &regions, ostream &out) {
   ifstream in(sites_file);
   if (!in) throw runtime_error("failed to open file: " + sites_file);
 
@@ -282,7 +395,7 @@ process_on_disk(const bool report_more_information, const char level_code,
     GenomicRegion r{region};
     r.set_score(score);
     out << r;
-    if (report_more_information)
+    if (report_more_info)
       out << '\t' << format_levels_counter(lc);
     out << '\n';
   }
@@ -328,8 +441,9 @@ Columns (beyond the first 6) in the BED format output:
     bool VERBOSE = false;
     bool print_numeric_only = false;
     bool preload = false;
-    bool report_more_information = false;
+    bool report_more_info = false;
     bool sort_data_if_needed = false;
+    uint32_t n_threads = 1;
 
     string level_code = "w";
 
@@ -351,7 +465,9 @@ Columns (beyond the first 6) in the BED format output:
                       "in bed format output (w, u or f)",
                       false, level_code);
     opt_parse.add_opt("more-levels", 'M', "report more methylation information",
-                      false, report_more_information);
+                      false, report_more_info);
+    opt_parse.add_opt("threads", 't', "threads to use (if input compressed)",
+                      false, n_threads);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -380,14 +496,17 @@ Columns (beyond the first 6) in the BED format output:
     const string sites_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (!is_msite_file(sites_file))
-      throw runtime_error("dnmtools counts format required: " + sites_file);
+    const bool is_xcounts = get_is_xcounts_file(sites_file);
+    if (!is_msite_file(sites_file) && !is_xcounts)
+      throw runtime_error("dnmtools counts or xcounts format required: " +
+                          sites_file);
 
     // make a map that specifies their order; otherwise we can't
     // ensure regions are sorted in the same way
     unordered_map<string, uint32_t> chrom_order;
-    for (auto &i : get_chroms(sites_file))
-      chrom_order.emplace(i, chrom_order.size());
+    if (!is_xcounts)
+      for (auto &i : get_chroms(sites_file))
+        chrom_order.emplace(i, chrom_order.size());
 
     if (VERBOSE) cerr << "loading regions" << endl;
 
@@ -427,14 +546,17 @@ Columns (beyond the first 6) in the BED format output:
       of.open(outfile);
       if (!of) throw runtime_error("failed to open outfile: " + outfile);
     }
-    std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
+    ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
-    if (preload)
-      process_preloaded(VERBOSE, report_more_information, level_code[0],
-                        sites_file, chrom_order, regions, out);
+    if (is_xcounts)
+      process_from_xcounts(n_threads, report_more_info, level_code[0],
+                           sites_file, regions, out);
+    else if (preload)
+      process_preloaded(VERBOSE, report_more_info, level_code[0], sites_file,
+                        chrom_order, regions, out);
     else
-      process_on_disk(report_more_information, level_code[0], sites_file,
-                      chrom_order, regions, out);
+      process_on_disk(report_more_info, level_code[0], sites_file, chrom_order,
+                      regions, out);
   }
   catch (const std::exception &e) {
     cerr << e.what() << endl;

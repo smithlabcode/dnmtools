@@ -35,24 +35,6 @@ using std::string;
 
 using bamxx::bgzf_file;
 
-inline auto
-getline(bgzf_file &file, kstring_t &line) -> bgzf_file & {
-  if (file.f == nullptr) return file;
-  const int x = bgzf_getline(file.f, '\n', &line);
-  if (x == -1) {
-    file.destroy();
-    free(line.s);
-    line = {0, 0, nullptr};
-  }
-  if (x < -1) {
-    // ADS: this is an error condition and should be handled
-    // differently from the EOF above.
-    file.destroy();
-    free(line.s);
-    line = {0, 0, nullptr};
-  }
-  return file;
-}
 
 static inline bool
 get_is_mutated(const kstring_t &line) {
@@ -131,7 +113,7 @@ main_covered(int argc, const char **argv) {
     if (ret) throw runtime_error("failed to acquire buffer");
 
     bool write_ok = true;
-    while (getline(in, line) && write_ok) {
+    while (bamxx::getline(in, line) && write_ok) {
       const bool is_mutated = get_is_mutated(line);
       const uint32_t n_reads = get_n_reads(line);
       if (n_reads > 0u || is_mutated) {

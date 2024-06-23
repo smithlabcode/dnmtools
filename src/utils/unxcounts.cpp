@@ -401,7 +401,7 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   // the index of the chrom sequence in the vector.
   chrom_itr_t ch_itr;
 
-  while (getline(in, line)) {
+  while (bamxx::getline(in, line)) {
     if (is_counts_header_line(line.s)) {
       process_header_line(name_to_id, chrom_sizes, line, out);
       continue;  // ADS: early loop exit
@@ -516,7 +516,7 @@ process_cpg_sites(const bool verbose, const bool add_missing_chroms,
   // the index of the chrom sequence in the vector.
   chrom_itr_t ch_itr;
 
-  while (getline(in, line)) {
+  while (bamxx::getline(in, line)) {
     if (is_counts_header_line(line.s)) {
       process_header_line(name_to_id, chrom_sizes, line, out);
       continue;  // ADS: early loop exit

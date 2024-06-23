@@ -226,9 +226,11 @@ write_missing_cpg(const uint32_t &name_size, const string &chrom,
   const auto buf_end = buf.data() + size(buf);
   // chrom name is already in the buffer so move past it
   auto cursor = buf.data() + name_size + 1;
-  for (auto pos = start_pos; pos < end_pos; ++pos) {
-    const char base = chrom[pos];
-    if (is_cytosine(base)) {
+  for (auto pos = start_pos; pos < end_pos - 1; ++pos) {
+    // When this function is called, the "end_pos" is either the chrom
+    // size or the position of a base known to be a C. So we never
+    // have to allow pos+1 to equal end_pos.
+    if (is_cytosine(chrom[pos]) && is_guanine(chrom[pos+1])) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wstringop-overflow=0"
       auto [ptr, ec] = to_chars(cursor, buf_end, pos);

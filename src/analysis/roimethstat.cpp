@@ -129,7 +129,7 @@ process_chrom(const bool report_more_info, const char level_code,
     r.set_score(level_code == 'w' ? lc.mean_meth_weighted()
                 : (level_code == 'u' ? lc.mean_meth()
                    : lc.fractional_meth()));
-    r.set_name("X_" +
+    r.set_name(r.get_name() + "_" +
                std::to_string((level_code == 'w'
                                ? lc.coverage()
                                : (level_code == 'u' ? lc.sites_covered

@@ -17,6 +17,12 @@
  * General Public License for more details.
  */
 
+#include "OptionParser.hpp"
+#include "bam_record_utils.hpp"
+#include "bsutils.hpp"
+#include "dnmt_error.hpp"
+#include "smithlab_utils.hpp"
+
 #include <bamxx.hpp>
 
 #include <algorithm>
@@ -27,12 +33,6 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
-
-#include "OptionParser.hpp"
-#include "bam_record_utils.hpp"
-#include "bsutils.hpp"
-#include "dnmt_error.hpp"
-#include "smithlab_utils.hpp"
 
 using std::accumulate;
 using std::cerr;
@@ -104,7 +104,8 @@ struct bsrate_summary {
   // then error_rate is given a value of 0.
   double error_rate{};
 
-  void update_pos(const char nt) {
+  void
+  update_pos(const char nt) {
     if (nt == 'C' || nt == 'T') {
       ++total_count_positive;
       converted_count_positive += (nt == 'T');
@@ -113,7 +114,8 @@ struct bsrate_summary {
       ++error_count;
   }
 
-  void update_neg(const char nt) {
+  void
+  update_neg(const char nt) {
     if (nt == 'C' || nt == 'T') {
       ++total_count_negative;
       converted_count_negative += (nt == 'T');
@@ -122,7 +124,8 @@ struct bsrate_summary {
       ++error_count;
   }
 
-  bsrate_summary &operator+=(const bsrate_summary &rhs) {
+  bsrate_summary &
+  operator+=(const bsrate_summary &rhs) {
     // ADS: the "rates" are set to 0.0 here to ensure that they are
     // computed properly using the full data after any accumulation of
     // integer values has completed.
@@ -144,7 +147,8 @@ struct bsrate_summary {
     return *this;
   }
 
-  void set_values() {
+  void
+  set_values() {
     bisulfite_conversion_rate_positive =
       static_cast<double>(converted_count_positive) /
       max(total_count_positive, static_cast<uint64_t>(1));
@@ -156,17 +160,17 @@ struct bsrate_summary {
     converted_count = converted_count_positive + converted_count_negative;
     total_count = total_count_positive + total_count_negative;
 
-    bisulfite_conversion_rate =
-      static_cast<double>(converted_count) /
-      max(total_count, static_cast<uint64_t>(1));
+    bisulfite_conversion_rate = static_cast<double>(converted_count) /
+                                max(total_count, static_cast<uint64_t>(1));
 
     valid_count = total_count + error_count;
 
     error_rate = static_cast<double>(error_count) /
-      max(valid_count, static_cast<uint64_t>(1));
+                 max(valid_count, static_cast<uint64_t>(1));
   }
 
-  string tostring_as_row() const {
+  string
+  tostring_as_row() const {
     static constexpr auto precision_val = 5u;
     std::ostringstream oss;
     oss.precision(precision_val);
@@ -188,7 +192,32 @@ struct bsrate_summary {
     return oss.str();
   }
 
-  string tostring() const {
+  string
+  tostring_as_yaml_list(const uint32_t position) const {
+    static constexpr auto precision_val = 5u;
+    std::ostringstream oss;
+    oss.precision(precision_val);
+    oss.setf(std::ios_base::fixed, std::ios_base::floatfield);
+    // clang-format off
+    oss << "  - base: " << position << '\n'
+        << "    ptot: " << total_count_positive << '\n'
+        << "    pconv: " << converted_count_positive << '\n'
+        << "    prate: " << bisulfite_conversion_rate_positive << '\n'
+        << "    ntot: " << total_count_negative << '\n'
+        << "    nconv: " << converted_count_negative << '\n'
+        << "    nrate: " << bisulfite_conversion_rate_negative << '\n'
+        << "    bthtot: " << total_count << '\n'
+        << "    bthconv: " << converted_count << '\n'
+        << "    bthrate: " << bisulfite_conversion_rate << '\n'
+        << "    err: " << error_count << '\n'
+        << "    all: " << valid_count << '\n'
+        << "    errrate: " << error_rate << '\n';
+    // clang-format on
+    return oss.str();
+  }
+
+  string
+  tostring() const {
     static constexpr auto sep = ": ";
     std::ostringstream oss;
     oss << "converted_count_positive" << sep << converted_count_positive
@@ -358,6 +387,35 @@ write_output(const string &outfile, const vector<bsrate_summary> &summaries) {
 }
 
 static void
+write_output_yaml(const string &outfile,
+                  const vector<bsrate_summary> &summaries) {
+  std::ofstream of;
+  if (!outfile.empty()) of.open(outfile.c_str());
+  std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
+  if (!out) throw dnmt_error("failed to open output file");
+
+  bsrate_summary overall_summary = reduce(cbegin(summaries), cend(summaries));
+  overall_summary.set_values();
+  out << "overall_conversion_rate: "
+      << overall_summary.bisulfite_conversion_rate << '\n'
+      << "pos_conversion_rate: "
+      << overall_summary.bisulfite_conversion_rate_positive << '\n'
+      << "pos_count: " << overall_summary.total_count_positive << '\n'
+      << "neg_conversion_rate: "
+      << overall_summary.bisulfite_conversion_rate_negative << '\n'
+      << "neg_count: " << overall_summary.total_count_negative << '\n';
+
+  // figure out how many positions to print in the output, capped at 1000
+  auto output_len = std::min(std::size(summaries), 1000ul);
+  while (output_len > 0 && summaries[output_len - 1].total_count == 0)
+    --output_len;
+
+  out << "rows:\n";
+  for (auto i = 0u; i < output_len; ++i)
+    out << summaries[i].tostring_as_yaml_list(i + 1);
+}
+
+static void
 write_summary(const string &summary_file, vector<bsrate_summary> &summaries) {
   auto s = reduce(cbegin(summaries), cend(summaries));
   s.set_values();
@@ -422,6 +480,7 @@ main_bsrate(int argc, const char **argv) {
 
     bool VERBOSE = false;
     bool INCLUDE_CPGS = false;
+    bool output_yaml = false;
     bool reads_are_a_rich = false;
     bool report_per_read = false;
     size_t n_threads = 1;
@@ -453,6 +512,7 @@ main_bsrate(int argc, const char **argv) {
     opt_parse.add_opt("bins", 'b', "number of bins for per-read", false,
                       n_hist_bins);
     opt_parse.add_opt("summary", 'S', "summary file name", false, summary_file);
+    opt_parse.add_opt("yaml", 'y', "output in yaml format", false, output_yaml);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
@@ -563,7 +623,10 @@ main_bsrate(int argc, const char **argv) {
     for_each(begin(summaries), end(summaries),
              [](bsrate_summary &s) { s.set_values(); });
 
-    write_output(outfile, summaries);
+    if (output_yaml)
+      write_output_yaml(outfile, summaries);
+    else
+      write_output(outfile, summaries);
 
     if (hanging > 0) write_hanging_read_message(cerr, hanging);
 

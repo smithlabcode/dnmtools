@@ -110,7 +110,7 @@ kmersites(const int argc, const char **argv) -> int {
     string kmer = "CG";
     string outfile;
     // int n_threads = 1;
-    int offset = 0;
+    int offset = 1;
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(fs::path(string(*argv)).filename(),

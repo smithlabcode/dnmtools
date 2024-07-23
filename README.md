@@ -12,7 +12,7 @@ sequencing (RRBS). These tools focus on overcoming the computing
 challenges imposed by the scale of genome-wide DNA methylation data,
 which is usually the early parts of data analysis.
 
-## Installing release 1.4.2
+## Installing release 1.4.3
 
 The documentation for DNMTools can be found
 [here](https://dnmtools.readthedocs.io). But if you want to install
@@ -23,11 +23,12 @@ all the formatting.
 ### Required libraries
 
 * A recent compiler. Most users will be building and installing this
-  software with GCC. We require a compiler that supports C++17, so we
-  recommend using at least GCC 8 (released in 2018). There are still
-  many systems that install a very old version of GCC by default, so
-  if you have problems with building this software, that might be the
-  first thing to check.
+  software with GCC. We require a compiler that fully supports C++17,
+  so we recommend using at least GCC 9 (released in 2019). There are
+  still many systems that install a very old version of GCC by
+  default, so if you have problems with building this software, that
+  might be the first thing to check. The clang LLVM compiler can
+  also be used with a recent enough version.
 * The GNU Scientific Library. It can be installed using apt on Linux
   (Ubuntu, Debian), using brew on macOS, or from source available
   [here](http://www.gnu.org/software/gsl).
@@ -41,14 +42,14 @@ repo, it is easiest if all dependencies are available through conda.
 
 ### Configuration
 
-* Download [dnmtools-1.4.2.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.4.2/dnmtools-1.4.2.tar.gz).
+* Download [dnmtools-1.4.3.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.4.3/dnmtools-1.4.3.tar.gz).
 * Unpack the archive:
 ```console
-tar -zxvf dnmtools-1.4.2.tar.gz
+tar -zxvf dnmtools-1.4.3.tar.gz
 ```
 * Move into the dnmtools directory and create a build directory:
 ```console
-cd dnmtools-1.4.2 && mkdir build && cd build
+cd dnmtools-1.4.3 && mkdir build && cd build
 ```
 * Run the configuration script:
 ```console
@@ -88,22 +89,23 @@ any arguments and you should see the list of available commands:
 ```console
 dnmtools
 ```
+There is a test suite for `dnmtools` and these test can be performed
+as follows:
+```console
+make check
+```
+This must be done from the build directory. Note that the tests
+performed with `make check` are mostly regression tests that cover
+prior issues rather than coverage tests to test all the functionality
+of `dnmtools`.
 
 ### Using a clone of the repo
 
-Not recommended, but if you want to do it this way, we assume you know
-what you are doing. We strongly recommend using DNMTools through the
-latest stable release under the releases section on GitHub. Developers
-who wish to work on the latest commits, which are unstable, can
-compile the source using a `Makefile` left in the root of the source
-tree. If HTSLib and other libraries are available system-wide,
-compile by running:
-```console
-make
-```
-This functionality will probably be removed soon, and if you want to
-build the code this way, you should know what you are doing any be
-able to make it work yourself.
+We strongly recommend using DNMTools through the latest stable release
+under the releases section on GitHub or through a package as with
+conda/mamba.  Developers who wish to work on the latest commits, which
+are unstable, can compile the source using `autogen.sh` which just
+wraps `autoreconf`.
 
 ## Usage
 
@@ -137,7 +139,7 @@ docker tag ghcr.io/smithlabcode/dnmtools:latest dnmtools:latest
 
 You can also install the image for a particular vertion by running
 ```console
-docker pull ghcr.io/smithlabcode/dnmtools:v[VERSION NUMBER] #(e.g. v1.4.2)
+docker pull ghcr.io/smithlabcode/dnmtools:v[VERSION NUMBER] #(e.g. v1.4.3)
 ```
 Not all versions have corresponding images; you can find available images
 [here](https://github.com/smithlabcode/dnmtools/pkgs/container/dnmtools).
@@ -205,24 +207,20 @@ docker run -v ./:/app -w /app \
   dnmtools abismal -v -t 1 -i artifacts/tRex1.idx artifacts/simreads_{1,2}.fq
 ```
 
-
 ## Contacts and bug reports
 
 Andrew D. Smith
 andrewds@usc.edu
 
-Guilherme de Sena Brandine
-desenabr@usc.edu
-
 ## Copyright and License Information
 
-Copyright (C) 2022-2023
+Copyright (C) 2022-2024
 Andrew D. Smith and Guilherme de Sena Brandine
 
 Authors of DNMTools: Andrew D. Smith and Guilherme de Sena Brandine
 
 Essential contributors: Ben Decato, Meng Zhou, Liz Ji, Terence Li,
-Jenny Qu, Qiang Song and Fang Fang
+Jenny Qu, Qiang Song, Fang Fang and Masaru Nakajima
 
 This is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free

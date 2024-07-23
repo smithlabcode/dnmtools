@@ -42,7 +42,6 @@ nav:
    - General-purpose tools:
      - 'cleanhp': 'cleanhp.md'
      - 'guessprotocol': 'guessprotocol.md'
-     - 'lc': 'lc.md'
      - 'merge-bsrate': 'merge-bsrate.md'
      - 'merge': 'merge.md'
      - 'selectsites': 'selectsites.md'

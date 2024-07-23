@@ -51,7 +51,6 @@ EXTRA_DIST = \
              docs/content/hmr-rep.md \
              docs/content/hypermr.md \
              docs/content/index.md \
-             docs/content/lc.md \
              docs/content/levels.md \
              docs/content/liftfilter.md \
              docs/content/merge-bsrate.md \
@@ -220,7 +219,6 @@ dnmtools_SOURCES += src/utils/guessprotocol.cpp
 dnmtools_SOURCES += src/utils/uniq.cpp
 dnmtools_SOURCES += src/utils/merge-bsrate.cpp
 dnmtools_SOURCES += src/utils/format-reads.cpp
-dnmtools_SOURCES += src/utils/lc-approx.cpp
 dnmtools_SOURCES += src/utils/selectsites.cpp
 dnmtools_SOURCES += src/utils/symmetric-cpgs.cpp
 dnmtools_SOURCES += src/utils/merge-methcounts.cpp

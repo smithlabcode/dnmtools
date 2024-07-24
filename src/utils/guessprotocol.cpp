@@ -78,6 +78,8 @@ constexpr int nuc_to_idx[] = {
     // clang-format on
 };
 
+constexpr char idx_to_nuc[] = {'A', 'C', 'G', 'T'};
+
 struct nucleotide_model {
   vector<double> pr{};
   vector<double> lpr{};
@@ -281,18 +283,105 @@ static bgzf_file &operator>>(bgzf_file &s, string &r) {
   return s;
 }
 
-void count_kmers(unordered_map<string, double> &total_counts,
-                 unordered_map<string, double> &head_counts, const bool head,
-                 const uint32_t kmer_value, const string &s) {
-  if (head) {
-    string head_kmer = s.substr(0, kmer_value);
-    if (head_kmer.find('N') == string::npos)
-      ++head_counts[head_kmer];
+template <typename T = string::const_iterator>
+uint64_t kmer_to_int(T start, const T stop) {
+  uint64_t num = 0;
+  uint8_t base = 4;
+  for (T it = start; it != stop; ++it) {
+    int idx = nuc_to_idx[static_cast<uint8_t>(*it)];
+    if (idx == 4) {
+      throw std::invalid_argument(
+          "Invalid nucleotide character when converting to integer");
+    }
+    num = num * base + idx;
   }
-  for (auto i = 0u; i < s.size() - kmer_value + 1; ++i) {
-    string kmer = s.substr(i, kmer_value);
-    if (kmer.find('N') == string::npos)
-      ++total_counts[kmer];
+  return num;
+}
+
+string int_to_kmer(uint64_t num, const uint32_t kmer_value) {
+  string kmer(kmer_value, 'N');
+  uint8_t base = 4;
+  for (size_t i = kmer_value; i > 0; --i) {
+    kmer[i - 1] = idx_to_nuc[num % base];
+    num /= base;
+  }
+  return kmer;
+}
+
+void count_kmers(const bool head, const uint32_t kmer_value, const string &s,
+                 int barcode, vector<double> &total_counts,
+                 vector<double> &head_counts) {
+  try {
+    const uint32_t start = std::max(0, barcode);
+    if (head) {
+      if (s.size() < kmer_value)
+        throw std::out_of_range("Read length smaller than k-mer length");
+
+      string head_kmer = s.substr(start, kmer_value);
+      if (head_kmer.find('N') == string::npos)
+        head_counts[kmer_to_int(head_kmer.begin(), head_kmer.end())]++;
+    }
+    for (auto i = start; i <= size(s) - start - kmer_value + 1; ++i) {
+      string kmer = s.substr(i, kmer_value);
+      if (kmer.find('N') == string::npos)
+        total_counts[kmer_to_int(kmer.begin(), kmer.end())]++;
+    }
+  } catch (const std::out_of_range &e) {
+    cerr << "Error: " << e.what() << endl;
+    cerr << "Sequence: " << s << endl;
+  }
+}
+
+vector<double> load_kmer_freq(const string &filename,
+                              vector<double> &kmer_freq) {
+  std::ifstream infile(filename);
+  if (!infile)
+    throw runtime_error("cannot open file: " + filename);
+
+  string kmer;
+  double freq;
+  while (infile >> kmer >> freq) {
+    uint64_t idx = kmer_to_int(kmer.begin(), kmer.end());
+    kmer_freq[idx] = freq;
+  }
+  return kmer_freq;
+}
+
+vector<double> calculate_kmer_freq(const string &ref_genome,
+                                   const uint32_t kmer_value,
+                                   const uint64_t reads_to_check,
+                                   vector<double> &kmer_freq) {
+  bgzf_file ref(ref_genome, "r");
+  if (!ref)
+    throw runtime_error("cannot open file: " + ref_genome);
+
+  uint64_t n_ref = 0;
+  uint64_t ref_seq_len = 0;
+  string ref_seq;
+  vector<double> tmp;
+
+  while (ref >> ref_seq && n_ref < reads_to_check) {
+    if (n_ref == 0)
+      ref_seq_len = ref_seq.size();
+    n_ref++;
+    count_kmers(false, kmer_value, ref_seq, 0, kmer_freq, tmp);
+  }
+  double total_pos = n_ref * (ref_seq_len - kmer_value + 1);
+  for (auto &freq : kmer_freq)
+    freq /= total_pos;
+
+  return kmer_freq;
+}
+
+void save_kmer_freq(const string &filename, const vector<double> &kmer_freq,
+                    const uint32_t kmer_value) {
+  std::ofstream outfile(filename);
+  if (!outfile)
+    throw runtime_error("cannot open file for writing: " + filename);
+
+  for (size_t i = 0; i < kmer_freq.size(); ++i) {
+    string kmer = int_to_kmer(i, kmer_value);
+    outfile << kmer << " " << kmer_freq[i] << "\n";
   }
 }
 
@@ -304,75 +393,74 @@ double binomial_test(uint32_t kmer_count, uint32_t total_positions,
   return 1 - boost::math::cdf(binom, kmer_count - 1);
 }
 
-// calculate over-represented k-mers at 5' end
-unordered_map<string, double>
-calculate_pval(const unordered_map<string, double> &total_counts,
-               const unordered_map<string, double> &head_counts,
-               const uint32_t kmer_value, const uint64_t seq_len,
-               const uint64_t n_seqs, const double p_val_cutoff) {
-  unordered_map<string, double> p_values;
-  for (const auto &k : head_counts) {
-    const double total = total_counts.at(k.first);
-    const double prob = total / ((seq_len - kmer_value + 1) * n_seqs);
-    const double p_value = binomial_test(k.second, n_seqs, prob);
-    // cout << "kmer: " << k.first << ", head count = " << k.second
-    //      << ", total count = " << total << ", p-value = " << p_value << '\n';
-    if (p_value < p_val_cutoff)
-      p_values[k.first] = p_value;
-  }
-  return p_values;
-}
-
-// update kmer_counts by converting part of T back to C based on kmer frequency
-void ct_convertion(unordered_map<string, double> &kmer_counts,
-                   const unordered_map<string, double> &p_values,
-                   const unordered_map<string, double> &kmer_freq,
-                   const uint64_t n_seqs) {
-  for (const auto &k : p_values) {
-    string t_kmer = k.first;
-    for (char &c : t_kmer) {
-      if (c == 'T') {
-        uint32_t t_exp = kmer_freq.at(t_kmer) * n_seqs;
-        int32_t delta = kmer_counts.at(t_kmer) - t_exp;
-        if (delta > 0) {
-          kmer_counts.at(t_kmer) -= delta;
-          // cout << "kmer = " << t_kmer << ", t_exp = " << t_exp
-          //      << ", delta = " << delta
-          //      << ", new_t_count = " << kmer_counts.at(t_kmer);
-          c = 'C';
-          kmer_counts.at(t_kmer) += delta;
-          // cout << ", new_c_count = " << kmer_counts.at(t_kmer) << '\n';
+void ct_conversion(const vector<double> &kmer_freq, const uint64_t n_seqs,
+                   const uint32_t kmer_value, vector<double> &kmer_counts) {
+  for (size_t i = 0; i < kmer_counts.size(); ++i) {
+    string t_kmer = int_to_kmer(i, kmer_value);
+    try {
+      for (char &c : t_kmer)
+        if (c == 'T') {
+          uint32_t t_exp = kmer_freq[i] * n_seqs;
+          int32_t delta = kmer_counts[i] - t_exp;
+          if (delta > 0) {
+            kmer_counts[i] -= delta;
+            // cout << "kmer = " << t_kmer << ", t_exp = " << t_exp
+            //       << ", delta = " << delta
+            //       << ", new_t_count = " << kmer_counts[i];
+            c = 'C';
+            uint64_t c_idx = kmer_to_int(t_kmer.begin(), t_kmer.end());
+            kmer_counts[c_idx] += delta;
+            // cout << ", new_c_count = " << kmer_counts[c_idx] << '\n';
+          }
         }
-      }
+    } catch (const std::out_of_range &e) {
+      cerr << "Error: " << e.what() << endl;
+      cerr << "Key not found: " << t_kmer << endl;
     }
   }
 }
 
+// calculate over-represented k-mers at 5' end
+vector<double> calculate_pval(const vector<double> &total_counts,
+                              const vector<double> &head_counts,
+                              const uint32_t kmer_value, const uint64_t seq_len,
+                              const uint64_t n_seqs) {
+  vector<double> p_values(static_cast<size_t>(std::pow(4, kmer_value)),
+                          std::numeric_limits<double>::infinity());
+  for (size_t i = 0; i < head_counts.size(); ++i) {
+    const double total = total_counts[i];
+    const double prob = total / ((seq_len - kmer_value + 1) * n_seqs);
+    if (head_counts[i] != 0)
+      p_values[i] = binomial_test(head_counts[i], n_seqs, prob);
+    // cout << "kmer: " << int_to_kmer(i, kmer_value) << ", head count = " <<
+    // head_counts[i] << ", total count = " << total << ", p-value = " <<
+    // p_value << '\n';
+  }
+  return p_values;
+}
+
 // find the k-mer with the max fraction at 5' end
-pair<double, double>
-find_max_frac(unordered_map<string, double> &kmer_counts,
-              const unordered_map<string, double> &p_values,
-              const uint64_t n_seqs) {
+double check_significance(const vector<double> &kmer_counts,
+                          const vector<double> &p_values, const uint64_t n_seqs,
+                          const double p_val_cutoff) {
   // pair<frac, p-value>
-  pair<double, double> max_enriched(0.0, 0.0);
-  for (const auto &k : p_values) {
-    double frac = kmer_counts.at(k.first) / static_cast<double>(n_seqs);
-    if (frac > max_enriched.first)
-      max_enriched.first = frac;
+  double max_enriched = 0.0;
+  for (size_t i = 0; i < kmer_counts.size(); ++i) {
+    double frac = kmer_counts[i] / n_seqs;
+    if (frac > max_enriched && p_values[i] < p_val_cutoff)
+      max_enriched = frac;
   }
   return max_enriched;
 }
 
-pair<double, double>
-kmer_enrich(const unordered_map<string, double> &total_counts,
-            unordered_map<string, double> &head_counts,
-            const unordered_map<string, double> &kmer_freq,
-            const uint32_t kmer_value, const uint64_t seq_len,
-            const uint64_t n_seqs, const double p_val_cutoff) {
-  const auto p_values = calculate_pval(total_counts, head_counts, kmer_value,
-                                       seq_len, n_seqs, p_val_cutoff);
-  ct_convertion(head_counts, p_values, kmer_freq, n_seqs);
-  return find_max_frac(head_counts, p_values, n_seqs);
+double kmer_enrich(const vector<double> &total_counts,
+                   const vector<double> &kmer_freq, const uint32_t kmer_value,
+                   const uint64_t seq_len, const uint64_t n_seqs,
+                   const double p_val_cutoff, vector<double> &head_counts) {
+  ct_conversion(kmer_freq, n_seqs, kmer_value, head_counts);
+  const auto p_values =
+      calculate_pval(total_counts, head_counts, kmer_value, seq_len, n_seqs);
+  return check_significance(head_counts, p_values, n_seqs, p_val_cutoff);
 }
 
 int main_guessprotocol(int argc, const char **argv) {
@@ -393,6 +481,7 @@ int main_guessprotocol(int argc, const char **argv) {
     uint32_t kmer_value = 3;
     string ref_genome{};
     double p_val_cutoff = 0.01;
+    int barcode = 0;
 
     namespace fs = std::filesystem;
     const string cmd_name = std::filesystem::path(argv[0]).filename();
@@ -416,6 +505,10 @@ int main_guessprotocol(int argc, const char **argv) {
     opt_parse.add_opt("refgenome", 'r',
                       "reference genome to calculate k-mer frequency", true,
                       ref_genome);
+    opt_parse.add_opt("barcode", 'x',
+                      "barcode length of the 5' end that needs to be omitted "
+                      "when determining RRBS",
+                      false, barcode);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
@@ -459,26 +552,20 @@ int main_guessprotocol(int argc, const char **argv) {
            << "bisulfite conversion: " << bisulfite_conversion_rate << '\n';
     }
 
-    // calculate kmer frequency using reference genome
-    bgzf_file ref(ref_genome, "r");
-    if (!ref)
-      throw runtime_error("cannot open file: " + ref_genome);
+    // look for the kmer frequency file
+    string kmer_freq_file = ref_genome + ".gp";
+    vector<double> kmer_freq(static_cast<size_t>(std::pow(4, kmer_value)), 0.0);
 
-    unordered_map<string, double> kmer_freq, tmp;
-    uint64_t n_ref = 0;
-    uint64_t ref_seq_len = 0;
-    string ref_seq;
-
-    while (ref >> ref_seq && n_ref < reads_to_check) {
-      if (n_ref == 0)
-        ref_seq_len = ref_seq.size();
-      n_ref++;
-      count_kmers(kmer_freq, tmp, false, kmer_value, ref_seq);
+    if (std::filesystem::exists(kmer_freq_file)) {
+      kmer_freq = load_kmer_freq(kmer_freq_file, kmer_freq);
+      cout << "Loaded k-mer frequencies from " << kmer_freq_file << '\n';
+    } else {
+      kmer_freq = calculate_kmer_freq(ref_genome, kmer_value, reads_to_check,
+                                      kmer_freq);
+      save_kmer_freq(kmer_freq_file, kmer_freq, kmer_value);
+      cout << "Calculated and saved k-mer frequencies to " << kmer_freq_file
+           << '\n';
     }
-    double total_pos = n_ref * (ref_seq_len - kmer_value + 1);
-    std::for_each(
-        kmer_freq.begin(), kmer_freq.end(),
-        [total_pos](pair<const string, double> &p) { p.second /= total_pos; });
 
     if (reads_files.size() == 2) {
 
@@ -492,8 +579,14 @@ int main_guessprotocol(int argc, const char **argv) {
         throw runtime_error("cannot open file: " + reads_files.back());
 
       FASTQRecord r1, r2;
-      unordered_map<string, double> total_counts_1{}, total_counts_2{},
-          head_counts_1{}, head_counts_2{};
+      vector<double> total_counts_1(
+          static_cast<size_t>(std::pow(4, kmer_value)), 0.0);
+      vector<double> total_counts_2(
+          static_cast<size_t>(std::pow(4, kmer_value)), 0.0);
+      vector<double> head_counts_1(static_cast<size_t>(std::pow(4, kmer_value)),
+                                   0.0);
+      vector<double> head_counts_2(static_cast<size_t>(std::pow(4, kmer_value)),
+                                   0.0);
 
       while (in1 >> r1 && in2 >> r2 && summary.n_reads < reads_to_check) {
         if (summary.n_reads == 0)
@@ -509,18 +602,20 @@ int main_guessprotocol(int argc, const char **argv) {
         const auto prob_read1_t_rich = exp(ta - log_sum_log(ta, at));
         summary.n_reads_wgbs += prob_read1_t_rich;
 
-        count_kmers(total_counts_1, head_counts_1, true, kmer_value, r1.seq);
-        count_kmers(total_counts_2, head_counts_2, true, kmer_value, r2.seq);
+        count_kmers(true, kmer_value, r1.seq, barcode, total_counts_1,
+                    head_counts_1);
+        count_kmers(true, kmer_value, r2.seq, barcode, total_counts_2,
+                    head_counts_2);
       }
       const auto r1_enrich =
-          kmer_enrich(total_counts_1, head_counts_1, kmer_freq, kmer_value,
-                      summary.read_len, summary.n_reads, p_val_cutoff);
+          kmer_enrich(total_counts_1, kmer_freq, kmer_value, summary.read_len,
+                      summary.n_reads, p_val_cutoff, head_counts_1);
       const auto r2_enrich =
-          kmer_enrich(total_counts_2, head_counts_2, kmer_freq, kmer_value,
-                      summary.read_len, summary.n_reads, p_val_cutoff);
+          kmer_enrich(total_counts_2, kmer_freq, kmer_value, summary.read_len,
+                      summary.n_reads, p_val_cutoff, head_counts_2);
 
       // take the average of the two enrichment
-      summary.rrbs_fraction = (r1_enrich.first + r2_enrich.first) / 2;
+      summary.rrbs_fraction = (r1_enrich + r2_enrich) / 2;
     } else {
       // input: single-end reads
       bgzf_file in(reads_files.front(), "r");
@@ -528,7 +623,10 @@ int main_guessprotocol(int argc, const char **argv) {
         throw runtime_error("cannot open file: " + reads_files.front());
 
       FASTQRecord r;
-      unordered_map<string, double> total_counts{}, head_counts{};
+      vector<double> total_counts(static_cast<size_t>(std::pow(4, kmer_value)),
+                                  0.0);
+      vector<double> head_counts(static_cast<size_t>(std::pow(4, kmer_value)),
+                                 0.0);
 
       while (in >> r && summary.n_reads < reads_to_check) {
         if (summary.n_reads == 0)
@@ -541,12 +639,13 @@ int main_guessprotocol(int argc, const char **argv) {
         const auto prob_t_rich = exp(t - log_sum_log(t, a));
         summary.n_reads_wgbs += prob_t_rich;
 
-        count_kmers(total_counts, head_counts, true, kmer_value, r.seq);
+        count_kmers(true, kmer_value, r.seq, barcode, total_counts,
+                    head_counts);
       }
       const auto r_enrich =
-          kmer_enrich(total_counts, head_counts, kmer_freq, kmer_value,
-                      summary.read_len, summary.n_reads, p_val_cutoff);
-      summary.rrbs_fraction = r_enrich.first;
+          kmer_enrich(total_counts, kmer_freq, kmer_value, summary.read_len,
+                      summary.n_reads, p_val_cutoff, head_counts);
+      summary.rrbs_fraction = r_enrich;
     }
 
     summary.evaluate();

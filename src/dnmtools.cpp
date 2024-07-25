@@ -114,8 +114,6 @@ main_format(int argc, const char **argv);
 int
 main_guessprotocol(int argc, const char **argv);
 int
-main_lc_approx(int argc, const char **argv);
-int
 main_lift_filter(int argc, const char **argv);
 int
 main_merge_bsrate(int argc, const char **argv);
@@ -202,7 +200,6 @@ main(int argc, const char **argv) {
 {"utilities",
  {{{"cleanhp",       "fix and stat invdup/hairping reads", main_clean_hairpins},
    {"guessprotocol", "guess whether protocol is ordinary, pbat or random", main_guessprotocol},
-   {"lc",            "approximate line counts in a file", main_lc_approx},
    {"merge-bsrate",  "merge bisulfite conversion rates files from bsrate", main_merge_bsrate},
    {"merge",         "merge multiple counts files into a counts file or a table", main_merge_methcounts},
    {"covered",       "filter a counts file for only covered sites", main_covered},

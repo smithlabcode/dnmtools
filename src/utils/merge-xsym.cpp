@@ -53,11 +53,14 @@ using std::ostream_iterator;
 
 using bamxx::bgzf_file;
 
+template<typename T>
+using num_lim = std::numeric_limits<T>;
+
 static void
-set_invalid(MSite &s) {s.pos = numeric_limits<uint64_t>::max();}
+set_invalid(MSite &s) {s.pos = num_lim<uint64_t>::max();}
 
 static bool
-is_valid(const MSite &s) {return s.pos != numeric_limits<uint64_t>::max();}
+is_valid(const MSite &s) {return s.pos != num_lim<uint64_t>::max();}
 
 
 inline bamxx::bgzf_file &
@@ -150,7 +153,6 @@ site_precedes(const vector<MSite> &sites,
           (a_chr == b_chr && sites[a].pos < sites[b].pos));
 }
 
-
 static uint32_t
 find_minimum_site(const vector<MSite> &sites,
                   const unordered_map<string, uint32_t> &chroms_order,
@@ -159,14 +161,13 @@ find_minimum_site(const vector<MSite> &sites,
   const uint32_t n_files = sites.size();
 
   // ms_id is the id of the minimum site, the next one to print
-  uint32_t ms_id = numeric_limits<uint32_t>::max();
+  uint32_t ms_id = num_lim<uint32_t>::max();
 
   // make sure there is at least one remaining site to print
-  for (uint32_t i = 0; i < n_files && ms_id == numeric_limits<uint32_t>::max(); ++i)
-    if (is_valid(sites[i]) && !outdated[i])
-      ms_id = i;
+  for (uint32_t i = 0; i < n_files && ms_id == num_lim<uint32_t>::max(); ++i)
+    if (is_valid(sites[i]) && !outdated[i]) ms_id = i;
 
-  if (ms_id == numeric_limits<uint32_t>::max())
+  if (ms_id == num_lim<uint32_t>::max())
     throw runtime_error("failed in a next site to print");
 
   // now find the earliest site to print among those that could be
@@ -177,7 +178,6 @@ find_minimum_site(const vector<MSite> &sites,
 
   return ms_id;
 }
-
 
 static bool
 same_location(const MSite &a, const MSite &b) {
@@ -233,7 +233,7 @@ write_line_for_tabular(const bool write_fractional,
   if (write_fractional) {
     for (uint32_t i = 0; i < n_files; ++i) {
       const uint32_t r = sites[i].n_reads;
-      if (to_print[i] && r > min_reads)
+      if (to_print[i] && r >= min_reads)
         out << '\t' << sites[i].meth;
       else
         out << '\t' << "NA";
@@ -289,86 +289,6 @@ remove_suffix(const string &suffix, const std::string &filename) {
   return filename;
 }
 
-
-// static void
-// get_orders_by_file(const string &filename, vector<string> &chroms_order) {
-
-//   bgzf_file in(filename, "r");
-//   if (!in) throw runtime_error("bad file: " + filename);
-//   chroms_order.clear();
-
-//   unordered_set<string> chroms_seen;
-//   string line;
-//   string prev_chrom;
-
-//   while (getline(in, line)) {
-//     line.resize(line.find_first_of(" \t"));
-//     if (line != prev_chrom) {
-//       if (chroms_seen.find(line) != end(chroms_seen))
-//         throw runtime_error("chroms out of order in: " + filename);
-//       chroms_seen.insert(line);
-//       chroms_order.push_back(line);
-//       std::swap(line, prev_chrom);
-//     }
-//   }
-// }
-
-
-// static void
-// get_chroms_order(const vector<string> &filenames,
-//                  unordered_map<string, uint32_t> &chroms_order) {
-
-//   // get order of chroms in each file
-//   vector<vector<string>> orders(filenames.size());
-//   for (uint32_t i = 0; i < filenames.size(); ++i)
-//     get_orders_by_file(filenames[i], orders[i]);
-
-//   // get the union of chrom sets
-//   unordered_set<string> the_union;
-//   for (uint32_t i = 0; i < orders.size(); ++i)
-//     for (uint32_t j = 0; j < orders[i].size(); ++j)
-//       the_union.insert(orders[i][j]);
-
-//   // get an adjacency list and in-degree for each node
-//   unordered_map<string, vector<string>> adj_lists;
-//   unordered_map<string, uint32_t> in_degree;
-//   for (auto &&i : the_union) {
-//     in_degree[i] = 0;
-//     adj_lists[i] = vector<string>();
-//   }
-//   for (auto &&i : orders) {
-//     auto j = begin(i);
-//     for (auto k = j + 1; k != end(i); ++j, ++k) {
-//       adj_lists[*j].push_back(*k);
-//       ++in_degree[*k];
-//     }
-//   }
-
-//   std::queue<string> q; // invariant: nodes with no incoming edge
-//   for (auto &&i : the_union)
-//     if (in_degree[i] == 0)
-//       q.push(i);
-
-//   while (!q.empty()) {
-//     const string u = q.front();
-//     q.pop();
-
-//     // iterate over the edges (u, v)
-//     for (auto &&v : adj_lists[u]) {
-//       --in_degree[v]; // degree should not appear here as 0
-//       if (in_degree[v] == 0) // this should only happen once per v
-//         q.push(v);
-//     }
-//     adj_lists[u].clear(); // delete node; already had in_degree 0
-
-//     chroms_order.insert(make_pair(u, chroms_order.size()));
-//   }
-
-//   // finally, make sure we found a consistent order
-//   for (auto &&i : adj_lists)
-//     if (!i.second.empty())
-//       throw runtime_error("inconsistent order of chroms between files");
-// }
 
 static void
 read_past_header(bamxx::bgzf_file &in) {
@@ -481,8 +401,8 @@ main_merge_xsym(int argc, const char **argv) {
                       false, write_fractional);
     opt_parse.add_opt("reads", 'r', "min reads (for fractional)",
                       false, min_reads);
-    opt_parse.add_opt("ignore", '\0',"Do not attempt to determine chromosome. "
-                      "Lexicographic order will be used.",
+    opt_parse.add_opt("ignore", '\0',
+                      "do not check chrom order and assume lexicographic",
                       false, ignore_chroms_order);
     opt_parse.add_opt("mut", 'm',"If any of the sites being merged indicates "
                       "mutated, mark the result has mutated.",

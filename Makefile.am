@@ -222,6 +222,7 @@ dnmtools_SOURCES += src/utils/format-reads.cpp
 dnmtools_SOURCES += src/utils/selectsites.cpp
 dnmtools_SOURCES += src/utils/symmetric-cpgs.cpp
 dnmtools_SOURCES += src/utils/merge-methcounts.cpp
+dnmtools_SOURCES += src/utils/merge-xsym.cpp
 dnmtools_SOURCES += src/utils/lift-filter.cpp
 dnmtools_SOURCES += src/utils/fast-liftover.cpp
 dnmtools_SOURCES += src/utils/covered.cpp

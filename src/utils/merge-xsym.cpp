@@ -358,6 +358,7 @@ main_merge_xsym(int argc, const char **argv) {
     bool radmeth_format = false;
     bool ignore_chroms_order = false;
     bool add_first_column_header = false;
+    uint32_t n_threads = 1;
 
     string header_info;
     string column_name_suffix = "RM";
@@ -397,6 +398,7 @@ main_merge_xsym(int argc, const char **argv) {
                       false, report_any_mutated);
     opt_parse.add_opt("1st-col-header", '\0',"add name for 1st col in header",
                       false, add_first_column_header);
+    opt_parse.add_opt("threads", '\0', "number of threads", false, n_threads);
     opt_parse.add_opt("verbose", 'v',"print more run info", false, VERBOSE);
     opt_parse.set_show_defaults();
     vector<string> leftover_args;
@@ -457,12 +459,19 @@ main_merge_xsym(int argc, const char **argv) {
         throw runtime_error("cannot open file: " + xsym_files[i]);
     }
 
+    // set the threads for the input file decompression
+    bamxx::bam_tpool tp(n_threads);
+    if (n_threads > 1)
+      for (auto &f: infiles)
+        if (f->is_bgzf()) tp.set_io(*f);
+
     for (auto &f: infiles)
       read_past_header(*f);
 
     std::ofstream of;
     if (!outfile.empty()) of.open(outfile);
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
+    if (!out) throw runtime_error("error opening output file: " + outfile);
 
     // print header if user specifies or if tabular output format
     if (write_tabular_format) {

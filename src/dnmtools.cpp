@@ -120,6 +120,8 @@ main_merge_bsrate(int argc, const char **argv);
 int
 main_merge_methcounts(int argc, const char **argv);
 int
+main_merge_xsym(int argc, const char **argv);
+int
 main_selectsites(int argc, const char **argv);
 int
 main_symmetric_cpgs(int argc, const char **argv);
@@ -202,6 +204,7 @@ main(int argc, const char **argv) {
    {"guessprotocol", "guess whether protocol is ordinary, pbat or random", main_guessprotocol},
    {"merge-bsrate",  "merge bisulfite conversion rates files from bsrate", main_merge_bsrate},
    {"merge",         "merge multiple counts files into a counts file or a table", main_merge_methcounts},
+   {"merge-xsym",    "merge multiple xsym files into a counts file or a table", main_merge_xsym},
    {"covered",       "filter a counts file for only covered sites", main_covered},
    {"recovered",     "replace missing sites in a counts file", main_recovered},
    {"xcounts",       "compress counts files by removing information", main_xcounts},

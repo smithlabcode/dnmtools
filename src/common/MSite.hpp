@@ -26,7 +26,7 @@
 struct MSite {
   std::string chrom{};
   size_t pos{};
-  char strand{};
+  char strand{'+'};
   std::string context{};
   double meth{};
   size_t n_reads{};

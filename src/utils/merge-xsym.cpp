@@ -97,7 +97,6 @@ read_site(bamxx::bgzf_file &f,
 
   s = MSite();
   s.chrom = chrom_name;
-  s.context = "CpG";
   s.pos = offset;
   s.n_reads = n_meth + n_unmeth;
   s.meth = static_cast<double>(n_meth)/s.n_reads;
@@ -153,6 +152,7 @@ site_precedes(const vector<MSite> &sites,
           (a_chr == b_chr && sites[a].pos < sites[b].pos));
 }
 
+
 static uint32_t
 find_minimum_site(const vector<MSite> &sites,
                   const unordered_map<string, uint32_t> &chroms_order,
@@ -179,10 +179,12 @@ find_minimum_site(const vector<MSite> &sites,
   return ms_id;
 }
 
+
 static bool
 same_location(const MSite &a, const MSite &b) {
   return a.chrom == b.chrom && a.pos == b.pos;
 }
+
 
 static uint32_t
 collect_sites_to_print(const vector<MSite> &sites,
@@ -248,6 +250,7 @@ write_line_for_tabular(const bool write_fractional,
   out << '\n';
 }
 
+
 static void
 write_line_for_merged_counts(std::ostream &out,
                              const bool report_any_mutated,
@@ -269,6 +272,7 @@ write_line_for_merged_counts(std::ostream &out,
       min_site.n_reads += sites[i].n_reads;
     }
   min_site.meth = meth_sum/std::max(1ul, min_site.n_reads);
+  min_site.context = "CpG";
 
   out << min_site << '\n';
 }
@@ -304,6 +308,7 @@ read_past_header(bamxx::bgzf_file &in) {
   ks_free(&line);
 }
 
+
 static vector<string>
 parse_xcounts_header(const string &filename) {
   static constexpr uint32_t buffer_size = 1024;
@@ -335,29 +340,12 @@ get_chroms_order(const vector<string> &header) {
 }
 
 
-/*
-  This utility does two things, and they are grouped together here
-  because of how they are done, not because the uses are related. (1)
-  merge-methcounts can take a set of methcounts output files and
-  combine them into one. There are several reasons a user might want
-  to do this. An example is when technical replicates are performed,
-  and analyzed separately to understand technical variance (e.g.,
-  between sequencing runs or library preps). After examining the
-  technical variation, subsequent analyses might be best conducted on
-  all the data together. So all the methcounts files can be combined
-  into one using merge-methcounts. In this case, the coverage at any
-  site is the sum of the coverages in the original methcounts files,
-  and the methylation level at any site is the weighted mean. (2)
-  merge-methcounts can take a set of methcounts output files, and
-  create a table that contains all the same information. The table
-  format is helpful if subsequent analyses are best done using a data
-  table, for example in R. When producing a tabular format,
-  merge-methcounts allows the user to select whether the desired
-  output is in counts or fractions.
- */
 int
 main_merge_xsym(int argc, const char **argv) {
-
+  /* This utility does two things, and they the same two things
+   * explained in the comment just above the main in
+   * merge-methcounts.cpp
+   */
   try {
 
     static const string description = "merge multiple xsym files";
@@ -434,7 +422,7 @@ main_merge_xsym(int argc, const char **argv) {
       cerr << opt_parse.help_message() << endl;
       return EXIT_SUCCESS;
     }
-    if (column_name_suffix.size() != 2) {
+    if (size(column_name_suffix) != 2) {
       cerr << "column name suffix must be 2 letters" << endl;
       return EXIT_SUCCESS;
     }
@@ -449,7 +437,7 @@ main_merge_xsym(int argc, const char **argv) {
 
     for (const auto &h: headers)
       if (h != headers.front())
-        throw runtime_error{"inconsistent xcounts headers between input files"};
+        throw runtime_error{"inconsistent xsym headers between input files"};
 
     unordered_map<string, uint32_t> chroms_order;
     if (!ignore_chroms_order)
@@ -460,14 +448,6 @@ main_merge_xsym(int argc, const char **argv) {
       vector<string> v(size(chroms_order));
       for (auto &&i : chroms_order) v[i.second] = i.first;
       copy(cbegin(v), cend(v), ostream_iterator<string>(cerr, "\n"));
-
-      // vector<pair<uint32_t, string>> v(size(chroms_order));
-      // transform(cbegin(chroms_order), cend(chroms_order), begin(v),
-      //           [](const pair<string, uint32_t> &o) {
-      //             return {o.second, o.first};});
-      // sort(begin(
-      // for (auto &&i : v)
-      //   cerr << i.second << endl;
     }
 
     vector<bgzf_file*> infiles(n_files);
@@ -543,12 +523,8 @@ main_merge_xsym(int argc, const char **argv) {
     for (auto &&f : infiles)
       delete f;
   }
-  catch (const runtime_error &e)  {
+  catch (const std::exception &e) {
     cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

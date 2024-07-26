@@ -183,7 +183,7 @@ write_line_for_tabular(const bool write_fractional,
   if (write_fractional) {
     for (size_t i = 0; i < n_files; ++i) {
       const size_t r = sites[i].n_reads;
-      if (to_print[i] && r > min_reads)
+      if (to_print[i] && r >= min_reads)
         out << '\t' << sites[i].meth;
       else
         out << '\t' << "NA";

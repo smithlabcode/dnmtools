@@ -98,6 +98,7 @@ read_site(bamxx::bgzf_file &f,
   s.pos = offset;
   s.n_reads = n_meth + n_unmeth;
   s.meth = static_cast<double>(n_meth)/s.n_reads;
+  ks_free(&line);
 
   return f;
 }
@@ -380,6 +381,7 @@ read_past_header(bamxx::bgzf_file &in) {
   while (getline(in, line) && is_counts_header_line(line.s) &&
          string(line.s) != string("#"))
     ;
+  ks_free(&line);
 }
 
 static vector<string>
@@ -396,6 +398,7 @@ parse_xcounts_header(const string &filename) {
   vector<string> v;
   while (getline(in, line) && is_counts_header_line(line.s))
     v.emplace_back(line.s);
+  ks_free(&line);
 
   return v;
 }

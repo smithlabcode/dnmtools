@@ -136,7 +136,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description,
-                           "<methcounts-file>");
+                           "<methcounts-file>", 1);
     opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
                       outfile);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);

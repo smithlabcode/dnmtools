@@ -1,9 +1,9 @@
-/* clean-hairpins: a program for identifying and removing hairping
- * reads from paired-end WGBS or RRBS reads.
+/* clean-hairpins: a program for identifying and removing hairpin
+ * reads from paired-end WGBS/PBAT/RPBAT or RRBS reads.
  *
- * Copyright (C) 2018-2022 Andrew D. Smith, Liz Ji and Jenny Qu
+ * Copyright (C) 2024 Andrew D. Smith
  *
- * Authors: Liz Ji and Andrew D. Smith
+ * Author: Andrew D. Smith
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -121,7 +121,7 @@ similar_letters_bisulfite_tc_and_ag(const char a, const char b) {
 
 // compare two reads to detect the overlapped region
 static double
-similarity_both_bisulfite_convsersions(const string &s1, const string &s2) {
+similarity_both_bisulfite_conversions(const string &s1, const string &s2) {
   const size_t lim = min(size(s1), size(s2));
 
   uint32_t total_letters = 0;
@@ -263,7 +263,7 @@ clean_hairpin::analyze_reads(const string &outfile1, const string &outfile2,
 
     // See if inverted duplicates emerge
     const double percent_match =
-      similarity_both_bisulfite_convsersions(r1.seq, r2.seq);
+      similarity_both_bisulfite_conversions(r1.seq, r2.seq);
 
     // ADS: need a bitter way to get this bin identifier
     ++hist[floor(percent_match * n_hist_bins)];
@@ -302,7 +302,7 @@ clean_hairpin::analyze_reads(bgzf_file &in1, bgzf_file &in2,
     ++hps.n_good_reads;
 
     const double percent_match =
-      similarity_both_bisulfite_convsersions(r1.seq, r2.seq);
+      similarity_both_bisulfite_conversions(r1.seq, r2.seq);
     ++hist[floor(percent_match * n_hist_bins)];
 
     if (percent_match > cutoff) {
@@ -318,7 +318,7 @@ clean_hairpin::analyze_reads(bgzf_file &in1, bgzf_file &in2,
 int
 main_clean_hairpins(int argc, const char **argv) {
 
-  static const string description = "fix and stat invdup/hairping reads";
+  static const string description = "fix and stat invdup/hairpin reads";
 
   try {
 

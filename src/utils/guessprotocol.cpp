@@ -29,10 +29,13 @@
 #include <limits>
 #include <numeric>
 #include <queue>
+#include <random>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "OptionParser.hpp"
@@ -51,13 +54,15 @@ using std::min;
 using std::pair;
 using std::priority_queue;
 using std::runtime_error;
+using std::set;
 using std::string;
 using std::unordered_map;
+using std::unordered_set;
 using std::vector;
 
 using bamxx::bgzf_file;
 
-constexpr int nuc_to_idx[] = {
+constexpr uint32_t nuc_to_idx[] = {
     // clang-format off
  /*  0*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
  /* 16*/  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -217,6 +222,8 @@ struct guessprotocol_summary {
 struct FASTQRecord {
   string name;
   string seq;
+  string plus;
+  string qual;
 };
 
 // see if two reads from two ends match to each other (they should
@@ -255,11 +262,11 @@ static bgzf_file &operator>>(bgzf_file &s, FASTQRecord &r) {
   if (!getline(s, r.seq))
     ec = err_code::bad_seq;
 
-  string tmp;
-  if (!getline(s, tmp))
+  // string tmp;
+  if (!getline(s, r.plus))
     ec = err_code::bad_plus;
 
-  if (!getline(s, tmp))
+  if (!getline(s, r.qual))
     ec = err_code::bad_qual;
 
   if (ec != err_code::none)
@@ -284,18 +291,18 @@ static bgzf_file &operator>>(bgzf_file &s, string &r) {
 }
 
 template <typename T = string::const_iterator>
-uint64_t kmer_to_int(T start, const T stop) {
+static inline uint64_t kmer_to_int(T itr, const T stop) {
+  static constexpr uint32_t alphabet_size = 4;
+  static constexpr uint32_t alphabet_shift_size = 2;
   uint64_t num = 0;
-  uint8_t base = 4;
-  for (T it = start; it != stop; ++it) {
-    int idx = nuc_to_idx[static_cast<uint8_t>(*it)];
-    if (idx == 4) {
-      throw std::invalid_argument(
-          "Invalid nucleotide character when converting to integer");
-    }
-    num = num * base + idx;
+  uint32_t n_count = 0;
+
+  while (itr != stop) {
+    const uint8_t idx = nuc_to_idx[static_cast<uint8_t>(*itr++)];
+    n_count += (idx == alphabet_size);
+    num = (num << alphabet_shift_size) + idx;
   }
-  return num;
+  return n_count > 0 ? std::numeric_limits<uint64_t>::max() : num;
 }
 
 string int_to_kmer(uint64_t num, const uint32_t kmer_value) {
@@ -311,39 +318,33 @@ string int_to_kmer(uint64_t num, const uint32_t kmer_value) {
 void count_kmers(const bool head, const uint32_t kmer_value, const string &s,
                  int barcode, vector<double> &total_counts,
                  vector<double> &head_counts) {
-  try {
-    const uint32_t start = std::max(0, barcode);
-    if (head) {
-      if (s.size() < kmer_value)
-        throw std::out_of_range("Read length smaller than k-mer length");
+  const uint32_t start = std::max(0, barcode);
+  if (head) {
+    if (s.size() < kmer_value)
+      throw std::out_of_range("Read length smaller than k-mer length");
 
-      string head_kmer = s.substr(start, kmer_value);
-      if (head_kmer.find('N') == string::npos)
-        head_counts[kmer_to_int(head_kmer.begin(), head_kmer.end())]++;
-    }
-    for (auto i = start; i <= size(s) - start - kmer_value + 1; ++i) {
-      string kmer = s.substr(i, kmer_value);
-      if (kmer.find('N') == string::npos)
-        total_counts[kmer_to_int(kmer.begin(), kmer.end())]++;
-    }
-  } catch (const std::out_of_range &e) {
-    cerr << "Error: " << e.what() << endl;
-    cerr << "Sequence: " << s << endl;
+    string head_kmer = s.substr(start, kmer_value);
+    if (head_kmer.find('N') == string::npos)
+      head_counts[kmer_to_int(head_kmer.begin(), head_kmer.end())]++;
+  }
+  for (auto i = start; i <= size(s) - start - kmer_value + 1; ++i) {
+    string kmer = s.substr(i, kmer_value);
+    if (kmer.find('N') == string::npos)
+      total_counts[kmer_to_int(kmer.begin(), kmer.end())]++;
   }
 }
 
-vector<double> load_kmer_freq(const string &filename,
-                              vector<double> &kmer_freq) {
-  std::ifstream infile(filename);
+vector<double> load_kmer_freq(const string &filename, size_t size) {
+  vector<double> kmer_freq(size, 0.0);
+  std::ifstream infile(filename, std::ios::binary);
   if (!infile)
     throw runtime_error("cannot open file: " + filename);
 
-  string kmer;
-  double freq;
-  while (infile >> kmer >> freq) {
-    uint64_t idx = kmer_to_int(kmer.begin(), kmer.end());
-    kmer_freq[idx] = freq;
-  }
+  infile.read(reinterpret_cast<char *>(kmer_freq.data()),
+              size * sizeof(double));
+  if (!infile)
+    throw runtime_error("error reading file: " + filename);
+
   return kmer_freq;
 }
 
@@ -373,16 +374,15 @@ vector<double> calculate_kmer_freq(const string &ref_genome,
   return kmer_freq;
 }
 
-void save_kmer_freq(const string &filename, const vector<double> &kmer_freq,
-                    const uint32_t kmer_value) {
-  std::ofstream outfile(filename);
+void save_kmer_freq(const string &filename, const vector<double> &kmer_freq) {
+  std::ofstream outfile(filename, std::ios::binary);
   if (!outfile)
     throw runtime_error("cannot open file for writing: " + filename);
 
-  for (size_t i = 0; i < kmer_freq.size(); ++i) {
-    string kmer = int_to_kmer(i, kmer_value);
-    outfile << kmer << " " << kmer_freq[i] << "\n";
-  }
+  outfile.write(reinterpret_cast<const char *>(kmer_freq.data()),
+                kmer_freq.size() * sizeof(double));
+  if (!outfile)
+    throw runtime_error("error writing to file: " + filename);
 }
 
 #include <boost/math/distributions/binomial.hpp>
@@ -397,26 +397,21 @@ void ct_conversion(const vector<double> &kmer_freq, const uint64_t n_seqs,
                    const uint32_t kmer_value, vector<double> &kmer_counts) {
   for (size_t i = 0; i < kmer_counts.size(); ++i) {
     string t_kmer = int_to_kmer(i, kmer_value);
-    try {
-      for (char &c : t_kmer)
-        if (c == 'T') {
-          uint32_t t_exp = kmer_freq[i] * n_seqs;
-          int32_t delta = kmer_counts[i] - t_exp;
-          if (delta > 0) {
-            kmer_counts[i] -= delta;
-            // cout << "kmer = " << t_kmer << ", t_exp = " << t_exp
-            //       << ", delta = " << delta
-            //       << ", new_t_count = " << kmer_counts[i];
-            c = 'C';
-            uint64_t c_idx = kmer_to_int(t_kmer.begin(), t_kmer.end());
-            kmer_counts[c_idx] += delta;
-            // cout << ", new_c_count = " << kmer_counts[c_idx] << '\n';
-          }
+    for (char &c : t_kmer)
+      if (c == 'T') {
+        uint32_t t_exp = kmer_freq[i] * n_seqs;
+        int32_t delta = kmer_counts[i] - t_exp;
+        if (delta > 0) {
+          kmer_counts[i] -= delta;
+          // cout << "kmer = " << t_kmer << ", t_exp = " << t_exp
+          //       << ", delta = " << delta
+          //       << ", new_t_count = " << kmer_counts[i];
+          c = 'C';
+          uint64_t c_idx = kmer_to_int(t_kmer.begin(), t_kmer.end());
+          kmer_counts[c_idx] += delta;
+          // cout << ", new_c_count = " << kmer_counts[c_idx] << '\n';
         }
-    } catch (const std::out_of_range &e) {
-      cerr << "Error: " << e.what() << endl;
-      cerr << "Key not found: " << t_kmer << endl;
-    }
+      }
   }
 }
 
@@ -463,8 +458,263 @@ double kmer_enrich(const vector<double> &total_counts,
   return check_significance(head_counts, p_values, n_seqs, p_val_cutoff);
 }
 
-int main_guessprotocol(int argc, const char **argv) {
+vector<vector<double>> generate_hyperplane(const uint32_t num_hashes,
+                                           const size_t dim) {
+  vector<vector<double>> hyperplane(num_hashes, vector<double>(dim, 0.0));
+  for (auto &h : hyperplane)
+    for (size_t i = 0; i < dim; ++i)
+      h[i] = ((double)rand() / RAND_MAX) * 2 - 1;
+  return hyperplane;
+}
 
+int8_t hash_binary_vector(const vector<int8_t> &binary_vector,
+                          const vector<double> &hyperplane) {
+  double dot_product = 0.0;
+  for (size_t i = 0; i < binary_vector.size(); ++i)
+    dot_product += binary_vector[i] * hyperplane[i];
+  return dot_product >= 0 ? 1 : 0;
+}
+
+uint64_t generate_composite_hash(const vector<int8_t> &binary_vector,
+                                 const vector<vector<double>> &hyperplanes) {
+  uint64_t composite_hash = 0;
+  for (size_t i = 0; i < hyperplanes.size(); ++i) {
+    const int8_t hash_bit = hash_binary_vector(binary_vector, hyperplanes[i]);
+    composite_hash = (composite_hash << 1) | hash_bit;
+  }
+  return composite_hash;
+}
+
+void extract_kmers(const string &sequence, const uint32_t k, set<string> &vocab,
+                   vector<set<string>> &all_kmers) {
+  set<string> kmers;
+  for (size_t i = 0; i <= sequence.length() - k; ++i) {
+    string kmer = sequence.substr(i, k);
+    kmers.insert(kmer);
+    if (vocab.find(kmer) == vocab.end())
+      vocab.insert(kmer);
+  }
+  all_kmers.push_back(kmers);
+}
+
+// generate a binary vector for each sequence based on the k-mer vocab
+void generate_binary_vector(const vector<set<string>> &all_kmers,
+                            const set<string> &vocab,
+                            vector<vector<int8_t>> &binaries) {
+  for (size_t i = 0; i < all_kmers.size(); ++i) {
+    set<string> kmers = all_kmers[i];
+
+    // generate binary vectors
+    vector<int8_t> binary_vector(vocab.size(), 0);
+    size_t index = 0;
+    for (const auto &elem : vocab) {
+      if (kmers.find(elem) != kmers.end())
+        binary_vector[index] = 1;
+      ++index;
+    }
+    binaries.push_back(binary_vector);
+  }
+}
+
+// calculate cosine similarity between two binary vectors
+[[maybe_unused]] double cosine_similarity(const vector<int8_t> &v1,
+                                          const vector<int8_t> &v2) {
+  assert(v1.size() == v2.size());
+
+  double dot_product = 0.0;
+  double norm_1 = 0.0;
+  double norm_2 = 0.0;
+
+  for (size_t i = 0; i < v1.size(); ++i) {
+    dot_product += v1[i] * v2[i];
+    norm_1 += v1[i] * v1[i];
+    norm_2 += v2[i] * v2[i];
+  }
+  if (norm_1 == 0 || norm_2 == 0)
+    return 0.0;
+
+  return dot_product / (sqrt(norm_1) * sqrt(norm_2));
+}
+
+unordered_map<size_t, unordered_set<uint32_t>>
+calculate_similarity(const bool verbose, const vector<vector<int8_t>> &binaries,
+                     const vector<vector<double>> &hyperplanes) {
+  unordered_map<size_t, unordered_set<uint32_t>> buckets;
+  for (size_t i = 0; i < binaries.size(); ++i) {
+    size_t composite_hash = generate_composite_hash(binaries[i], hyperplanes);
+    buckets[composite_hash].insert(i);
+  }
+
+  // only keep the buckets with the size greater than min_bucket_size
+  unordered_map<size_t, unordered_set<uint32_t>> large_buckets;
+  uint32_t min_bucket_size = binaries.size() / 50;
+  for (const auto &b : buckets) {
+    if (b.second.size() > min_bucket_size)
+      large_buckets[b.first] = b.second;
+  }
+
+  // print out the buckets and similarities
+  // for (const auto &b : buckets) {
+  //   cout << "Hash Value: " << b.first << " contains " <<
+  //   b.second.size() << " sequences: ";
+  //   for (uint32_t index : b.second)
+  //     cout << index << " ";
+  //   cout << "\n";
+  // }
+
+  // for (size_t i = 0; i < binaries.size(); ++i)
+  //   for (size_t j = i + 1; j < binaries.size(); ++j) {
+  //     double similarity = cosine_similarity(binaries[i], binaries[j]);
+  //     cout << "Similarity between sequence " << i + 1 << " and sequence " <<
+  //     j + 1 << ": " << similarity << "\n";
+  //   }
+  return large_buckets;
+}
+
+unordered_map<size_t, unordered_set<uint32_t>>
+identify_contaminants(const bool verbose, const vector<set<string>> &all_kmers,
+                      const set<string> &vocab, const uint32_t num_hashes) {
+  vector<vector<int8_t>> binaries;
+  generate_binary_vector(all_kmers, vocab, binaries);
+  auto hyperplanes = generate_hyperplane(num_hashes, binaries[0].size());
+  return calculate_similarity(verbose, binaries, hyperplanes);
+}
+
+uint64_t rm_contam(
+    const bool verbose, const vector<string> &reads_files,
+    const vector<string> &output_names, const size_t total_seqs,
+    const vector<unordered_map<size_t, unordered_set<uint32_t>>> &buckets) {
+  FASTQRecord r1, r2;
+  uint64_t n_seqs = 0;
+  uint64_t n_removed = 0;
+  double buck_frac = 0;
+  unordered_set<string> reported;
+
+  if (reads_files.size() == 2) {
+    bgzf_file in1(reads_files.front(), "r");
+    bgzf_file in2(reads_files.back(), "r");
+
+    bgzf_file out1(output_names.front(), "w");
+    bgzf_file out2(output_names.back(), "w");
+    if (!out1 || !out2)
+      throw runtime_error("Failed to open output files. \n");
+
+    while (in1 >> r1 && in2 >> r2) {
+      bool valid = true;
+      for (size_t i = 0; i < buckets.size(); ++i) {
+        for (const auto &b : buckets[i])
+          if (b.second.find(n_seqs) != b.second.end()) {
+            valid = false;
+            buck_frac = b.second.size() / static_cast<double>(total_seqs);
+            break;
+          }
+        if (verbose) {
+          if (!valid && i == 0 && reported.find(r1.seq) == reported.end()) {
+            reported.insert(r1.seq);
+            cout << "r1 \t" << buck_frac << " \t " << r1.seq << "\n";
+          }
+          if (!valid && i == 1 && reported.find(r2.seq) == reported.end()) {
+            reported.insert(r2.seq);
+            cout << "r2 \t" << buck_frac << " \t " << r2.seq << "\n";
+          }
+        }
+      }
+      if (valid) {
+        string out1_content =
+            "@" + r1.name + "\n" + r1.seq + "\n+\n" + r1.qual + "\n";
+        string out2_content =
+            "@" + r2.name + "\n" + r2.seq + "\n+\n" + r2.qual + "\n";
+        if (!out1.write(out1_content) || !out2.write(out2_content))
+          throw runtime_error("Failed to write to output file. \n");
+      } else
+        n_removed++;
+      ++n_seqs;
+    }
+  } else if (reads_files.size() == 1) {
+    bgzf_file in1(reads_files.front(), "r");
+    bgzf_file out1(output_names.front(), "w");
+    if (!out1)
+      throw runtime_error("Failed to open output files. \n");
+
+    cout << "fraction \t sequence \n";
+    while (in1 >> r1) {
+      bool valid = true;
+      for (const auto &buck : buckets) {
+        cout << "Potential contaminants:\n";
+        for (const auto &b : buck)
+          if (b.second.find(n_seqs) != b.second.end()) {
+            valid = false;
+            buck_frac = b.second.size() / static_cast<double>(total_seqs);
+            break;
+          }
+        if (verbose)
+          if (!valid && reported.find(r1.seq) == reported.end()) {
+            reported.insert(r1.seq);
+            cout << buck_frac << " \t " << r1.seq << "\n";
+          }
+      }
+      if (valid) {
+        string out1_content =
+            "@" + r1.name + "\n" + r1.seq + "\n+\n" + r1.qual + "\n";
+        if (!out1.write(out1_content))
+          throw runtime_error("Failed to write to output file. \n");
+      } else
+        n_removed++;
+      ++n_seqs;
+    }
+  }
+  return n_removed;
+}
+
+vector<string> clean_fastq(const bool verbose,
+                           const vector<string> &reads_files,
+                           const uint32_t subset_value,
+                           const uint32_t num_hashes, const string prefix) {
+  set<string> vocab_1, vocab_2;
+  vector<set<string>> all_kmers_1, all_kmers_2;
+  FASTQRecord r1, r2;
+  vector<string> output_names;
+  vector<unordered_map<size_t, unordered_set<uint32_t>>> buckets;
+
+  bgzf_file in1(reads_files.front(), "r");
+  if (!in1)
+    throw runtime_error("cannot open file: " + reads_files.front());
+
+  if (reads_files.size() == 2) {
+    bgzf_file in2(reads_files.back(), "r");
+    if (!in2)
+      throw runtime_error("cannot open file: " + reads_files.back());
+
+    // create output files
+    output_names.push_back(prefix + "_clean_1.fastq.gz");
+    output_names.push_back(prefix + "_clean_2.fastq.gz");
+
+    while (in1 >> r1 && in2 >> r2) {
+      extract_kmers(r1.seq, subset_value, vocab_1, all_kmers_1);
+      extract_kmers(r2.seq, subset_value, vocab_2, all_kmers_2);
+    }
+    buckets.push_back(
+        identify_contaminants(verbose, all_kmers_1, vocab_1, num_hashes));
+    buckets.push_back(
+        identify_contaminants(verbose, all_kmers_2, vocab_2, num_hashes));
+  } else if (reads_files.size() == 1) {
+    output_names.push_back(prefix + "_clean.fastq.gz");
+
+    while (in1 >> r1)
+      extract_kmers(r1.seq, subset_value, vocab_1, all_kmers_1);
+
+    buckets.push_back(
+        identify_contaminants(verbose, all_kmers_1, vocab_1, num_hashes));
+  }
+
+  uint64_t n_removed = rm_contam(verbose, reads_files, output_names,
+                                 all_kmers_1.size(), buckets);
+  cout << n_removed << " reads removed before guessing the protocol.\n\n";
+
+  return output_names;
+}
+
+int main_guessprotocol(int argc, const char **argv) {
   try {
 
     static const vector<double> human_base_comp = {0.295, 0.205, 0.205, 0.295};
@@ -472,16 +722,24 @@ int main_guessprotocol(int argc, const char **argv) {
 
     constexpr auto description = "guess bisulfite protocol for a library";
 
+    // check wgbs fraction
     bool verbose = false;
     bool use_human = false;
     string outfile;
     size_t reads_to_check = 1000000;
     size_t name_suffix_len = 0;
     double bisulfite_conversion_rate = 0.98;
+    // check rrbs
     uint32_t kmer_value = 3;
     string ref_genome{};
     double p_val_cutoff = 0.01;
-    int barcode = 0;
+    uint32_t barcode = 0;
+    // check contamination
+    uint32_t seed = std::numeric_limits<uint32_t>::max();
+    string prefix{};
+    uint32_t subset_value = 6;
+    uint32_t num_hashes = 10;
+    bool remove_reads = false;
 
     namespace fs = std::filesystem;
     const string cmd_name = std::filesystem::path(argv[0]).filename();
@@ -509,6 +767,12 @@ int main_guessprotocol(int argc, const char **argv) {
                       "barcode length of the 5' end that needs to be omitted "
                       "when determining RRBS",
                       false, barcode);
+    opt_parse.add_opt("seed", 's', "seed for random numbers", false, seed);
+    opt_parse.add_opt("prefix", 'p', "prefix for the output files", true,
+                      prefix);
+    opt_parse.add_opt("check", 'c',
+                      "check and remove contaminants in the fastq file", false,
+                      remove_reads);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
@@ -552,17 +816,24 @@ int main_guessprotocol(int argc, const char **argv) {
            << "bisulfite conversion: " << bisulfite_conversion_rate << '\n';
     }
 
+    // remove contaminants before running guessprotocol
+    vector<string> output_names;
+    if (remove_reads)
+      output_names =
+          clean_fastq(verbose, reads_files, subset_value, num_hashes, prefix);
+
     // look for the kmer frequency file
     string kmer_freq_file = ref_genome + ".gp";
-    vector<double> kmer_freq(static_cast<size_t>(std::pow(4, kmer_value)), 0.0);
+    size_t vec_size = static_cast<size_t>(std::pow(4, kmer_value));
+    vector<double> kmer_freq(vec_size, 0.0);
 
     if (std::filesystem::exists(kmer_freq_file)) {
-      kmer_freq = load_kmer_freq(kmer_freq_file, kmer_freq);
+      kmer_freq = load_kmer_freq(kmer_freq_file, vec_size);
       cout << "Loaded k-mer frequencies from " << kmer_freq_file << '\n';
     } else {
       kmer_freq = calculate_kmer_freq(ref_genome, kmer_value, reads_to_check,
                                       kmer_freq);
-      save_kmer_freq(kmer_freq_file, kmer_freq, kmer_value);
+      save_kmer_freq(kmer_freq_file, kmer_freq);
       cout << "Calculated and saved k-mer frequencies to " << kmer_freq_file
            << '\n';
     }
@@ -570,27 +841,26 @@ int main_guessprotocol(int argc, const char **argv) {
     if (reads_files.size() == 2) {
 
       // input: paired-end reads with end1 and end2
-      bgzf_file in1(reads_files.front(), "r");
+      bgzf_file in1(remove_reads ? output_names.front() : reads_files.front(),
+                    "r");
       if (!in1)
         throw runtime_error("cannot open file: " + reads_files.front());
 
-      bgzf_file in2(reads_files.back(), "r");
+      bgzf_file in2(remove_reads ? output_names.back() : reads_files.back(),
+                    "r");
       if (!in2)
         throw runtime_error("cannot open file: " + reads_files.back());
 
       FASTQRecord r1, r2;
-      vector<double> total_counts_1(
-          static_cast<size_t>(std::pow(4, kmer_value)), 0.0);
-      vector<double> total_counts_2(
-          static_cast<size_t>(std::pow(4, kmer_value)), 0.0);
-      vector<double> head_counts_1(static_cast<size_t>(std::pow(4, kmer_value)),
-                                   0.0);
-      vector<double> head_counts_2(static_cast<size_t>(std::pow(4, kmer_value)),
-                                   0.0);
+      vector<double> total_counts_1(vec_size, 0.0);
+      vector<double> total_counts_2(vec_size, 0.0);
+      vector<double> head_counts_1(vec_size, 0.0);
+      vector<double> head_counts_2(vec_size, 0.0);
 
       while (in1 >> r1 && in2 >> r2 && summary.n_reads < reads_to_check) {
-        if (summary.n_reads == 0)
+        if (summary.n_reads == 0) {
           summary.read_len = size(r1.seq);
+        }
         summary.n_reads++;
 
         if (!mates(name_suffix_len, r1, r2))
@@ -616,6 +886,7 @@ int main_guessprotocol(int argc, const char **argv) {
 
       // take the average of the two enrichment
       summary.rrbs_fraction = (r1_enrich + r2_enrich) / 2;
+
     } else {
       // input: single-end reads
       bgzf_file in(reads_files.front(), "r");
@@ -623,10 +894,9 @@ int main_guessprotocol(int argc, const char **argv) {
         throw runtime_error("cannot open file: " + reads_files.front());
 
       FASTQRecord r;
-      vector<double> total_counts(static_cast<size_t>(std::pow(4, kmer_value)),
-                                  0.0);
-      vector<double> head_counts(static_cast<size_t>(std::pow(4, kmer_value)),
-                                 0.0);
+      vector<double> total_counts(vec_size, 0.0);
+      vector<double> head_counts(vec_size, 0.0);
+      unordered_map<string, double> contam;
 
       while (in >> r && summary.n_reads < reads_to_check) {
         if (summary.n_reads == 0)

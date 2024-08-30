@@ -239,7 +239,7 @@ main_guessprotocol(int argc, const char **argv) {
     constexpr auto description = "guess bisulfite protocol for a library";
 
     bool verbose = false;
-    bool use_human;
+    bool use_human = false;
     string outfile;
     size_t reads_to_check = 1000000;
     size_t name_suffix_len = 0;

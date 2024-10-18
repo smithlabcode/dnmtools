@@ -205,6 +205,16 @@ get_pos(const bamxx::bam_rec &b) {
   return b.b->core.pos;
 }
 
+inline int32_t
+get_mtid(const bamxx::bam_rec &b) {
+  return b.b->core.mtid;
+}
+
+inline hts_pos_t
+get_mpos(const bamxx::bam_rec &b) {
+  return b.b->core.mpos;
+}
+
 inline uint32_t
 get_n_cigar(const bamxx::bam_rec &b) {
   return b.b->core.n_cigar;
@@ -253,7 +263,8 @@ equivalent_end_and_strand(const bamxx::bam_rec &a, const bamxx::bam_rec &b) {
   return bam_endpos(a.b) == bam_endpos(b.b) && bam_is_rev(a) == bam_is_rev(b);
 }
 
-template<typename T> int
+template <typename T>
+int
 bam_aux_update_int(bamxx::bam_rec &b, const char tag[2], T val) {
   return bam_aux_update_int(b.b, tag, val);
 }

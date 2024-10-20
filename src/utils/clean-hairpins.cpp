@@ -20,6 +20,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>  // std::size_t
+#include <cstdint>  // std::uint32_t and std::uint64_t
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -45,7 +47,10 @@ using std::ofstream;
 using std::ostream;
 using std::ostringstream;
 using std::runtime_error;
+using std::size_t;
 using std::string;
+using std::uint32_t;
+using std::uint64_t;
 using std::vector;
 
 using bamxx::bgzf_file;
@@ -93,22 +98,28 @@ operator>>(bgzf_file &s, FASTQRecord &r) {
 
   err_code ec = err_code::none;
 
-  if (!getline(s, r.name)) return s;
+  if (!getline(s, r.name))
+    return s;
 
-  if (r.name.empty() || r.name[0] != '@') ec = err_code::bad_name;
+  if (r.name.empty() || r.name[0] != '@')
+    ec = err_code::bad_name;
 
   const auto nm_end = r.name.find_first_of(" \t");
   const auto nm_sz = (nm_end == string::npos ? r.name.size() : nm_end) - 1;
   r.name.erase(copy_n(cbegin(r.name) + 1, nm_sz, begin(r.name)), cend(r.name));
 
-  if (!getline(s, r.seq)) ec = err_code::bad_seq;
+  if (!getline(s, r.seq))
+    ec = err_code::bad_seq;
 
   string tmp;
-  if (!getline(s, tmp)) ec = err_code::bad_plus;
+  if (!getline(s, tmp))
+    ec = err_code::bad_plus;
 
-  if (!getline(s, r.qual)) ec = err_code::bad_qual;
+  if (!getline(s, r.qual))
+    ec = err_code::bad_qual;
 
-  if (ec != err_code::none) throw error_msg[ec];
+  if (ec != err_code::none)
+    throw error_msg[ec];
 
   return s;
 }
@@ -171,15 +182,13 @@ struct hp_summary {
   // sum_percent_match_bad over the total hairpin reads.
   double mean_percent_match_hairpin{};
 
-  auto
-  assign_values() -> void {
+  auto assign_values() -> void {
     mean_percent_match_non_hairpin =
       sum_percent_match_good / (n_reads - n_hairpin_reads);
     mean_percent_match_hairpin = sum_percent_match_bad / n_hairpin_reads;
   }
 
-  auto
-  tostring() const -> string {
+  auto tostring() const -> string {
     ostringstream oss;
     oss << "total_reads_pairs: " << n_reads << '\n'
         << "good_reads_pairs: " << n_good_reads << '\n'
@@ -197,7 +206,8 @@ struct hp_summary {
 static void
 write_histogram(const string &hist_outfile, vector<double> hist) {
   ofstream hist_out(hist_outfile);
-  if (!hist_out) throw runtime_error("failed to open file: " + hist_outfile);
+  if (!hist_out)
+    throw runtime_error("failed to open file: " + hist_outfile);
   const auto total = accumulate(cbegin(hist), cend(hist), 0.0);
   transform(cbegin(hist), cend(hist), begin(hist),
             [&total](const double t) { return t / total; });
@@ -213,7 +223,8 @@ static void
 write_statistics(const string &filename, hp_summary hps) {
   hps.assign_values();
   ofstream out(filename);
-  if (!out) throw runtime_error("failed to open file: " + filename);
+  if (!out)
+    throw runtime_error("failed to open file: " + filename);
   out << hps.tostring();
 }
 
@@ -226,17 +237,18 @@ fraction_good_bases(const FASTQRecord &a, const FASTQRecord &b) {
 
 struct clean_hairpin {
   double cutoff{0.95};
-  uint64_t n_reads_to_check{std::numeric_limits<size_t>::max()};
+  // ADS: this was uint64_t but g++-14.2.0 on macOS had a problem
+  size_t n_reads_to_check{std::numeric_limits<size_t>::max()};
   double min_good_base_percent{0.5};
   uint32_t min_read_length{32};
   uint32_t n_hist_bins{20};
   bool invert_output{false};
 
-  hp_summary
-  analyze_reads(const string &outfile1, const string &outfile2, bgzf_file &in1,
-                bgzf_file &in2, vector<double> &hist) const;
-  hp_summary
-  analyze_reads(bgzf_file &in1, bgzf_file &in2, vector<double> &hist) const;
+  hp_summary analyze_reads(const string &outfile1, const string &outfile2,
+                           bgzf_file &in1, bgzf_file &in2,
+                           vector<double> &hist) const;
+  hp_summary analyze_reads(bgzf_file &in1, bgzf_file &in2,
+                           vector<double> &hist) const;
 };
 
 hp_summary
@@ -246,9 +258,11 @@ clean_hairpin::analyze_reads(const string &outfile1, const string &outfile2,
 
   // output files for read1 and read2 with hairpins removed
   bgzf_file out1(outfile1, "w");
-  if (!out1) throw runtime_error("cannot open output file: " + outfile1);
+  if (!out1)
+    throw runtime_error("cannot open output file: " + outfile1);
   bgzf_file out2(outfile2, "w");
-  if (!out2) throw runtime_error("cannot open output file: " + outfile2);
+  if (!out2)
+    throw runtime_error("cannot open output file: " + outfile2);
 
   hp_summary hps{cutoff};
   FASTQRecord r1, r2;
@@ -384,17 +398,21 @@ main_clean_hairpins(int argc, const char **argv) {
 
     // Input: paired-end reads with end1 and end2
     bgzf_file in1(reads_file1, "r");
-    if (!in1) throw runtime_error("cannot open input file: " + reads_file1);
+    if (!in1)
+      throw runtime_error("cannot open input file: " + reads_file1);
     bgzf_file in2(reads_file2, "r");
-    if (!in2) throw runtime_error("cannot open input file: " + reads_file2);
+    if (!in2)
+      throw runtime_error("cannot open input file: " + reads_file2);
 
     const hp_summary hps =
       write_reads ? ch.analyze_reads(outfile1, outfile2, in1, in2, hist)
                   : ch.analyze_reads(in1, in2, hist);
 
-    if (!stat_outfile.empty()) write_statistics(stat_outfile, hps);
+    if (!stat_outfile.empty())
+      write_statistics(stat_outfile, hps);
 
-    if (!hist_outfile.empty()) write_histogram(hist_outfile, hist);
+    if (!hist_outfile.empty())
+      write_histogram(hist_outfile, hist);
   }
   catch (const std::exception &e) {
     cerr << e.what() << endl;

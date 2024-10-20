@@ -20,13 +20,14 @@
 #include "MSite.hpp"
 #include "OptionParser.hpp"
 #include "bsutils.hpp"
-#include "xcounts_utils.hpp"
 #include "smithlab_utils.hpp"
+#include "xcounts_utils.hpp"
 
 #include <bamxx.hpp>
 
 #include <algorithm>
 #include <charconv>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -45,6 +46,8 @@ using std::ostream;
 using std::runtime_error;
 using std::size;
 using std::string;
+using std::uint32_t;
+using std::uint64_t;
 using std::unordered_map;
 using std::vector;
 
@@ -75,13 +78,13 @@ format_levels_counter(const LevelsCounter &lc) {
   return oss.str();
 }
 
-
 static unordered_map<string, uint64_t>
 get_chrom_sizes(const string &chrom_sizes_file) {
   unordered_map<string, uint64_t> chrom_sizes;
 
   ifstream in(chrom_sizes_file);
-  if (!in) throw runtime_error("failed to open file: " + chrom_sizes_file);
+  if (!in)
+    throw runtime_error("failed to open file: " + chrom_sizes_file);
 
   string line;
   while (getline(in, line)) {
@@ -91,7 +94,8 @@ get_chrom_sizes(const string &chrom_sizes_file) {
     if (!(iss >> chrom_name >> chrom_size))
       throw runtime_error("bad line in " + chrom_sizes_file + ":\n" + line);
     string dummy;
-    if (iss >> dummy) throw runtime_error("too many columns: " + line);
+    if (iss >> dummy)
+      throw runtime_error("too many columns: " + line);
 
     if (chrom_sizes.find(chrom_name) != cend(chrom_sizes))
       throw runtime_error("repeated entry " + chrom_name + " in " +
@@ -105,7 +109,8 @@ get_chrom_sizes(const string &chrom_sizes_file) {
 static vector<string>
 get_chrom_names(const string &chrom_sizes_file) {
   ifstream in(chrom_sizes_file);
-  if (!in) throw runtime_error("failed to open file: " + chrom_sizes_file);
+  if (!in)
+    throw runtime_error("failed to open file: " + chrom_sizes_file);
 
   vector<string> chrom_names;
 
@@ -120,7 +125,6 @@ get_chrom_names(const string &chrom_sizes_file) {
   }
   return chrom_names;
 }
-
 
 static void
 update(LevelsCounter &lc, const xcounts_entry &xce) {
@@ -149,7 +153,8 @@ process_chrom(const bool report_more_info, const char level_code,
 
   uint64_t j = 0;
   for (auto i = 0ul; i < chrom_size; i += bin_size) {
-    while (j < size(sites) && sites[j].pos < i) ++j;
+    while (j < size(sites) && sites[j].pos < i)
+      ++j;
 
     LevelsCounter lc;
     while (j < size(sites) && sites[j].pos < i + bin_size)
@@ -166,7 +171,8 @@ process_chrom(const bool report_more_info, const char level_code,
                                  : (level_code == 'u' ? lc.sites_covered
                                                       : lc.total_called()))));
     out << r;
-    if (report_more_info) out << '\t' << format_levels_counter(lc);
+    if (report_more_info)
+      out << '\t' << format_levels_counter(lc);
     out << '\n';
   }
 }
@@ -182,7 +188,8 @@ process_chrom(const bool report_more_info, const string &chrom_name,
     r.set_start(i);
     r.set_end(std::min(i + bin_size, chrom_size));
     out << r;
-    if (report_more_info) out << '\t' << lc_formatted;
+    if (report_more_info)
+      out << '\t' << lc_formatted;
     out << '\n';
   }
 }
@@ -210,7 +217,8 @@ Columns (beyond the first 6) in the BED format output:
     bool verbose = false;
     bool report_more_info = false;
     uint32_t n_threads = 1;
-    uint64_t bin_size = 1000;
+    // uint64_t bin_size = 1000;
+    size_t bin_size = 1000;  // ADS: for macOS gcc-14.2.0
     string level_code = "w";
     string outfile;
 
@@ -266,7 +274,8 @@ Columns (beyond the first 6) in the BED format output:
     std::ofstream of;
     if (!outfile.empty()) {
       of.open(outfile);
-      if (!of) throw runtime_error("failed to open outfile: " + outfile);
+      if (!of)
+        throw runtime_error("failed to open outfile: " + outfile);
     }
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 

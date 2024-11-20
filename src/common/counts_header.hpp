@@ -19,18 +19,19 @@
 #ifndef COUNTS_HEADER_HPP
 #define COUNTS_HEADER_HPP
 
-#include <string>
-#include <vector>
 #include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "bamxx.hpp"
 
-void
-write_counts_header_from_chrom_sizes(const std::vector<std::string> &chrom_names,
-                                     const std::vector<uint64_t> &chrom_sizes,
-                                     bamxx::bgzf_file &out);
+std::unordered_map<std::string, std::uint32_t>
+write_counts_header_from_chrom_sizes(
+  const std::vector<std::string> &chrom_names,
+  const std::vector<uint64_t> &chrom_sizes, bamxx::bgzf_file &out);
 
-void
+std::unordered_map<std::string, std::uint32_t>
 write_counts_header_from_file(const std::string &header_file,
                               bamxx::bgzf_file &out);
 
@@ -60,7 +61,7 @@ is_counts_header_version_line(const std::string &line) {
   return line.compare(0, 9, version_line) == 0;
 }
 
-template<typename T>
+template <typename T>
 inline bool
 is_counts_header_line(T &line) {
   return line[0] == '#';

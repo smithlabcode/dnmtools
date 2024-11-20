@@ -18,13 +18,13 @@
 
 #include "counts_header.hpp"
 
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <vector>
 #include <cassert>
 #include <cstdint>
+#include <fstream>
+#include <iostream>
 #include <sstream>
+#include <string>
+#include <vector>
 
 #include "bam_record_utils.hpp"
 
@@ -34,40 +34,54 @@
 #include "bamxx.hpp"
 #include "dnmt_error.hpp"
 
-using std::vector;
 using std::string;
 using std::to_string;
+using std::unordered_map;
+using std::vector;
 
 using bamxx::bgzf_file;
 
-void
+std::unordered_map<std::string, std::uint32_t>
 write_counts_header_from_chrom_sizes(const vector<string> &chrom_names,
                                      const vector<uint64_t> &chrom_sizes,
                                      bgzf_file &out) {
   const auto version = "#DNMTOOLS " + string(VERSION) + "\n";
   out.write(version.c_str());
+
+  std::unordered_map<std::string, std::uint32_t> chrom_order;
+  std::uint32_t chrom_count = 0;
+
   for (auto i = 0u; i < size(chrom_sizes); ++i) {
     const string tmp =
       "#" + chrom_names[i] + " " + to_string(chrom_sizes[i]) + "\n";
-    out.write(tmp.c_str());
+    out.write(tmp.data());
+    chrom_order.emplace(chrom_names[i], chrom_count++);
   }
   out.write("#\n");
+
+  return chrom_order;
 }
 
-
-void
+std::unordered_map<std::string, std::uint32_t>
 write_counts_header_from_file(const string &header_file, bgzf_file &out) {
   std::ifstream in(header_file);
   if (!in.is_open()) {
-      throw dnmt_error("failed to open header file: " + header_file);
+    throw dnmt_error("failed to open header file: " + header_file);
   }
+
+  std::unordered_map<std::string, std::uint32_t> chrom_order;
+  std::uint32_t chrom_count = 0;
+
   string line;
-  while(getline(in, line)) {
+  while (getline(in, line)) {
     out.write(line + '\n');
+    const auto name = line.substr(1, line.find(' ') - 1);
+    chrom_order.emplace(name, chrom_count++);
   }
   in.close();
-}
 
+  return chrom_order;
+}
 
 bamxx::bgzf_file &
 skip_counts_header(bamxx::bgzf_file &in) {
@@ -75,7 +89,8 @@ skip_counts_header(bamxx::bgzf_file &in) {
   // use the kstring_t type to more directly use the BGZF file
   kstring_t line{0, 0, nullptr};
   const int ret = ks_resize(&line, 1024);
-  if (ret) return in;
+  if (ret)
+    return in;
 
   while (bamxx::getline(in, line) && line.s[0] == '#') {
     if (line.s[0] == '#' && line.l == 1)
@@ -86,7 +101,6 @@ skip_counts_header(bamxx::bgzf_file &in) {
   return in;
 }
 
-
 int
 get_chrom_sizes_for_counts_header(const uint32_t n_threads,
                                   const string &filename,
@@ -96,7 +110,8 @@ get_chrom_sizes_for_counts_header(const uint32_t n_threads,
   bamxx::bam_tpool tpool(n_threads);
 
   bgzf_file in(filename, "r");
-  if (!in) return -1;
+  if (!in)
+    return -1;
   if (n_threads > 1 && in.is_bgzf())
     tpool.set_io(in);
 
@@ -106,18 +121,22 @@ get_chrom_sizes_for_counts_header(const uint32_t n_threads,
   // use the kstring_t type to more directly use the BGZF file
   kstring_t line{0, 0, nullptr};
   const int ret = ks_resize(&line, 1024);
-  if (ret) return -1;
+  if (ret)
+    return -1;
 
   uint64_t chrom_size = 0;
   while (getline(in, line)) {
     if (line.s[0] == '>') {
-      if (!chrom_names.empty()) chrom_sizes.push_back(chrom_size);
+      if (!chrom_names.empty())
+        chrom_sizes.push_back(chrom_size);
       chrom_names.emplace_back(line.s + 1);
       chrom_size = 0;
     }
-    else chrom_size += line.l;
+    else
+      chrom_size += line.l;
   }
-  if (!chrom_names.empty()) chrom_sizes.push_back(chrom_size);
+  if (!chrom_names.empty())
+    chrom_sizes.push_back(chrom_size);
 
   ks_free(&line);
 
@@ -125,7 +144,6 @@ get_chrom_sizes_for_counts_header(const uint32_t n_threads,
 
   return 0;
 }
-
 
 void
 write_counts_header_from_bam_header(const bamxx::bam_header &hdr,
@@ -142,7 +160,6 @@ write_counts_header_from_bam_header(const bamxx::bam_header &hdr,
   out.write("#\n");
 }
 
-
 bool
 write_counts_header_line(string line, bgzf_file &out) {
   line += '\n';
@@ -153,8 +170,10 @@ write_counts_header_line(string line, bgzf_file &out) {
 bool
 get_has_counts_header(const string &filename) {
   bgzf_file in(filename, "r");
-  if (!in) return false;
+  if (!in)
+    return false;
   string line;
-  if (!getline(in, line)) return false;
+  if (!getline(in, line))
+    return false;
   return line[0] == '#';
 }

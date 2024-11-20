@@ -23,6 +23,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <type_traits>  // std::underlying_type_t
 #include <vector>
 
 // from smithlab_cpp
@@ -44,6 +45,49 @@ using std::to_string;
 using std::vector;
 
 using bamxx::bgzf_file;
+
+enum class xcounts_err {
+  // clang-format off
+  ok                            = 0,
+  open_failure                  = 1,
+  header_failure                = 2,
+  chromosome_not_found          = 3,
+  inconsistent_chromosome_order = 4,
+  incorrect_chromosome_size     = 5,
+  failed_to_write_file          = 6,
+  failed_to_parse_site          = 7,
+  // clang-format on
+};
+
+struct xcounts_err_cat : std::error_category {
+  auto name() const noexcept -> const char * override {
+    return "xcounts error";
+  }
+  auto message(const int condition) const -> std::string override {
+    using std::string_literals::operator""s;
+    switch (condition) {
+    case 0: return "ok"s;
+    case 1: return "failed to open methylome file"s;
+    case 2: return "failed to parse xcounts header"s;
+    case 3: return "failed to find chromosome in xcounts header"s;
+    case 4: return "inconsistent chromosome order"s;
+    case 5: return "incorrect chromosome size"s;
+    case 6: return "failed to write to file"s;
+    case 7: return "failed to parse site"s;
+    }
+    std::abort();  // unreacheable
+  }
+};
+
+template <>
+struct std::is_error_code_enum<xcounts_err> : public std::true_type {};
+
+std::error_code
+make_error_code(xcounts_err e) {
+  static auto category = xcounts_err_cat{};
+  return std::error_code(static_cast<std::underlying_type_t<xcounts_err>>(e),
+                         category);
+}
 
 template <typename T>
 static inline uint32_t
@@ -137,10 +181,12 @@ main_xcounts(int argc, const char **argv) {
       tpool.set_io(out);
     }
 
+    std::unordered_map<string, uint32_t> chrom_order;
     if (!header_file.empty())
-      write_counts_header_from_file(header_file, out);
+      chrom_order = write_counts_header_from_file(header_file, out);
     else if (!genome_file.empty())
-      write_counts_header_from_chrom_sizes(chrom_names, chrom_sizes, out);
+      chrom_order =
+        write_counts_header_from_chrom_sizes(chrom_names, chrom_sizes, out);
 
     // use the kstring_t type to more directly use the BGZF file
     kstring_t line{0, 0, nullptr};
@@ -152,11 +198,14 @@ main_xcounts(int argc, const char **argv) {
 
     uint32_t offset = 0;
     string prev_chrom;
-    bool status_ok = true;
     bool found_header = (!genome_file.empty() || !header_file.empty());
 
+    std::error_code ec{};
+
+    uint32_t chrom_counter = 0;
+
     MSite site;
-    while (status_ok && bamxx::getline(in, line)) {
+    while (ec == std::errc{} && bamxx::getline(in, line)) {
       if (is_counts_header_line(line.s)) {
         if (!genome_file.empty() || !header_file.empty())
           continue;
@@ -166,34 +215,53 @@ main_xcounts(int argc, const char **argv) {
         continue;
       }
 
-      status_ok = site.initialize(line.s, line.s + line.l);
-      if (!status_ok || !found_header)
+      if (!site.initialize(line.s, line.s + line.l)) {
+        ec = xcounts_err::failed_to_parse_site;
         break;
+      }
+      if (!found_header) {
+        ec = xcounts_err::header_failure;
+        break;
+      }
 
       if (site.chrom != prev_chrom) {
         if (verbose)
           cerr << "processing: " << site.chrom << endl;
+
+        if (!chrom_order.empty()) {
+          const auto expected_chrom_counter = chrom_order.find(site.chrom);
+          if (expected_chrom_counter == std::cend(chrom_order)) {
+            ec = xcounts_err::chromosome_not_found;
+            break;
+          }
+          if (expected_chrom_counter->second != chrom_counter) {
+            ec = xcounts_err::inconsistent_chromosome_order;
+            break;
+          }
+        }
+
+        chrom_counter++;
+
         prev_chrom = site.chrom;
         offset = 0;
 
         site.chrom += '\n';
         const int64_t sz = size(site.chrom);
-        status_ok = bgzf_write(out.f, site.chrom.data(), sz) == sz;
+        if (bgzf_write(out.f, site.chrom.data(), sz) != sz)
+          ec = xcounts_err::failed_to_write_file;
       }
       if (site.n_reads > 0) {
         const int64_t sz = fill_output_buffer(offset, site, buf);
-        status_ok = bgzf_write(out.f, buf.data(), sz) == sz;
+        if (bgzf_write(out.f, buf.data(), sz) != sz)
+          ec = xcounts_err::failed_to_write_file;
         offset = site.pos;
       }
     }
     ks_free(&line);
 
-    if (!status_ok) {
-      cerr << "failed converting " << filename << " to " << outfile << endl;
-      return EXIT_FAILURE;
-    }
-    if (!found_header) {
-      cerr << "no header provided or found" << endl;
+    if (ec) {
+      cerr << "failed converting " << filename << " to " << outfile << endl
+           << ec << endl;
       return EXIT_FAILURE;
     }
   }

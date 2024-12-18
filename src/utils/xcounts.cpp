@@ -24,6 +24,7 @@
 #include <vector>
 #include <charconv>
 #include <system_error>
+#include <filesystem>
 
 // from smithlab_cpp
 #include "OptionParser.hpp"
@@ -44,7 +45,22 @@ using std::vector;
 using std::to_string;
 
 using bamxx::bgzf_file;
+namespace fs = std::filesystem;
 
+/*
+  The verify_header_line function might detect multiple possible
+  errors and these should each be given a different code:
+
+  -- dnmtools version number(?)
+  -- bad header format
+  -- too many chroms
+  -- missing chroms
+  -- wrong chrom order
+  -- wrong chrom size
+
+  -- There is no consistent chrom order among the assembly.chrom.size
+  -- There seems to be a consistent order within the reference genome files
+ */
 
 template<typename T>
 static inline uint32_t
@@ -74,7 +90,7 @@ main_xcounts(int argc, const char **argv) {
       "compress counts files by removing context information";
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description,
+    OptionParser opt_parse(fs::path{argv[0]}.filename(), description,
                            "<counts-file> (\"-\" for standard input)", 1);
     opt_parse.add_opt("output", 'o', "output file (default is standard out)",
                       false, outfile);

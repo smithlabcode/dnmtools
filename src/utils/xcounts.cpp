@@ -59,6 +59,7 @@ enum class xcounts_err {
   // clang-format on
 };
 
+// clang-format off
 struct xcounts_err_cat : std::error_category {
   auto name() const noexcept -> const char * override {
     return "xcounts error";
@@ -78,6 +79,7 @@ struct xcounts_err_cat : std::error_category {
     std::abort();  // unreacheable
   }
 };
+// clang-format off
 
 template <>
 struct std::is_error_code_enum<xcounts_err> : public std::true_type {};
@@ -107,6 +109,7 @@ main_xcounts(int argc, const char **argv) {
   try {
     bool verbose = false;
     bool gzip_output = false;
+    bool keep_all_sites = false;
     bool require_coverage = false;
     size_t n_threads = 1;
     string genome_file;
@@ -123,8 +126,10 @@ main_xcounts(int argc, const char **argv) {
                       false, outfile);
     opt_parse.add_opt("chroms", 'c', "make header from this reference", false,
                       genome_file);
-    opt_parse.add_opt("reads", 'r', "ouput only sites with reads", false,
+    opt_parse.add_opt("reads", 'r', "output only sites with reads (on by default)", false,
                       require_coverage);
+    opt_parse.add_opt("keep", 'k', "keep sites that are not covered", false,
+                      keep_all_sites);
     opt_parse.add_opt("header", 'h', "use this file to generate header", false,
                       header_file);
     opt_parse.add_opt("threads", 't', "threads for compression (use few)",
@@ -250,7 +255,7 @@ main_xcounts(int argc, const char **argv) {
         if (bgzf_write(out.f, site.chrom.data(), sz) != sz)
           ec = xcounts_err::failed_to_write_file;
       }
-      if (site.n_reads > 0) {
+      if (keep_all_sites || site.n_reads > 0) {
         const int64_t sz = fill_output_buffer(offset, site, buf);
         if (bgzf_write(out.f, buf.data(), sz) != sz)
           ec = xcounts_err::failed_to_write_file;

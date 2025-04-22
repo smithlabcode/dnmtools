@@ -1,5 +1,5 @@
-/* Copyright (C) 2013-2022 University of Southern California
- *                    Andrew D Smith and Jenny Qu
+/* Copyright (C) 2013-2025 University of Southern California
+ *                         Andrew D Smith and Jenny Qu
  *
  * Author: Jenny Qu and Andrew D. Smith
  *
@@ -14,74 +14,102 @@
  * GNU General Public License for more details.
  */
 
-#include <string>
-#include <vector>
+#include <cstdlib>
+#include <fstream>
 #include <iostream>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-#include "smithlab_utils.hpp"
-#include "smithlab_os.hpp"
 #include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
+#include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
 
+[[nodiscard]] static auto
+read_fasta(const std::string &fasta_file,
+           std::unordered_map<std::string, std::uint32_t> &chrom_names,
+           std::vector<std::string> &chroms) {
+  std::ifstream in(fasta_file);
+  if (!in)
+    throw std::runtime_error("Failed to read fasta file: " + fasta_file);
 
-using std::string;
-using std::vector;
-using std::cerr;
-using std::cout;
-using std::endl;
-using std::unordered_map;
-using std::runtime_error;
-
-
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
+  std::string line;
+  std::string seq;
+  std::uint32_t index{};
+  while (std::getline(in, line)) {
+    if (line[0] == '>') {
+      const auto name = line.substr(1);
+      const auto itr = chrom_names.find(name);
+      if (itr != std::cend(chrom_names))
+        throw std::runtime_error("Duplicate chrom found: " + name);
+      if (!seq.empty()) {
+        chroms.push_back(std::move(seq));
+        seq.clear();
+      }
+      chrom_names.emplace(name, index++);
+    }
+    else
+      seq += line;
+  }
+  if (!seq.empty())
+    chroms.push_back(std::move(seq));
+}
 
 inline static bool
-is_cpg(const string &s, const size_t idx) {
-  return toupper(s[idx]) == 'C' && toupper(s[idx + 1]) == 'G';
+is_cpg(const std::string &s, const std::size_t idx) {
+  return std::toupper(s[idx]) == 'C' && std::toupper(s[idx + 1]) == 'G';
 }
-
-
 
 static void
-build_coordinate_converter(const unordered_map<string, string> &chrom_files,
-                           const string &chrom,
-                           unordered_map<size_t, size_t> &cpg_lookup) {
-
-  const unordered_map<string, string>::const_iterator
-    file_name(chrom_files.find(chrom));
-  if (file_name == chrom_files.end())
-    throw runtime_error("chrom file not found for chrom: " + chrom);
-
-  vector<string> dummy, chrom_seq;
-  read_fasta_file_short_names(file_name->second.c_str(), dummy, chrom_seq);
-  if (chrom_seq.size() > 1)
-    throw runtime_error("multiple chroms/file: " + file_name->second);
-
-  const size_t lim = chrom_seq.front().length() - 1;
-  size_t cpg_count = 0;
-  for (size_t i = 0; i < lim; ++i)
-    if (is_cpg(chrom_seq.front(), i)) {
-      cpg_lookup[cpg_count] = i;
-      ++cpg_count;
-    }
+build_coordinate_converter(
+  const std::string &chrom,
+  std::unordered_map<std::size_t, std::size_t> &cpg_lookup) {
+  cpg_lookup.clear();
+  const auto lim = std::size(chrom) - 1u;
+  std::size_t cpg_count = 0;
+  for (std::size_t i = 0; i < lim; ++i)
+    if (is_cpg(chrom, i))
+      cpg_lookup[cpg_count++] = i;
 }
 
+// static void
+// build_coordinate_converter(const std::unordered_map<std::string, std::string>
+// &chrom_files,
+//                            const std::string &chrom,
+//                            std::unordered_map<size_t, size_t> &cpg_lookup) {
 
+//   const std::unordered_map<std::string, std::string>::const_iterator
+//   file_name(
+//     chrom_files.find(chrom));
+//   if (file_name == chrom_files.end())
+//     throw std::runtime_error("chrom file not found for chrom: " +
+//     chrom_files);
 
-static size_t
-convert_coordinates(const unordered_map<size_t, size_t> &cpgs,
-                    const size_t position)  {
-  const unordered_map<size_t, size_t>::const_iterator
-    i(cpgs.find(position));
+//   vector<std::string> dummy, chrom_seq;
+//   read_fasta_file_short_names(file_name->second.c_str(), dummy, chrom_seq);
+//   if (chrom_seq.size() > 1)
+//     throw std::runtime_error("multiple chroms/file: " + file_name->second);
+
+//   const size_t lim = chrom_seq.front().length() - 1;
+//   size_t cpg_count = 0;
+//   for (size_t i = 0; i < lim; ++i)
+//     if (is_cpg(chrom_seq.front(), i)) {
+//       cpg_lookup[cpg_count] = i;
+//       ++cpg_count;
+//     }
+// }
+
+static std::size_t
+convert_coordinates(const std::unordered_map<std::size_t, std::size_t> &cpgs,
+                    const std::size_t position) {
+  const std::unordered_map<std::size_t, std::size_t>::const_iterator i(
+    cpgs.find(position));
   if (i == cpgs.end())
-    throw runtime_error("could not convert:\n" + toa(position));
+    throw std::runtime_error("could not convert:\n" + toa(position));
   return i->second;
 }
-
-
 
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
@@ -89,108 +117,103 @@ convert_coordinates(const unordered_map<size_t, size_t> &cpgs,
 /////// CODE FOR WORKING WITH EPIREADS BELOW HERE
 ///////
 
-
-
 struct epiread {
-  bool operator<(const epiread &other) const {
+  bool
+  operator<(const epiread &other) const {
     return (chr < other.chr || (chr == other.chr && pos < other.pos));
   }
-  size_t get_end() const {return pos + seq.length();}
-  size_t length() const {return seq.length();}
-  bool flip_states();
+  std::size_t
+  get_end() const {
+    return pos + std::size(seq);
+  }
+  std::size_t
+  size() const {
+    return std::size(seq);
+  }
+  bool
+  flip_states();
 
-  string chr;
-  size_t pos;
-  string seq;
+  std::string chr;
+  std::size_t pos{};
+  std::string seq;
 };
-
-
 
 bool
 epiread::flip_states() {
-  const size_t meth_states_count =
-    std::count(seq.begin(), seq.end(), 'C');
-  if (meth_states_count < 0.5*length()) {
-    for (size_t i = 0; i < seq.length(); ++i)
+  const std::size_t meth_states_count = std::count(seq.begin(), seq.end(), 'C');
+  const auto sz = std::size(seq);
+  if (meth_states_count < 0.5 * sz) {
+    for (std::size_t i = 0; i < sz; ++i)
       seq[i] = (seq[i] == 'T') ? 'C' : ((seq[i] == 'C') ? 'T' : seq[i]);
     return true;
   }
   return false;
 }
 
-
-
-static std::istream&
+static std::istream &
 operator>>(std::istream &in, epiread &er) {
-  string buffer;
+  std::string buffer;
   if (getline(in, buffer)) {
     std::istringstream is(buffer);
     if (!(is >> er.chr >> er.pos >> er.seq))
-      throw runtime_error("malformed epiread line:\n" + buffer);
+      throw std::runtime_error("malformed epiread line:\n" + buffer);
   }
   return in;
 }
 
 static bool
-check_sorted(const vector<epiread> &epireads){
-  for (size_t i = 1; i < epireads.size(); ++i)
+check_sorted(const std::vector<epiread> &epireads) {
+  for (std::size_t i = 1; i < epireads.size(); ++i)
     if (epireads[i] < epireads[i - 1])
       return false;
   return true;
 }
 
-
-
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-///////
-/////// CODE FOR ACTUAL ENTROPY CALCULATIONS BELOW HERE
-///////
-
-
+// code for entropy calculations below here
 
 static double
-compute_prob_read_has_state(const vector<double> &site_probs,
-                            const size_t start_cpg, const size_t end_cpg,
-                            const size_t state, const epiread &er) {
+compute_prob_read_has_state(const std::vector<double> &site_probs,
+                            const std::size_t start_cpg,
+                            const std::size_t end_cpg, const std::size_t state,
+                            const epiread &er) {
   double prob = 1.0;
-  size_t cpg_pos = start_cpg;
-  const size_t lim = end_cpg - start_cpg;
-  for (size_t i = 0; i < lim; ++i) {
+  std::size_t cpg_pos = start_cpg;
+  const std::size_t lim = end_cpg - start_cpg;
+  for (std::size_t i = 0; i < lim; ++i) {
     const char curr_state = ((state & (1ul << i)) > 0) ? 'C' : 'T';
-    const size_t er_idx = (cpg_pos >= er.pos) ? cpg_pos - er.pos :
-      std::numeric_limits<size_t>::max();
-    if (er_idx < er.length() && er.seq[er_idx] != 'N')
+    const std::size_t er_idx = (cpg_pos >= er.pos)
+                                 ? cpg_pos - er.pos
+                                 : std::numeric_limits<std::size_t>::max();
+    if (er_idx < std::size(er) && er.seq[er_idx] != 'N')
       prob *= static_cast<double>(curr_state == er.seq[er_idx]);
     else {
       if (curr_state == 'C')
         prob *= site_probs[cpg_pos];
-      else prob *= (1.0 - site_probs[cpg_pos]);
+      else
+        prob *= (1.0 - site_probs[cpg_pos]);
     }
     ++cpg_pos;
   }
   return prob;
 }
 
-
-
 static double
-compute_entropy_for_window(const vector<double> &site_probs,
-                           const vector<epiread> &epireads,
-                           const size_t start_idx,
-                           const size_t end_idx,
-                           const size_t start_cpg,
-                           const size_t end_cpg,
-                           size_t &reads_in_window) {
+compute_entropy_for_window(const std::vector<double> &site_probs,
+                           const std::vector<epiread> &epireads,
+                           const std::size_t start_idx,
+                           const std::size_t end_idx,
+                           const std::size_t start_cpg,
+                           const std::size_t end_cpg,
+                           std::size_t &reads_in_window) {
 
-  const size_t n_states = 1ul << (end_cpg - start_cpg);
+  const std::size_t n_states = 1ul << (end_cpg - start_cpg);
 
   double entropy = 0.0;
-  for (size_t i = 0; i < n_states; ++i) {
+  for (std::size_t i = 0; i < n_states; ++i) {
 
     double state_prob = 0.0;
     reads_in_window = 0;
-    for (size_t j = start_idx; j < end_idx; ++j)
+    for (std::size_t j = start_idx; j < end_idx; ++j)
       if (epireads[j].get_end() > start_cpg && epireads[j].pos < end_cpg) {
         state_prob += compute_prob_read_has_state(site_probs, start_cpg,
                                                   end_cpg, i, epireads[j]);
@@ -198,13 +221,11 @@ compute_entropy_for_window(const vector<double> &site_probs,
       }
     if (reads_in_window > 0) {
       state_prob /= reads_in_window;
-      entropy += (state_prob > 0.0) ? state_prob*log2(state_prob) : 0.0;
+      entropy += (state_prob > 0.0) ? state_prob * log2(state_prob) : 0.0;
     }
   }
   return entropy;
 }
-
-
 
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
@@ -212,169 +233,159 @@ compute_entropy_for_window(const vector<double> &site_probs,
 /////// CODE FOR SLIDING THE WINDOW ALONG THE CHROMOSOME BELOW HERE
 ///////
 
-
-
 /* This function just basically computes the same thing as methcounts
    output, so that unobserved states can be imputed  */
 static void
-compute_site_probs(const size_t n_cpgs, const vector<epiread> &epireads,
-                   vector<double> &site_probs) {
+compute_site_probs(const std::size_t n_cpgs,
+                   const std::vector<epiread> &epireads,
+                   std::vector<double> &site_probs) {
 
-  site_probs = vector<double>(n_cpgs);
-  vector<size_t> totals(n_cpgs);
+  site_probs = std::vector<double>(n_cpgs);
+  std::vector<std::size_t> totals(n_cpgs);
 
-  for (size_t i = 0; i < epireads.size(); ++i) {
-    const size_t len = epireads[i].length();
-    size_t idx = epireads[i].pos;
-    for (size_t j = 0; j < len; ++j, ++idx) {
+  for (std::size_t i = 0; i < epireads.size(); ++i) {
+    const std::size_t len = std::size(epireads[i]);
+    std::size_t idx = epireads[i].pos;
+    for (std::size_t j = 0; j < len; ++j, ++idx) {
       site_probs[idx] += (epireads[i].seq[j] == 'C');
       totals[idx] += (epireads[i].seq[j] != 'N');
     }
   }
-  for (size_t i = 0; i < site_probs.size(); ++i)
+  for (std::size_t i = 0; i < site_probs.size(); ++i)
     if (totals[i] > 0.0)
       site_probs[i] /= totals[i];
 }
 
-
-
 static void
-move_start_index(const size_t max_epiread_len,
-                 const vector<epiread> &epireads,
-                 const size_t start_cpg, size_t &idx) {
+move_start_index(const std::size_t max_epiread_len,
+                 const std::vector<epiread> &epireads,
+                 const std::size_t start_cpg, std::size_t &idx) {
   while (idx < epireads.size() &&
          epireads[idx].get_end() + max_epiread_len <= start_cpg)
     ++idx;
 }
 
-
-
 static void
-move_end_index(const vector<epiread> &epireads,
-               const size_t start_cpg, const size_t cpg_window, size_t &idx) {
+move_end_index(const std::vector<epiread> &epireads,
+               const std::size_t start_cpg, const std::size_t cpg_window,
+               std::size_t &idx) {
   while (idx < epireads.size() && epireads[idx].pos < start_cpg + cpg_window)
     ++idx;
 }
 
-
-
 static void
-process_chrom(const bool VERBOSE, const size_t cpg_window,
-              const vector<epiread> &epireads,
-              const unordered_map<size_t, size_t> &cpg_lookup,
+process_chrom(const bool VERBOSE, const std::size_t cpg_window,
+              const std::vector<epiread> &epireads,
+              const std::unordered_map<std::size_t, std::size_t> &cpg_lookup,
               std::ostream &out) {
 
-  const string chrom(epireads.front().chr);
+  const std::string chrom(epireads.front().chr);
   if (!check_sorted(epireads))
-    throw runtime_error("epireads not sorted in chrom: " + chrom);
+    throw std::runtime_error("epireads not sorted in chrom: " + chrom);
 
-  const size_t n_cpgs = cpg_lookup.size();
+  const std::size_t n_cpgs = cpg_lookup.size();
   if (VERBOSE)
-    cerr << "processing " << chrom
-         << " (cpgs = " << n_cpgs << ")" << endl;
+    std::cerr << "processing " << chrom << " (cpgs = " << n_cpgs << ")"
+              << std::endl;
 
-  vector<double> site_probs;
+  std::vector<double> site_probs;
   compute_site_probs(n_cpgs, epireads, site_probs);
 
-  size_t max_epiread_len = 0;
-  for (size_t i = 0; i < epireads.size(); ++i)
-    max_epiread_len = std::max(max_epiread_len, epireads[i].length());
+  std::size_t max_epiread_len = 0;
+  for (std::size_t i = 0; i < epireads.size(); ++i)
+    max_epiread_len = std::max(max_epiread_len, std::size(epireads[i]));
 
-  size_t start_cpg = 0;
-  size_t start_idx = 0, end_idx = 0;
+  std::size_t start_cpg = 0;
+  std::size_t start_idx = 0, end_idx = 0;
   while (start_cpg + cpg_window < n_cpgs) {
 
     move_start_index(max_epiread_len, epireads, start_cpg, start_idx);
     move_end_index(epireads, start_cpg, cpg_window, end_idx);
 
-    size_t reads_used = 0;
+    std::size_t reads_used = 0;
     const double entropy =
-      compute_entropy_for_window(site_probs, epireads, start_idx,
-                                 end_idx, start_cpg, start_cpg + cpg_window,
-                                 reads_used);
+      compute_entropy_for_window(site_probs, epireads, start_idx, end_idx,
+                                 start_cpg, start_cpg + cpg_window, reads_used);
 
     out << chrom << '\t'
-        << convert_coordinates(cpg_lookup, start_cpg + cpg_window/2) << '\t'
-        << "+\tCpG\t"
-        << entropy << '\t'
-        << reads_used << endl;
+        << convert_coordinates(cpg_lookup, start_cpg + cpg_window / 2) << '\t'
+        << "+\tCpG\t" << entropy << '\t' << reads_used << '\n';
 
     ++start_cpg;
   }
 }
-
-
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
 
 int
 main_methentropy(int argc, const char **argv) {
 
   try {
 
-    static const string fasta_suffix = "fa";
-
     bool VERBOSE = false;
     bool FLIP_MAJORITY_STATE = false;
 
-    size_t cpg_window = 4;
-    string outfile;
+    std::size_t cpg_window = 4;
+    std::string outfile;
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]),
                            "compute methylation entropy in sliding window",
-                           "<chroms> <epireads-file>");
-    opt_parse.add_opt("window", 'w', "number of CpGs in sliding window",
-                      false, cpg_window);
-    opt_parse.add_opt("flip", 'F', "flip read majority state to meth",
-                      false, FLIP_MAJORITY_STATE);
-    opt_parse.add_opt("output", 'o', "output file (default: stdout)",
-                      false, outfile);
+                           "<fasta-genome-file> <epireads-file>");
+    opt_parse.add_opt("window", 'w', "number of CpGs in sliding window", false,
+                      cpg_window);
+    opt_parse.add_opt("flip", 'F', "flip read majority state to meth", false,
+                      FLIP_MAJORITY_STATE);
+    opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
+                      outfile);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.help_message() << std::endl
+                << opt_parse.about_message() << std::endl;
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.about_message() << std::endl;
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      std::cerr << opt_parse.option_missing_message() << std::endl;
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 2) {
-      cerr << opt_parse.help_message() << endl;
+      std::cerr << opt_parse.help_message() << std::endl;
       return EXIT_SUCCESS;
     }
-    const string chroms_dir = leftover_args.front();
-    const string epi_file = leftover_args.back();
+    const std::string genome_file = leftover_args.front();
+    const std::string epi_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    std::ifstream in(epi_file.c_str());
-    if (!in)
-      throw runtime_error("cannot open input file: " + epi_file);
+    std::unordered_map<std::string, std::uint32_t> chrom_names;
+    std::vector<std::string> chroms;
+    read_fasta(genome_file, chrom_names, chroms);
 
-    unordered_map<string, string> chrom_files;
-    identify_chromosomes(chroms_dir, fasta_suffix, chrom_files);
+    std::ifstream in(epi_file);
+    if (!in)
+      throw std::runtime_error("cannot open input file: " + epi_file);
 
     std::ofstream of;
-    if (!outfile.empty()) of.open(outfile.c_str());
-    std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
+    if (!outfile.empty())
+      of.open(outfile.c_str());
+    std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
-    vector<epiread> epireads;
+    std::unordered_map<std::size_t, std::size_t> cpg_lookup;
+
+    std::vector<epiread> epireads;
     epiread tmp_er;
+    const std::string chrom;
     while (in >> tmp_er) {
-      if (!epireads.empty() && tmp_er.chr != epireads.back().chr) {
-        unordered_map<size_t, size_t> cpg_lookup;
-        build_coordinate_converter(chrom_files,
-                                   epireads.back().chr, cpg_lookup);
+      const auto &name = tmp_er.chr;
+      if (!epireads.empty() && name != epireads.back().chr) {
+        const auto chrom = epireads.back().chr;
+        const auto itr = chrom_names.find(chrom);
+        if (itr == std::cend(chrom_names))
+          throw std::runtime_error("chrom not found: " + chrom);
+        build_coordinate_converter(chroms[itr->second], cpg_lookup);
         process_chrom(VERBOSE, cpg_window, epireads, cpg_lookup, out);
         epireads.clear();
       }
@@ -383,17 +394,20 @@ main_methentropy(int argc, const char **argv) {
       epireads.push_back(tmp_er);
     }
     if (!epireads.empty()) {
-      unordered_map<size_t, size_t> cpg_lookup;
-      build_coordinate_converter(chrom_files, epireads.back().chr, cpg_lookup);
+      const auto chrom = epireads.back().chr;
+      const auto itr = chrom_names.find(chrom);
+      if (itr == std::cend(chrom_names))
+        throw std::runtime_error("chrom not found: " + chrom);
+      build_coordinate_converter(chroms[itr->second], cpg_lookup);
       process_chrom(VERBOSE, cpg_window, epireads, cpg_lookup, out);
     }
   }
-  catch (const runtime_error &e) {
-    cerr << e.what() << endl;
+  catch (const std::runtime_error &e) {
+    std::cerr << e.what() << std::endl;
     return EXIT_FAILURE;
   }
   catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
+    std::cerr << "ERROR: could not allocate memory" << std::endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

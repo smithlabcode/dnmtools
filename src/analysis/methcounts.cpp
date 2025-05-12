@@ -446,22 +446,30 @@ process_reads(const bool VERBOSE, const bool show_progress,
   vector<string>::const_iterator chrom_itr;
 
   while (hts.read(hdr, aln)) {
-    if (get_tid(aln) == prev_tid) {
+    const int32_t tid = get_tid(aln);
+    if (tid == -1)  // ADS: skip reads that have no tid -- they are not mapped
+      continue;
+    if (tid == prev_tid) {
       // do the work for this mapped read, depending on strand
       if (bam_is_rev(aln))
         count_states_neg(aln, counts);
       else
         count_states_pos(aln, counts);
     }
-    else {  // chrom changes, output results, get the next one
+    else {  // chrom has changed, so output results and get the next chrom
 
-      // write output if there is any; should fail only once
+      // write output if there is any; counts is empty only for first chrom
       if (!counts.empty())
         write_output<require_covered>(hdr, out, prev_tid,
                                       *chrom_itr, counts, CPG_ONLY);
-
-      const int32_t tid = get_tid(aln);
-      if (tid < prev_tid) throw dnmt_error("SAM file is not sorted");
+      // make sure reads are sorted chrom tid number in header
+      if (tid < prev_tid) {
+        const std::string message = "SAM file is not sorted "
+          "previous tid: " +
+          std::to_string(prev_tid) +
+          " current tid: " + std::to_string(tid);
+        throw dnmt_error(message);
+      }
 
       if (!require_covered)
         for (auto i = prev_tid + 1; i < tid; ++i)

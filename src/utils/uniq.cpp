@@ -227,8 +227,14 @@ uniq(const bool add_dup_count, const uint32_t max_buffer_size,
   }
 
   bam_rec aln;
-  if (hts.read(hdr, aln)) {  // valid SAM/BAM can have 0 reads
+  bool found_mapped_read{false};  // valid SAM/BAM can have 0 reads
+  while (!found_mapped_read && hts.read(hdr, aln)) {
+    // ADS: skip reads that have no tid -- they are not mapped
+    if (get_tid(aln) != -1)
+      found_mapped_read = true;
+  }
 
+  if (found_mapped_read) {
     rs_in.update(aln);  // update stats for input we just got
 
     vector<bam_rec> buffer(1, aln);  // select output from this buffer
@@ -238,6 +244,9 @@ uniq(const bool add_dup_count, const uint32_t max_buffer_size,
     int32_t cur_chrom = get_tid(aln);
 
     while (hts.read(hdr, aln)) {
+      // ADS: skip reads that have no tid -- they are not mapped
+      if (get_tid(aln) == -1)
+        continue;
       rs_in.update(aln);
 
       // below works because buffer reset at every new chrom

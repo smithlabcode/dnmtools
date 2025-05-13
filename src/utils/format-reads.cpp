@@ -341,6 +341,10 @@ format(const string &cmd, const size_t n_threads, const string &inputfile,
     swap(aln, prev_aln);  // start with prev_aln being first read
 
     while (hts.read(hdr, aln)) {
+      // ADS: skip reads that have no tid -- they are not mapped
+      if (get_tid(aln) == -1)
+        continue;
+
       standardize_format(input_format, aln);
       if (same_name(prev_aln, aln, suff_len)) {
         // below: essentially check for dovetail

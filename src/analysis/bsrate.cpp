@@ -580,12 +580,14 @@ main_bsrate(int argc, const char **argv) {
     unordered_set<int32_t> chroms_seen;
 
     while (hts.read(hdr, aln)) {
+      const int32_t the_tid = get_tid(aln);
+      if (the_tid == -1)
+        continue;
+
       if (reads_are_a_rich) flip_conversion(aln);
 
       // get the correct chrom if it has changed
-      if (get_tid(aln) != current_tid) {
-        const int32_t the_tid = get_tid(aln);
-
+      if (the_tid != current_tid) {
         // make sure all reads from same chrom are contiguous in the file
         if (chroms_seen.find(the_tid) != end(chroms_seen))
           throw runtime_error("chroms out of order in mapped reads file");

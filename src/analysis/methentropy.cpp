@@ -74,33 +74,6 @@ build_coordinate_converter(
       cpg_lookup[cpg_count++] = i;
 }
 
-// static void
-// build_coordinate_converter(const std::unordered_map<std::string, std::string>
-// &chrom_files,
-//                            const std::string &chrom,
-//                            std::unordered_map<size_t, size_t> &cpg_lookup) {
-
-//   const std::unordered_map<std::string, std::string>::const_iterator
-//   file_name(
-//     chrom_files.find(chrom));
-//   if (file_name == chrom_files.end())
-//     throw std::runtime_error("chrom file not found for chrom: " +
-//     chrom_files);
-
-//   vector<std::string> dummy, chrom_seq;
-//   read_fasta_file_short_names(file_name->second.c_str(), dummy, chrom_seq);
-//   if (chrom_seq.size() > 1)
-//     throw std::runtime_error("multiple chroms/file: " + file_name->second);
-
-//   const size_t lim = chrom_seq.front().length() - 1;
-//   size_t cpg_count = 0;
-//   for (size_t i = 0; i < lim; ++i)
-//     if (is_cpg(chrom_seq.front(), i)) {
-//       cpg_lookup[cpg_count] = i;
-//       ++cpg_count;
-//     }
-// }
-
 static std::size_t
 convert_coordinates(const std::unordered_map<std::size_t, std::size_t> &cpgs,
                     const std::size_t position) {
@@ -163,7 +136,7 @@ operator>>(std::istream &in, epiread &er) {
 
 static bool
 check_sorted(const std::vector<epiread> &epireads) {
-  for (std::size_t i = 1; i < epireads.size(); ++i)
+  for (std::size_t i = 1; i < std::size(epireads); ++i)
     if (epireads[i] < epireads[i - 1])
       return false;
   return true;
@@ -186,12 +159,9 @@ compute_prob_read_has_state(const std::vector<double> &site_probs,
                                  : std::numeric_limits<std::size_t>::max();
     if (er_idx < std::size(er) && er.seq[er_idx] != 'N')
       prob *= static_cast<double>(curr_state == er.seq[er_idx]);
-    else {
-      if (curr_state == 'C')
-        prob *= site_probs[cpg_pos];
-      else
-        prob *= (1.0 - site_probs[cpg_pos]);
-    }
+    else
+      prob *=
+        (curr_state == 'C') ? site_probs[cpg_pos] : 1.0 - site_probs[cpg_pos];
     ++cpg_pos;
   }
   return prob;
@@ -235,13 +205,12 @@ compute_entropy_for_window(const std::vector<double> &site_probs,
 
 /* This function just basically computes the same thing as methcounts
    output, so that unobserved states can be imputed  */
-static void
+static std::vector<double>
 compute_site_probs(const std::size_t n_cpgs,
-                   const std::vector<epiread> &epireads,
-                   std::vector<double> &site_probs) {
+                   const std::vector<epiread> &epireads) {
 
-  site_probs = std::vector<double>(n_cpgs);
-  std::vector<std::size_t> totals(n_cpgs);
+  std::vector<double> site_probs(n_cpgs);
+  std::vector<std::uint32_t> totals(n_cpgs);
 
   for (std::size_t i = 0; i < epireads.size(); ++i) {
     const std::size_t len = std::size(epireads[i]);
@@ -251,9 +220,12 @@ compute_site_probs(const std::size_t n_cpgs,
       totals[idx] += (epireads[i].seq[j] != 'N');
     }
   }
-  for (std::size_t i = 0; i < site_probs.size(); ++i)
+
+  for (auto i = 0u; i < std::size(site_probs); ++i)
     if (totals[i] > 0.0)
       site_probs[i] /= totals[i];
+
+  return site_probs;
 }
 
 static void
@@ -285,15 +257,13 @@ process_chrom(const bool VERBOSE, const std::size_t cpg_window,
 
   const std::size_t n_cpgs = cpg_lookup.size();
   if (VERBOSE)
-    std::cerr << "processing " << chrom << " (cpgs = " << n_cpgs << ")"
-              << std::endl;
+    std::cerr << "processing " << chrom << " (cpgs = " << n_cpgs << ")\n";
 
-  std::vector<double> site_probs;
-  compute_site_probs(n_cpgs, epireads, site_probs);
+  const auto site_probs = compute_site_probs(n_cpgs, epireads);
 
   std::size_t max_epiread_len = 0;
-  for (std::size_t i = 0; i < epireads.size(); ++i)
-    max_epiread_len = std::max(max_epiread_len, std::size(epireads[i]));
+  for (const auto &er : epireads)
+    max_epiread_len = std::max(max_epiread_len, std::size(er));
 
   std::size_t start_cpg = 0;
   std::size_t start_idx = 0, end_idx = 0;
@@ -370,7 +340,7 @@ main_methentropy(int argc, const char **argv) {
 
     std::ofstream of;
     if (!outfile.empty())
-      of.open(outfile.c_str());
+      of.open(outfile);
     std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
     std::unordered_map<std::size_t, std::size_t> cpg_lookup;
@@ -402,12 +372,8 @@ main_methentropy(int argc, const char **argv) {
       process_chrom(VERBOSE, cpg_window, epireads, cpg_lookup, out);
     }
   }
-  catch (const std::runtime_error &e) {
-    std::cerr << e.what() << std::endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    std::cerr << "ERROR: could not allocate memory" << std::endl;
+  catch (const std::exception &e) {
+    std::cerr << e.what() << "\n";
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

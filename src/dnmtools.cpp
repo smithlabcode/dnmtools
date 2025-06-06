@@ -24,8 +24,8 @@
 #include <vector>
 
 using std::begin;
-using std::end;
 using std::cout;
+using std::end;
 using std::endl;
 using std::pair;
 using std::string;
@@ -39,7 +39,8 @@ struct dnmtools_command {
   string description;
   std::function<int(const int, const char **)> fun;
 
-  auto operator()(const int argc, const char **argv) const -> int {
+  auto
+  operator()(const int argc, const char **argv) const -> int {
     return fun(argc - 1, argv + 1);
   }
 };
@@ -63,6 +64,8 @@ int
 simreads(int argc, const char **argv);
 int
 main_counts(int argc, const char **argv);
+int
+main_nanopore(int argc, const char **argv);
 int
 main_allelicmeth(int argc, const char **argv);
 int
@@ -145,7 +148,8 @@ print_help(
        << "Commands:" << endl;
   for (auto &&g : command_groups) {
     cout << "  " << g.first << ":" << endl;
-    for (auto &&c : g.second) cout << c << endl;
+    for (auto &&c : g.second)
+      cout << c << endl;
     cout << endl;
   }
 }
@@ -154,7 +158,7 @@ int
 main(int argc, const char **argv) {
   try {
     vector<pair<string, vector<dnmtools_command>>> command_groups = {
-// clang-format off
+      // clang-format off
 {{"mapping",
  {{{"abismal",    "map FASTQ reads to a FASTA reference genome or an index", abismal},
    {"abismalidx", "convert a FASTA reference genome to an abismal index",    abismalidx},
@@ -165,6 +169,7 @@ main(int argc, const char **argv) {
    {"uniq",      "remove duplicate reads from sorted mapped reads",           main_uniq},
    {"bsrate",    "compute the BS conversion rate from BS-seq reads mapped to a genome",  main_bsrate},
    {"counts",    "get methylation levels from mapped WGBS reads",             main_counts},
+   {"nano",      "get methylation levels from mapped nanopore reads",         main_nanopore},
    {"sym",       "get CpG sites and make methylation levels symmetric",       main_symmetric_cpgs},
    {"levels",    "compute methylation summary statistics from a counts file", main_levels}}}},
 
@@ -208,7 +213,7 @@ main(int argc, const char **argv) {
    {"unxcounts",     "reverse the xcounts process yielding a counts file", main_unxcounts},
    {"selectsites",   "sites inside a set of genomic intervals", main_selectsites},
    {"kmersites",     "make track file for sites matching kmer", kmersites}}}}}};
-// clang-format on
+    // clang-format on
 
     if (argc < 2) {
       print_help(command_groups);
@@ -221,11 +226,11 @@ main(int argc, const char **argv) {
 
     for (auto &g : command_groups) {
       const auto the_cmd = find_if(begin(g.second), end(g.second), has_tag);
-      if (the_cmd != end(g.second)) return (*the_cmd)(argc, argv);
+      if (the_cmd != end(g.second))
+        return (*the_cmd)(argc, argv);
     }
 
     std::cerr << "ERROR: invalid command " << argv[1] << std::endl;
-
   }
   catch (const std::exception &e) {
     std::cerr << "ERROR:\t" << e.what() << endl;

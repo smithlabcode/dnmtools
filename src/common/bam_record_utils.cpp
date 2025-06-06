@@ -980,7 +980,8 @@ to_string(const bam_header &hdr, const bam_rec &aln) {
   if (ret < 0) {
     throw runtime_error("Can't format record: " + to_string(hdr, aln));
   }
+  const std::string s = string(ks.s);
   if (ks.s != nullptr)
     free(ks.s);
-  return string(ks.s);
+  return s;
 }

@@ -205,6 +205,7 @@ dnmtools_SOURCES += src/analysis/methstates.cpp
 dnmtools_SOURCES += src/analysis/bsrate.cpp
 dnmtools_SOURCES += src/analysis/methentropy.cpp
 dnmtools_SOURCES += src/analysis/methcounts.cpp
+dnmtools_SOURCES += src/analysis/nanopore.cpp
 dnmtools_SOURCES += src/analysis/roimethstat.cpp
 dnmtools_SOURCES += src/analysis/cpgbins.cpp
 dnmtools_SOURCES += src/analysis/multimethstat.cpp

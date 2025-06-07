@@ -16,14 +16,14 @@
  * General Public License for more details.
  */
 
+#include <array>
 #include <cstdint>  // for [u]int[0-9]+_t
+#include <iomanip>
 #include <iostream>
 #include <numeric>
-#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include "OptionParser.hpp"
@@ -39,7 +39,6 @@ using std::cerr;
 using std::endl;
 using std::string;
 using std::unordered_map;
-using std::unordered_set;
 using std::vector;
 
 using bamxx::bam_header;
@@ -74,12 +73,12 @@ struct quick_buf : public std::ostringstream,
 typedef uint16_t count_type;
 
 static inline bool
-eats_ref(const uint32_t c) {
+eats_ref(const std::uint32_t c) {
   return bam_cigar_type(bam_cigar_op(c)) & 2;
 }
 
 static inline bool
-eats_query(const uint32_t c) {
+eats_query(const std::uint32_t c) {
   return bam_cigar_type(bam_cigar_op(c)) & 1;
 }
 
@@ -114,34 +113,27 @@ is_c_at_g(const std::string &s, size_t i) {
    requirement of the program into a more reasonable range, so keeping
    all the information seems reasonable. */
 struct CountSet {
-
   string
   tostring() const {
     std::ostringstream oss;
-    oss << pos_prob << '\t' << neg_prob << '\t' << pos_n << '\t' << neg_n;
+    oss << prob_pos << '\t' << n_reads_pos << '\t' << prob_neg << '\t'
+        << n_reads_neg << '\n';
     return oss.str();
   }
   void
   add_count_pos(const std::uint8_t x) {
-    pos_prob += x;
-    ++pos_n;
+    prob_pos += x;
+    ++n_reads_pos;
   }
   void
   add_count_neg(const std::uint8_t x) {
-    neg_prob += x;
-    ++neg_n;
+    prob_neg += x;
+    ++n_reads_neg;
   }
-  count_type
-  pos_total() const {
-    return pos_n;
-  }
-  count_type
-  neg_total() const {
-    return neg_n;
-  }
-
-  count_type pos_prob{0}, neg_prob{0};
-  count_type pos_n{0}, neg_n{0};
+  count_type prob_pos{0};
+  count_type prob_neg{0};
+  count_type n_reads_pos{0};
+  count_type n_reads_neg{0};
 };
 
 /* The "tag" returned by this function should be exclusive, so that
@@ -150,7 +142,7 @@ struct CountSet {
  * works as long as the chromosome size is not the maximum size of a
  * size_t.
  */
-static uint32_t
+static std::uint32_t
 get_tag_from_genome(const string &s, const size_t pos) {
   if (is_cytosine(s[pos])) {
     if (is_cpg(s, pos))
@@ -176,27 +168,16 @@ get_tag_from_genome(const string &s, const size_t pos) {
 }
 
 static const char *tag_values[] = {
-  "CpG",   // 0
-  "CHH",   // 1
-  "CXG",   // 2
-  "CCG",   // 3
-  "N",     // 4
-  "CpGx",  // 5 <---- MUT_OFFSET
-  "CHHx",  // 6
-  "CXGx",  // 7
-  "CCGx",  // 8
-  "Nx"     // 9
+  "CpG",  // 0
+  "CHH",  // 1
+  "CXG",  // 2
+  "CCG",  // 3
+  "N",    // 4
 };
-static const uint32_t MUT_OFFSET = 5;
-
-static inline uint32_t
-tag_with_mut(const uint32_t tag, const bool mut) {
-  return tag + (mut ? MUT_OFFSET : 0);
-}
 
 template <const bool require_covered = false>
 static void
-write_output(const bam_header &hdr, bgzf_file &out, const int32_t tid,
+write_output(const bam_header &hdr, bgzf_file &out, const std::int32_t tid,
              const string &chrom, const vector<CountSet> &counts,
              bool CPG_ONLY) {
 
@@ -205,24 +186,24 @@ write_output(const bam_header &hdr, bgzf_file &out, const int32_t tid,
     const char base = chrom[i];
     if (is_cytosine(base) || is_guanine(base)) {
 
-      const uint32_t the_tag = get_tag_from_genome(chrom, i);
+      const std::uint32_t the_tag = get_tag_from_genome(chrom, i);
       if (CPG_ONLY && the_tag != 0)
         continue;
 
       const bool is_c = is_cytosine(base);
-      const double n_reads = is_c ? counts[i].pos_n : counts[i].neg_n;
-      double n_meth = is_c ? counts[i].pos_prob : counts[i].neg_prob;
+      const double n_reads =
+        is_c ? counts[i].n_reads_pos : counts[i].n_reads_neg;
+      double n_meth = is_c ? counts[i].prob_pos : counts[i].prob_neg;
       n_meth = n_meth > 0.0 ? (n_meth / 256.0) : 0.0;
 
       if (require_covered && n_reads == 0)
         continue;
 
-      const bool mut = false;
+      // const bool mut = false;
       buf.clear();
       // ADS: here is where we make an MSite, but not using MSite
       buf << sam_hdr_tid2name(hdr, tid) << '\t' << i << '\t'
-          << (is_c ? '+' : '-') << '\t'
-          << tag_values[tag_with_mut(the_tag, mut)] << '\t'
+          << (is_c ? '+' : '-') << '\t' << tag_values[the_tag] << '\t'
           << (n_reads > 0.0 ? n_meth / n_reads : 0.0) << '\t' << n_reads
           << '\n';
       if (!out.write(buf.c_str(), buf.tellp()))
@@ -231,92 +212,204 @@ write_output(const bam_header &hdr, bgzf_file &out, const int32_t tid,
   }
 }
 
-static inline std::vector<std::uint8_t>
-get_ml_values(const bamxx::bam_rec &aln) {
-  static constexpr auto min_ml_size = 7;  // ML:B:C
-  // Get the ML values
-  kstring_t s = {0, 0, nullptr};
-  if (bam_aux_get_str(aln.b, "ML", &s) <= 0) {
-    ks_free(&s);
-    return {};
-  }
-  std::string ml(ks_str(&s));
-  ks_free(&s);
-  if (std::size(ml) < min_ml_size)
-    return {};
-  ml = ml.substr(min_ml_size);
-  std::vector<std::string> parts = smithlab::split(ml, ",", false);
-  std::vector<uint8_t> probs;
-  for (const auto &p : parts)
-    probs.push_back(atoi(p.data()));
+static inline bool
+confirm_mm_vals(const bamxx::bam_rec &aln, std::vector<std::uint8_t> &vals) {
+  const char hydroxy_tag[] = "C+h?";
+  const auto hydroxy_tag_size = 4;
+  const char methyl_tag[] = "C+m?";
+  const auto methyl_tag_size = 4;
 
-  auto prob_itr = std::cbegin(probs) + std::size(probs) / 2;
-  std::vector<std::uint8_t> vals(get_l_qseq(aln), 0);
+  const auto mm_aux = bam_aux_get(aln.b, "MM");
+  if (mm_aux == nullptr)
+    return false;
+
+  auto mm_beg = bam_aux2Z(mm_aux);
+  auto mm_end = mm_beg + std::strlen(mm_beg);
+
+  auto hydroxy_beg = strstr(mm_beg, hydroxy_tag);
+  auto hydroxy_end = std::find(hydroxy_beg, mm_end, ';');
+
+  auto methyl_beg = strstr(mm_beg, methyl_tag);
+  // auto methyl_end = std::find(methyl_beg, mm_end, ';');
+
+  hydroxy_beg += hydroxy_tag_size;
+  methyl_beg += methyl_tag_size;
+
+  if (!std::equal(hydroxy_beg, hydroxy_end, methyl_beg))
+    return false;
+
+  const auto isdig = [](const auto x) {
+    return std::isdigit(static_cast<unsigned char>(x));
+  };
+
+  const auto get_next = [&](auto &b, auto &e) -> std::int32_t {
+    b = std::find_if(b, e, isdig);
+    if (b == e)
+      return -1;
+    auto r = atoi(b);
+    b = std::find_if_not(b, e, isdig);
+    return r;
+  };
+
+  const auto ml_aux = bam_aux_get(aln.b, "ML");
+  if (ml_aux == nullptr)
+    return false;
+  const auto ml_aux_len = bam_auxB_len(ml_aux);
+
+  // number of commas is number of hydroxy substrates = CpG sites
+  const auto n_cpgs = std::count(hydroxy_beg, hydroxy_end, ',');
+
+  const auto n = get_l_qseq(aln);
   const auto seq = bam_get_seq(aln);
-  for (std::int32_t i = 0; i + 1 < get_l_qseq(aln); ++i)
-    if (seq_nt16_str[bam_seqi(seq, i)] == 'C' &&
-        seq_nt16_str[bam_seqi(seq, i + 1)] == 'G')
-      vals[i] += *prob_itr++;
-  assert(prob_itr == std::cend(probs));
+  vals = std::vector<std::uint8_t>(n, 0);
+  std::int32_t delta = get_next(hydroxy_beg, hydroxy_end);
 
-  return vals;
+  auto ml_idx = n_cpgs;  // start methyl after hydroxy
+
+  if (bam_is_rev(aln)) {
+    for (auto i = 1; i <= n; ++i) {
+      const auto nuc = seq_nt16_str[bam_seqi(seq, n - i)];
+      if (nuc == 'G') {
+        if (seq_nt16_str[bam_seqi(seq, n - i - 1)] == 'C') {
+          if (delta != 0)
+            return false;
+          vals[i - 1] = bam_auxB2i(ml_aux, ml_idx++);
+        }
+        --delta;
+        if (delta < 0)
+          delta = get_next(hydroxy_beg, hydroxy_end);
+      }
+    }
+  }
+  else {
+    for (auto i = 0; i + 1 < n; ++i) {
+      const auto nuc = seq_nt16_str[bam_seqi(seq, i)];
+      if (nuc == 'C') {
+        if (seq_nt16_str[bam_seqi(seq, i + 1)] == 'G') {
+          if (delta != 0)
+            return false;
+          vals[i] = bam_auxB2i(ml_aux, ml_idx++);
+        }
+        --delta;
+        if (delta < 0)
+          delta = get_next(hydroxy_beg, hydroxy_end);
+      }
+    }
+  }
+
+  return true;
 }
 
-static inline std::vector<std::uint8_t>
-get_ml_values_rev(const bamxx::bam_rec &aln) {
-  static constexpr auto min_ml_size = 7;  // ML:B:C
-  // Get the ML values
-  kstring_t s = {0, 0, nullptr};
-  if (bam_aux_get_str(aln.b, "ML", &s) <= 0) {
-    ks_free(&s);
-    return {};
+std::uint8_t enc[] = {
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 16
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 32
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 48
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 64
+  4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,  // 80
+  4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 96
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 112
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 128
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 144
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 160
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 176
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 192
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 208
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 224
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 240
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4   // 256
+};
+
+struct match_counter {
+  std::array<std::uint64_t, 256> c{};
+
+  void
+  add_pos(const std::uint8_t r1, const std::uint8_t r2, const std::uint8_t q1,
+          const std::uint8_t q2) {
+    const auto r1e = enc[r1];
+    const auto r2e = enc[r2];
+    const auto q1e = enc[q1];
+    const auto q2e = enc[q2];
+    if ((r1e | r2e | q1e | q2e) & 4u)
+      return;
+    c[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
   }
-  std::string ml(ks_str(&s));
-  ks_free(&s);
-  if (std::size(ml) < min_ml_size)
-    return {};
-  ml = ml.substr(min_ml_size);
-  std::vector<std::string> parts = smithlab::split(ml, ",", false);
-  std::vector<uint8_t> probs;
-  for (const auto &p : parts)
-    probs.push_back(atoi(p.data()));
 
-  auto prob_itr = std::cbegin(probs) + std::size(probs) / 2;
-  const std::uint32_t n = get_l_qseq(aln);
-  std::vector<std::uint8_t> vals(n, 0);
-  const auto seq = bam_get_seq(aln);
-  for (std::int32_t i = 0; i + 1 < get_l_qseq(aln); ++i)
-    if (seq_nt16_str[bam_seqi(seq, i)] == 'C' &&
-        seq_nt16_str[bam_seqi(seq, i + 1)] == 'G')
-      vals[n - i - 2] += *prob_itr++;
-  assert(prob_itr == std::cend(probs));
+  std::string
+  tostring() const {
+    static constexpr auto n_dinucs = 16u;
+    const auto dinucs = std::vector{
+      "AA", "AC", "AG", "AT", "CA", "CC", "CG", "CT",
+      "GA", "GC", "GG", "GT", "TA", "TC", "TG", "TT",
+    };
+    std::ostringstream oss;
+    for (auto i = 0u; i < n_dinucs; ++i) {
+      oss << dinucs[i];
+      for (auto j = 0u; j < n_dinucs; ++j)
+        oss << '\t' << c[i * n_dinucs + j];
+      oss << '\n';
+    }
+    return oss.str();
+  }
 
-  return vals;
-}
+  std::string
+  tostring_frac() const {
+    static constexpr auto width = 8;
+    static constexpr auto prec = 3;
+    static constexpr auto n_dinucs = 16u;
+    const auto dinucs = std::vector{
+      "AA", "AC", "AG", "AT", "CA", "CC", "CG", "CT",
+      "GA", "GC", "GG", "GT", "TA", "TC", "TG", "TT",
+    };
+    std::ostringstream oss;
+    for (auto i = 0u; i < n_dinucs; ++i) {
+      oss << dinucs[i];
+      const auto tot =
+        std::accumulate(std::cbegin(c) + (i * n_dinucs),
+                        std::cbegin(c) + ((i + 1) * n_dinucs), 0.0);
+      for (auto j = 0u; j < n_dinucs; ++j) {
+        oss << std::setw(width) << std::fixed << std::setprecision(prec)
+            << c[i * n_dinucs + j] / tot;
+      }
+      oss << '\n';
+    }
+    return oss.str();
+  }
+};
 
 static void
-count_states_pos(const bam_rec &aln, vector<CountSet> &counts) {
+count_states_pos(const bam_rec &aln, vector<CountSet> &counts,
+                 const std::string &chrom, match_counter &mc) {
   /* Move through cigar, reference and read positions without
      inflating cigar or read sequence */
+  const auto seq = bam_get_seq(aln);
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + get_n_cigar(aln);
 
   auto rpos = get_pos(aln);
-  auto qpos = 0;  // to match type with b->core.l_qseq
+  auto r_itr = std::cbegin(chrom) + rpos;
+  const auto r_itr_lim = std::cend(chrom);
 
-  const auto probs = get_ml_values(aln);
-  if (probs.empty())
+  std::vector<std::uint8_t> probs;
+  if (!confirm_mm_vals(aln, probs))
     return;
+
+  auto qpos = 0;                     // to match type with b->core.l_qseq
+  auto q_lim = get_l_qseq(aln) - 1;  // if here, this is >= 0
 
   auto prob_itr = std::cbegin(probs);
 
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
-    const uint32_t n = bam_cigar_oplen(*c_itr);
+    const std::uint32_t n = bam_cigar_oplen(*c_itr);
     if (eats_ref(op) && eats_query(op)) {
       const decltype(qpos) end_qpos = qpos + n;
-      for (; qpos < end_qpos; ++qpos)
+      for (; qpos < end_qpos; ++qpos) {
+        const auto r_nuc = *r_itr++;
+        mc.add_pos(r_nuc, r_itr == r_itr_lim ? 'N' : *r_itr,
+                   seq_nt16_str[bam_seqi(seq, qpos)],
+                   qpos == q_lim ? 'N' : seq_nt16_str[bam_seqi(seq, qpos + 1)]);
         counts[rpos++].add_count_pos(*prob_itr++);
+      }
     }
     else if (eats_query(op)) {
       qpos += n;
@@ -324,31 +417,35 @@ count_states_pos(const bam_rec &aln, vector<CountSet> &counts) {
     }
     else if (eats_ref(op)) {
       rpos += n;
+      r_itr += n;
     }
   }
   // ADS: somehow previous code included a correction for rpos going
   // past the end of the chromosome; this should result at least in a
   // soft-clip by any mapper. I'm not checking it here as even if it
   // happens I don't want to terminate.
-  // assert(qpos == get_l_qseq(aln));
-  if (qpos != get_l_qseq(aln)) {
-    std::cerr << qpos << '\t' << get_l_qseq(aln) << std::endl;
-  }
+  assert(qpos == get_l_qseq(aln));
 }
 
 [[maybe_unused]] static void
-count_states_neg(const bam_rec &aln, vector<CountSet> &counts) {
+count_states_neg(const bam_rec &aln, vector<CountSet> &counts,
+                 const std::string &chrom, match_counter &mc) {
   /* Move through cigar, reference and (*backward*) through read
      positions without inflating cigar or read sequence */
+  const auto seq = bam_get_seq(aln);
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + get_n_cigar(aln);
   size_t rpos = get_pos(aln);
-  size_t qpos = get_l_qseq(aln);  // to match type with b->core.l_qseq
+  auto r_itr = std::cbegin(chrom) + rpos;
+  const auto r_lim = std::cend(chrom);
 
-  const auto probs = get_ml_values_rev(aln);
-  if (probs.empty())
+  size_t qpos = get_l_qseq(aln);  // to match type with b->core.l_qseq
+  size_t q_idx = 0;
+  size_t l_qseq = get_l_qseq(aln);
+
+  std::vector<std::uint8_t> probs;  // vals;
+  if (!confirm_mm_vals(aln, probs))
     return;
-  assert(std::size(probs) == qpos);
 
   auto prob_itr = std::cend(probs);
 
@@ -356,31 +453,40 @@ count_states_neg(const bam_rec &aln, vector<CountSet> &counts) {
     return;
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
-    const uint32_t n = bam_cigar_oplen(*c_itr);
+    const std::uint32_t n = bam_cigar_oplen(*c_itr);
     if (eats_ref(op) && eats_query(op)) {
       assert(qpos >= n);
       const size_t end_qpos = qpos - n;  // to match type with qpos
-      for (; qpos > end_qpos; --qpos)
+      for (; qpos > end_qpos; --qpos) {
+        const auto r_nuc = *r_itr++;
+        const auto q_nuc = seq_nt16_str[bam_seqi(seq, q_idx)];
+        ++q_idx;
+        mc.add_pos(r_nuc, r_itr == r_lim ? 'N' : *r_itr, q_nuc,
+                   q_idx == l_qseq ? 'N' : seq_nt16_str[bam_seqi(seq, q_idx)]);
         counts[rpos++].add_count_neg(*--prob_itr);
+      }
     }
     else if (eats_query(op)) {
       qpos -= n;
+      q_idx += n;
       prob_itr -= n;
     }
     else if (eats_ref(op)) {
       rpos += n;
+      r_itr += n;
     }
   }
+
   /* qpos is unsigned; would wrap around if < 0 */
   // ADS: Same as count_states_pos; see comment there
   assert(qpos == 0);
 }
 
-static unordered_map<int32_t, size_t>
+static std::unordered_map<std::int32_t, size_t>
 get_tid_to_idx(const bam_header &hdr,
-               const unordered_map<string, size_t> name_to_idx) {
-  unordered_map<int32_t, size_t> tid_to_idx;
-  for (int32_t i = 0; i < hdr.h->n_targets; ++i) {
+               const std::unordered_map<string, size_t> name_to_idx) {
+  std::unordered_map<std::int32_t, size_t> tid_to_idx;
+  for (std::int32_t i = 0; i < hdr.h->n_targets; ++i) {
     // "curr_name" gives a "tid_to_name" mapping allowing to jump
     // through "name_to_idx" and get "tid_to_idx"
     const string curr_name(hdr.h->target_name[i]);
@@ -394,16 +500,15 @@ get_tid_to_idx(const bam_header &hdr,
 
 template <class CS>
 static void
-output_skipped_chromosome(const bool CPG_ONLY, const int32_t tid,
-                          const unordered_map<int32_t, size_t> &tid_to_idx,
-                          const bam_header &hdr,
-                          const vector<string>::const_iterator chroms_beg,
-                          const vector<size_t> &chrom_sizes, vector<CS> &counts,
-                          bgzf_file &out) {
+output_skipped_chromosome(
+  const bool CPG_ONLY, const std::int32_t tid,
+  const std::unordered_map<std::int32_t, size_t> &tid_to_idx,
+  const bam_header &hdr, const vector<string>::const_iterator chroms_beg,
+  const vector<size_t> &chrom_sizes, vector<CS> &counts, bgzf_file &out) {
 
   // get the index of the next chrom sequence
   const auto chrom_idx = tid_to_idx.find(tid);
-  if (chrom_idx == cend(tid_to_idx))
+  if (chrom_idx == std::cend(tid_to_idx))
     throw dnmt_error("chrom not found: " + sam_hdr_tid2name(hdr, tid));
 
   const auto chrom_itr = chroms_beg + chrom_idx->second;
@@ -417,7 +522,7 @@ output_skipped_chromosome(const bool CPG_ONLY, const int32_t tid,
 
 static bool
 consistent_targets(const bam_header &hdr,
-                   const unordered_map<int32_t, size_t> &tid_to_idx,
+                   const std::unordered_map<std::int32_t, size_t> &tid_to_idx,
                    const vector<string> &names, const vector<size_t> &sizes) {
   const size_t n_targets = hdr.h->n_targets;
   if (n_targets != names.size())
@@ -427,7 +532,7 @@ consistent_targets(const bam_header &hdr,
     const string tid_name_sam = sam_hdr_tid2name(hdr, tid);
     const size_t tid_size_sam = sam_hdr_tid2len(hdr, tid);
     const auto idx_itr = tid_to_idx.find(tid);
-    if (idx_itr == cend(tid_to_idx))
+    if (idx_itr == std::cend(tid_to_idx))
       return false;
     const auto idx = idx_itr->second;
     if (tid_name_sam != names[idx] || tid_size_sam != sizes[idx])
@@ -447,13 +552,13 @@ process_reads(const bool VERBOSE, const bool show_progress,
   vector<string> chroms, names;
   read_fasta_file_short_names(chroms_file, names, chroms);
   for (auto &i : chroms)
-    transform(cbegin(i), cend(i), begin(i),
+    transform(std::cbegin(i), std::cend(i), std::begin(i),
               [](const char c) { return std::toupper(c); });
   if (VERBOSE)
     cerr << "[n chroms in reference: " << chroms.size() << "]" << endl;
-  const auto chroms_beg = cbegin(chroms);
+  const auto chroms_beg = std::cbegin(chroms);
 
-  unordered_map<string, size_t> name_to_idx;
+  std::unordered_map<string, size_t> name_to_idx;
   vector<size_t> chrom_sizes(chroms.size(), 0);
   for (size_t i = 0; i < chroms.size(); ++i) {
     name_to_idx[names[i]] = i;
@@ -471,7 +576,8 @@ process_reads(const bool VERBOSE, const bool show_progress,
   if (!hdr)
     throw dnmt_error("failed to read header");
 
-  unordered_map<int32_t, size_t> tid_to_idx = get_tid_to_idx(hdr, name_to_idx);
+  std::unordered_map<std::int32_t, size_t> tid_to_idx =
+    get_tid_to_idx(hdr, name_to_idx);
 
   if (!consistent_targets(hdr, tid_to_idx, names, chrom_sizes))
     throw dnmt_error("inconsistent reference genome information");
@@ -494,15 +600,18 @@ process_reads(const bool VERBOSE, const bool show_progress,
   // now iterate over the reads, switching chromosomes and writing
   // output as needed
   bam_rec aln;
-  int32_t prev_tid = -1;
+  std::int32_t prev_tid = -1;
 
   // this is where all the counts are accumulated
   vector<CountSet> counts;
 
   vector<string>::const_iterator chrom_itr{};
 
+  match_counter mc_pos;
+  match_counter mc_neg;
+
   while (hts.read(hdr, aln)) {
-    const int32_t tid = get_tid(aln);
+    const std::int32_t tid = get_tid(aln);
     if (get_l_qseq(aln) == 0)
       continue;
 
@@ -510,9 +619,9 @@ process_reads(const bool VERBOSE, const bool show_progress,
       continue;
     if (tid == prev_tid) {
       if (bam_is_rev(aln))
-        count_states_neg(aln, counts);
+        count_states_neg(aln, counts, *chrom_itr, mc_neg);
       else
-        count_states_pos(aln, counts);
+        count_states_pos(aln, counts, *chrom_itr, mc_pos);
     }
     else {  // chrom has changed, so output results and get the next chrom
 
@@ -560,6 +669,8 @@ process_reads(const bool VERBOSE, const bool show_progress,
     for (auto i = prev_tid + 1; i < hdr.h->n_targets; ++i)
       output_skipped_chromosome(CPG_ONLY, i, tid_to_idx, hdr, chroms_beg,
                                 chrom_sizes, counts, out);
+  std::cout << mc_pos.tostring_frac() << std::endl;
+  std::cout << mc_neg.tostring_frac() << std::endl;
 }
 
 int

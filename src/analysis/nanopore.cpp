@@ -1,19 +1,18 @@
-/* nanopore: counts for nanopore data
+/* nanocount: methylation counts for nanopore data
  *
- * Copyright (C) 2011-2025 University of Southern California and
- *                         Andrew D. Smith
+ * Copyright (C) 2025 Andrew D. Smith
  *
  * Author: Andrew D. Smith
  *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
 
 #include <array>
@@ -65,11 +64,8 @@ struct quick_buf : public std::ostringstream,
   }
 };
 
-// ADS: we should never have to worry about coverage over > 32767 in
-// any downstream analysis, so using "int16_t" here would allow to
-// detect wrap around and report it as some kind of weird thing, maybe
-// zeroing it and flagging the output. As it is now, if we really need
-// >65535-fold coverage, we can make the change here.
+// ADS: here the uint16_t allows for up to 256 reads, each contributing up to
+// 256 "counts" in the probability encoding.
 typedef uint16_t count_type;
 
 static inline bool
@@ -113,25 +109,48 @@ is_c_at_g(const std::string &s, size_t i) {
    requirement of the program into a more reasonable range, so keeping
    all the information seems reasonable. */
 struct CountSet {
-  string
+  std::string
   tostring() const {
+    // clang-format off
     std::ostringstream oss;
-    oss << prob_pos << '\t' << n_reads_pos << '\t' << prob_neg << '\t'
-        << n_reads_neg << '\n';
+    oss << hydroxy_pos << '\t' << hydroxy_neg << '\t'
+        << methyl_pos << '\t' << methyl_neg << '\t'
+        << n_reads_pos << '\t' << n_reads_neg << '\n';
+    // clang-format on
     return oss.str();
   }
   void
-  add_count_pos(const std::uint8_t x) {
-    prob_pos += x;
+  add_count_pos(const std::uint8_t h, const std::uint8_t m) {
+    hydroxy_pos += h;
+    methyl_pos += m;
     ++n_reads_pos;
   }
   void
-  add_count_neg(const std::uint8_t x) {
-    prob_neg += x;
+  add_count_neg(const std::uint8_t h, const std::uint8_t m) {
+    hydroxy_neg += h;
+    methyl_neg += m;
     ++n_reads_neg;
   }
-  count_type prob_pos{0};
-  count_type prob_neg{0};
+  double
+  get_hydroxy(const bool is_c) const {
+    return is_c ? hydroxy_pos : hydroxy_neg;
+  }
+  double
+  get_methyl(const bool is_c) const {
+    return is_c ? methyl_pos : methyl_neg;
+  }
+  double
+  get_mods(const bool is_c) const {
+    return get_hydroxy(is_c) + get_methyl(is_c);
+  }
+  double
+  get_n_reads(const bool is_c) const {
+    return is_c ? n_reads_pos : n_reads_neg;
+  }
+  count_type hydroxy_pos{0};
+  count_type hydroxy_neg{0};
+  count_type methyl_pos{0};
+  count_type methyl_neg{0};
   count_type n_reads_pos{0};
   count_type n_reads_neg{0};
 };
@@ -191,116 +210,169 @@ write_output(const bam_header &hdr, bgzf_file &out, const std::int32_t tid,
         continue;
 
       const bool is_c = is_cytosine(base);
-      const double n_reads =
-        is_c ? counts[i].n_reads_pos : counts[i].n_reads_neg;
-      double n_meth = is_c ? counts[i].prob_pos : counts[i].prob_neg;
-      n_meth = n_meth > 0.0 ? (n_meth / 256.0) : 0.0;
 
-      if (require_covered && n_reads == 0)
+      const double n_reads = counts[i].get_n_reads(is_c);
+      if (require_covered && n_reads < 1.0)
         continue;
+      const double denom = std::max(n_reads, 1.0);
+      const double hydroxy = counts[i].get_hydroxy(is_c) / 256.0 / denom;
+      const double methyl = counts[i].get_methyl(is_c) / 256.0 / denom;
+      const double mods = counts[i].get_mods(is_c) / 256.0 / denom;
 
-      // const bool mut = false;
       buf.clear();
       // ADS: here is where we make an MSite, but not using MSite
+      // clang-format off
       buf << sam_hdr_tid2name(hdr, tid) << '\t' << i << '\t'
           << (is_c ? '+' : '-') << '\t' << tag_values[the_tag] << '\t'
-          << (n_reads > 0.0 ? n_meth / n_reads : 0.0) << '\t' << n_reads
+          << mods << '\t'
+          << n_reads << '\t'
+          << hydroxy << '\t'
+          << methyl
           << '\n';
+      // clang-format on
       if (!out.write(buf.c_str(), buf.tellp()))
-        throw dnmt_error("error writing output");
+        throw std::runtime_error("error writing output");
     }
   }
 }
 
-static inline bool
-confirm_mm_vals(const bamxx::bam_rec &aln, std::vector<std::uint8_t> &vals) {
+template <typename T>
+static std::tuple<T, T>
+get_hydroxy_sites(T mod_pos_beg, T mod_pos_end) {
   const char hydroxy_tag[] = "C+h?";
   const auto hydroxy_tag_size = 4;
-  const char methyl_tag[] = "C+m?";
-  const auto methyl_tag_size = 4;
-
-  const auto mm_aux = bam_aux_get(aln.b, "MM");
-  if (mm_aux == nullptr)
-    return false;
-
-  auto mm_beg = bam_aux2Z(mm_aux);
-  auto mm_end = mm_beg + std::strlen(mm_beg);
-
-  auto hydroxy_beg = strstr(mm_beg, hydroxy_tag);
-  auto hydroxy_end = std::find(hydroxy_beg, mm_end, ';');
-
-  auto methyl_beg = strstr(mm_beg, methyl_tag);
-  // auto methyl_end = std::find(methyl_beg, mm_end, ';');
-
+  auto hydroxy_beg = strstr(mod_pos_beg, hydroxy_tag);
+  if (hydroxy_beg == mod_pos_end)
+    return std::tuple<T, T>{};
+  auto hydroxy_end = std::find(hydroxy_beg, mod_pos_end, ';');
+  if (hydroxy_end == mod_pos_end)
+    return std::tuple<T, T>{};
   hydroxy_beg += hydroxy_tag_size;
-  methyl_beg += methyl_tag_size;
-
-  if (!std::equal(hydroxy_beg, hydroxy_end, methyl_beg))
-    return false;
-
-  const auto isdig = [](const auto x) {
-    return std::isdigit(static_cast<unsigned char>(x));
-  };
-
-  const auto get_next = [&](auto &b, auto &e) -> std::int32_t {
-    b = std::find_if(b, e, isdig);
-    if (b == e)
-      return -1;
-    auto r = atoi(b);
-    b = std::find_if_not(b, e, isdig);
-    return r;
-  };
-
-  const auto ml_aux = bam_aux_get(aln.b, "ML");
-  if (ml_aux == nullptr)
-    return false;
-  const auto ml_aux_len = bam_auxB_len(ml_aux);
-
-  // number of commas is number of hydroxy substrates = CpG sites
-  const auto n_cpgs = std::count(hydroxy_beg, hydroxy_end, ',');
-
-  const auto n = get_l_qseq(aln);
-  const auto seq = bam_get_seq(aln);
-  vals = std::vector<std::uint8_t>(n, 0);
-  std::int32_t delta = get_next(hydroxy_beg, hydroxy_end);
-
-  auto ml_idx = n_cpgs;  // start methyl after hydroxy
-
-  if (bam_is_rev(aln)) {
-    for (auto i = 1; i <= n; ++i) {
-      const auto nuc = seq_nt16_str[bam_seqi(seq, n - i)];
-      if (nuc == 'G') {
-        if (seq_nt16_str[bam_seqi(seq, n - i - 1)] == 'C') {
-          if (delta != 0)
-            return false;
-          vals[i - 1] = bam_auxB2i(ml_aux, ml_idx++);
-        }
-        --delta;
-        if (delta < 0)
-          delta = get_next(hydroxy_beg, hydroxy_end);
-      }
-    }
-  }
-  else {
-    for (auto i = 0; i + 1 < n; ++i) {
-      const auto nuc = seq_nt16_str[bam_seqi(seq, i)];
-      if (nuc == 'C') {
-        if (seq_nt16_str[bam_seqi(seq, i + 1)] == 'G') {
-          if (delta != 0)
-            return false;
-          vals[i] = bam_auxB2i(ml_aux, ml_idx++);
-        }
-        --delta;
-        if (delta < 0)
-          delta = get_next(hydroxy_beg, hydroxy_end);
-      }
-    }
-  }
-
-  return true;
+  return std::tuple<T, T>(hydroxy_beg, hydroxy_end);
 }
 
-std::uint8_t enc[] = {
+template <typename T>
+static std::tuple<T, T>
+get_methyl_sites(T mod_pos_beg, T mod_pos_end) {
+  const char methyl_tag[] = "C+h?";
+  const auto methyl_tag_size = 4;
+  auto methyl_beg = strstr(mod_pos_beg, methyl_tag);
+  if (methyl_beg == mod_pos_end)
+    return std::tuple<T, T>{};
+  auto methyl_end = std::find(methyl_beg, mod_pos_end, ';');
+  if (methyl_end == mod_pos_end)
+    return std::tuple<T, T>{};
+  methyl_beg += methyl_tag_size;
+  return std::tuple<T, T>(methyl_beg, methyl_end);
+}
+
+static std::tuple<char *, char *>
+get_modification_positions(const bamxx::bam_rec &aln) {
+  const auto mm_aux = bam_aux_get(aln.b, "MM");
+  if (mm_aux == nullptr)
+    return {};
+  auto mod_pos_beg = bam_aux2Z(mm_aux);
+  auto mod_pos_end = mod_pos_beg + std::strlen(mod_pos_beg);
+  return {mod_pos_beg, mod_pos_end};
+}
+
+struct mod_prob_buffer {
+  static constexpr auto init_capacity{128 * 1024};
+  std::vector<std::uint8_t> hydroxy_probs;
+  std::vector<std::uint8_t> methyl_probs;
+  mod_prob_buffer() {
+    methyl_probs.reserve(init_capacity);
+    hydroxy_probs.reserve(init_capacity);
+  }
+  bool
+  set_probs(const bamxx::bam_rec &aln) {
+    const auto get_next_mod_pos = [](auto &b, const auto e) -> std::int32_t {
+      const auto isdig = [](const auto x) {
+        return std::isdigit(static_cast<unsigned char>(x));
+      };
+      b = std::find_if(b, e, isdig);
+      if (b == e)
+        return -1;
+      auto r = atoi(b);
+      b = std::find_if_not(b, e, isdig);
+      return r;
+    };
+
+    auto [mod_pos_beg, mod_pos_end] = get_modification_positions(aln);
+    auto [hydroxy_beg, hydroxy_end] =
+      get_hydroxy_sites(mod_pos_beg, mod_pos_end);
+    auto [methyl_beg, methyl_end] = get_methyl_sites(mod_pos_beg, mod_pos_end);
+
+    // check if any are false
+    if (mod_pos_beg == nullptr || hydroxy_beg == nullptr ||
+        methyl_beg == nullptr)
+      return false;
+
+    // assume that hydroxy and methyl both point to CpG sites
+    if (!std::equal(hydroxy_beg, hydroxy_end, methyl_beg, methyl_end))
+      return false;
+
+    const auto mod_prob = bam_aux_get(aln.b, "ML");
+    if (mod_prob == nullptr)
+      return false;
+
+    // number of commas is number of hydroxy substrates = CpG sites
+    const auto n_cpgs = std::count(hydroxy_beg, hydroxy_end, ',');
+
+    const auto qlen = get_l_qseq(aln);
+    const auto seq = bam_get_seq(aln);
+
+    methyl_probs.clear();
+    methyl_probs.resize(qlen, 0);
+
+    hydroxy_probs.clear();
+    hydroxy_probs.resize(qlen, 0);
+
+    std::int32_t delta = get_next_mod_pos(hydroxy_beg, hydroxy_end);
+
+    auto hydroxy_prob_idx = 0;      // start of modifications
+    auto methyl_prob_idx = n_cpgs;  // start methyl after hydroxy
+
+    if (bam_is_rev(aln)) {
+      for (auto i = 0; i < qlen; ++i) {
+        const auto nuc = seq_nt16_str[bam_seqi(seq, qlen - i - 1)];
+        if (nuc == 'G') {
+          if (seq_nt16_str[bam_seqi(seq, qlen - i - 2)] == 'C') {
+            // assume that when delta hits 0 we have a CpG site
+            if (delta != 0)
+              return false;
+            methyl_probs[i] = bam_auxB2i(mod_prob, methyl_prob_idx++);
+            hydroxy_probs[i] = bam_auxB2i(mod_prob, hydroxy_prob_idx++);
+          }
+          --delta;
+          if (delta < 0)
+            delta = get_next_mod_pos(hydroxy_beg, hydroxy_end);
+        }
+      }
+    }
+    else {
+      for (auto i = 0; i + 1 < qlen; ++i) {
+        const auto nuc = seq_nt16_str[bam_seqi(seq, i)];
+        if (nuc == 'C') {
+          if (seq_nt16_str[bam_seqi(seq, i + 1)] == 'G') {
+            // assume that when delta hits 0 we have a CpG site
+            if (delta != 0)
+              return false;
+            methyl_probs[i] = bam_auxB2i(mod_prob, methyl_prob_idx++);
+            hydroxy_probs[i] = bam_auxB2i(mod_prob, hydroxy_prob_idx++);
+          }
+          --delta;
+          if (delta < 0)
+            delta = get_next_mod_pos(hydroxy_beg, hydroxy_end);
+        }
+      }
+    }
+    return true;
+  }
+};
+
+// clang-format off
+static const std::uint8_t enc[] = {
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 16
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 32
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 48
@@ -318,6 +390,17 @@ std::uint8_t enc[] = {
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 240
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4   // 256
 };
+// clang-format on
+
+static constexpr auto n_dinucs = 16u;
+// clang-format off
+static const auto dinucs = std::vector{
+  "AA", "AC", "AG", "AT",
+  "CA", "CC", "CG", "CT",
+  "GA", "GC", "GG", "GT",
+  "TA", "TC", "TG", "TT",
+};
+// clang-format on
 
 struct match_counter {
   std::array<std::uint64_t, 256> c{};
@@ -336,16 +419,12 @@ struct match_counter {
 
   std::string
   tostring() const {
-    static constexpr auto n_dinucs = 16u;
-    const auto dinucs = std::vector{
-      "AA", "AC", "AG", "AT", "CA", "CC", "CG", "CT",
-      "GA", "GC", "GG", "GT", "TA", "TC", "TG", "TT",
-    };
     std::ostringstream oss;
     for (auto i = 0u; i < n_dinucs; ++i) {
+      const auto beg = std::cbegin(c) + (i * n_dinucs);
       oss << dinucs[i];
-      for (auto j = 0u; j < n_dinucs; ++j)
-        oss << '\t' << c[i * n_dinucs + j];
+      for (auto itr = beg; itr != beg + n_dinucs; ++itr)
+        oss << '\t' << *itr;
       oss << '\n';
     }
     return oss.str();
@@ -355,21 +434,15 @@ struct match_counter {
   tostring_frac() const {
     static constexpr auto width = 8;
     static constexpr auto prec = 3;
-    static constexpr auto n_dinucs = 16u;
-    const auto dinucs = std::vector{
-      "AA", "AC", "AG", "AT", "CA", "CC", "CG", "CT",
-      "GA", "GC", "GG", "GT", "TA", "TC", "TG", "TT",
-    };
     std::ostringstream oss;
+    oss.precision(prec);
+    oss.setf(std::ios::fixed, std::ios::floatfield);
     for (auto i = 0u; i < n_dinucs; ++i) {
       oss << dinucs[i];
-      const auto tot =
-        std::accumulate(std::cbegin(c) + (i * n_dinucs),
-                        std::cbegin(c) + ((i + 1) * n_dinucs), 0.0);
-      for (auto j = 0u; j < n_dinucs; ++j) {
-        oss << std::setw(width) << std::fixed << std::setprecision(prec)
-            << c[i * n_dinucs + j] / tot;
-      }
+      const auto beg = std::cbegin(c) + (i * n_dinucs);
+      const auto tot = std::max(std::accumulate(beg, beg + n_dinucs, 0.0), 1.0);
+      for (auto itr = beg; itr != beg + n_dinucs; ++itr)
+        oss << std::setw(width) << *itr / tot;
       oss << '\n';
     }
     return oss.str();
@@ -378,7 +451,8 @@ struct match_counter {
 
 static void
 count_states_pos(const bam_rec &aln, vector<CountSet> &counts,
-                 const std::string &chrom, match_counter &mc) {
+                 mod_prob_buffer &mod_buf, const std::string &chrom,
+                 match_counter &mc) {
   /* Move through cigar, reference and read positions without
      inflating cigar or read sequence */
   const auto seq = bam_get_seq(aln);
@@ -389,14 +463,14 @@ count_states_pos(const bam_rec &aln, vector<CountSet> &counts,
   auto r_itr = std::cbegin(chrom) + rpos;
   const auto r_itr_lim = std::cend(chrom);
 
-  std::vector<std::uint8_t> probs;
-  if (!confirm_mm_vals(aln, probs))
+  if (!mod_buf.set_probs(aln))
     return;
 
   auto qpos = 0;                     // to match type with b->core.l_qseq
   auto q_lim = get_l_qseq(aln) - 1;  // if here, this is >= 0
 
-  auto prob_itr = std::cbegin(probs);
+  auto hydroxy_prob_itr = std::cbegin(mod_buf.hydroxy_probs);
+  auto methyl_prob_itr = std::cbegin(mod_buf.methyl_probs);
 
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
@@ -408,12 +482,15 @@ count_states_pos(const bam_rec &aln, vector<CountSet> &counts,
         mc.add_pos(r_nuc, r_itr == r_itr_lim ? 'N' : *r_itr,
                    seq_nt16_str[bam_seqi(seq, qpos)],
                    qpos == q_lim ? 'N' : seq_nt16_str[bam_seqi(seq, qpos + 1)]);
-        counts[rpos++].add_count_pos(*prob_itr++);
+        counts[rpos++].add_count_pos(*hydroxy_prob_itr, *methyl_prob_itr);
+        ++methyl_prob_itr;
+        ++hydroxy_prob_itr;
       }
     }
     else if (eats_query(op)) {
       qpos += n;
-      prob_itr += n;
+      methyl_prob_itr += n;
+      hydroxy_prob_itr += n;
     }
     else if (eats_ref(op)) {
       rpos += n;
@@ -429,7 +506,8 @@ count_states_pos(const bam_rec &aln, vector<CountSet> &counts,
 
 [[maybe_unused]] static void
 count_states_neg(const bam_rec &aln, vector<CountSet> &counts,
-                 const std::string &chrom, match_counter &mc) {
+                 mod_prob_buffer &mod_buf, const std::string &chrom,
+                 match_counter &mc) {
   /* Move through cigar, reference and (*backward*) through read
      positions without inflating cigar or read sequence */
   const auto seq = bam_get_seq(aln);
@@ -443,11 +521,11 @@ count_states_neg(const bam_rec &aln, vector<CountSet> &counts,
   size_t q_idx = 0;
   size_t l_qseq = get_l_qseq(aln);
 
-  std::vector<std::uint8_t> probs;  // vals;
-  if (!confirm_mm_vals(aln, probs))
+  if (!mod_buf.set_probs(aln))
     return;
 
-  auto prob_itr = std::cend(probs);
+  auto hydroxy_prob_itr = std::cend(mod_buf.hydroxy_probs);
+  auto methyl_prob_itr = std::cend(mod_buf.methyl_probs);
 
   if (qpos == 0)
     return;
@@ -463,13 +541,16 @@ count_states_neg(const bam_rec &aln, vector<CountSet> &counts,
         ++q_idx;
         mc.add_pos(r_nuc, r_itr == r_lim ? 'N' : *r_itr, q_nuc,
                    q_idx == l_qseq ? 'N' : seq_nt16_str[bam_seqi(seq, q_idx)]);
-        counts[rpos++].add_count_neg(*--prob_itr);
+        --methyl_prob_itr;
+        --hydroxy_prob_itr;
+        counts[rpos++].add_count_neg(*hydroxy_prob_itr, *methyl_prob_itr);
       }
     }
     else if (eats_query(op)) {
       qpos -= n;
       q_idx += n;
-      prob_itr -= n;
+      methyl_prob_itr -= n;
+      hydroxy_prob_itr -= n;
     }
     else if (eats_ref(op)) {
       rpos += n;
@@ -492,7 +573,7 @@ get_tid_to_idx(const bam_header &hdr,
     const string curr_name(hdr.h->target_name[i]);
     const auto name_itr(name_to_idx.find(curr_name));
     if (name_itr == end(name_to_idx))
-      throw dnmt_error("failed to find chrom: " + curr_name);
+      throw std::runtime_error("failed to find chrom: " + curr_name);
     tid_to_idx[i] = name_itr->second;
   }
   return tid_to_idx;
@@ -509,7 +590,7 @@ output_skipped_chromosome(
   // get the index of the next chrom sequence
   const auto chrom_idx = tid_to_idx.find(tid);
   if (chrom_idx == std::cend(tid_to_idx))
-    throw dnmt_error("chrom not found: " + sam_hdr_tid2name(hdr, tid));
+    throw std::runtime_error("chrom not found: " + sam_hdr_tid2name(hdr, tid));
 
   const auto chrom_itr = chroms_beg + chrom_idx->second;
 
@@ -542,12 +623,12 @@ consistent_targets(const bam_header &hdr,
 }
 
 template <const bool require_covered = false>
-static void
+static std::tuple<match_counter, match_counter>
 process_reads(const bool VERBOSE, const bool show_progress,
               const bool compress_output, const bool include_header,
               const size_t n_threads, const string &infile,
               const string &outfile, const string &chroms_file,
-              const bool CPG_ONLY) {
+              const bool CPG_ONLY, const int strand) {
   // first get the chromosome names and sequences from the FASTA file
   vector<string> chroms, names;
   read_fasta_file_short_names(chroms_file, names, chroms);
@@ -570,23 +651,23 @@ process_reads(const bool VERBOSE, const bool show_progress,
   // open the hts SAM/BAM input file and get the header
   bamxx::bam_in hts(infile);
   if (!hts)
-    throw dnmt_error("failed to open input file");
+    throw std::runtime_error("failed to open input file");
   // load the input file's header
   bam_header hdr(hts);
   if (!hdr)
-    throw dnmt_error("failed to read header");
+    throw std::runtime_error("failed to read header");
 
   std::unordered_map<std::int32_t, size_t> tid_to_idx =
     get_tid_to_idx(hdr, name_to_idx);
 
   if (!consistent_targets(hdr, tid_to_idx, names, chrom_sizes))
-    throw dnmt_error("inconsistent reference genome information");
+    throw std::runtime_error("inconsistent reference genome information");
 
   // open the output file
   const string output_mode = compress_output ? "w" : "wu";
   bgzf_file out(outfile, output_mode);
   if (!out)
-    throw dnmt_error("error opening output file: " + outfile);
+    throw std::runtime_error("error opening output file: " + outfile);
 
   // set the threads for the input file decompression
   if (n_threads > 1) {
@@ -609,6 +690,7 @@ process_reads(const bool VERBOSE, const bool show_progress,
 
   match_counter mc_pos;
   match_counter mc_neg;
+  mod_prob_buffer mod_buf;
 
   while (hts.read(hdr, aln)) {
     const std::int32_t tid = get_tid(aln);
@@ -618,10 +700,11 @@ process_reads(const bool VERBOSE, const bool show_progress,
     if (tid == -1)  // ADS: skip reads that have no tid -- they are not mapped
       continue;
     if (tid == prev_tid) {
-      if (bam_is_rev(aln))
-        count_states_neg(aln, counts, *chrom_itr, mc_neg);
-      else
-        count_states_pos(aln, counts, *chrom_itr, mc_pos);
+      const bool is_rev = bam_is_rev(aln);
+      if (is_rev && strand != 1)
+        count_states_neg(aln, counts, mod_buf, *chrom_itr, mc_neg);
+      if (!is_rev && strand != 2)
+        count_states_pos(aln, counts, mod_buf, *chrom_itr, mc_pos);
     }
     else {  // chrom has changed, so output results and get the next chrom
 
@@ -635,7 +718,7 @@ process_reads(const bool VERBOSE, const bool show_progress,
                                     "previous tid: " +
                                     std::to_string(prev_tid) +
                                     " current tid: " + std::to_string(tid);
-        throw dnmt_error(message);
+        throw std::runtime_error(message);
       }
 
       if (!require_covered)
@@ -646,8 +729,8 @@ process_reads(const bool VERBOSE, const bool show_progress,
       // get the next chrom to process
       auto chrom_idx(tid_to_idx.find(tid));
       if (chrom_idx == end(tid_to_idx))
-        throw dnmt_error("chromosome not found: " +
-                         string(sam_hdr_tid2name(hdr, tid)));
+        throw std::runtime_error("chromosome not found: " +
+                                 string(sam_hdr_tid2name(hdr, tid)));
       if (show_progress)
         cerr << "processing " << sam_hdr_tid2name(hdr, tid) << endl;
 
@@ -669,12 +752,11 @@ process_reads(const bool VERBOSE, const bool show_progress,
     for (auto i = prev_tid + 1; i < hdr.h->n_targets; ++i)
       output_skipped_chromosome(CPG_ONLY, i, tid_to_idx, hdr, chroms_beg,
                                 chrom_sizes, counts, out);
-  std::cout << mc_pos.tostring_frac() << std::endl;
-  std::cout << mc_neg.tostring_frac() << std::endl;
+  return {mc_pos, mc_neg};
 }
 
 int
-main_nanopore(int argc, const char **argv) {
+main_nanocount(int argc, const char **argv) {
 
   try {
 
@@ -684,9 +766,11 @@ main_nanopore(int argc, const char **argv) {
     bool require_covered = false;
     bool compress_output = false;
     bool include_header = false;
+    int strand = 0;
 
     string chroms_file;
     string outfile;
+    string stats_file;
     int n_threads = 1;
 
     /****************** COMMAND LINE OPTIONS ********************/
@@ -703,6 +787,11 @@ main_nanopore(int argc, const char **argv) {
                       false, CPG_ONLY);
     opt_parse.add_opt("require-covered", 'r', "only output covered sites",
                       false, require_covered);
+    opt_parse.add_opt("strand", '\0',
+                      "use strand (1=positive, 2=negative, 0=default)", false,
+                      strand);
+    opt_parse.add_opt("stats", 's', "output match/mismatch stats to this file",
+                      false, stats_file);
     opt_parse.add_opt("header", 'H', "add a header to identify the reference",
                       false, include_header);
     opt_parse.add_opt("zip", 'z', "output gzip format", false, compress_output);
@@ -724,7 +813,7 @@ main_nanopore(int argc, const char **argv) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (n_threads < 0)
-      throw dnmt_error("thread count cannot be negative");
+      throw std::runtime_error("thread count cannot be negative");
 
     std::ostringstream cmd;
     copy(argv, argv + argc, std::ostream_iterator<const char *>(cmd, " "));
@@ -743,14 +832,25 @@ main_nanopore(int argc, const char **argv) {
            << "[CpG only mode: " << (CPG_ONLY ? "yes" : "no") << "]" << endl
            << "[command line: \"" << cmd.str() << "\"]" << endl;
 
-    if (require_covered)
-      process_reads<true>(VERBOSE, show_progress, compress_output,
-                          include_header, n_threads, mapped_reads_file, outfile,
-                          chroms_file, CPG_ONLY);
-    else
-      process_reads(VERBOSE, show_progress, compress_output, include_header,
-                    n_threads, mapped_reads_file, outfile, chroms_file,
-                    CPG_ONLY);
+    const auto [mc_pos, mc_neg] = [&] {
+      if (require_covered)
+        return process_reads<true>(VERBOSE, show_progress, compress_output,
+                                   include_header, n_threads, mapped_reads_file,
+                                   outfile, chroms_file, CPG_ONLY, strand);
+      return process_reads(VERBOSE, show_progress, compress_output,
+                           include_header, n_threads, mapped_reads_file,
+                           outfile, chroms_file, CPG_ONLY, strand);
+    }();
+
+    if (!stats_file.empty()) {
+      std::ofstream stats_out(stats_file);
+      if (!stats_out)
+        std::cerr << "Error opening stats file" << std::endl;
+      else {
+        stats_out << mc_pos.tostring_frac() << std::endl;
+        stats_out << mc_neg.tostring_frac() << std::endl;
+      }
+    }
   }
   catch (const std::exception &e) {
     cerr << e.what() << endl;

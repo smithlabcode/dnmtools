@@ -18,12 +18,20 @@
 #ifndef MSITE_HPP
 #define MSITE_HPP
 
-#include <string>
+#include <bamxx.hpp>
+
 #include <cmath>
 #include <cstdint>
+#include <sstream>
+#include <string>
 #include <unordered_map>
 
 struct MSite {
+
+  // This defaults to true, and when true MSite lines cannot be parsed if they
+  // have additional columns in the file.
+  static bool no_extra_fields;
+
   std::string chrom{};
   size_t pos{};
   char strand{};
@@ -32,34 +40,37 @@ struct MSite {
   size_t n_reads{};
 
   MSite() = default;
-  MSite(const std::string &chrom,
-        const size_t pos,
-        const char strand,
-        const std::string &context,
-        const double meth,
-        const size_t n_reads) :
-    chrom{chrom}, pos{pos}, strand{strand},
-    context{context}, meth{meth}, n_reads{n_reads} {}
+  MSite(const std::string &chrom, const size_t pos, const char strand,
+        const std::string &context, const double meth, const size_t n_reads) :
+    chrom{chrom}, pos{pos}, strand{strand}, context{context}, meth{meth},
+    n_reads{n_reads} {}
   explicit MSite(const std::string &line);
   explicit MSite(const char *line, const int n);
 
-  bool initialize(const char *c, const char *c_end);
+  bool
+  initialize(const char *c, const char *c_end);
 
-  bool operator<(const MSite &other) const {
+  bool
+  operator<(const MSite &other) const {
     int r = chrom.compare(other.chrom);
-    return (r < 0 ||
-            (r == 0 &&
-             (pos < other.pos ||
-              (pos == other.pos && strand < other.strand))));
+    return (r < 0 || (r == 0 && (pos < other.pos ||
+                                 (pos == other.pos && strand < other.strand))));
   }
 
-  size_t n_meth() const {return std::round(meth*n_reads);}
-  size_t n_unmeth() const {return n_reads - n_meth();}
+  size_t
+  n_meth() const {
+    return std::round(meth * n_reads);
+  }
+  size_t
+  n_unmeth() const {
+    return n_reads - n_meth();
+  }
 
   //////////////////////////////////////////////////////////////
   /// FUNCTIONS BELOW ARE FOR MANIPULATING SYMMETRIC CPG SITES
   //////////////////////////////////////////////////////////////
-  void add(const MSite &other) {
+  void
+  add(const MSite &other) {
     // ADS: possible that this function has specific behavior that
     // should be placed in the 'sym' source, since we might not want
     // this line below to operate generally.
@@ -67,14 +78,15 @@ struct MSite {
       context += 'x';
     // ADS: order matters below as n_reads update invalidates n_meth()
     // function until meth has been updated
-    const size_t total_c_reads = n_meth() + other.n_meth();
+    const double total_c_reads = (meth * n_reads + other.meth * other.n_reads);
     n_reads += other.n_reads;
-    meth = static_cast<double>(total_c_reads)/std::max(1ul, n_reads);
+    meth = total_c_reads / std::max(1ul, n_reads);
   }
 
   // ADS: function below has redundant check for is_cpg, which is
   // expensive and might be ok to remove
-  bool is_mate_of(const MSite &first) {
+  bool
+  is_mate_of(const MSite &first) {
     return (first.pos + 1 == pos && first.is_cpg() && is_cpg() &&
             first.strand == '+' && strand == '-');
   }
@@ -85,39 +97,48 @@ struct MSite {
   /////  CpG within. Also included is a function that tests if a site
   /////  has a mutation.
   ////////////////////////////////////////////////////////////////////////
-  bool is_cpg() const {
+  bool
+  is_cpg() const {
     return context.length() >= 3 &&
-      (context[0] == 'C' && context[1] == 'p' && context[2] == 'G');
+           (context[0] == 'C' && context[1] == 'p' && context[2] == 'G');
   }
-  bool is_chh() const {
+  bool
+  is_chh() const {
     return context.length() >= 3 &&
-      (context[0] == 'C' && context[1] == 'H' && context[2] == 'H');
+           (context[0] == 'C' && context[1] == 'H' && context[2] == 'H');
   }
-  bool is_ccg() const {
+  bool
+  is_ccg() const {
     return context.length() >= 3 &&
-      (context[0] == 'C' && context[1] == 'C' && context[2] == 'G');
+           (context[0] == 'C' && context[1] == 'C' && context[2] == 'G');
   }
-  bool is_cxg() const {
+  bool
+  is_cxg() const {
     return context.length() >= 3 &&
-      (context[0] == 'C' && context[1] == 'X' && context[2] == 'G');
+           (context[0] == 'C' && context[1] == 'X' && context[2] == 'G');
   }
-  bool is_mutated() const {
+  bool
+  is_mutated() const {
     return context.length() == 4 && context[3] == 'x';
   }
 
-  void set_mutated() {
+  void
+  set_mutated() {
     if (!is_mutated())
       context += 'x';
   }
-  void set_unmutated() {
+  void
+  set_unmutated() {
     if (is_mutated())
       context.resize(context.length() - 1);
   }
 
-  std::string tostring() const;
+  std::string
+  tostring() const;
 };
 
-template <class T> T &
+template <class T>
+T &
 operator>>(T &in, MSite &s) {
   std::string line;
   if (getline(in, line))
@@ -125,9 +146,10 @@ operator>>(T &in, MSite &s) {
   return in;
 }
 
-template <class T> T &
+template <class T>
+T &
 operator<<(T &out, const MSite &s) {
-  out << s.tostring(); // seems to be an issue returning this directly
+  out << s.tostring();  // seems to be an issue returning this directly
   return out;
 }
 
@@ -138,24 +160,19 @@ distance(const MSite &a, const MSite &b);
 // file (for the specified stream) that does not precede the specified
 // position given by the (chrom, start_pos) pair.
 void
-find_offset_for_msite(const std::string &chrom,
-                      const size_t start_pos,
+find_offset_for_msite(const std::string &chrom, const size_t start_pos,
                       std::ifstream &site_in);
 
 void
-find_offset_for_msite(const std::unordered_map<std::string, uint32_t> &chrom_order,
-                      const std::string &chr,
-                      const size_t idx,
-                      std::ifstream &site_in);
+find_offset_for_msite(
+  const std::unordered_map<std::string, uint32_t> &chrom_order,
+  const std::string &chr, const size_t idx, std::ifstream &site_in);
 
 // ADS: using the functions below for now for static polymorphism
 // because I don't want to have insertion and extraction operators
 // hanging around for MSite with bamxx::bgzf_file. The reason is that
 // if we are going to use them, we need to be aware of which functions
 // we are calling, and not just do it unconsciously.
-
-#include <bamxx.hpp>
-#include <sstream>
 
 inline bamxx::bgzf_file &
 write_site(bamxx::bgzf_file &f, const MSite &s) {

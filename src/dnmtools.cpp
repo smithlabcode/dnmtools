@@ -65,7 +65,7 @@ simreads(int argc, const char **argv);
 int
 main_counts(int argc, const char **argv);
 int
-main_nanopore(int argc, const char **argv);
+main_nanocount(int argc, const char **argv);
 int
 main_allelicmeth(int argc, const char **argv);
 int
@@ -169,7 +169,7 @@ main(int argc, const char **argv) {
    {"uniq",      "remove duplicate reads from sorted mapped reads",           main_uniq},
    {"bsrate",    "compute the BS conversion rate from BS-seq reads mapped to a genome",  main_bsrate},
    {"counts",    "get methylation levels from mapped WGBS reads",             main_counts},
-   {"nano",      "get methylation levels from mapped nanopore reads",         main_nanopore},
+   {"nano",      "get methylation levels from mapped nanopore reads",         main_nanocount},
    {"sym",       "get CpG sites and make methylation levels symmetric",       main_symmetric_cpgs},
    {"levels",    "compute methylation summary statistics from a counts file", main_levels}}}},
 

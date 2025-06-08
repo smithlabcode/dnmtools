@@ -1,8 +1,7 @@
 /* symmetric-cpgs: extract the CpG sites from a methcounts output
  * file and produce a new one with the CpGs treated unstranded.
  *
- * Copyright (C) 2014 University of Southern California and
- *                    Andrew D. Smith
+ * Copyright (C) 2014-2025 Andrew D. Smith
  *
  * Authors: Andrew D. Smith
  *
@@ -56,7 +55,8 @@ ensure_positive_cpg(MSite &s) {
   s.strand = '+';
 }
 
-template<class T> static std::tuple<MSite, bool>
+template <class T>
+static std::tuple<MSite, bool>
 get_first_site(T &in, T &out) {
   bool prev_is_cpg = false;
   MSite prev_site;
@@ -68,14 +68,16 @@ get_first_site(T &in, T &out) {
     }
     else {
       prev_site.initialize(line.data(), line.data() + size(line));
-      if (prev_site.is_cpg()) prev_is_cpg = true;
+      if (prev_site.is_cpg())
+        prev_is_cpg = true;
       within_header = false;
     }
   }
   return {prev_site, prev_is_cpg};
 }
 
-template<class T> static bool
+template <class T>
+static bool
 process_sites(const bool verbose, T &in, T &out) {
 
   // get the first site while dealing with the header
@@ -90,7 +92,8 @@ process_sites(const bool verbose, T &in, T &out) {
   while (read_site(in, curr_site)) {
     const bool same_chrom = prev_site.chrom == curr_site.chrom;
     if (same_chrom) {
-      if (curr_site.pos <= prev_site.pos) return false;
+      if (curr_site.pos <= prev_site.pos)
+        return false;
       if (prev_is_cpg) {
         if (curr_site.is_mate_of(prev_site))
           curr_site.add(prev_site);
@@ -103,7 +106,8 @@ process_sites(const bool verbose, T &in, T &out) {
     else {
       if (verbose)
         cerr << "processing: " << curr_site.chrom << endl;
-      if (chroms_seen.find(curr_site.chrom) != cend(chroms_seen)) return false;
+      if (chroms_seen.find(curr_site.chrom) != cend(chroms_seen))
+        return false;
       chroms_seen.insert(curr_site.chrom);
 
       if (prev_is_cpg) {
@@ -129,6 +133,7 @@ main_symmetric_cpgs(int argc, const char **argv) {
     string outfile{"-"};
     bool verbose = false;
     bool compress_output = false;
+    bool allow_extra_fields = false;
     int32_t n_threads = 1;
 
     const string description =
@@ -141,6 +146,8 @@ main_symmetric_cpgs(int argc, const char **argv) {
                       outfile);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("zip", 'z', "output gzip format", false, compress_output);
+    opt_parse.add_opt("relaxed", '\0', "allow extra fields in input", false,
+                      allow_extra_fields);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
     std::vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -164,20 +171,26 @@ main_symmetric_cpgs(int argc, const char **argv) {
     const string filename(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (n_threads <= 0) throw runtime_error("threads must be positive");
+    MSite::no_extra_fields = (allow_extra_fields == false);
+
+    if (n_threads <= 0)
+      throw runtime_error("threads must be positive");
     bamxx::bam_tpool tp(n_threads);
 
     // const bool show_progress = VERBOSE && isatty(fileno(stderr));
     bgzf_file in(filename, "r");
-    if (!in) throw runtime_error("could not open file: " + filename);
+    if (!in)
+      throw runtime_error("could not open file: " + filename);
 
     // open the output file
     const string output_mode = compress_output ? "w" : "wu";
     bamxx::bgzf_file out(outfile, output_mode);
-    if (!out) throw runtime_error("error opening output file: " + outfile);
+    if (!out)
+      throw runtime_error("error opening output file: " + outfile);
 
     if (n_threads > 1) {
-      if (in.is_bgzf()) tp.set_io(in);
+      if (in.is_bgzf())
+        tp.set_io(in);
       tp.set_io(out);
     }
 
@@ -187,7 +200,8 @@ main_symmetric_cpgs(int argc, const char **argv) {
       cerr << "sites are not sorted in: " << filename << endl;
       namespace fs = std::filesystem;
       const fs::path outpath{outfile};
-      if (fs::exists(outpath)) fs::remove(outpath);
+      if (fs::exists(outpath))
+        fs::remove(outpath);
       return EXIT_FAILURE;
     }
   }

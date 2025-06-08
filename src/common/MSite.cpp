@@ -15,26 +15,27 @@
 
 #include "MSite.hpp"
 
-#include <string>
-#include <iostream>
+#include <charconv>
 #include <fstream>
+#include <iostream>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
-#include <regex>
-#include <charconv>
+#include <string>
 
-#include "smithlab_utils.hpp"
 #include "counts_header.hpp"
+#include "smithlab_utils.hpp"
 
-using std::string;
-using std::runtime_error;
-using std::regex_match;
-using std::from_chars;
-using std::find_if;
 using std::cbegin;
 using std::cend;
 using std::end;
+using std::find_if;
+using std::from_chars;
+using std::regex_match;
+using std::runtime_error;
+using std::string;
 
+bool MSite::no_extra_fields = true;
 
 bool
 MSite::initialize(const char *c, const char *c_end) {
@@ -45,7 +46,8 @@ MSite::initialize(const char *c, const char *c_end) {
 
   auto field_s = c;
   auto field_e = find_if(field_s + 1, c_end, is_sep);
-  if (field_e == c_end) failed = true;
+  if (field_e == c_end)
+    failed = true;
 
   {
     const uint32_t d = std::distance(field_s, field_e);
@@ -95,7 +97,7 @@ MSite::initialize(const char *c, const char *c_end) {
 
   {
     const auto [ptr, ec] = from_chars(field_s, c_end, n_reads);
-    failed = failed || (ptr != c_end);
+    failed = failed || (no_extra_fields && ptr != c_end);
   }
   // ADS: the value below would work for a flag
   // pos = std::numeric_limits<decltype(pos)>::max();
@@ -103,36 +105,28 @@ MSite::initialize(const char *c, const char *c_end) {
   return !failed;
 }
 
-
 MSite::MSite(const string &line) {
   if (!initialize(line.data(), line.data() + size(line)))
     throw runtime_error("bad count line: " + line);
 }
-
 
 MSite::MSite(const char *line, const int n) {
   if (!initialize(line, line + n))
     throw runtime_error("bad count line: " + string(line));
 }
 
-
 string
 MSite::tostring() const {
   std::ostringstream oss;
-  oss << chrom << '\t'
-      << pos << '\t'
-      << strand << '\t'
-      << context << '\t'
-      << meth << '\t'
-      << n_reads;
+  oss << chrom << '\t' << pos << '\t' << strand << '\t' << context << '\t'
+      << meth << '\t' << n_reads;
   return oss.str();
 }
 
 size_t
 distance(const MSite &a, const MSite &b) {
-  return a.chrom == b.chrom ?
-    std::max(a.pos, b.pos) - std::min(a.pos, b.pos) :
-    std::numeric_limits<size_t>::max();
+  return a.chrom == b.chrom ? std::max(a.pos, b.pos) - std::min(a.pos, b.pos)
+                            : std::numeric_limits<size_t>::max();
 }
 
 using std::ifstream;
@@ -152,10 +146,8 @@ move_to_start_of_line(ifstream &in) {
     in.clear();
 }
 
-
 void
-find_offset_for_msite(const std::string &chr,
-                      const size_t idx,
+find_offset_for_msite(const std::string &chr, const size_t idx,
                       std::ifstream &site_in) {
 
   site_in.seekg(0, ios_base::beg);
@@ -166,7 +158,7 @@ find_offset_for_msite(const std::string &chr,
   if (end_pos - begin_pos < 2)
     throw runtime_error("empty counts file");
 
-  size_t step_size = (end_pos - begin_pos)/2;
+  size_t step_size = (end_pos - begin_pos) / 2;
 
   site_in.seekg(0, ios_base::beg);
   string low_chr;
@@ -185,7 +177,7 @@ find_offset_for_msite(const std::string &chr,
   size_t pos = step_size;
   site_in.seekg(pos, ios_base::beg);
   move_to_start_of_line(site_in);
-  size_t prev_pos = 0; // keep track of previous position in file
+  size_t prev_pos = 0;  // keep track of previous position in file
 
   // binary search inside sorted file on disk
   // iterate until step size is 0 or positions are identical
@@ -194,8 +186,8 @@ find_offset_for_msite(const std::string &chr,
     // track (mid) position in file to make sure it keeps moving
     prev_pos = pos;
 
-    string mid_chr; // chromosome name at mid point
-    size_t mid_idx = 0; // position at mid point
+    string mid_chr;      // chromosome name at mid point
+    size_t mid_idx = 0;  // position at mid point
     if (!(site_in >> mid_chr >> mid_idx))
       throw runtime_error("failed navigating inside file");
 
@@ -203,10 +195,10 @@ find_offset_for_msite(const std::string &chr,
     // might catch an unsorted file
     if (mid_chr < low_chr || mid_chr > high_chr)
       throw runtime_error("chromosomes unsorted inside file: "
-                          "low=" + low_chr + ",mid=" + mid_chr +
-                          ",high=" + high_chr);
+                          "low=" +
+                          low_chr + ",mid=" + mid_chr + ",high=" + high_chr);
 
-    step_size /= 2; // cut the range in half
+    step_size /= 2;  // cut the range in half
 
     if (chr < mid_chr || (chr == mid_chr && idx <= mid_idx)) {
       // move to the left
@@ -229,8 +221,7 @@ find_offset_for_msite(const std::string &chr,
 using std::unordered_map;
 void
 find_offset_for_msite(const unordered_map<string, uint32_t> &chrom_order,
-                      const std::string &chr,
-                      const size_t idx,
+                      const std::string &chr, const size_t idx,
                       std::ifstream &site_in) {
 
   site_in.seekg(0, ios_base::beg);
@@ -241,7 +232,7 @@ find_offset_for_msite(const unordered_map<string, uint32_t> &chrom_order,
   if (end_pos - begin_pos < 2)
     throw runtime_error("empty counts file");
 
-  size_t step_size = (end_pos - begin_pos)/2;
+  size_t step_size = (end_pos - begin_pos) / 2;
 
   const auto chr_idx_itr = chrom_order.find(chr);
   if (chr_idx_itr == end(chrom_order)) {
@@ -277,7 +268,7 @@ find_offset_for_msite(const unordered_map<string, uint32_t> &chrom_order,
   size_t pos = step_size;
   site_in.seekg(pos, ios_base::beg);
   move_to_start_of_line(site_in);
-  size_t prev_pos = 0; // keep track of previous position in file
+  size_t prev_pos = 0;  // keep track of previous position in file
 
   // binary search inside sorted file on disk
   // iterate until step size is 0 or positions are identical
@@ -286,8 +277,8 @@ find_offset_for_msite(const unordered_map<string, uint32_t> &chrom_order,
     // track (mid) position in file to make sure it keeps moving
     prev_pos = pos;
 
-    string mid_chr; // chromosome name at mid point
-    size_t mid_idx{}; // position at mid point
+    string mid_chr;    // chromosome name at mid point
+    size_t mid_idx{};  // position at mid point
     if (!(site_in >> mid_chr >> mid_idx))
       throw runtime_error("failed navigating inside file");
 
@@ -301,10 +292,12 @@ find_offset_for_msite(const unordered_map<string, uint32_t> &chrom_order,
     using std::to_string;
     if (mid_chr_idx < low_chr_idx || mid_chr_idx > high_chr_idx)
       throw runtime_error("chromosomes unsorted inside file: "
-                          "low=" + to_string(low_chr_idx) + ",mid=" + to_string(mid_chr_idx) +
+                          "low=" +
+                          to_string(low_chr_idx) +
+                          ",mid=" + to_string(mid_chr_idx) +
                           ",high=" + to_string(high_chr_idx));
 
-    step_size /= 2; // cut the range in half
+    step_size /= 2;  // cut the range in half
 
     if (chr_idx < mid_chr_idx || (chr_idx == mid_chr_idx && idx <= mid_idx)) {
       // move to the left
@@ -328,10 +321,12 @@ is_msite_line(const string &line) {
   std::istringstream iss(line);
 
   string chrom;
-  if (!(iss >> chrom)) return false;
+  if (!(iss >> chrom))
+    return false;
 
   int64_t pos = 0;
-  if (!(iss >> pos || pos < 0)) return false;
+  if (!(iss >> pos || pos < 0))
+    return false;
 
   string strand;
   if (!(iss >> strand) || (strand.size() != 1) ||
@@ -341,13 +336,16 @@ is_msite_line(const string &line) {
   string context;
   // ADS: below, allowing any context
   // std::regex pattern("^C[pHWX][GH]$");
-  if (!(iss >> context)) return false;
+  if (!(iss >> context))
+    return false;
 
   double level = 0.0;
-  if (!(iss >> level) || level < 0.0 || level > 1.0) return false;
+  if (!(iss >> level) || level < 0.0 || level > 1.0)
+    return false;
 
   int64_t n_reads = 0;
-  if (!(iss >> n_reads || n_reads < 0)) return false;
+  if (!(iss >> n_reads || n_reads < 0))
+    return false;
 
   string temp;
   if (iss >> temp)
@@ -359,7 +357,8 @@ is_msite_line(const string &line) {
 bool
 is_msite_file(const string &file) {
   bamxx::bgzf_file in(file, "r");
-  if (!in) throw runtime_error("cannot open file: " + file);
+  if (!in)
+    throw runtime_error("cannot open file: " + file);
 
   string line;
   while (getline(in, line) && is_counts_header_line(line))

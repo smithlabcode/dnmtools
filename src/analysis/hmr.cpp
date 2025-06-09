@@ -330,6 +330,19 @@ write_params_file(const string &outfile,
       << "DOMAIN_SCORE_CUTOFF\t" << domain_score_cutoff << endl;
 }
 
+[[nodiscard]]
+static inline double
+get_n_meth(const MSite &s) {
+  return s.meth * s.n_reads;
+}
+
+[[nodiscard]]
+static inline double
+get_n_unmeth(const MSite &s) {
+  return (1.0 - s.meth) * s.n_reads;
+}
+
+
 static void
 load_cpgs(const string &cpgs_file, vector<MSite> &cpgs,
           vector<pair<double, double> > &meth,
@@ -347,7 +360,7 @@ load_cpgs(const string &cpgs_file, vector<MSite> &cpgs,
       throw runtime_error("error: input is not symmetric-CpGs: " + cpgs_file);
     cpgs.push_back(the_site);
     reads.push_back(the_site.n_reads);
-    meth.push_back(make_pair(the_site.n_meth(), the_site.n_unmeth()));
+    meth.push_back(make_pair(get_n_meth(the_site), get_n_unmeth(the_site)));
     prev_site = the_site;
   }
 }

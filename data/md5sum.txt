@@ -4,7 +4,6 @@ ae05a28de5643a512386e767b3aa963a  tests/araTha1_simulated.hypermr
 75777c209bf820ab700801d87a0a3615  tests/reads.bsrate
 e73facd597c3b903cbfe29afa9f58371  tests/reads.counts
 56575da7d3af9b696258512142903d1e  tests/reads.counts.select
-34bf6331c3e6c59fd8709fe112960ec4  tests/reads.counts.sym
 0f72560aa101e85679783a1ecaf80615  tests/reads.epiread
 9dbd476424d48a8d0f043dfc00af0d23  tests/reads.fmt.srt.sam
 4085cc74b003a918b4a4743fca7922a4  tests/reads.hmr
@@ -12,7 +11,6 @@ e73facd597c3b903cbfe29afa9f58371  tests/reads.counts
 a389e4ee1687895517b0b0d26e9338ee  tests/reads.mstats
 d8856f9731af76b8a4ab3cc7d667cdb2  tests/reads.ustats
 bcbf01be810cbf4051292813eb6b9225  tests/tRex1.idx
-c0951c0682abfb4fb6383c94b96c84cf  tests/tRex1_promoters.roi.bed
 ec6a686617cad31e9f7a37a3d378e6ed  tests/two_epialleles.states
 93e38b20d162062a5d147c4290095a13  tests/mlml.out
 d947fe3d61ef7b1564558a69608f0e64  tests/methylome.pmd
@@ -22,3 +20,5 @@ d6c983396860541a29b730e4acd0ef88  tests/reads.sam
 1251050c362589319ca65151708ff998  tests/reads.fmt.srt.uniq.sam
 534ed1d8320e4b250c6d675bba23fac9  tests/reads.xcounts
 838e61c5a3155db8075eeeec53d25efa  tests/reads.unxcounts
+001b9d966f62fa439b24cf2198cc3de5  tests/reads.counts.sym
+2b8a0406015458be51b8b1c9e58b3602  tests/tRex1_promoters.roi.bed

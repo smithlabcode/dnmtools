@@ -97,19 +97,19 @@ eats_query(const std::uint32_t c) {
    because he spent much time thinking about it in the context of
    plants. */
 [[nodiscard]] static bool
-is_chh(const std::string &s, std::size_t i) {
+is_chh(const std::string &s, const std::size_t i) {
   return i + 2 < std::size(s) && is_cytosine(s[i]) && !is_guanine(s[i + 1]) &&
          !is_guanine(s[i + 2]);
 }
 
 [[nodiscard]] static bool
-is_ddg(const std::string &s, std::size_t i) {
+is_ddg(const std::string &s, const std::size_t i) {
   return i + 2 < std::size(s) && !is_cytosine(s[i]) && !is_cytosine(s[i + 1]) &&
          is_guanine(s[i + 2]);
 }
 
 [[nodiscard]] static bool
-is_c_at_g(const std::string &s, std::size_t i) {
+is_c_at_g(const std::string &s, const std::size_t i) {
   return i + 2 < std::size(s) && is_cytosine(s[i]) && !is_cytosine(s[i + 1]) &&
          !is_guanine(s[i + 1]) && is_guanine(s[i + 2]);
 }
@@ -207,7 +207,7 @@ static const char *tag_values[] = {
 
 template <typename T>
 [[nodiscard]] static std::tuple<T, T>
-get_hydroxy_sites(T mod_pos_beg, T mod_pos_end) {
+get_hydroxy_sites(const T mod_pos_beg, const T mod_pos_end) {
   const char hydroxy_tag[] = "C+h?";
   const auto hydroxy_tag_size = 4;
   auto hydroxy_beg = strstr(mod_pos_beg, hydroxy_tag);
@@ -222,7 +222,7 @@ get_hydroxy_sites(T mod_pos_beg, T mod_pos_end) {
 
 template <typename T>
 [[nodiscard]] static std::tuple<T, T>
-get_methyl_sites(T mod_pos_beg, T mod_pos_end) {
+get_methyl_sites(const T mod_pos_beg, const T mod_pos_end) {
   const char methyl_tag[] = "C+h?";
   const auto methyl_tag_size = 4;
   auto methyl_beg = strstr(mod_pos_beg, methyl_tag);
@@ -344,7 +344,7 @@ struct mod_prob_buffer {
 };
 
 // clang-format off
-static const std::uint8_t enc[] = {
+static const std::uint8_t encoding[] = {
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 16
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 32
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 48
@@ -362,10 +362,7 @@ static const std::uint8_t enc[] = {
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 240
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4   // 256
 };
-// clang-format on
-
 static constexpr auto n_dinucs = 16u;
-// clang-format off
 static const auto dinucs = std::vector{
   "AA", "AC", "AG", "AT",
   "CA", "CC", "CG", "CT",
@@ -375,17 +372,18 @@ static const auto dinucs = std::vector{
 // clang-format on
 
 struct match_counter {
-  typedef std::array<std::uint64_t, 256> container;
+  static constexpr auto dinuc_combos = 256;
+  typedef std::array<std::uint64_t, dinuc_combos> container;
   container pos{};
   container neg{};
 
   void
   add_pos(const std::uint8_t r1, const std::uint8_t r2, const std::uint8_t q1,
           const std::uint8_t q2) {
-    const auto r1e = enc[r1];
-    const auto r2e = enc[r2];
-    const auto q1e = enc[q1];
-    const auto q2e = enc[q2];
+    const auto r1e = encoding[r1];
+    const auto r2e = encoding[r2];
+    const auto q1e = encoding[q1];
+    const auto q2e = encoding[q2];
     if ((r1e | r2e | q1e | q2e) & 4u)
       return;
     pos[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
@@ -394,10 +392,10 @@ struct match_counter {
   void
   add_neg(const std::uint8_t r1, const std::uint8_t r2, const std::uint8_t q1,
           const std::uint8_t q2) {
-    const auto r1e = enc[r1];
-    const auto r2e = enc[r2];
-    const auto q1e = enc[q1];
-    const auto q2e = enc[q2];
+    const auto r1e = encoding[r1];
+    const auto r2e = encoding[r2];
+    const auto q1e = encoding[q1];
+    const auto q2e = encoding[q2];
     if ((r1e | r2e | q1e | q2e) & 4u)
       return;
     neg[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
@@ -607,8 +605,9 @@ count_states_neg(const bam_rec &aln, std::vector<CountSet> &counts,
 }
 
 [[nodiscard]] static std::unordered_map<std::int32_t, std::size_t>
-get_tid_to_idx(const bam_header &hdr,
-               const std::unordered_map<std::string, std::size_t> name_to_idx) {
+get_tid_to_idx(
+  const bam_header &hdr,
+  const std::unordered_map<std::string, std::size_t> &name_to_idx) {
   std::unordered_map<std::int32_t, std::size_t> tid_to_idx;
   for (std::int32_t i = 0; i < hdr.h->n_targets; ++i) {
     // "curr_name" gives a "tid_to_name" mapping allowing to jump

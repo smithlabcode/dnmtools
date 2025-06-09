@@ -63,10 +63,9 @@ TwoStateBetaBin::tostring() const {
 
 double
 TwoStateBetaBin::operator()(const pair<double, double> &val) const {
-  const size_t x = static_cast<size_t>(val.first);
-  const size_t n = static_cast<size_t>(x + val.second);
-  return gsl_sf_lnchoose(n, x) +
-    gsl_sf_lnbeta(alpha + x, beta + val.second) - lnbeta_helper;
+  return gsl_sf_lngamma(val.first + val.second + 1.0) -
+         gsl_sf_lngamma(val.first + 1.0) - gsl_sf_lngamma(val.second + 1.0) +
+         gsl_sf_lnbeta(alpha + val.first, beta + val.second) - lnbeta_helper;
 }
 
 inline static double

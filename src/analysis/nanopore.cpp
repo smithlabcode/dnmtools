@@ -1,4 +1,5 @@
-/* nanocount: methylation counts for nanopore data
+/* nanocount: methylation counts for nanopore data; see docs for 'counts'
+ * command for details.
  *
  * Copyright (C) 2025 Andrew D. Smith
  *
@@ -374,7 +375,9 @@ static const auto dinucs = std::vector{
 // clang-format on
 
 struct match_counter {
-  std::array<std::uint64_t, 256> c{};
+  typedef std::array<std::uint64_t, 256> container;
+  container pos{};
+  container neg{};
 
   void
   add_pos(const std::uint8_t r1, const std::uint8_t r2, const std::uint8_t q1,
@@ -385,14 +388,35 @@ struct match_counter {
     const auto q2e = enc[q2];
     if ((r1e | r2e | q1e | q2e) & 4u)
       return;
-    c[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
+    pos[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
+  }
+
+  void
+  add_neg(const std::uint8_t r1, const std::uint8_t r2, const std::uint8_t q1,
+          const std::uint8_t q2) {
+    const auto r1e = enc[r1];
+    const auto r2e = enc[r2];
+    const auto q1e = enc[q1];
+    const auto q2e = enc[q2];
+    if ((r1e | r2e | q1e | q2e) & 4u)
+      return;
+    neg[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
   }
 
   [[nodiscard]] std::string
   tostring() const {
     std::ostringstream oss;
+    oss << "target_query_fwd" << '\n';
     for (auto i = 0u; i < n_dinucs; ++i) {
-      const auto beg = std::cbegin(c) + (i * n_dinucs);
+      const auto beg = std::cbegin(pos) + (i * n_dinucs);
+      oss << dinucs[i];
+      for (auto itr = beg; itr != beg + n_dinucs; ++itr)
+        oss << '\t' << *itr;
+      oss << '\n';
+    }
+    oss << "target_query_rev" << '\n';
+    for (auto i = 0u; i < n_dinucs; ++i) {
+      const auto beg = std::cbegin(neg) + (i * n_dinucs);
       oss << dinucs[i];
       for (auto itr = beg; itr != beg + n_dinucs; ++itr)
         oss << '\t' << *itr;
@@ -402,15 +426,63 @@ struct match_counter {
   }
 
   [[nodiscard]] std::string
+  json_row(const container::const_iterator beg) const {
+    std::ostringstream oss;
+    oss << "{";
+    auto j = 0;
+    for (auto itr = beg; itr != beg + n_dinucs; ++itr) {
+      if (j > 0)
+        oss << ",";
+      oss << R"(")" << dinucs[j++] << R"(":")" << *itr << R"(")";
+    }
+    oss << "}";
+    return oss.str();
+  }
+
+  [[nodiscard]] std::string
+  json_table(const container &a) const {
+    std::ostringstream oss;
+    const auto beg = std::cbegin(a);
+    oss << "{";
+    for (auto i = 0u; i < n_dinucs; ++i) {
+      if (i > 0)
+        oss << ",";
+      oss << R"(")" << dinucs[i] << R"(":)" << json_row(beg + (i * n_dinucs));
+    }
+    oss << "}";
+    return oss.str();
+  }
+
+  [[nodiscard]] std::string
+  json() const {
+    // clang-format off
+    return (std::ostringstream() << "{"
+            << R"("map_fwd":)" << json_table(pos) << ","
+            << R"("map_rev":)" << json_table(neg)
+            << "}").str();
+    // clang-format on
+  }
+
+  [[nodiscard]] std::string
   tostring_frac() const {
     static constexpr auto width = 8;
     static constexpr auto prec = 3;
     std::ostringstream oss;
     oss.precision(prec);
     oss.setf(std::ios::fixed, std::ios::floatfield);
+    oss << "map_fwd\n";
     for (auto i = 0u; i < n_dinucs; ++i) {
       oss << dinucs[i];
-      const auto beg = std::cbegin(c) + (i * n_dinucs);
+      const auto beg = std::cbegin(pos) + (i * n_dinucs);
+      const auto tot = std::max(std::accumulate(beg, beg + n_dinucs, 0.0), 1.0);
+      for (auto itr = beg; itr != beg + n_dinucs; ++itr)
+        oss << std::setw(width) << *itr / tot;
+      oss << '\n';
+    }
+    oss << "map_ref\n";
+    for (auto i = 0u; i < n_dinucs; ++i) {
+      oss << dinucs[i];
+      const auto beg = std::cbegin(neg) + (i * n_dinucs);
       const auto tot = std::max(std::accumulate(beg, beg + n_dinucs, 0.0), 1.0);
       for (auto itr = beg; itr != beg + n_dinucs; ++itr)
         oss << std::setw(width) << *itr / tot;
@@ -510,7 +582,7 @@ count_states_neg(const bam_rec &aln, std::vector<CountSet> &counts,
         const auto r_nuc = *ref_itr++;
         const auto q_nuc = seq_nt16_str[bam_seqi(seq, q_idx)];
         ++q_idx;
-        mc.add_pos(r_nuc, ref_itr == end_ref ? 'N' : *ref_itr, q_nuc,
+        mc.add_neg(r_nuc, ref_itr == end_ref ? 'N' : *ref_itr, q_nuc,
                    q_idx == l_qseq ? 'N' : seq_nt16_str[bam_seqi(seq, q_idx)]);
         --methyl_prob_itr;
         --hydroxy_prob_itr;
@@ -693,7 +765,7 @@ struct read_processor {
     }
   }
 
-  [[nodiscard]] std::tuple<match_counter, match_counter>
+  [[nodiscard]] match_counter
   operator()(const std::string &infile, const std::string &outfile,
              const std::string &chroms_file) const {
     // first get the chromosome names and sequences from the FASTA file
@@ -771,8 +843,7 @@ struct read_processor {
 
     std::vector<std::string>::const_iterator chrom_itr{};
 
-    match_counter mc_pos;
-    match_counter mc_neg;
+    match_counter mc;
     mod_prob_buffer mod_buf;
 
     while (hts.read(hdr, aln)) {
@@ -785,9 +856,9 @@ struct read_processor {
       if (tid == prev_tid) {
         const bool is_rev = bam_is_rev(aln);
         if (is_rev && strand != 1)
-          count_states_neg(aln, counts, mod_buf, *chrom_itr, mc_neg);
+          count_states_neg(aln, counts, mod_buf, *chrom_itr, mc);
         if (!is_rev && strand != 2)
-          count_states_pos(aln, counts, mod_buf, *chrom_itr, mc_pos);
+          count_states_pos(aln, counts, mod_buf, *chrom_itr, mc);
       }
       else {  // chrom has changed, so output results and get the next chrom
 
@@ -833,7 +904,7 @@ struct read_processor {
       for (auto i = prev_tid + 1; i < hdr.h->n_targets; ++i)
         output_skipped_chromosome(i, tid_to_idx, hdr, chroms_beg, chrom_sizes,
                                   counts, out);
-    return {mc_pos, mc_neg};
+    return mc;
   }
 };
 
@@ -910,15 +981,12 @@ main_nanocount(int argc, const char **argv) {
                 << "[genome file: " << chroms_file << "]\n"
                 << rp.tostring();
 
-    const auto [mc_pos, mc_neg] = rp(mapped_reads_file, outfile, chroms_file);
+    const auto mc = rp(mapped_reads_file, outfile, chroms_file);
     if (!stats_file.empty()) {
       std::ofstream stats_out(stats_file);
-      if (!stats_out) {
-        std::cerr << "Error opening stats file" << std::endl;
-        return EXIT_FAILURE;
-      }
-      stats_out << mc_pos.tostring_frac() << std::endl
-                << mc_neg.tostring_frac() << std::endl;
+      if (!stats_out)
+        throw std::runtime_error("Error opening stats file: " + stats_file);
+      stats_out << mc.json() << std::endl;
     }
   }
   catch (const std::exception &e) {

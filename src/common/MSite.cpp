@@ -348,7 +348,7 @@ is_msite_line(const string &line) {
     return false;
 
   string temp;
-  if (iss >> temp)
+  if (MSite::no_extra_fields && iss >> temp)
     return false;
   else
     return true;

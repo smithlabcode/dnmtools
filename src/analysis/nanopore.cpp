@@ -16,20 +16,25 @@
  * more details.
  */
 
+#include <algorithm>
 #include <array>
-#include <cstdint>  // for [u]int[0-9]+_t
+#include <cassert>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
+#include <map>
 #include <numeric>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "OptionParser.hpp"
 #include "bam_record_utils.hpp"
-#include "bsutils.hpp"
 #include "counts_header.hpp"
 #include "dnmt_error.hpp"
 
@@ -39,6 +44,56 @@
 using bamxx::bam_header;
 using bamxx::bam_rec;
 using bamxx::bgzf_file;
+
+[[nodiscard]] inline bool
+is_cytosine(const char c) {
+  return c == 'c' || c == 'C';
+}
+
+[[nodiscard]] inline bool
+is_guanine(const char c) {
+  return c == 'g' || c == 'G';
+}
+
+[[nodiscard]] inline bool
+is_thymine(const char c) {
+  return c == 't' || c == 'T';
+}
+
+[[nodiscard]] inline bool
+is_adenine(const char c) {
+  return c == 'a' || c == 'A';
+}
+
+[[nodiscard]] inline bool
+is_cpg(const std::string &s, const std::size_t i) {
+  return i + 1 < std::size(s) && is_cytosine(s[i]) && is_guanine(s[i + 1]);
+}
+
+static void
+read_fasta_file(const std::string &filename, std::vector<std::string> &names,
+                std::vector<std::string> &sequences) {
+  bgzf_file in(filename, "r");
+  if (!in)
+    throw std::runtime_error("error opening genome file: " + filename);
+  names.clear();
+  sequences.clear();
+
+  std::string line;
+  while (getline(in, line)) {
+    if (line[0] == '>') {
+      const auto first_space = line.find_first_of(" \t", 1);
+      if (first_space == std::string::npos)
+        names.push_back(line.substr(1));
+      else
+        names.emplace_back(std::cbegin(line) + 1,
+                           std::cbegin(line) + line.find_first_of(" \t", 1));
+      sequences.emplace_back();
+    }
+    else
+      sequences.back() += line;
+  }
+}
 
 [[nodiscard]] static std::string
 get_basecall_model(const bam_header &hdr) {
@@ -210,6 +265,8 @@ template <typename T>
 get_hydroxy_sites(const T mod_pos_beg, const T mod_pos_end) {
   const char hydroxy_tag[] = "C+h?";
   const auto hydroxy_tag_size = 4;
+  if (mod_pos_beg == mod_pos_end)
+    return {};
   auto hydroxy_beg = strstr(mod_pos_beg, hydroxy_tag);
   if (hydroxy_beg == mod_pos_end)
     return std::tuple<T, T>{};
@@ -225,6 +282,8 @@ template <typename T>
 get_methyl_sites(const T mod_pos_beg, const T mod_pos_end) {
   const char methyl_tag[] = "C+h?";
   const auto methyl_tag_size = 4;
+  if (mod_pos_beg == mod_pos_end)
+    return {};
   auto methyl_beg = strstr(mod_pos_beg, methyl_tag);
   if (methyl_beg == mod_pos_end)
     return std::tuple<T, T>{};
@@ -274,8 +333,6 @@ struct mod_prob_buffer {
     auto [hydroxy_beg, hydroxy_end] =
       get_hydroxy_sites(mod_pos_beg, mod_pos_end);
     auto [methyl_beg, methyl_end] = get_methyl_sites(mod_pos_beg, mod_pos_end);
-
-    // check if any are false
     if (mod_pos_beg == nullptr || hydroxy_beg == nullptr ||
         methyl_beg == nullptr)
       return false;
@@ -604,29 +661,31 @@ count_states_neg(const bam_rec &aln, std::vector<CountSet> &counts,
   assert(qpos == 0);
 }
 
-[[nodiscard]] static std::unordered_map<std::int32_t, std::size_t>
-get_tid_to_idx(
-  const bam_header &hdr,
-  const std::unordered_map<std::string, std::size_t> &name_to_idx) {
-  std::unordered_map<std::int32_t, std::size_t> tid_to_idx;
+[[nodiscard]] static std::tuple<std::map<std::int32_t, std::size_t>,
+                                std::set<std::int32_t>>
+get_tid_to_idx(const bam_header &hdr,
+               const std::map<std::string, std::size_t> &name_to_idx) {
+  std::set<std::int32_t> missing_tids;
+  std::map<std::int32_t, std::size_t> tid_to_idx;
   for (std::int32_t i = 0; i < hdr.h->n_targets; ++i) {
     // "curr_name" gives a "tid_to_name" mapping allowing to jump
     // through "name_to_idx" and get "tid_to_idx"
     const std::string curr_name(hdr.h->target_name[i]);
     const auto name_itr(name_to_idx.find(curr_name));
     if (name_itr == end(name_to_idx))
-      throw std::runtime_error("failed to find chrom: " + curr_name);
-    tid_to_idx[i] = name_itr->second;
+      missing_tids.insert(i);
+    else
+      tid_to_idx[i] = name_itr->second;
   }
-  return tid_to_idx;
+  return std::tuple<std::map<std::int32_t, std::size_t>,
+                    std::set<std::int32_t>>{tid_to_idx, missing_tids};
 }
 
 [[nodiscard]] static bool
-consistent_targets(
-  const bam_header &hdr,
-  const std::unordered_map<std::int32_t, std::size_t> &tid_to_idx,
-  const std::vector<std::string> &names,
-  const std::vector<std::size_t> &sizes) {
+consistent_targets(const bam_header &hdr,
+                   const std::map<std::int32_t, std::size_t> &tid_to_idx,
+                   const std::vector<std::string> &names,
+                   const std::vector<std::size_t> &sizes) {
   const std::size_t n_targets = hdr.h->n_targets;
   if (n_targets != names.size())
     return false;
@@ -637,6 +696,25 @@ consistent_targets(
     const auto idx_itr = tid_to_idx.find(tid);
     if (idx_itr == std::cend(tid_to_idx))
       return false;
+    const auto idx = idx_itr->second;
+    if (tid_name_sam != names[idx] || tid_size_sam != sizes[idx])
+      return false;
+  }
+  return true;
+}
+
+[[nodiscard]] static bool
+consistent_existing_targets(
+  const bam_header &hdr, const std::map<std::int32_t, std::size_t> &tid_to_idx,
+  const std::vector<std::string> &names,
+  const std::vector<std::size_t> &sizes) {
+  const std::size_t n_targets = hdr.h->n_targets;
+  for (std::size_t tid = 0; tid < n_targets; ++tid) {
+    const auto idx_itr = tid_to_idx.find(tid);
+    if (idx_itr == std::cend(tid_to_idx))
+      continue;
+    const std::string tid_name_sam = sam_hdr_tid2name(hdr, tid);
+    const std::size_t tid_size_sam = sam_hdr_tid2len(hdr, tid);
     const auto idx = idx_itr->second;
     if (tid_name_sam != names[idx] || tid_size_sam != sizes[idx])
       return false;
@@ -687,7 +765,7 @@ struct read_processor {
   void
   output_skipped_chromosome(
     const std::int32_t tid,
-    const std::unordered_map<std::int32_t, std::size_t> &tid_to_idx,
+    const std::map<std::int32_t, std::size_t> &tid_to_idx,
     const bam_header &hdr,
     const std::vector<std::string>::const_iterator chroms_beg,
     const std::vector<std::size_t> &chrom_sizes, std::vector<CountSet> &counts,
@@ -695,9 +773,13 @@ struct read_processor {
 
     // get the index of the next chrom sequence
     const auto chrom_idx = tid_to_idx.find(tid);
-    if (chrom_idx == std::cend(tid_to_idx))
-      throw std::runtime_error("chrom not found: " +
-                               sam_hdr_tid2name(hdr, tid));
+    if (chrom_idx == std::cend(tid_to_idx)) {
+      if (force)
+        return;
+      else
+        throw std::runtime_error("chrom not found: " +
+                                 sam_hdr_tid2name(hdr, tid));
+    }
 
     const auto chrom_itr = chroms_beg + chrom_idx->second;
 
@@ -728,27 +810,29 @@ struct read_processor {
       throw std::runtime_error("failed to write to output buffer");
     auto buffer_after_chrom = buffer + chrom_name_offset;
 
-    for (std::size_t i = 0; i < std::size(chrom); ++i) {
-      const char base = chrom[i];
+    for (auto chrom_posn = 0ul; chrom_posn < std::size(chrom); ++chrom_posn) {
+      const char base = chrom[chrom_posn];
       if (is_cytosine(base) || is_guanine(base)) {
 
-        const std::uint32_t the_tag = get_tag_from_genome(chrom, i);
+        const std::uint32_t the_tag = get_tag_from_genome(chrom, chrom_posn);
         if (cpg_only && the_tag != 0)
           continue;
 
         const bool is_c = is_cytosine(base);
 
-        const std::uint32_t n_reads = counts[i].get_n_reads(is_c);
+        const std::uint32_t n_reads = counts[chrom_posn].get_n_reads(is_c);
         if (require_covered && n_reads == 0)
           continue;
         const double denom = std::max(n_reads, 1u);
-        const double hydroxy = counts[i].get_hydroxy(is_c) / 256.0 / denom;
-        const double methyl = counts[i].get_methyl(is_c) / 256.0 / denom;
-        const double mods = counts[i].get_mods(is_c) / 256.0 / denom;
+        const double hydroxy =
+          counts[chrom_posn].get_hydroxy(is_c) / 256.0 / denom;
+        const double methyl =
+          counts[chrom_posn].get_methyl(is_c) / 256.0 / denom;
+        const double mods = counts[chrom_posn].get_mods(is_c) / 256.0 / denom;
 
         // clang-format off
         int r = std::sprintf(buffer_after_chrom, out_fmt,
-                             i,
+                             chrom_posn,
                              is_c ? '+' : '-',
                              tag_values[the_tag],
                              mods,
@@ -769,7 +853,7 @@ struct read_processor {
              const std::string &chroms_file) const {
     // first get the chromosome names and sequences from the FASTA file
     std::vector<std::string> chroms, names;
-    read_fasta_file_short_names(chroms_file, names, chroms);
+    read_fasta_file(chroms_file, names, chroms);
     for (auto &i : chroms)
       transform(std::cbegin(i), std::cend(i), std::begin(i),
                 [](const char c) { return std::toupper(c); });
@@ -778,7 +862,7 @@ struct read_processor {
                 << std::endl;
     const auto chroms_beg = std::cbegin(chroms);
 
-    std::unordered_map<std::string, std::size_t> name_to_idx;
+    std::map<std::string, std::size_t> name_to_idx;
     std::vector<std::size_t> chrom_sizes(chroms.size(), 0);
     for (std::size_t i = 0; i < chroms.size(); ++i) {
       name_to_idx[names[i]] = i;
@@ -796,10 +880,20 @@ struct read_processor {
     if (!hdr)
       throw std::runtime_error("failed to read header");
 
-    std::unordered_map<std::int32_t, std::size_t> tid_to_idx =
-      get_tid_to_idx(hdr, name_to_idx);
+    auto [tid_to_idx, missing_tids] = get_tid_to_idx(hdr, name_to_idx);
+    if (verbose)
+      std::cerr << "targets found: " << std::size(tid_to_idx) << std::endl
+                << "missing targets: " << std::size(missing_tids) << std::endl;
 
-    if (!consistent_targets(hdr, tid_to_idx, names, chrom_sizes))
+    if (!force && !missing_tids.empty())
+      throw std::runtime_error(
+        "missing targets in reference and force not specified");
+
+    if (!force && !consistent_targets(hdr, tid_to_idx, names, chrom_sizes))
+      throw std::runtime_error("inconsistent reference genome information");
+
+    if (force &&
+        !consistent_existing_targets(hdr, tid_to_idx, names, chrom_sizes))
       throw std::runtime_error("inconsistent reference genome information");
 
     // open the output file
@@ -845,6 +939,8 @@ struct read_processor {
     match_counter mc;
     mod_prob_buffer mod_buf;
 
+    bool current_target_present = false;
+
     while (hts.read(hdr, aln)) {
       const std::int32_t tid = get_tid(aln);
       if (get_l_qseq(aln) == 0)
@@ -852,7 +948,7 @@ struct read_processor {
 
       if (tid == -1)  // ADS: skip reads that have no tid -- they are not mapped
         continue;
-      if (tid == prev_tid) {
+      if (tid == prev_tid && current_target_present) {
         const bool is_rev = bam_is_rev(aln);
         if (is_rev && strand != 1)
           count_states_neg(aln, counts, mod_buf, *chrom_itr, mc);
@@ -879,19 +975,29 @@ struct read_processor {
                                       chrom_sizes, counts, out);
 
         // get the next chrom to process
-        auto chrom_idx(tid_to_idx.find(tid));
-        if (chrom_idx == end(tid_to_idx))
+        const auto chrom_idx = tid_to_idx.find(tid);
+        current_target_present = (chrom_idx != std::cend(tid_to_idx));
+        if (!force && !current_target_present)
           throw std::runtime_error("chromosome not found: " +
                                    std::string(sam_hdr_tid2name(hdr, tid)));
-        if (show_progress)
+
+        if (show_progress && current_target_present)
           std::cerr << "processing " << sam_hdr_tid2name(hdr, tid) << std::endl;
 
         prev_tid = tid;
-        chrom_itr = chroms_beg + chrom_idx->second;
+        if (current_target_present) {
+          chrom_itr = chroms_beg + chrom_idx->second;
 
-        // reset the counts
-        counts.clear();
-        counts.resize(chrom_sizes[chrom_idx->second]);
+          // reset the counts
+          counts.clear();
+          counts.resize(chrom_sizes[chrom_idx->second]);
+
+          const bool is_rev = bam_is_rev(aln);
+          if (is_rev && strand != 1)
+            count_states_neg(aln, counts, mod_buf, *chrom_itr, mc);
+          if (!is_rev && strand != 2)
+            count_states_pos(aln, counts, mod_buf, *chrom_itr, mc);
+        }
       }
     }
     if (!counts.empty())
@@ -919,7 +1025,7 @@ main_nanocount(int argc, const char **argv) {
     std::string stats_file;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]),
+    OptionParser opt_parse(std::filesystem::path{argv[0]}.filename(),
                            "get methylation levels from mapped nanopore reads",
                            "-c <chroms> <mapped-reads>");
     opt_parse.add_opt("threads", 't', "threads to use (few needed)", false,

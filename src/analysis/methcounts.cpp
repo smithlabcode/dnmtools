@@ -17,14 +17,14 @@
  * General Public License for more details.
  */
 
-#include <string>
-#include <vector>
+#include <cstdint>  // for [u]int[0-9]+_t
 #include <iostream>
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <unordered_set>
-#include <cstdint> // for [u]int[0-9]+_t
+#include <vector>
 
 #include "OptionParser.hpp"
 // #include "GenomicRegion.hpp"
@@ -33,23 +33,23 @@
    MSite has a way to serialize into a char[] directly, then we should
    use it. */
 // #include "MSite.hpp"
-#include "bsutils.hpp"
-#include "dnmt_error.hpp"
 #include "bam_record_utils.hpp"
+#include "bsutils.hpp"
 #include "counts_header.hpp"
+#include "dnmt_error.hpp"
 
 /* HTSlib */
 #include <htslib/sam.h>
 
-using std::string;
-using std::vector;
 using std::cerr;
 using std::endl;
-using std::unordered_set;
+using std::string;
 using std::unordered_map;
+using std::unordered_set;
+using std::vector;
 
-using bamxx::bam_rec;
 using bamxx::bam_header;
+using bamxx::bam_rec;
 using bamxx::bgzf_file;
 
 struct quick_buf : public std::ostringstream,
@@ -57,19 +57,20 @@ struct quick_buf : public std::ostringstream,
   // ADS: By user ecatmur on SO; very fast. Seems to work...
   quick_buf() {
     // ...but this seems to depend on data layout
-    static_cast<std::basic_ios<char>&>(*this).rdbuf(this);
+    static_cast<std::basic_ios<char> &>(*this).rdbuf(this);
   }
-  void clear() {
+  void
+  clear() {
     // reset buffer pointers (member functions)
     setp(pbase(), pbase());
   }
-  char const* c_str() {
+  char const *
+  c_str() {
     /* between c_str and insertion make sure to clear() */
     *pptr() = '\0';
     return pbase();
   }
 };
-
 
 // ADS: we should never have to worry about coverage over > 32767 in
 // any downstream analysis, so using "int16_t" here would allow to
@@ -78,14 +79,15 @@ struct quick_buf : public std::ostringstream,
 // >65535-fold coverage, we can make the change here.
 typedef uint16_t count_type;
 
+static inline bool
+eats_ref(const uint32_t c) {
+  return bam_cigar_type(bam_cigar_op(c)) & 2;
+}
 
 static inline bool
-eats_ref(const uint32_t c) {return bam_cigar_type(bam_cigar_op(c)) & 2;}
-
-
-static inline bool
-eats_query(const uint32_t c) {return bam_cigar_type(bam_cigar_op(c)) & 1;}
-
+eats_query(const uint32_t c) {
+  return bam_cigar_type(bam_cigar_op(c)) & 1;
+}
 
 /* The three functions below here should probably be moved into
    bsutils.hpp. I am not sure if the DDG function is needed, but it
@@ -95,31 +97,22 @@ eats_query(const uint32_t c) {return bam_cigar_type(bam_cigar_op(c)) & 1;}
    plants. */
 static bool
 is_chh(const std::string &s, size_t i) {
-  return (i < (s.length() - 2)) &&
-    is_cytosine(s[i]) &&
-    !is_guanine(s[i + 1]) &&
-    !is_guanine(s[i + 2]);
+  return (i < (s.length() - 2)) && is_cytosine(s[i]) && !is_guanine(s[i + 1]) &&
+         !is_guanine(s[i + 2]);
 }
-
 
 static bool
 is_ddg(const std::string &s, size_t i) {
-  return (i < (s.length() - 2)) &&
-    !is_cytosine(s[i]) &&
-    !is_cytosine(s[i + 1]) &&
-    is_guanine(s[i + 2]);
+  return (i < (s.length() - 2)) && !is_cytosine(s[i]) &&
+         !is_cytosine(s[i + 1]) && is_guanine(s[i + 2]);
 }
-
 
 static bool
 is_c_at_g(const std::string &s, size_t i) {
-  return (i < (s.length() - 2)) &&
-    is_cytosine(s[i]) &&
-    !is_cytosine(s[i + 1]) &&
-    !is_guanine(s[i + 1]) &&
-    is_guanine(s[i + 2]);
+  return (i < (s.length() - 2)) && is_cytosine(s[i]) &&
+         !is_cytosine(s[i + 1]) && !is_guanine(s[i + 1]) &&
+         is_guanine(s[i + 2]);
 }
-
 
 /* Right now the CountSet objects below are much larger than they need
    to be, for the things we are computing. However, it's not clear
@@ -128,40 +121,68 @@ is_c_at_g(const std::string &s, size_t i) {
    all the information seems reasonable. */
 struct CountSet {
 
-  string tostring() const {
+  string
+  tostring() const {
     std::ostringstream oss;
-    oss << pA << '\t' << pC << '\t' << pG << '\t' << pT << '\t'
-        << nA << '\t' << nC << '\t' << nG << '\t' << nT;
+    oss << pA << '\t' << pC << '\t' << pG << '\t' << pT << '\t' << nA << '\t'
+        << nC << '\t' << nG << '\t' << nT;
     // << '\t' << N; /* not used */
     return oss.str();
   }
-  void add_count_pos(const char x) {
-    if (x == 'T') ++pT; // conditions ordered for efficiency
-    else if (x == 'C') ++pC;
-    else if (x == 'G') ++pG;
-    else if (x == 'A') ++pA;
+  void
+  add_count_pos(const char x) {
+    if (x == 'T')
+      ++pT;  // conditions ordered for efficiency
+    else if (x == 'C')
+      ++pC;
+    else if (x == 'G')
+      ++pG;
+    else if (x == 'A')
+      ++pA;
     // else ++N; /* not used */
   }
-  void add_count_neg(const char x) {
-    if (x == 'T') ++nT; // conditions ordered for efficiency(??)
-    else if (x == 'C') ++nC;
-    else if (x == 'G') ++nG;
-    else if (x == 'A') ++nA;
+  void
+  add_count_neg(const char x) {
+    if (x == 'T')
+      ++nT;  // conditions ordered for efficiency(??)
+    else if (x == 'C')
+      ++nC;
+    else if (x == 'G')
+      ++nG;
+    else if (x == 'A')
+      ++nA;
     // else ++N; /* not used */
   }
-  count_type pos_total() const {return pA + pC + pG + pT;}
-  count_type neg_total() const {return nA + nC + nG + nT;}
+  count_type
+  pos_total() const {
+    return pA + pC + pG + pT;
+  }
+  count_type
+  neg_total() const {
+    return nA + nC + nG + nT;
+  }
 
-  count_type unconverted_cytosine() const {return pC;}
-  count_type converted_cytosine() const {return pT;}
-  count_type unconverted_guanine() const {return nC;}
-  count_type converted_guanine() const {return nT;}
+  count_type
+  unconverted_cytosine() const {
+    return pC;
+  }
+  count_type
+  converted_cytosine() const {
+    return pT;
+  }
+  count_type
+  unconverted_guanine() const {
+    return nC;
+  }
+  count_type
+  converted_guanine() const {
+    return nT;
+  }
 
   count_type pA{0}, pC{0}, pG{0}, pT{0};
   count_type nA{0}, nC{0}, nG{0}, nT{0};
   // count_type N; /* this wasn't used and breaks alignment */
 };
-
 
 /* The "tag" returned by this function should be exclusive, so that
  * the order of checking conditions doesn't matter. There is also a
@@ -172,18 +193,26 @@ struct CountSet {
 static uint32_t
 get_tag_from_genome(const string &s, const size_t pos) {
   if (is_cytosine(s[pos])) {
-    if (is_cpg(s, pos)) return 0;
-    else if (is_chh(s, pos)) return 1;
-    else if (is_c_at_g(s, pos)) return 2;
-    else return 3;
+    if (is_cpg(s, pos))
+      return 0;
+    else if (is_chh(s, pos))
+      return 1;
+    else if (is_c_at_g(s, pos))
+      return 2;
+    else
+      return 3;
   }
   if (is_guanine(s[pos])) {
-    if (is_cpg(s, pos - 1)) return 0;
-    else if (is_ddg(s, pos - 2)) return 1;
-    else if (is_c_at_g(s, pos - 2)) return 2;
-    else return 3;
+    if (is_cpg(s, pos - 1))
+      return 0;
+    else if (is_ddg(s, pos - 2))
+      return 1;
+    else if (is_c_at_g(s, pos - 2))
+      return 2;
+    else
+      return 3;
   }
-  return 4; // shouldn't be used for anything
+  return 4;  // shouldn't be used for anything
 }
 
 /* This "has_mutated" function looks on the opposite strand to see
@@ -199,40 +228,39 @@ has_mutated(const char base, const CountSet &cs) {
 }
 
 static const char *tag_values[] = {
-  "CpG", // 0
-  "CHH", // 1
-  "CXG", // 2
-  "CCG", // 3
-  "N",   // 4
-  "CpGx",// 5 <---- MUT_OFFSET
-  "CHHx",// 6
-  "CXGx",// 7
-  "CCGx",// 8
-  "Nx"   // 9
+  "CpG",   // 0
+  "CHH",   // 1
+  "CXG",   // 2
+  "CCG",   // 3
+  "N",     // 4
+  "CpGx",  // 5 <---- MUT_OFFSET
+  "CHHx",  // 6
+  "CXGx",  // 7
+  "CCGx",  // 8
+  "Nx"     // 9
 };
 static const uint32_t MUT_OFFSET = 5;
-
 
 static inline uint32_t
 tag_with_mut(const uint32_t tag, const bool mut) {
   return tag + (mut ? MUT_OFFSET : 0);
 }
 
-
 template <const bool require_covered = false>
 static void
-write_output(const bam_header &hdr, bgzf_file &out,
-             const int32_t tid, const string &chrom,
-             const vector<CountSet> &counts, bool CPG_ONLY) {
+write_output(const bam_header &hdr, bgzf_file &out, const int32_t tid,
+             const string &chrom, const vector<CountSet> &counts,
+             bool CPG_ONLY) {
 
-  quick_buf buf; // keep underlying buffer space?
+  quick_buf buf;  // keep underlying buffer space?
 
   for (size_t i = 0; i < counts.size(); ++i) {
     const char base = chrom[i];
     if (is_cytosine(base) || is_guanine(base)) {
 
       const uint32_t the_tag = get_tag_from_genome(chrom, i);
-      if (CPG_ONLY && the_tag != 0) continue;
+      if (CPG_ONLY && the_tag != 0)
+        continue;
 
       const bool is_c = is_cytosine(base);
       const double unconverted = is_c ? counts[i].unconverted_cytosine()
@@ -241,7 +269,8 @@ write_output(const bam_header &hdr, bgzf_file &out,
         is_c ? counts[i].converted_cytosine() : counts[i].converted_guanine();
       const uint32_t n_reads = unconverted + converted;
 
-      if (require_covered && n_reads == 0) continue;
+      if (require_covered && n_reads == 0)
+        continue;
 
       const bool mut = has_mutated(base, counts[i]);
       buf.clear();
@@ -257,7 +286,6 @@ write_output(const bam_header &hdr, bgzf_file &out,
   }
 }
 
-
 static void
 count_states_pos(const bam_rec &aln, vector<CountSet> &counts) {
   /* Move through cigar, reference and read positions without
@@ -266,7 +294,7 @@ count_states_pos(const bam_rec &aln, vector<CountSet> &counts) {
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + get_n_cigar(aln);
   auto rpos = get_pos(aln);
-  auto qpos = 0; // to match type with b->core.l_qseq
+  auto qpos = 0;  // to match type with b->core.l_qseq
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
     const uint32_t n = bam_cigar_oplen(*c_itr);
@@ -293,7 +321,6 @@ count_states_pos(const bam_rec &aln, vector<CountSet> &counts) {
   assert(qpos == get_l_qseq(aln));
 }
 
-
 static void
 count_states_neg(const bam_rec &aln, vector<CountSet> &counts) {
   /* Move through cigar, reference and (*backward*) through read
@@ -302,14 +329,14 @@ count_states_neg(const bam_rec &aln, vector<CountSet> &counts) {
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + get_n_cigar(aln);
   size_t rpos = get_pos(aln);
-  size_t qpos = get_l_qseq(aln); // to match type with b->core.l_qseq
+  size_t qpos = get_l_qseq(aln);  // to match type with b->core.l_qseq
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
     const uint32_t n = bam_cigar_oplen(*c_itr);
     if (eats_ref(op) && eats_query(op)) {
-      const size_t end_qpos = qpos - n; // to match type with qpos
-      for (; qpos > end_qpos; --qpos) // beware ++ in macro below!!!
-        counts[rpos++].add_count_neg(seq_nt16_str[bam_seqi(seq, qpos-1)]);
+      const size_t end_qpos = qpos - n;  // to match type with qpos
+      for (; qpos > end_qpos; --qpos)    // beware ++ in macro below!!!
+        counts[rpos++].add_count_neg(seq_nt16_str[bam_seqi(seq, qpos - 1)]);
     }
     else if (eats_query(op)) {
       qpos -= n;
@@ -322,7 +349,6 @@ count_states_neg(const bam_rec &aln, vector<CountSet> &counts) {
   // ADS: Same as count_states_pos; see comment there
   assert(qpos == 0);
 }
-
 
 static unordered_map<int32_t, size_t>
 get_tid_to_idx(const bam_header &hdr,
@@ -340,15 +366,14 @@ get_tid_to_idx(const bam_header &hdr,
   return tid_to_idx;
 }
 
-
 template <class CS>
 static void
 output_skipped_chromosome(const bool CPG_ONLY, const int32_t tid,
                           const unordered_map<int32_t, size_t> &tid_to_idx,
                           const bam_header &hdr,
                           const vector<string>::const_iterator chroms_beg,
-                          const vector<size_t> &chrom_sizes,
-                          vector<CS> &counts, bgzf_file &out) {
+                          const vector<size_t> &chrom_sizes, vector<CS> &counts,
+                          bgzf_file &out) {
 
   // get the index of the next chrom sequence
   const auto chrom_idx = tid_to_idx.find(tid);
@@ -364,27 +389,29 @@ output_skipped_chromosome(const bool CPG_ONLY, const int32_t tid,
   write_output<false>(hdr, out, tid, *chrom_itr, counts, CPG_ONLY);
 }
 
-
 static bool
 consistent_targets(const bam_header &hdr,
                    const unordered_map<int32_t, size_t> &tid_to_idx,
                    const vector<string> &names, const vector<size_t> &sizes) {
   const size_t n_targets = hdr.h->n_targets;
-  if (n_targets != names.size()) return false;
+  if (n_targets != names.size())
+    return false;
 
   for (size_t tid = 0; tid < n_targets; ++tid) {
     const string tid_name_sam = sam_hdr_tid2name(hdr, tid);
     const size_t tid_size_sam = sam_hdr_tid2len(hdr, tid);
     const auto idx_itr = tid_to_idx.find(tid);
-    if (idx_itr == cend(tid_to_idx)) return false;
+    if (idx_itr == cend(tid_to_idx))
+      return false;
     const auto idx = idx_itr->second;
-    if (tid_name_sam != names[idx] || tid_size_sam != sizes[idx]) return false;
+    if (tid_name_sam != names[idx] || tid_size_sam != sizes[idx])
+      return false;
   }
   return true;
 }
 
-
-template<const bool require_covered = false> static void
+template <const bool require_covered = false>
+static void
 process_reads(const bool VERBOSE, const bool show_progress,
               const bool compress_output, const bool include_header,
               const size_t n_threads, const string &infile,
@@ -411,10 +438,12 @@ process_reads(const bool VERBOSE, const bool show_progress,
 
   // open the hts SAM/BAM input file and get the header
   bamxx::bam_in hts(infile);
-  if (!hts) throw dnmt_error("failed to open input file");
+  if (!hts)
+    throw dnmt_error("failed to open input file");
   // load the input file's header
   bam_header hdr(hts);
-  if (!hdr) throw dnmt_error("failed to read header");
+  if (!hdr)
+    throw dnmt_error("failed to read header");
 
   unordered_map<int32_t, size_t> tid_to_idx = get_tid_to_idx(hdr, name_to_idx);
 
@@ -424,7 +453,8 @@ process_reads(const bool VERBOSE, const bool show_progress,
   // open the output file
   const string output_mode = compress_output ? "w" : "wu";
   bgzf_file out(outfile, output_mode);
-  if (!out) throw dnmt_error("error opening output file: " + outfile);
+  if (!out)
+    throw dnmt_error("error opening output file: " + outfile);
 
   // set the threads for the input file decompression
   if (n_threads > 1) {
@@ -449,25 +479,19 @@ process_reads(const bool VERBOSE, const bool show_progress,
     const int32_t tid = get_tid(aln);
     if (tid == -1)  // ADS: skip reads that have no tid -- they are not mapped
       continue;
-    if (tid == prev_tid) {
-      // do the work for this mapped read, depending on strand
-      if (bam_is_rev(aln))
-        count_states_neg(aln, counts);
-      else
-        count_states_pos(aln, counts);
-    }
-    else {  // chrom has changed, so output results and get the next chrom
+    if (tid != prev_tid) {
+      // chrom has changed, so output results and get the next chrom
 
       // write output if there is any; counts is empty only for first chrom
       if (!counts.empty())
-        write_output<require_covered>(hdr, out, prev_tid,
-                                      *chrom_itr, counts, CPG_ONLY);
+        write_output<require_covered>(hdr, out, prev_tid, *chrom_itr, counts,
+                                      CPG_ONLY);
       // make sure reads are sorted chrom tid number in header
       if (tid < prev_tid) {
         const std::string message = "SAM file is not sorted "
-          "previous tid: " +
-          std::to_string(prev_tid) +
-          " current tid: " + std::to_string(tid);
+                                    "previous tid: " +
+                                    std::to_string(prev_tid) +
+                                    " current tid: " + std::to_string(tid);
         throw dnmt_error(message);
       }
 
@@ -491,16 +515,22 @@ process_reads(const bool VERBOSE, const bool show_progress,
       counts.clear();
       counts.resize(chrom_sizes[chrom_idx->second]);
     }
+    // do the work for this mapped read, depending on strand
+    if (bam_is_rev(aln))
+      count_states_neg(aln, counts);
+    else
+      count_states_pos(aln, counts);
   }
   if (!counts.empty())
-    write_output<require_covered>(hdr, out, prev_tid, *chrom_itr, counts, CPG_ONLY);
+    write_output<require_covered>(hdr, out, prev_tid, *chrom_itr, counts,
+                                  CPG_ONLY);
 
   // ADS: if some chroms might not be covered by reads, we have to
   // iterate over what remains
   if (!require_covered)
     for (auto i = prev_tid + 1; i < hdr.h->n_targets; ++i)
-      output_skipped_chromosome(CPG_ONLY, i, tid_to_idx, hdr,
-                                chroms_beg, chrom_sizes, counts, out);
+      output_skipped_chromosome(CPG_ONLY, i, tid_to_idx, hdr, chroms_beg,
+                                chrom_sizes, counts, out);
 }
 
 int
@@ -524,12 +554,12 @@ main_counts(int argc, const char **argv) {
                            "get methylation levels from "
                            "mapped bisulfite sequencing reads",
                            "-c <chroms> <mapped-reads>");
-    opt_parse.add_opt("threads", 't', "threads to use (few needed)",
-                      false, n_threads);
+    opt_parse.add_opt("threads", 't', "threads to use (few needed)", false,
+                      n_threads);
     opt_parse.add_opt("output", 'o', "output file name (default: stdout)",
                       false, outfile);
     opt_parse.add_opt("chrom", 'c', "reference genome file (FASTA format)",
-                      true , chroms_file);
+                      true, chroms_file);
     opt_parse.add_opt("cpg-only", 'n', "print only CpG context cytosines",
                       false, CPG_ONLY);
     opt_parse.add_opt("require-covered", 'r', "only output covered sites",
@@ -558,7 +588,7 @@ main_counts(int argc, const char **argv) {
       throw dnmt_error("thread count cannot be negative");
 
     std::ostringstream cmd;
-    copy(argv, argv + argc, std::ostream_iterator<const char*>(cmd, " "));
+    copy(argv, argv + argc, std::ostream_iterator<const char *>(cmd, " "));
 
     // file types from HTSlib use "-" for the filename to go to stdout
     if (outfile.empty())
@@ -567,8 +597,8 @@ main_counts(int argc, const char **argv) {
     if (VERBOSE)
       cerr << "[input BAM/SAM file: " << mapped_reads_file << "]" << endl
            << "[output file: " << outfile << "]" << endl
-           << "[output format: "
-           << (compress_output ? "bgzf" : "text") << "]" << endl
+           << "[output format: " << (compress_output ? "bgzf" : "text") << "]"
+           << endl
            << "[genome file: " << chroms_file << "]" << endl
            << "[threads requested: " << n_threads << "]" << endl
            << "[CpG only mode: " << (CPG_ONLY ? "yes" : "no") << "]" << endl

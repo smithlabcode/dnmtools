@@ -195,7 +195,7 @@ even longer. It usually take quite a long time to map reads from a
 single large file with tens of millions of reads. If you have access
 to a cluster, one strategy is to launch multiple jobs, each working on
 a subset of reads simultaneously, and finally combine their output.
-`abismal` takes advantage of OpenMP to parallelize the process of
+`abismal` uses standard c++ threads to parallelize the process of
 mapping reads using the shared index.
 
 If each node can only access its local storage, dividing the set of

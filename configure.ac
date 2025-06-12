@@ -1,6 +1,6 @@
 dnl This file is part of dnmtools
 dnl
-dnl Copyright (C) 2022-2024: Andrew D. Smith
+dnl Copyright (C) 2022-2025: Andrew D. Smith
 dnl
 dnl Authors: Andrew D. Smith
 dnl
@@ -32,19 +32,21 @@ AC_CONFIG_SUBDIRS([src/smithlab_cpp])
 
 dnl check for HTSLib if requested
 hts_fail_msg="
-Failed to locate HTSLib on your system. Please use the LDFLAGS and
-CPPFLAGS variables to specify the directories where the HTSLib library
-and headers can be found.
+Failed to locate HTSLib on your system. Please use the LDFLAGS and CPPFLAGS
+variables to specify the directories where the HTSLib library and headers can
+be found.
 "
 
 gsl_fail_msg="
-Failed to locate the GNU Scientific Library (GSL) on your
-system. Please use the LDFLAGS and CPPFLAGS variables to specify the
-directories where the GSL library and headers can be found.
+Failed to locate the GNU Scientific Library (GSL) on your system. Please use
+the LDFLAGS and CPPFLAGS variables to specify the directories where the GSL
+library and headers can be found.
 "
 
 dnl check for required libraries
-AC_SEARCH_LIBS([hts_version], [hts], [], [AC_MSG_FAILURE([$hts_fail_msg])])
+AC_SEARCH_LIBS([pthread_create], [pthread], [], [AC_MSG_FAILURE(["pthread library not found"])])
+AC_SEARCH_LIBS([gzopen], [z], [], [AC_MSG_FAILURE(["Zlib library not found"])])
+AC_SEARCH_LIBS([hts_version], [hts], [], [AC_MSG_FAILURE([$hts_fail_msg])], [-lz -lpthread])
 AC_SEARCH_LIBS([cblas_dgemm], [gslcblas], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 AC_SEARCH_LIBS([gsl_blas_dgemm], [gsl], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 

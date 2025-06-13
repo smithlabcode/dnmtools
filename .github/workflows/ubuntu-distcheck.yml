@@ -1,4 +1,4 @@
-name: DNMTools distribution check on Ubuntu
+name: DNMTools distcheck (Ubuntu)
 
 on:
   workflow_dispatch:
@@ -9,11 +9,9 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
     - name: Update packages
@@ -25,4 +23,4 @@ jobs:
     - name: configure
       run: ./configure
     - name: make distcheck
-      run: make distcheck
+      run: make -j4 distcheck

@@ -1,0 +1,89 @@
+name: dnmtools Release (macOS)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-macos-binaries:
+    strategy:
+      matrix:
+        os: [macos-13, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Make dnmtools dependency directories
+        run: sudo mkdir -p /opt/dnmtools/lib /opt/dnmtools/include
+      - name: Install dependency headers and static libs
+        run: |
+          brew install zlib gsl automake
+          sudo cp $(brew --prefix zlib)/lib/*.a /opt/dnmtools/lib
+          sudo cp $(brew --prefix gsl)/lib/*.a /opt/dnmtools/lib
+          sudo cp -r $(brew --prefix zlib)/include/* /opt/dnmtools/include
+          sudo cp -r $(brew --prefix gsl)/include/* /opt/dnmtools/include
+      - name: Build and install HTSlib
+        run: |
+          git clone --recursive https://github.com/samtools/htslib.git
+          cd htslib
+          sudo cp -r htslib /opt/dnmtools/include
+          autoreconf -i
+          mkdir build && cd build
+          ../configure \
+            --disable-bz2 \
+            --disable-libcurl \
+            --disable-lzma \
+            --disable-ref-cache \
+            --without-libdeflate \
+            LDADD="-L/usr/local/lib"
+          make CFLAGS="-Wall -O2 -fvisibility=hidden" libhts.a
+          sudo cp libhts.a /opt/dnmtools/lib
+      - name: Build dnmtools
+        run: |
+          ./autogen.sh
+          mkdir build && cd build
+          ../configure CXX=g++-14 LDFLAGS="-L/opt/dnmtools/lib -static-libgcc -static-libstdc++ -Wl,-dead_strip" CPPFLAGS="-I/opt/dnmtools/include"
+          make -j4
+      - name: Rename the binary
+        run: mv build/dnmtools dnmtools_$(uname -m)
+      - name: Get version number
+        id: vars
+        run: |
+          awk '/AC_INIT/ {print "vn="$2}' configure.ac | \
+            sed "s/\[//; s/\]//; s/,//" >> "$GITHUB_OUTPUT"
+          uname -m | awk '{print "arch="$0}' >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Upload the binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: dnmtools-${{ steps.vars.outputs.arch }}
+          path: |
+            dnmtools_${{ steps.vars.outputs.arch }}
+  make-lipo:
+    needs: build-macos-binaries
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries
+          pattern: dnmtools-*
+          merge-multiple: false
+      - name: Create universal binary
+        run: |
+          lipo -create \
+          binaries/dnmtools-*/dnmtools_* \
+          -output dnmtools
+          chmod +x dnmtools
+      - name: Get version number
+        id: vn
+        run: awk '/AC_INIT/ {print "vn="$2}' configure.ac | sed "s/\[//; s/\]//; s/,//" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Upload the lipo binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: dnmtools-${{ steps.vn.outputs.vn }}-macOS
+          path: dnmtools

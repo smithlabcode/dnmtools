@@ -1,0 +1,58 @@
+name: dnmtools Release (Linux)
+
+on:
+  workflow_dispatch:
+
+env:
+  CONTAINER: andrewdavidsmith/transferase-build
+
+jobs:
+  linux-releases:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start docker container
+        # Pull the container, run it in detached mode, mount the workspace
+        run: |
+          docker pull $CONTAINER
+          docker run --name build-container \
+          -d -v ${{ github.workspace }}:/workspace $CONTAINER tail -f /dev/null
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure and build
+        env:
+          SCRIPT: |
+            export DEBIAN_FRONTEND=noninteractive && \
+            apt-get update && apt-get install --no-install-recommends -y automake && \
+            find /usr -name libz.so -exec rm {} \; && \
+            git clone --recursive https://github.com/samtools/htslib.git && \
+            cd htslib && \
+            autoreconf -i && \
+            mkdir build && cd build && \
+            ../configure \
+                --disable-bz2 \
+                --disable-libcurl \
+                --disable-lzma \
+                --disable-ref-cache \
+                LDADD="-L/usr/local/lib" && \
+            make CFLAGS="-Wall -O2 -fvisibility=hidden" libhts.a && \
+            cp libhts.a /usr/local/lib/ && \
+            cp -r ../htslib /usr/local/include/ && \
+            cd /workspace && \
+            autoreconf -i && \
+            mkdir build && cd build && \
+            ../configure && \
+            make -j4 LDFLAGS="-static-libgcc -static-libstdc++ -s"
+        run: |
+          docker exec build-container bash -c "$SCRIPT"
+      - name: Get version number
+        id: get-vn
+        run: |
+          awk '/AC_INIT/ {print "vn="$2}' configure.ac | sed -e "s/\[//; s/\]//; s/,//" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Upload the binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: dnmtools-${{ steps.get-vn.outputs.vn }}-Linux
+          path: build/dnmtools

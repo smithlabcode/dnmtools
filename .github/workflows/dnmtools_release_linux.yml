@@ -1,4 +1,4 @@
-name: dnmtools Release (Linux)
+name: DNMTools release (Linux)
 
 on:
   workflow_dispatch:

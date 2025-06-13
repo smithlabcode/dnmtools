@@ -23,8 +23,9 @@ jobs:
         env:
           SCRIPT: |
             export DEBIAN_FRONTEND=noninteractive && \
-            apt-get update && apt-get install --no-install-recommends -y automake && \
+            apt-get update && apt-get install --no-install-recommends -y automake libgsl-dev && \
             find /usr -name libz.so -exec rm {} \; && \
+            find /usr -name libgsl\*.so -exec rm {} \; && \
             git clone --recursive https://github.com/samtools/htslib.git && \
             cd htslib && \
             autoreconf -i && \
@@ -35,7 +36,7 @@ jobs:
                 --disable-lzma \
                 --disable-ref-cache \
                 LDADD="-L/usr/local/lib" && \
-            make CFLAGS="-Wall -O2 -fvisibility=hidden" libhts.a && \
+            make -j4 CFLAGS="-Wall -O2 -fvisibility=hidden" libhts.a && \
             cp libhts.a /usr/local/lib/ && \
             cp -r ../htslib /usr/local/include/ && \
             cd /workspace && \
@@ -48,7 +49,7 @@ jobs:
       - name: Get version number
         id: get-vn
         run: |
-          awk '/AC_INIT/ {print "vn="$2}' configure.ac | sed -e "s/\[//; s/\]//; s/,//" >> "$GITHUB_OUTPUT"
+          awk '/AC_INIT/ {print "vn="$2}' configure.ac | sed "s/\[//; s/\]//; s/,//" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Upload the binary

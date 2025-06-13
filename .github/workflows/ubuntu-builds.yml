@@ -1,10 +1,14 @@
-name: DNMTools builds on Ubuntu
+name: DNMTools build (Ubuntu)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
 
 jobs:
-  build:
+  build-with-gcc:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -14,21 +18,25 @@ jobs:
       run: sudo apt-get install -y libhts-dev libgsl-dev
     - name: Generate configure script
       run: ./autogen.sh
-    - name: Configure for g++
+    - name: Configure for GCC
       run: ./configure CXX="g++"
     - name: Build with g++
-      run: make
+      run: make -j4
     - name: Test the g++ build
-      run: make check-TESTS
-    - name: Cleanup after the g++ build
-      run: make distclean
-    - name: Install Clang/LLVM dependencies
-      run: sudo apt-get install -y libomp-dev
-    - name: Configure for clang++
+      run: make -j4 check-TESTS
+  build-with-clang:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: sudo apt-get install -y libhts-dev libgsl-dev
+    - name: Generate configure script
+      run: ./autogen.sh
+    - name: Configure for Clang
       run: ./configure CXX="clang++"
     - name: Build with clang++
-      run: make
+      run: make -j4
     - name: Test the clang++ build
-      run: make
-    - name: Cleanup after the clang++ build
-      run: make distclean
+      run: make -j4 check-TESTS

@@ -33,7 +33,7 @@ jobs:
               -DCMAKE_VERBOSE_MAKEFILE=on \
               -DCMAKE_BUILD_TYPE=Release && \
           cmake --build build -j4 && \
-          cmake --install build --prefix=/opt/dnmtools
+          sudo cmake --install build --prefix=/opt/dnmtools
       - name: Build and install HTSlib
         run: |
           git clone --recursive https://github.com/samtools/htslib.git

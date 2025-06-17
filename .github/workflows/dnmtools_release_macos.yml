@@ -17,7 +17,7 @@ jobs:
         run: sudo mkdir -p /opt/dnmtools/lib /opt/dnmtools/include
       - name: Install dependency headers and static libs
         run: |
-          brew install zlib gsl automake cmake
+          brew install zlib gsl automake
           sudo cp $(brew --prefix zlib)/lib/*.a /opt/dnmtools/lib
           sudo cp $(brew --prefix gsl)/lib/*.a /opt/dnmtools/lib
           sudo cp -r $(brew --prefix zlib)/include/* /opt/dnmtools/include

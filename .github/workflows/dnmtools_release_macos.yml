@@ -17,11 +17,23 @@ jobs:
         run: sudo mkdir -p /opt/dnmtools/lib /opt/dnmtools/include
       - name: Install dependency headers and static libs
         run: |
-          brew install zlib gsl automake
+          brew install zlib gsl automake cmake
           sudo cp $(brew --prefix zlib)/lib/*.a /opt/dnmtools/lib
           sudo cp $(brew --prefix gsl)/lib/*.a /opt/dnmtools/lib
           sudo cp -r $(brew --prefix zlib)/include/* /opt/dnmtools/include
           sudo cp -r $(brew --prefix gsl)/include/* /opt/dnmtools/include
+      - name: Build and install libdeflate
+        run: |
+          git clone https://github.com/ebiggers/libdeflate.git && \
+          cd libdeflate && \
+          cmake -B build \
+              -DLIBDEFLATE_BUILD_GZIP=off \
+              -DLIBDEFLATE_BUILD_TESTS=off \
+              -DLIBDEFLATE_BUILD_SHARED_LIB=off \
+              -DCMAKE_VERBOSE_MAKEFILE=on \
+              -DCMAKE_BUILD_TYPE=Release && \
+          cmake --build build -j4 && \
+          cmake --install build --prefix=/opt/dnmtools
       - name: Build and install HTSlib
         run: |
           git clone --recursive https://github.com/samtools/htslib.git
@@ -34,8 +46,8 @@ jobs:
             --disable-libcurl \
             --disable-lzma \
             --disable-ref-cache \
-            --without-libdeflate \
-            LDADD="-L/usr/local/lib"
+            --with-libdeflate \
+            LDADD="-L/opt/dnmtools/lib"
           make -j4 CFLAGS="-Wall -O2 -fvisibility=hidden" libhts.a
           sudo cp libhts.a /opt/dnmtools/lib
       - name: Build dnmtools
@@ -43,7 +55,8 @@ jobs:
           ./autogen.sh
           mkdir build && cd build
           ../configure --with-libdeflate \
-            CXX=g++-14 LDFLAGS="-L/opt/dnmtools/lib -static-libgcc -static-libstdc++ -Wl,-dead_strip" \
+            CXX=g++-14 \
+            LDFLAGS="-L/opt/dnmtools/lib -static-libgcc -static-libstdc++ -Wl,-dead_strip" \
             CPPFLAGS="-I/opt/dnmtools/include"
           make -j4
       - name: Rename the binary

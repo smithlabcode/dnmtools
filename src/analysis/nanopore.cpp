@@ -41,10 +41,6 @@
 /* HTSlib */
 #include <htslib/sam.h>
 
-using bamxx::bam_header;
-using bamxx::bam_rec;
-using bamxx::bgzf_file;
-
 [[nodiscard]] inline bool
 is_cytosine(const char c) {
   return c == 'c' || c == 'C';
@@ -73,7 +69,7 @@ is_cpg(const std::string &s, const std::size_t i) {
 static void
 read_fasta_file(const std::string &filename, std::vector<std::string> &names,
                 std::vector<std::string> &sequences) {
-  bgzf_file in(filename, "r");
+  bamxx::bgzf_file in(filename, "r");
   if (!in)
     throw std::runtime_error("error opening genome file: " + filename);
   names.clear();
@@ -96,7 +92,7 @@ read_fasta_file(const std::string &filename, std::vector<std::string> &names,
 }
 
 [[nodiscard]] static std::string
-get_basecall_model(const bam_header &hdr) {
+get_basecall_model(const bamxx::bam_header &hdr) {
   kstring_t ks{};
 
   ks = {0, 0, nullptr};
@@ -583,7 +579,7 @@ struct match_counter {
 };
 
 static void
-count_states_fwd(const bam_rec &aln, std::vector<CountSet> &counts,
+count_states_fwd(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
                  mod_prob_buffer &mod_buf, const std::string &chrom,
                  match_counter &mc) {
   /* Move through cigar, reference and read positions without
@@ -612,9 +608,12 @@ count_states_fwd(const bam_rec &aln, std::vector<CountSet> &counts,
       const decltype(qpos) end_qpos = qpos + n;
       for (; qpos < end_qpos; ++qpos) {
         const auto r_nuc = *ref_itr++;
-        mc.add_fwd(r_nuc, ref_itr == end_ref ? 'N' : *ref_itr,
-                   seq_nt16_str[bam_seqi(seq, qpos)],
-                   qpos == q_lim ? 'N' : seq_nt16_str[bam_seqi(seq, qpos + 1)]);
+        if (qpos + 1 < end_qpos) {
+          mc.add_fwd(r_nuc, ref_itr == end_ref ? 'N' : *ref_itr,
+                     seq_nt16_str[bam_seqi(seq, qpos)],
+                     qpos == q_lim ? 'N'
+                                   : seq_nt16_str[bam_seqi(seq, qpos + 1)]);
+        }
         counts[rpos++].add_count_fwd(*hydroxy_prob_itr, *methyl_prob_itr);
         ++methyl_prob_itr;
         ++hydroxy_prob_itr;
@@ -638,7 +637,7 @@ count_states_fwd(const bam_rec &aln, std::vector<CountSet> &counts,
 }
 
 static void
-count_states_rev(const bam_rec &aln, std::vector<CountSet> &counts,
+count_states_rev(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
                  mod_prob_buffer &mod_buf, const std::string &chrom,
                  match_counter &mc) {
   /* Move through cigar, reference and (*backward*) through read
@@ -672,8 +671,10 @@ count_states_rev(const bam_rec &aln, std::vector<CountSet> &counts,
         const auto r_nuc = *ref_itr++;
         const auto q_nuc = seq_nt16_str[bam_seqi(seq, q_idx)];
         ++q_idx;
-        mc.add_rev(r_nuc, ref_itr == end_ref ? 'N' : *ref_itr, q_nuc,
-                   q_idx == l_qseq ? 'N' : seq_nt16_str[bam_seqi(seq, q_idx)]);
+        if (end_qpos + 1 < qpos)
+          mc.add_rev(r_nuc, ref_itr == end_ref ? 'N' : *ref_itr, q_nuc,
+                     q_idx == l_qseq ? 'N'
+                                     : seq_nt16_str[bam_seqi(seq, q_idx)]);
         --methyl_prob_itr;
         --hydroxy_prob_itr;
         counts[rpos++].add_count_rev(*hydroxy_prob_itr, *methyl_prob_itr);
@@ -699,7 +700,7 @@ count_states_rev(const bam_rec &aln, std::vector<CountSet> &counts,
 [[nodiscard]] static std::tuple<std::map<std::int32_t, std::size_t>,
                                 std::set<std::int32_t>>
 get_tid_to_idx(
-  const bam_header &hdr,
+  const bamxx::bam_header &hdr,
   const std::unordered_map<std::string, std::size_t> &name_to_idx) {
   std::set<std::int32_t> missing_tids;
   std::map<std::int32_t, std::size_t> tid_to_idx;
@@ -718,7 +719,7 @@ get_tid_to_idx(
 }
 
 [[nodiscard]] static bool
-consistent_targets(const bam_header &hdr,
+consistent_targets(const bamxx::bam_header &hdr,
                    const std::map<std::int32_t, std::size_t> &tid_to_idx,
                    const std::vector<std::string> &names,
                    const std::vector<std::size_t> &sizes) {
@@ -741,7 +742,8 @@ consistent_targets(const bam_header &hdr,
 
 [[nodiscard]] static bool
 consistent_existing_targets(
-  const bam_header &hdr, const std::map<std::int32_t, std::size_t> &tid_to_idx,
+  const bamxx::bam_header &hdr,
+  const std::map<std::int32_t, std::size_t> &tid_to_idx,
   const std::vector<std::string> &names,
   const std::vector<std::size_t> &sizes) {
   const std::size_t n_targets = hdr.h->n_targets;
@@ -805,10 +807,10 @@ struct read_processor {
   output_skipped_chromosome(
     const std::int32_t tid,
     const std::map<std::int32_t, std::size_t> &tid_to_idx,
-    const bam_header &hdr,
+    const bamxx::bam_header &hdr,
     const std::vector<std::string>::const_iterator chroms_beg,
     const std::vector<std::size_t> &chrom_sizes, std::vector<CountSet> &counts,
-    bgzf_file &out) const {
+    bamxx::bgzf_file &out) const {
 
     // get the index of the next chrom sequence
     const auto chrom_idx = tid_to_idx.find(tid);
@@ -831,7 +833,7 @@ struct read_processor {
   }
 
   void
-  write_output_all(const bam_header &hdr, bgzf_file &out,
+  write_output_all(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
                    const std::int32_t tid, const std::string &chrom,
                    const std::vector<CountSet> &counts) const {
     static constexpr auto out_fmt = "%ld\t%c\t%s\t%.6g\t%d\t%.6g\t%.6g\n";
@@ -886,7 +888,7 @@ struct read_processor {
   }
 
   void
-  write_output_sym(const bam_header &hdr, bgzf_file &out,
+  write_output_sym(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
                    const std::int32_t tid, const std::string &chrom,
                    const std::vector<CountSet> &counts) const {
     static constexpr auto out_fmt = "%ld\t+\tCpG\t%.6g\t%d\t%.6g\t%.6g\n";
@@ -952,8 +954,8 @@ struct read_processor {
   }
 
   void
-  write_output(const bam_header &hdr, bgzf_file &out, const std::int32_t tid,
-               const std::string &chrom,
+  write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
+               const std::int32_t tid, const std::string &chrom,
                const std::vector<CountSet> &counts) const {
     if (symmetric)
       write_output_sym(hdr, out, tid, chrom, counts);
@@ -989,7 +991,7 @@ struct read_processor {
     if (!hts)
       throw std::runtime_error("failed to open input file");
     // load the input file's header
-    bam_header hdr(hts);
+    bamxx::bam_header hdr(hts);
     if (!hdr)
       throw std::runtime_error("failed to read header");
 
@@ -1011,7 +1013,7 @@ struct read_processor {
 
     // open the output file
     const std::string output_mode = compress_output ? "w" : "wu";
-    bgzf_file out(outfile, output_mode);
+    bamxx::bgzf_file out(outfile, output_mode);
     if (!out)
       throw std::runtime_error("error opening output file: " + outfile);
 
@@ -1044,7 +1046,7 @@ struct read_processor {
 
     // now iterate over the reads, switching chromosomes and writing
     // output as needed
-    bam_rec aln;
+    bamxx::bam_rec aln;
     std::int32_t prev_tid = -1;
 
     std::vector<std::string>::const_iterator chrom_itr{};
@@ -1190,7 +1192,7 @@ main_nanocount(int argc, const char **argv) {
       throw std::runtime_error("thread count cannot be negative");
 
     std::ostringstream cmd;
-    copy(argv, argv + argc, std::ostream_iterator<const char *>(cmd, " "));
+    std::copy(argv, argv + argc, std::ostream_iterator<const char *>(cmd, " "));
 
     // file types from HTSlib use "-" for the filename to go to stdout
     if (outfile.empty())

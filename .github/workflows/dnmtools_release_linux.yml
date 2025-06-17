@@ -26,6 +26,17 @@ jobs:
             apt-get update && apt-get install --no-install-recommends -y automake libgsl-dev && \
             find /usr -name libz.so -exec rm {} \; && \
             find /usr -name libgsl\*.so -exec rm {} \; && \
+            git clone https://github.com/ebiggers/libdeflate.git && \
+            cd libdeflate && \
+            cmake -B build \
+                -DLIBDEFLATE_BUILD_GZIP=off \
+                -DLIBDEFLATE_BUILD_TESTS=off \
+                -DLIBDEFLATE_BUILD_SHARED_LIB=off \
+                -DCMAKE_VERBOSE_MAKEFILE=on \
+                -DCMAKE_BUILD_TYPE=Release && \
+            cmake --build build -j4 && \
+            cmake --install build --prefix=/usr/local && \
+            cd .. && \
             git clone --recursive https://github.com/samtools/htslib.git && \
             cd htslib && \
             autoreconf -i && \
@@ -35,7 +46,7 @@ jobs:
                 --disable-libcurl \
                 --disable-lzma \
                 --disable-ref-cache \
-                LDADD="-L/usr/local/lib" && \
+                --with-libdeflate && \
             make -j4 CFLAGS="-Wall -O2 -fvisibility=hidden" libhts.a && \
             cp libhts.a /usr/local/lib/ && \
             cp -r ../htslib /usr/local/include/ && \

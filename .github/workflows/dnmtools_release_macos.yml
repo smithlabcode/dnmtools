@@ -42,7 +42,9 @@ jobs:
         run: |
           ./autogen.sh
           mkdir build && cd build
-          ../configure CXX=g++-14 LDFLAGS="-L/opt/dnmtools/lib -static-libgcc -static-libstdc++ -Wl,-dead_strip" CPPFLAGS="-I/opt/dnmtools/include"
+          ../configure --with-libdeflate \
+            CXX=g++-14 LDFLAGS="-L/opt/dnmtools/lib -static-libgcc -static-libstdc++ -Wl,-dead_strip" \
+            CPPFLAGS="-I/opt/dnmtools/include"
           make -j4
       - name: Rename the binary
         run: mv build/dnmtools dnmtools_$(uname -m)

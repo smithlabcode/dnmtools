@@ -51,11 +51,9 @@ jobs:
             cp libhts.a /usr/local/lib/ && \
             cp -r ../htslib /usr/local/include/ && \
             cd /workspace && \
-            sed -i "s/dnl AC/AC/" configure.ac && \
-            sed -i "s/dnl AC/AC/" src/abismal/configure.ac && \
             autoreconf -i && \
             mkdir build && cd build && \
-            ../configure && \
+            ../configure --with-libdeflate && \
             make -j4 LDFLAGS="-static-libgcc -static-libstdc++ -s"
         run: |
           docker exec build-container bash -c "$SCRIPT"

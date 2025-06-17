@@ -47,7 +47,7 @@ jobs:
             --disable-lzma \
             --disable-ref-cache \
             --with-libdeflate \
-            LDADD="-L/opt/dnmtools/lib"
+            LDFLAGS="-L/opt/dnmtools/lib" CPPFLAGS="-I/opt/dnmtools/include"
           make -j4 CFLAGS="-Wall -O2 -fvisibility=hidden" libhts.a
           sudo cp libhts.a /opt/dnmtools/lib
       - name: Build dnmtools

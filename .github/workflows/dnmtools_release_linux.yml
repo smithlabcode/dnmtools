@@ -51,6 +51,7 @@ jobs:
             cp libhts.a /usr/local/lib/ && \
             cp -r ../htslib /usr/local/include/ && \
             cd /workspace && \
+            sed -i "s/dnl AC/AC/" configure.ac && \
             autoreconf -i && \
             mkdir build && cd build && \
             ../configure && \

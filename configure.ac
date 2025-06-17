@@ -43,11 +43,20 @@ the LDFLAGS and CPPFLAGS variables to specify the directories where the GSL
 library and headers can be found.
 "
 
+dnl arg for using libdeflate, which might happen by default anyway
+AC_ARG_WITH([libdeflate],
+  [AS_HELP_STRING([--with-libdeflate], [use libdeflate for BAM output])],
+  [with_libdeflate=yes], [with_libdeflate=no])
+
 dnl check for required libraries
 AC_SEARCH_LIBS([pthread_create], [pthread], [], [AC_MSG_FAILURE(["pthread library not found"])])
 AC_SEARCH_LIBS([gzopen], [z], [], [AC_MSG_FAILURE(["Zlib library not found"])])
-dnl AC_SEARCH_LIBS([libdeflate_deflate_compress], [deflate], [], [AC_MSG_FAILURE(["libdeflate not found"])])
-AC_SEARCH_LIBS([hts_version], [hts], [], [AC_MSG_FAILURE([$hts_fail_msg])], [-lz -lpthread])
+AS_IF([test "x$with_libdeflate" = "xyes"],
+  [
+    AC_SEARCH_LIBS([libdeflate_deflate_compress], [deflate], [],
+                   [AC_MSG_ERROR([--with-libdeflate specified but libdeflate not found])])
+  ])
+AC_SEARCH_LIBS([hts_version], [hts], [], [AC_MSG_FAILURE([$hts_fail_msg])])
 AC_SEARCH_LIBS([cblas_dgemm], [gslcblas], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 AC_SEARCH_LIBS([gsl_blas_dgemm], [gsl], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 

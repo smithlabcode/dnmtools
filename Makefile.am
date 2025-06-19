@@ -232,6 +232,7 @@ dnmtools_SOURCES += src/utils/unxcounts.cpp
 
 dnmtools_SOURCES += src/amrfinder/allelicmeth.cpp
 dnmtools_SOURCES += src/amrfinder/amrfinder.cpp
+dnmtools_SOURCES += src/amrfinder/amrscores.cpp
 dnmtools_SOURCES += src/amrfinder/amrtester.cpp
 
 dnmtools_SOURCES += src/radmeth/dmr.cpp

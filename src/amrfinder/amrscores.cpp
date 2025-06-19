@@ -66,6 +66,7 @@ read_epiread(bamxx::bgzf_file &f, epiread &er) {
   kstring_t line = KS_INITIALIZE;
   if (getline(f, line))
     er = epiread(ks_str(&line), ks_len(&line));
+  ks_free(&line);
   return f;
 }
 

@@ -17,34 +17,48 @@
 #ifndef EPIREAD
 #define EPIREAD
 
+#include "smithlab_utils.hpp"
 #include <string>
 #include <vector>
-#include "smithlab_utils.hpp"
 
 struct epiread {
   std::string chr{};
-  size_t pos{};
+  std::size_t pos{};
   std::string seq{};
   epiread() = default;
   epiread(const std::string &line);
-  epiread(const size_t p, const std::string &s) : pos(p), seq(s) {}
-  epiread(const std::string &c, const size_t p, const std::string &s)
-      : chr(c), pos(p), seq(s) {}
+  epiread(const std::size_t p, const std::string &s) : pos(p), seq(s) {}
+  epiread(const std::string &c, const std::size_t p, const std::string &s) :
+    chr(c), pos(p), seq(s) {}
+  epiread(const char *line, const std::size_t len);
 
-  bool operator<(const epiread &other) const {
+  bool
+  operator<(const epiread &other) const {
     return (chr < other.chr || (chr == other.chr && pos < other.pos));
   }
-  size_t end() const {return pos + seq.length();}
-  size_t length() const {return seq.length();}
+  std::size_t
+  end() const {
+    return pos + seq.length();
+  }
+  std::size_t
+  length() const {
+    return std::size(seq);
+  }
+  std::size_t
+  size() const {
+    return std::size(seq);
+  }
 };
 
-std::istream& operator>>(std::istream &in, epiread &er);
-std::ostream& operator<<(std::ostream &out, const epiread &er);
+std::istream &
+operator>>(std::istream &in, epiread &er);
+std::ostream &
+operator<<(std::ostream &out, const epiread &er);
 
-size_t
+std::size_t
 adjust_read_offsets(std::vector<epiread> &reads);
 
-size_t
+std::size_t
 get_n_cpgs(const std::vector<epiread> &reads);
 
 bool

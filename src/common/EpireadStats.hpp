@@ -23,14 +23,25 @@
 #include "Epiread.hpp"
 
 struct small_epiread {
-  uint32_t pos{};
+  std::uint32_t pos{};
   std::string seq{};
 
-  small_epiread(uint32_t p, std::string s): pos{p}, seq{s} {}
+  small_epiread(std::uint32_t p, std::string s) : pos{p}, seq{s} {}
 
-  uint32_t end() const { return pos + std::size(seq); }
+  [[nodiscard]] std::uint32_t
+  end() const {
+    return pos + std::size(seq);
+  }
 
-  uint32_t length() const { return std::size(seq); }
+  [[nodiscard]] std::uint32_t
+  length() const {
+    return std::size(seq);
+  }
+
+  [[nodiscard]] std::size_t
+  size() const {
+    return std::size(seq);
+  }
 };
 
 double
@@ -71,8 +82,8 @@ test_asm_bic(const size_t max_itr, const bool crct_for_read_count,
              std::vector<small_epiread> &reads);
 
 struct EpireadStats {
-  double test_asm(std::vector<small_epiread> &reads,
-                  bool &is_significant) const {
+  double
+  test_asm(std::vector<small_epiread> &reads, bool &is_significant) const {
     const double score = use_bic ? test_asm_bic(max_itr, crct_for_read_count,
                                                 low_prob, high_prob, reads)
                                  : test_asm_lrt(max_itr, crct_for_read_count,

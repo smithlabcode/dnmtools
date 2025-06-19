@@ -31,6 +31,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 [[nodiscard]]
@@ -327,7 +328,7 @@ main_amrscores(int argc, const char **argv) {
     auto [names, seqs] = read_genome(genome_file);
     for (auto i = 0u; i < std::size(names); ++i) {
       cpgs.emplace_back(get_cpg_positions(seqs[i]));
-      std::swap(seqs[i], std::string{});
+      std::string().swap(seqs[i]);
     }
 
     std::unordered_map<std::string, std::uint32_t> name_to_idx;
@@ -369,7 +370,7 @@ main_amrscores(int argc, const char **argv) {
           const auto scores =
             process_chrom(verbose, n_threads, min_obs_per_cpg, window_size,
                           epistat, prev_chrom, epireads);
-          std::swap(epireads, std::vector<epi_r>());
+          std::vector<epi_r>().swap(epireads);
           auto chrom_itr = name_to_idx.find(prev_chrom);
           if (chrom_itr == std::cend(name_to_idx))
             throw std::runtime_error("failed to find chrom: " + prev_chrom);
@@ -393,7 +394,7 @@ main_amrscores(int argc, const char **argv) {
     if (!epireads.empty()) {
       auto scores = process_chrom(verbose, n_threads, min_obs_per_cpg,
                                   window_size, epistat, prev_chrom, epireads);
-      std::swap(epireads, std::vector<epi_r>());
+      std::vector<epi_r>().swap(epireads);
       auto chrom_itr = name_to_idx.find(prev_chrom);
       if (chrom_itr == std::cend(name_to_idx))
         throw std::runtime_error("failed to find chrom: " + prev_chrom);

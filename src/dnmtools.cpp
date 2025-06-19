@@ -71,6 +71,8 @@ main_allelicmeth(int argc, const char **argv);
 int
 main_amrfinder(int argc, const char **argv);
 int
+main_amrscores(int argc, const char **argv);
+int
 main_amrtester(int argc, const char **argv);
 int
 main_bsrate(int argc, const char **argv);
@@ -188,6 +190,7 @@ main(int argc, const char **argv) {
  {{{"states",    "convert reads in SAM format into methylation states at CpGs", main_methstates},
    {"allelic",   "get probability of ASM for each pair of neighboring CpGs", main_allelicmeth},
    {"amrfinder", "identify regions of ASM in the genome", main_amrfinder},
+   {"amrscores", "generate scores for each site as used in amrfinder", main_amrscores},
    {"amrtester", "test a set of genomic intervals for ASM", main_amrtester}}}},
 
 {"differential methylation (DM)",

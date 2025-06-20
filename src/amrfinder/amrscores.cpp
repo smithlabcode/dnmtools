@@ -222,6 +222,8 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
     threads.emplace_back([&, thread_id, b_beg, b_end] {
       std::vector<float> curr_scores;
       for (auto b = b_beg; b != b_end; ++b) {
+        // ADS: below, we could do binary search for the first read_idx of the
+        // set of blocks, but this does not seem to be a bottleneck
         std::size_t read_idx = 0;
         for (auto start_pos = b->first; start_pos < b->second; ++start_pos) {
           if (n_epireads == read_idx) {
@@ -257,10 +259,10 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
 
   // make scores associated with the CpG site in the middle of the window
   if (std::size(all_scores) > window_size) {
-    std::copy(std::begin(all_scores) + window_size / 2, std::end(all_scores),
-              std::begin(all_scores));
-    const auto valid_region = std::size(all_scores) - (window_size + 1) / 2;
-    std::fill_n(std::begin(all_scores) + valid_region, window_size / 2, 0.0);
+    std::copy_backward(std::cbegin(all_scores),
+                       std::cend(all_scores) - window_size / 2,
+                       std::end(all_scores));
+    std::fill_n(std::begin(all_scores), window_size / 2, 0.0);
   }
   return all_scores;
 }

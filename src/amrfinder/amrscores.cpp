@@ -95,7 +95,7 @@ using epi_r = small_epiread;
 // Code for converting between cpg and base pair coordinates below
 [[nodiscard]] static inline std::vector<std::uint32_t>
 get_cpg_positions(const std::string &s) {
-  const auto is_cpg[](const auto a, const auto b) {
+  const auto is_cpg = [](const auto a, const auto b) {
     return (a == 'C' || a == 'c') && (b == 'g' || b == 'G');
   };
   auto cpg_count = 0u;
@@ -207,8 +207,9 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
 
   const auto n_blocks = n_threads * blocks_per_thread;
 
+  const std::uint32_t lim = n_cpgs;
   const auto blocks =
-    get_block_bounds(0u, n_cpgs, (n_cpgs + n_blocks - 1) / n_blocks);
+    get_block_bounds(0u, lim, (lim + n_blocks - 1) / n_blocks);
   const auto blocks_beg = std::cbegin(blocks);
   const std::uint32_t n_per = (n_blocks + n_threads - 1) / n_threads;
 

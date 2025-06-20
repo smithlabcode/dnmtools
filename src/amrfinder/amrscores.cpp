@@ -95,13 +95,16 @@ using epi_r = small_epiread;
 // Code for converting between cpg and base pair coordinates below
 [[nodiscard]] static inline std::vector<std::uint32_t>
 get_cpg_positions(const std::string &s) {
+  const auto is_cpg[](const auto a, const auto b) {
+    return (a == 'C' || a == 'c') && (b == 'g' || b == 'G');
+  };
   auto cpg_count = 0u;
   for (std::uint32_t i = 0; i + 1 < std::size(s); ++i)
-    cpg_count += (s[i] == 'C' && s[i + 1] == 'G');
+    cpg_count += is_cpg(s[i], s[i + 1]);
   std::vector<std::uint32_t> cpgs(cpg_count);
   std::uint32_t j = 0;
   for (std::uint32_t i = 0; i + 1 < std::size(s); ++i)
-    if (s[i] == 'C' && s[i + 1] == 'G')
+    if (is_cpg(s[i], s[i + 1]))
       cpgs[j++] = i;
   return cpgs;
 }
@@ -123,10 +126,10 @@ static std::vector<epi_r>
 get_current_epireads(const std::vector<epi_r> &epireads,
                      const std::size_t max_len, const std::size_t cpg_window,
                      const std::size_t start_pos, std::size_t &read_id) {
-  if (read_id == std::size(epireads))
-    return {};
-
   const auto n_epi = std::size(epireads);
+
+  if (std::size(epireads) <= read_id)
+    return {};
 
   while (read_id < std::size(epireads) &&
          epireads[read_id].pos + max_len <= start_pos)
@@ -175,8 +178,9 @@ get_block_bounds(const T start_pos, const T end_pos, const T block_size) {
 
 static std::vector<float>
 process_chrom(const bool verbose, const std::uint32_t n_threads,
-              const std::size_t min_obs_per_cpg, const std::size_t window_size,
-              const EpireadStats &epistat, const std::string &chrom_name,
+              const std::size_t n_cpgs, const std::size_t min_obs_per_cpg,
+              const std::size_t window_size, const EpireadStats &epistat,
+              const std::string &chrom_name,
               const std::vector<epi_r> &epireads) {
   constexpr auto blocks_per_thread = 8u;
 
@@ -186,25 +190,29 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
 
   // minimum observations per window to be able to do the stats calcs
   const std::size_t min_obs = window_size * min_obs_per_cpg;
+  const auto n_epireads = std::size(epireads);
 
-  const std::size_t n_cpgs = get_n_cpgs(epireads);
+  const std::size_t n_cpgs_from_epireads = get_n_cpgs(epireads);
+  if (n_cpgs < n_cpgs_from_epireads)
+    throw std::runtime_error(
+      "cpgs from genome: " + std::to_string(n_cpgs) +
+      ", cpgs from reads: " + std::to_string(n_cpgs_from_epireads));
+
   if (verbose)
     std::cerr << "processing " << chrom_name << " "
-              << "[reads: " << std::size(epireads) << "] "
+              << "[reads: " << n_epireads << "] "
               << "[cpgs: " << n_cpgs << "]" << std::endl;
   if (n_cpgs < window_size)
     return {};
 
   const auto n_blocks = n_threads * blocks_per_thread;
 
-  const std::uint32_t lim = n_cpgs;
   const auto blocks =
-    get_block_bounds(0u, lim, (lim + n_blocks - 1) / n_blocks);
+    get_block_bounds(0u, n_cpgs, (n_cpgs + n_blocks - 1) / n_blocks);
   const auto blocks_beg = std::cbegin(blocks);
   const std::uint32_t n_per = (n_blocks + n_threads - 1) / n_threads;
 
   std::vector<std::vector<float>> scores(n_threads);
-  bool is_sig{};  // dummy
 
   std::vector<std::thread> threads;
   for (auto thread_id = 0u; thread_id < n_threads; ++thread_id) {
@@ -215,9 +223,14 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
       for (auto b = b_beg; b != b_end; ++b) {
         std::size_t start_idx = 0;
         for (auto start_pos = b->first; start_pos < b->second; ++start_pos) {
+          if (n_epireads == start_idx) {
+            curr_scores.push_back(0.0);
+            continue;
+          }
           auto curr_epireads = get_current_epireads(
             epireads, max_epiread_len, window_size, start_pos, start_idx);
           const auto n_states = total_states(curr_epireads);
+          bool is_sig{};
           const auto score =
             n_states < min_obs ? 0.0 : epistat.test_asm(curr_epireads, is_sig);
           curr_scores.push_back(score);
@@ -368,13 +381,14 @@ main_amrscores(int argc, const char **argv) {
     while (read_epiread(in, er)) {
       if (er.chr != prev_chrom) {
         if (!epireads.empty()) {
-          const auto scores =
-            process_chrom(verbose, n_threads, min_obs_per_cpg, window_size,
-                          epistat, prev_chrom, epireads);
-          std::vector<epi_r>().swap(epireads);
           auto chrom_itr = name_to_idx.find(prev_chrom);
           if (chrom_itr == std::cend(name_to_idx))
             throw std::runtime_error("failed to find chrom: " + prev_chrom);
+          const auto n_cpgs = std::size(cpgs[chrom_itr->second]);
+          const auto scores =
+            process_chrom(verbose, n_threads, n_cpgs, min_obs_per_cpg,
+                          window_size, epistat, prev_chrom, epireads);
+          std::vector<epi_r>().swap(epireads);
           const int m = std::sprintf(buf.data(), "%s\t", prev_chrom.data());
           if (m <= 0)
             throw std::runtime_error("failed to write output line");
@@ -393,12 +407,14 @@ main_amrscores(int argc, const char **argv) {
       epireads.emplace_back(er.pos, er.seq);
     }
     if (!epireads.empty()) {
-      auto scores = process_chrom(verbose, n_threads, min_obs_per_cpg,
-                                  window_size, epistat, prev_chrom, epireads);
-      std::vector<epi_r>().swap(epireads);
       auto chrom_itr = name_to_idx.find(prev_chrom);
       if (chrom_itr == std::cend(name_to_idx))
         throw std::runtime_error("failed to find chrom: " + prev_chrom);
+      const auto n_cpgs = std::size(cpgs[chrom_itr->second]);
+      const auto scores =
+        process_chrom(verbose, n_threads, n_cpgs, min_obs_per_cpg, window_size,
+                      epistat, prev_chrom, epireads);
+      std::vector<epi_r>().swap(epireads);
       const int m = std::sprintf(buf.data(), "%s\t", prev_chrom.data());
       if (m <= 0)
         throw std::runtime_error("failed to write output line");

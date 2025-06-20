@@ -125,20 +125,20 @@ clip_read(const std::size_t start_pos, const std::size_t end_pos, epi_r r) {
 static std::vector<epi_r>
 get_current_epireads(const std::vector<epi_r> &epireads,
                      const std::size_t max_len, const std::size_t cpg_window,
-                     const std::size_t start_pos, std::size_t &read_id) {
+                     const std::size_t start_pos, std::size_t &read_idx) {
   const auto n_epi = std::size(epireads);
 
-  if (std::size(epireads) <= read_id)
+  if (std::size(epireads) <= read_idx)
     return {};
 
-  while (read_id < std::size(epireads) &&
-         epireads[read_id].pos + max_len <= start_pos)
-    ++read_id;
+  while (read_idx < std::size(epireads) &&
+         epireads[read_idx].pos + max_len <= start_pos)
+    ++read_idx;
 
   const auto end_pos = start_pos + cpg_window;
 
   std::vector<epi_r> current_epireads;
-  for (auto i = read_id; i < n_epi && epireads[i].pos < end_pos; ++i)
+  for (auto i = read_idx; i < n_epi && epireads[i].pos < end_pos; ++i)
     if (epireads[i].end() > start_pos)
       current_epireads.push_back(clip_read(start_pos, end_pos, epireads[i]));
 
@@ -163,13 +163,14 @@ get_n_cpgs(const std::vector<epi_r> &reads) {
 
 template <typename T>
 static inline std::vector<std::pair<T, T>>
-get_block_bounds(const T start_pos, const T end_pos, const T block_size) {
-  if (block_size == 0)
-    return {{start_pos, end_pos}};
+get_block_bounds(const T n_elements, const T n_blocks) {
   std::vector<std::pair<T, T>> blocks;
-  auto block_start = start_pos;
-  while (block_start < end_pos) {
-    const auto block_end = std::min({block_start + block_size, end_pos});
+  const T q = n_elements / n_blocks;
+  const T r = n_elements - q * n_blocks;
+  T block_start{};
+  for (std::size_t i = 0; i < n_blocks; ++i) {
+    const auto sz = (i < r) ? q + 1 : q;
+    const auto block_end = block_start + sz;
     blocks.emplace_back(block_start, block_end);
     block_start = block_end;
   }
@@ -205,31 +206,30 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
   if (n_cpgs < window_size)
     return {};
 
-  const auto n_blocks = n_threads * blocks_per_thread;
-
-  const std::uint32_t lim = n_cpgs;
-  const auto blocks =
-    get_block_bounds(0u, lim, (lim + n_blocks - 1) / n_blocks);
+  const std::size_t n_blocks = n_threads * blocks_per_thread;
+  const auto blocks = get_block_bounds(n_cpgs, n_blocks);
   const auto blocks_beg = std::cbegin(blocks);
-  const std::uint32_t n_per = (n_blocks + n_threads - 1) / n_threads;
+  assert(std::size(blocks) == n_blocks);
 
   std::vector<std::vector<float>> scores(n_threads);
 
   std::vector<std::thread> threads;
-  for (auto thread_id = 0u; thread_id < n_threads; ++thread_id) {
-    const auto b_beg = blocks_beg + thread_id * n_per;
-    const auto b_end = blocks_beg + std::min((thread_id + 1) * n_per, n_blocks);
+  for (auto thread_id = 0ul; thread_id < n_threads; ++thread_id) {
+    const auto b_beg =
+      blocks_beg + std::min(thread_id * blocks_per_thread, n_blocks);
+    const auto b_end =
+      blocks_beg + std::min((thread_id + 1) * blocks_per_thread, n_blocks);
     threads.emplace_back([&, thread_id, b_beg, b_end] {
       std::vector<float> curr_scores;
       for (auto b = b_beg; b != b_end; ++b) {
-        std::size_t start_idx = 0;
+        std::size_t read_idx = 0;
         for (auto start_pos = b->first; start_pos < b->second; ++start_pos) {
-          if (n_epireads == start_idx) {
+          if (n_epireads == read_idx) {
             curr_scores.push_back(0.0);
             continue;
           }
           auto curr_epireads = get_current_epireads(
-            epireads, max_epiread_len, window_size, start_pos, start_idx);
+            epireads, max_epiread_len, window_size, start_pos, read_idx);
           const auto n_states = total_states(curr_epireads);
           bool is_sig{};
           const auto score =
@@ -253,6 +253,7 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
     scr_itr = std::copy(std::cbegin(s), std::cend(s), scr_itr);
 
   assert(scr_itr == std::cend(all_scores));
+  assert(std::size(all_scores) == n_cpgs);
 
   // make scores associated with the CpG site in the middle of the window
   if (std::size(all_scores) > window_size) {
@@ -389,6 +390,7 @@ main_amrscores(int argc, const char **argv) {
           const auto scores =
             process_chrom(verbose, n_threads, n_cpgs, min_obs_per_cpg,
                           window_size, epistat, prev_chrom, epireads);
+          assert(std::size(scores) == n_cpgs);
           std::vector<epi_r>().swap(epireads);
           const int m = std::sprintf(buf.data(), "%s\t", prev_chrom.data());
           if (m <= 0)
@@ -415,6 +417,7 @@ main_amrscores(int argc, const char **argv) {
       const auto scores =
         process_chrom(verbose, n_threads, n_cpgs, min_obs_per_cpg, window_size,
                       epistat, prev_chrom, epireads);
+      assert(std::size(scores) == n_cpgs);
       std::vector<epi_r>().swap(epireads);
       const int m = std::sprintf(buf.data(), "%s\t", prev_chrom.data());
       if (m <= 0)

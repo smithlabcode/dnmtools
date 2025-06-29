@@ -267,6 +267,26 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
   return all_scores;
 }
 
+static inline void
+write_output(std::ofstream &out, const std::string &chrom_name,
+             const std::vector<std::uint32_t> &cpgs,
+             const std::vector<float> &scores) {
+  static constexpr auto buf_size = 128ul;
+  static const auto excpt = std::runtime_error("failed to write output line");
+  static std::array<char, buf_size> buf{};
+  const int m = std::sprintf(buf.data(), "%s\t", chrom_name.data());
+  if (m <= 0)
+    throw excpt;
+  auto j = std::cbegin(cpgs);
+  auto cursor = buf.data() + m;
+  for (const auto scr : scores) {
+    const int n = std::sprintf(cursor, "%d\t%.6g\n", *j++, scr);
+    if (n <= 0)
+      throw excpt;
+    out.write(buf.data(), m + n);
+  }
+}
+
 int
 main_amrscores(int argc, const char **argv) {
   try {
@@ -379,32 +399,19 @@ main_amrscores(int argc, const char **argv) {
     std::vector<epi_r> epireads;
     std::string prev_chrom;
     std::vector<std::string> chrom_names;
-    static constexpr auto buf_size = 128ul;
-    std::array<char, buf_size> buf{};
 
     while (read_epiread(in, er)) {
       if (er.chr != prev_chrom) {
         if (!epireads.empty()) {
-          auto chrom_itr = name_to_idx.find(prev_chrom);
+          const auto chrom_itr = name_to_idx.find(prev_chrom);
           if (chrom_itr == std::cend(name_to_idx))
             throw std::runtime_error("failed to find chrom: " + prev_chrom);
-          const auto n_cpgs = std::size(cpgs[chrom_itr->second]);
-          const auto scores =
-            process_chrom(verbose, n_threads, n_cpgs, min_obs_per_cpg,
-                          window_size, epistat, prev_chrom, epireads);
-          assert(std::size(scores) == n_cpgs);
+          const auto scores = process_chrom(
+            verbose, n_threads, std::size(cpgs[chrom_itr->second]),
+            min_obs_per_cpg, window_size, epistat, prev_chrom, epireads);
+          assert(std::size(scores) == std::size(cpgs[chrom_itr->second]));
           std::vector<epi_r>().swap(epireads);
-          const int m = std::sprintf(buf.data(), "%s\t", prev_chrom.data());
-          if (m <= 0)
-            throw std::runtime_error("failed to write output line");
-          auto j = std::cbegin(cpgs[chrom_itr->second]);
-          auto cursor = buf.data() + m;
-          for (const auto scr : scores) {
-            const int n = std::sprintf(cursor, "%d\t%.6g\n", *j++, scr);
-            if (n <= 0)
-              throw std::runtime_error("failed to write output line");
-            out.write(buf.data(), m + n);
-          }
+          write_output(out, prev_chrom, cpgs[chrom_itr->second], scores);
         }
         chrom_names.emplace_back(er.chr);
         prev_chrom = er.chr;
@@ -412,26 +419,15 @@ main_amrscores(int argc, const char **argv) {
       epireads.emplace_back(er.pos, er.seq);
     }
     if (!epireads.empty()) {
-      auto chrom_itr = name_to_idx.find(prev_chrom);
+      const auto chrom_itr = name_to_idx.find(prev_chrom);
       if (chrom_itr == std::cend(name_to_idx))
         throw std::runtime_error("failed to find chrom: " + prev_chrom);
-      const auto n_cpgs = std::size(cpgs[chrom_itr->second]);
-      const auto scores =
-        process_chrom(verbose, n_threads, n_cpgs, min_obs_per_cpg, window_size,
-                      epistat, prev_chrom, epireads);
-      assert(std::size(scores) == n_cpgs);
+      const auto scores = process_chrom(
+        verbose, n_threads, std::size(cpgs[chrom_itr->second]), min_obs_per_cpg,
+        window_size, epistat, prev_chrom, epireads);
+      assert(std::size(scores) == std::size(cpgs[chrom_itr->second]));
       std::vector<epi_r>().swap(epireads);
-      const int m = std::sprintf(buf.data(), "%s\t", prev_chrom.data());
-      if (m <= 0)
-        throw std::runtime_error("failed to write output line");
-      auto j = std::cbegin(cpgs[chrom_itr->second]);
-      auto cursor = buf.data() + m;
-      for (const auto scr : scores) {
-        const int n = std::sprintf(cursor, "%d\t%.6g\n", *j++, scr);
-        if (n <= 0)
-          throw std::runtime_error("failed to write output line");
-        out.write(buf.data(), m + n);
-      }
+      write_output(out, prev_chrom, cpgs[chrom_itr->second], scores);
     }
   }
   catch (const std::exception &e) {

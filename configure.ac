@@ -14,7 +14,7 @@ dnl but WITHOUT ANY WARRANTY; without even the implied warranty of
 dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 dnl General Public License for more details.
 
-AC_INIT([dnmtools], [1.4.4], [andrewds@usc.edu],
+AC_INIT([dnmtools], [1.5.0], [andrewds@usc.edu],
         [dnmtools], [https://github.com/smithlabcode/dnmtools])
 dnl the config.h is #included in the sources for version info
 AC_CONFIG_HEADERS([config.h])

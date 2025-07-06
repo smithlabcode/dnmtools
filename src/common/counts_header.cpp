@@ -76,7 +76,8 @@ write_counts_header_from_file(const string &header_file, bgzf_file &out) {
   while (getline(in, line)) {
     out.write(line + '\n');
     const auto name = line.substr(1, line.find(' ') - 1);
-    chrom_order.emplace(name, chrom_count++);
+    if (!name.empty() && name != "DNMTOOLS")
+      chrom_order.emplace(name, chrom_count++);
   }
   in.close();
 

@@ -80,6 +80,11 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Get version number
+        id: vn
+        run: awk '/AC_INIT/ {print "vn="$2}' configure.ac | sed "s/\[//; s/\]//; s/,//" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -92,13 +97,9 @@ jobs:
           binaries/dnmtools-*/dnmtools_* \
           -output dnmtools
           chmod +x dnmtools
-      - name: Get version number
-        id: vn
-        run: awk '/AC_INIT/ {print "vn="$2}' configure.ac | sed "s/\[//; s/\]//; s/,//" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ github.token }}
+          tar -cf dnmtools-${{ steps.get-vn.outputs.vn }}-macOS.tar.gz dnmtools
       - name: Upload the lipo binary
         uses: actions/upload-artifact@v4
         with:
-          name: dnmtools-${{ steps.vn.outputs.vn }}-macOS
+          name: dnmtools-${{ steps.vn.outputs.vn }}-macOS.tar.gz
           path: dnmtools

@@ -213,7 +213,7 @@ verify_chroms_available(const string &chrom_name,
 
 
 int
-main_allelicmeth(int argc, const char **argv) {
+main_allelicmeth(int argc, char *argv[]) {
 
   try {
 

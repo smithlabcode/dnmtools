@@ -403,7 +403,7 @@ struct rename_amr {
 };
 
 int
-main_amrfinder(int argc, const char **argv) {
+main_amrfinder(int argc, char *argv[]) {
   try {
     const std::string description =
       "identify regions of allele-specific methylation";

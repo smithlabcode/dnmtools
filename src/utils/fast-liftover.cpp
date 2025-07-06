@@ -108,7 +108,7 @@ lift_site(const unordered_map<string, liftover_index> &index,
 }
 
 int
-main_fast_liftover(int argc, const char **argv) {
+main_fast_liftover(int argc, char *argv[]) {
   try {
     string indexfile;
     string tofile;

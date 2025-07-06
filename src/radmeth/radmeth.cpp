@@ -275,7 +275,7 @@ verify_multiple_levels(const Regression &full_regression,
  * proportions and design matrix
  */
 int
-main_radmeth(int argc, const char **argv) {
+main_radmeth(int argc, char *argv[]) {
   try {
     static const string description =
       "calculate differential methylation scores";

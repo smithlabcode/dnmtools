@@ -99,7 +99,7 @@ process_chrom_with_named_lines(const string &kmer, const int offset,
 }
 
 auto
-kmersites(const int argc, const char **argv) -> int {
+kmersites(const int argc, char *argv[]) -> int {
   try {
 
     bool verbose = false;

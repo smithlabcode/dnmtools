@@ -386,7 +386,7 @@ check_sorted_within_chroms(T first, const T last) {
 }
 
 int
-main_hmr(int argc, const char **argv) {
+main_hmr(int argc, char *argv[]) {
 
   try {
 

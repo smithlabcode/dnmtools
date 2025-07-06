@@ -229,7 +229,7 @@ operator>>(bgzf_file &s, FASTQRecord &r) {
 }
 
 int
-main_guessprotocol(int argc, const char **argv) {
+main_guessprotocol(int argc, char *argv[]) {
 
   try {
 

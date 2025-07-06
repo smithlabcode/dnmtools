@@ -286,7 +286,7 @@ process_chrom(const bool VERBOSE, const std::size_t cpg_window,
 }
 
 int
-main_methentropy(int argc, const char **argv) {
+main_methentropy(int argc, char *argv[]) {
 
   try {
 

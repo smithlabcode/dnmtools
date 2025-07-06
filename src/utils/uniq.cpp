@@ -277,7 +277,7 @@ uniq(const bool add_dup_count, const uint32_t max_buffer_size,
 }
 
 int
-main_uniq(int argc, const char **argv) {
+main_uniq(int argc, char *argv[]) {
   try {
     uint32_t max_buffer_size = std::numeric_limits<uint32_t>::max();
     bool VERBOSE = false;

@@ -154,7 +154,7 @@ merge(istream &cpg_stream, ostream &dmr_stream, double cutoff) {
 }
 
 int
-main_radmeth_merge(int argc, const char **argv) {
+main_radmeth_merge(int argc, char *argv[]) {
 
   try {
 

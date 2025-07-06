@@ -534,7 +534,7 @@ process_reads(const bool VERBOSE, const bool show_progress,
 }
 
 int
-main_counts(int argc, const char **argv) {
+main_counts(int argc, char *argv[]) {
 
   try {
 

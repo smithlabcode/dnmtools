@@ -379,7 +379,7 @@ format(const string &cmd, const size_t n_threads, const string &inputfile,
 }
 
 int
-main_format(int argc, const char **argv) {
+main_format(int argc, char *argv[]) {
   try {
     size_t n_reads_to_check = 1000000;
 

@@ -127,7 +127,7 @@ process_sites(const bool verbose, T &in, T &out) {
 }
 
 int
-main_symmetric_cpgs(int argc, const char **argv) {
+main_symmetric_cpgs(int argc, char *argv[]) {
   try {
     // file types from HTSlib use "-" for the filename to go to stdout
     string outfile{"-"};

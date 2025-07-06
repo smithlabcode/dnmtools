@@ -564,7 +564,7 @@ process_cpg_sites(const bool verbose, const bool add_missing_chroms,
 }
 
 int
-main_unxcounts(int argc, const char **argv) {
+main_unxcounts(int argc, char *argv[]) {
   try {
     bool verbose = false;
     bool add_missing_chroms = false;

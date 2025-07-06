@@ -19,6 +19,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Get version number
+        id: get-vn
+        run: |
+          awk '/AC_INIT/ {print "vn="$2}' configure.ac | sed "s/\[//; s/\]//; s/,//" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Configure and build
         env:
           SCRIPT: |
@@ -54,17 +60,12 @@ jobs:
             autoreconf -i && \
             mkdir build && cd build && \
             ../configure --with-libdeflate && \
-            make -j4 LDFLAGS="-static-libgcc -static-libstdc++ -s"
+            make -j4 LDFLAGS="-static-libgcc -static-libstdc++ -s" && \
+            tar -cf dnmtools-${{ steps.get-vn.outputs.vn }}-Linux.tar.gz dnmtools
         run: |
           docker exec build-container bash -c "$SCRIPT"
-      - name: Get version number
-        id: get-vn
-        run: |
-          awk '/AC_INIT/ {print "vn="$2}' configure.ac | sed "s/\[//; s/\]//; s/,//" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ github.token }}
       - name: Upload the binary
         uses: actions/upload-artifact@v4
         with:
-          name: dnmtools-${{ steps.get-vn.outputs.vn }}-Linux
-          path: build/dnmtools
+          name: dnmtools-${{ steps.get-vn.outputs.vn }}-Linux.tar.gz
+          path: build/dnmtools-${{ steps.get-vn.outputs.vn }}-Linux.tar.gz

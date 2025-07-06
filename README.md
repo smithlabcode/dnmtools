@@ -23,28 +23,25 @@ The documentation for DNMTools can be found
 ## Installation
 
 - **Linux**
-  The binary should work on almost any Linux system as recent as 2017: Ubuntu
-  16.04+, Debian 9+, Fedora 24+, openSUSE Leap 42.3+, and RHEL/CentOS 8+.
-  [Download](https://github.com/smithlabcode/dnmtools/releases/download/v1.5.0/dnmtools-1.5.0-Linux.tar.gz).
+  [binary](https://github.com/smithlabcode/dnmtools/releases/download/v1.5.0/dnmtools-1.5.0-Linux.tar.gz).
+  Should work on any Linux distribution since roughly 2017.
 
 - **Mac**
-  The Mac binary should work on any Mac hardware and macOS-13 (Ventura) or
-  newer.
-  [Download](https://github.com/smithlabcode/dnmtools/releases/download/v1.5.0/dnmtools-1.5.0-macOS.tar.gz).
+  [binary](https://github.com/smithlabcode/dnmtools/releases/download/v1.5.0/dnmtools-1.5.0-macOS.tar.gz).
+  Should work on any Mac hardware and macOS-13 (Ventura) or newer.
 
 - **Conda**
   ```console
   conda install -c bioconda dnmtools
   ```
 
-- **Build from source**
-  Get the source here:
+- **Source**
   [dnmtools-1.5.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.5.0/dnmtools-1.5.0.tar.gz). Dependencies:
   [GSL](http://www.gnu.org/software/gsl),
   [HTSlib](https://github.com/samtools/htslib),
   [libdeflate](https://github.com/ebiggers/libdeflate) and
-  [ZLib](https://github.com/madler/zlib). Installing GSL and HTSlib is usually enough.
-  See below for system-specific details.
+  [ZLib](https://github.com/madler/zlib). Installing HTSlib as a package
+  should also give you ZLib and libdeflate.  System-specific details below.
 
   Build DNMTools like this:
   ```console
@@ -55,7 +52,7 @@ The documentation for DNMTools can be found
   make install
   ```
 
-  Get dependencies and a compiler on (these might change):
+  To get dependencies and a compiler on (these might with OS/package updates):
 
   Ubuntu/Debian
   ```console
@@ -67,19 +64,22 @@ The documentation for DNMTools can be found
   dnf install @c-development @development-tools htslib-devel gsl-devel awk
   ```
 
-  Homebrew (see below)
+  Homebrew (see notes below)
   ```console
   brew install gcc htslib gsl
   ```
 
-  Conda (see below)
+  Conda (see notes below)
   ```console
-  conda create -n build-env -c conda-forge -c bioconda gcc gxx make autoconf automake htslib gsl && \
+  conda create -n build-env -c conda-forge -c bioconda \
+      gcc gxx make autoconf automake htslib gsl zlib binutils && \
   conda activate build-env
   ```
 
-  If you used Homebrew or Conda, you might need to set additional environment
-  variables or run configure differently. For example with Homebrew:
+  Notes: If you use only Homebrew or only Conda to setup your environment, you
+  could need additional dependencies, and some of what I listed you might
+  already have. You might need to set additional environment variables or run
+  configure differently. For example with Homebrew:
   ```console
   ./configure CPPFLAGS="-I$(brew --prefix)/include" LDFLAGS="-L$(brew --prefix)/lib"
   ```

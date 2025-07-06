@@ -25,10 +25,10 @@ More documentation will come as this tool evolves, but for now:
   the number of reads because probabilities on modifications are used, so
   methylation levels for each site are expected values (the best estimates we
   can make), and do not use arbitrary cutoffs.
-- Other commands in DNMTools have been modified to use this form of expected
-  methylation level, and behave as previously for bisulfite sequencing data,
-  but have updated behavior when the data is from nanopore. The user does not
-  need to specify the technology used.
+- Several other commands in DNMTools have been modified to use this form of
+  expected methylation level, and behave as previously for bisulfite
+  sequencing data, but have updated behavior when the data is from
+  nanopore. The user does not need to specify the technology used.
 - Some commands need to use a `-relaxed` flag to work with the additional
   columns in the output from `counts-nano` compared with `counts`. For
   commands without this option, simply do `cut -f1-6` on the output of

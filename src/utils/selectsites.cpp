@@ -61,8 +61,8 @@ struct quick_buf : public std::ostringstream,
     setp(pbase(), pbase());
   }
   char const *
-  c_str() {
-    /* between c_str and insertion make sure to clear() */
+  data() {
+    /* between data() and insertion make sure to clear() */
     *pptr() = '\0';
     return pbase();
   }

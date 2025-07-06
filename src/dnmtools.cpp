@@ -19,11 +19,11 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <vector>
 
-using std::begin;
 using std::cout;
 using std::end;
 using std::endl;
@@ -34,13 +34,17 @@ using std::vector;
 
 static const string PROGRAM_NAME = "dnmtools";
 
+static const std::string license_text = R"(
+
+)";
+
 struct dnmtools_command {
   string tag;
   string description;
-  std::function<int(const int, const char **)> fun;
+  std::function<int(int, char **)> fun;
 
   auto
-  operator()(const int argc, const char **argv) const -> int {
+  operator()(const int argc, char *argv[]) const -> int {
     return fun(argc - 1, argv + 1);
   }
 };
@@ -57,87 +61,87 @@ operator<<(std::ostream &out, const dnmtools_command &cmd) -> std::ostream & {
 // ADS: not sure of best way to acquire these below beyond simply
 // declaring them here
 int
-abismal(int argc, const char **argv);
+abismal(int argc, char *argv[]);
 int
-abismalidx(int argc, const char **argv);
+abismalidx(int argc, char *argv[]);
 int
-simreads(int argc, const char **argv);
+simreads(int argc, char *argv[]);
 int
-main_counts(int argc, const char **argv);
+main_counts(int argc, char *argv[]);
 int
-main_nanocount(int argc, const char **argv);
+main_nanocount(int argc, char *argv[]);
 int
-main_allelicmeth(int argc, const char **argv);
+main_allelicmeth(int argc, char *argv[]);
 int
-main_amrfinder(int argc, const char **argv);
+main_amrfinder(int argc, char *argv[]);
 int
-main_amrtester(int argc, const char **argv);
+main_amrtester(int argc, char *argv[]);
 int
-main_bsrate(int argc, const char **argv);
+main_bsrate(int argc, char *argv[]);
 int
-main_hmr(int argc, const char **argv);
+main_hmr(int argc, char *argv[]);
 int
-main_hmr_rep(int argc, const char **argv);
+main_hmr_rep(int argc, char *argv[]);
 int
-main_hypermr(int argc, const char **argv);
+main_hypermr(int argc, char *argv[]);
 int
-main_levels(int argc, const char **argv);
+main_levels(int argc, char *argv[]);
 int
-main_methentropy(int argc, const char **argv);
+main_methentropy(int argc, char *argv[]);
 int
-main_methstates(int argc, const char **argv);
+main_methstates(int argc, char *argv[]);
 int
-main_multimethstat(int argc, const char **argv);
+main_multimethstat(int argc, char *argv[]);
 int
-main_pmd(int argc, const char **argv);
+main_pmd(int argc, char *argv[]);
 int
-main_roimethstat(int argc, const char **argv);
+main_roimethstat(int argc, char *argv[]);
 int
-main_cpgbins(int argc, const char **argv);
+main_cpgbins(int argc, char *argv[]);
 int
-main_mlml(int argc, const char **argv);
+main_mlml(int argc, char *argv[]);
 int
-main_dmr(int argc, const char **argv);
+main_dmr(int argc, char *argv[]);
 int
-main_methdiff(int argc, const char **argv);
+main_methdiff(int argc, char *argv[]);
 int
-main_radmeth_adjust(int argc, const char **argv);
+main_radmeth_adjust(int argc, char *argv[]);
 int
-main_radmeth(int argc, const char **argv);
+main_radmeth(int argc, char *argv[]);
 int
-main_radmeth_merge(int argc, const char **argv);
+main_radmeth_merge(int argc, char *argv[]);
 int
-main_clean_hairpins(int argc, const char **argv);
+main_clean_hairpins(int argc, char *argv[]);
 int
-main_uniq(int argc, const char **argv);
+main_uniq(int argc, char *argv[]);
 int
-main_fast_liftover(int argc, const char **argv);
+main_fast_liftover(int argc, char *argv[]);
 int
-main_format(int argc, const char **argv);
+main_format(int argc, char *argv[]);
 int
-main_guessprotocol(int argc, const char **argv);
+main_guessprotocol(int argc, char *argv[]);
 int
-main_lift_filter(int argc, const char **argv);
+main_lift_filter(int argc, char *argv[]);
 int
-main_merge_bsrate(int argc, const char **argv);
+main_merge_bsrate(int argc, char *argv[]);
 int
-main_merge_methcounts(int argc, const char **argv);
+main_merge_methcounts(int argc, char *argv[]);
 int
-main_selectsites(int argc, const char **argv);
+main_selectsites(int argc, char *argv[]);
 int
-main_symmetric_cpgs(int argc, const char **argv);
+main_symmetric_cpgs(int argc, char *argv[]);
 int
-metagene(int argc, const char **argv);
+metagene(int argc, char *argv[]);
 int
-main_covered(int argc, const char **argv);
+main_covered(int argc, char *argv[]);
 int
-main_xcounts(int argc, const char **argv);
+main_xcounts(int argc, char *argv[]);
 int
-main_unxcounts(int argc, const char **argv);
+main_unxcounts(int argc, char *argv[]);
 int
-main_recovered(int argc, const char **argv);
+main_recovered(int argc, char *argv[]);
 int
-kmersites(int argc, const char **argv);
+kmersites(int argc, char *argv[]);
 
 void
 print_help(
@@ -155,7 +159,7 @@ print_help(
 }
 
 int
-main(int argc, const char **argv) {
+main(int argc, char *argv[]) {
   try {
     vector<pair<string, vector<dnmtools_command>>> command_groups = {
       // clang-format off
@@ -220,13 +224,21 @@ main(int argc, const char **argv) {
       return EXIT_SUCCESS;
     }
 
+    for (auto i = 0; i < argc; ++i) {
+      if (std::string(argv[i]) == "--license") {
+        std::cout << license_text;
+        return EXIT_SUCCESS;
+      }
+    }
+
     const auto has_tag = [&](const dnmtools_command &a) {
       return a.tag == argv[1];
     };
 
     for (auto &g : command_groups) {
-      const auto the_cmd = find_if(begin(g.second), end(g.second), has_tag);
-      if (the_cmd != end(g.second))
+      const auto the_cmd =
+        std::find_if(std::cbegin(g.second), std::cend(g.second), has_tag);
+      if (the_cmd != std::cend(g.second))
         return (*the_cmd)(argc, argv);
     }
 

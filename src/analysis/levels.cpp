@@ -83,7 +83,7 @@ guess_counts_file_format(const string &filename) {
 }
 
 int
-main_levels(int argc, const char **argv) {
+main_levels(int argc, char *argv[]) {
   try {
     bool verbose = false;
     bool relaxed_mode = false;

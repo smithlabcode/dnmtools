@@ -1127,7 +1127,7 @@ struct read_processor {
 };
 
 int
-main_nanocount(int argc, const char **argv) {
+main_nanocount(int argc, char *argv[]) {
 
   try {
 

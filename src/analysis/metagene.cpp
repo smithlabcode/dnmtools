@@ -86,7 +86,7 @@ collapse_bins(const uint32_t bin_size, vector<T> &v) {
 }
 
 int
-metagene(int argc, const char **argv) {
+metagene(int argc, char *argv[]) {
   constexpr auto description =
     "Compute the information needed for metagene plots of DNA methylation    \
      levels. The columns in the output correspond to the fields calculated   \

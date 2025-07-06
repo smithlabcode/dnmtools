@@ -195,7 +195,7 @@ process_chrom(const bool report_more_info, const string &chrom_name,
 }
 
 int
-main_cpgbins(int argc, const char **argv) {
+main_cpgbins(int argc, char *argv[]) {
   try {
     static const string description = R"""(
 Compute average site methylation levels in each non-overlapping

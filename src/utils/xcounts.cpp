@@ -105,7 +105,7 @@ fill_output_buffer(const uint32_t offset, const MSite &s, T &buf) {
 }
 
 int
-main_xcounts(int argc, const char **argv) {
+main_xcounts(int argc, char *argv[]) {
   try {
     bool verbose = false;
     bool gzip_output = false;

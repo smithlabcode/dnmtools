@@ -323,7 +323,7 @@ process_sites(const bool verbose, const bool add_missing_chroms,
 
 
 int
-main_recovered(int argc, const char **argv) {
+main_recovered(int argc, char *argv[]) {
   try {
 
     bool verbose = false;

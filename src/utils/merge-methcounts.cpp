@@ -343,7 +343,7 @@ get_chroms_order(const vector<string> &filenames,
   output is in counts or fractions.
  */
 int
-main_merge_methcounts(int argc, const char **argv) {
+main_merge_methcounts(int argc, char *argv[]) {
 
   try {
 

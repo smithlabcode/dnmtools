@@ -212,7 +212,7 @@ initialize_transitions(vector<vector<double>> &trans) {
 }
 
 int
-main_hypermr(int argc, const char **argv) {
+main_hypermr(int argc, char *argv[]) {
   try {
     static const string description =
       "Identify regions of elevated methylation. Designed for "

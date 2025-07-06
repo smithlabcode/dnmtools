@@ -436,7 +436,7 @@ fdr(vector<PvalLocus> &loci) {
 
 
 int
-main_radmeth_adjust(int argc, const char **argv) {
+main_radmeth_adjust(int argc, char *argv[]) {
 
   try {
 

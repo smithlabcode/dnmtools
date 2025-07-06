@@ -180,7 +180,7 @@ get_chrom(const string &chrom_name, const vector<string> &all_chroms,
 }
 
 int
-main_methstates(int argc, const char **argv) {
+main_methstates(int argc, char *argv[]) {
   try {
     const string description =
       "Convert mapped reads in SAM format into a format that indicates binary \

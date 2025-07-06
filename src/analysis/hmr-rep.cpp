@@ -338,7 +338,7 @@ split_comma(const string &orig) {
 }
 
 int
-main_hmr_rep(int argc, const char **argv) {
+main_hmr_rep(int argc, char *argv[]) {
 
   try {
 

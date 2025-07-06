@@ -237,7 +237,7 @@ process_sites(const bool show_progress, bgzf_file &in_a, bgzf_file &in_b,
 }
 
 int
-main_methdiff(int argc, const char **argv) {
+main_methdiff(int argc, char *argv[]) {
   try {
     std::string outfile;
     double pseudocount = 1.0;

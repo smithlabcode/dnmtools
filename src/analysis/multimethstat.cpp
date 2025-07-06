@@ -528,7 +528,7 @@ check_bed_format(const string &regions_file) {
 
 
 int
-main_multimethstat(int argc, const char **argv) {
+main_multimethstat(int argc, char *argv[]) {
 
   try {
 

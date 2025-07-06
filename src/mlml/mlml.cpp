@@ -737,7 +737,7 @@ process_two_types(const double alpha,
 }
 
 int
-main_mlml(int argc, const char **argv) {
+main_mlml(int argc, char *argv[]) {
 
   try {
 

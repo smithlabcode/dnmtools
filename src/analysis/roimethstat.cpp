@@ -419,7 +419,7 @@ get_bed_columns(const string &regions_file) {
 
 
 int
-main_roimethstat(int argc, const char **argv) {
+main_roimethstat(int argc, char *argv[]) {
   try {
     static const string description = R"""(
 Compute average site methylation levels in each interval from a given

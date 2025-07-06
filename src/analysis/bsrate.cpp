@@ -468,7 +468,7 @@ write_per_read_histogram(const vector<vector<T>> &tab, const size_t n_hist_bins,
 }
 
 int
-main_bsrate(int argc, const char **argv) {
+main_bsrate(int argc, char *argv[]) {
   try {
     // assumed maximum length of a fragment
     static constexpr const size_t output_size = 10000;

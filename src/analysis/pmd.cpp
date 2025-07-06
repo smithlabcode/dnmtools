@@ -1140,7 +1140,7 @@ write_empty_summary(const string &summary_file) {
 
 
 int
-main_pmd(int argc, const char **argv) {
+main_pmd(int argc, char *argv[]) {
   try {
 
     static const size_t min_observations_for_inference = 100;

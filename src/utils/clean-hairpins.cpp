@@ -330,7 +330,7 @@ clean_hairpin::analyze_reads(bgzf_file &in1, bgzf_file &in2,
 }
 
 int
-main_clean_hairpins(int argc, const char **argv) {
+main_clean_hairpins(int argc, char *argv[]) {
 
   static const string description = "fix and stat invdup/hairpin reads";
 

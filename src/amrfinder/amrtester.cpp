@@ -187,7 +187,7 @@ ensure_regions_are_named(vector<GenomicRegion> &regions) {
 
 
 int
-main_amrtester(int argc, const char **argv) {
+main_amrtester(int argc, char *argv[]) {
 
   try {
 

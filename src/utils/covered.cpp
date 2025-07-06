@@ -53,7 +53,7 @@ get_n_reads(const kstring_t &line) {
 }
 
 int
-main_covered(int argc, const char **argv) {
+main_covered(int argc, char *argv[]) {
   try {
     size_t n_threads = 1;
 

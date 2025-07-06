@@ -99,9 +99,9 @@ jobs:
           binaries/dnmtools-*/dnmtools_* \
           -output dnmtools
           chmod +x dnmtools
-          tar -cf dnmtools-${{ steps.get-vn.outputs.vn }}-macOS.tar.gz dnmtools
+          tar -cf dnmtools-${{ steps.vn.outputs.vn }}-macOS.tar.gz dnmtools
       - name: Upload the lipo binary
         uses: actions/upload-artifact@v4
         with:
           name: dnmtools-${{ steps.vn.outputs.vn }}-macOS.tar.gz
-          path: dnmtools
+          path: dnmtools-${{ steps.vn.outputs.vn }}-macOS.tar.gz

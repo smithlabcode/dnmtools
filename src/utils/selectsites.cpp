@@ -139,7 +139,7 @@ write_stats_output(const selectsites_summary &summary,
 static void
 collapsebed(std::vector<GenomicRegion> &regions) {
   std::size_t j = 0;
-  for (std::size_t i = 1; i < std::(regions); ++i) {
+  for (std::size_t i = 1; i < std::size(regions); ++i) {
     if (regions[j].same_chrom(regions[i]) &&
         regions[i].get_start() <= regions[j].get_end()) {
       regions[j].set_end(std::max(regions[j].get_end(), regions[i].get_end()));

@@ -24,6 +24,10 @@
 #include <string>
 #include <vector>
 
+#ifdef INCLUDE_FULL_LICENSE_INFO
+#include <license.h>
+#endif
+
 using std::cout;
 using std::end;
 using std::endl;
@@ -33,10 +37,6 @@ using std::to_string;
 using std::vector;
 
 static const string PROGRAM_NAME = "dnmtools";
-
-static const std::string license_text = R"(
-
-)";
 
 struct dnmtools_command {
   string tag;
@@ -148,6 +148,9 @@ print_help(
   const vector<pair<string, vector<dnmtools_command>>> &command_groups) {
   cout << "Program: " << PROGRAM_NAME << "\n"
        << "Version: " << VERSION << "\n"
+#ifdef INCLUDE_FULL_LICENSE_INFO
+       << "License: use --license for full license info\n"
+#endif
        << "Usage: " << PROGRAM_NAME << " <command> [options]\n"
        << "Commands:" << endl;
   for (auto &&g : command_groups) {
@@ -224,12 +227,14 @@ main(int argc, char *argv[]) {
       return EXIT_SUCCESS;
     }
 
+#ifdef INCLUDE_FULL_LICENSE_INFO
     for (auto i = 0; i < argc; ++i) {
       if (std::string(argv[i]) == "--license") {
         std::cout << license_text;
         return EXIT_SUCCESS;
       }
     }
+#endif
 
     const auto has_tag = [&](const dnmtools_command &a) {
       return a.tag == argv[1];

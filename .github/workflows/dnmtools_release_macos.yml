@@ -58,6 +58,8 @@ jobs:
             CXX=g++-14 \
             LDFLAGS="-L/opt/dnmtools/lib -static-libgcc -static-libstdc++ -Wl,-dead_strip" \
             CPPFLAGS="-I/opt/dnmtools/include"
+          ../data/make_full_license_info_header.sh ../data/LICENSE > license.h
+          echo "#define INCLUDE_FULL_LICENSE_INFO 1" >> config.h
           make -j4
       - name: Rename the binary
         run: mv build/dnmtools dnmtools_$(uname -m)

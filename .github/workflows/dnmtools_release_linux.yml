@@ -60,6 +60,8 @@ jobs:
             autoreconf -i && \
             mkdir build && cd build && \
             ../configure --with-libdeflate && \
+            ../data/make_full_license_info_header.sh ../data/LICENSE > license.h && \
+            echo "#define INCLUDE_FULL_LICENSE_INFO 1" >> config.h && \
             make -j4 LDFLAGS="-static-libgcc -static-libstdc++ -s" && \
             tar -cf dnmtools-${{ steps.get-vn.outputs.vn }}-Linux.tar.gz dnmtools
         run: |

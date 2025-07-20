@@ -23,6 +23,13 @@ AM_INIT_AUTOMAKE([subdir-objects foreign])
 AC_CONFIG_MACRO_DIR([m4])
 AC_LANG(C++)
 AC_PROG_CXX
+
+# Set CXXFLAGS only if the user hasn't set them
+AS_IF([test "x$CXXFLAGS_set" != "xset"], [
+  CXXFLAGS="-O3 -DNDEBUG"
+])
+AC_MSG_NOTICE([CXXFLAGS is $CXXFLAGS])
+
 AX_CXX_COMPILE_STDCXX_17([noext], [mandatory])
 AC_PROG_RANLIB
 

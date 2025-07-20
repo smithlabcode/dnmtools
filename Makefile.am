@@ -25,7 +25,6 @@ install installdirs: SUBDIRS := $(filter-out src/smithlab_cpp src/abismal, $(SUB
 AM_CPPFLAGS = -I $(top_srcdir)/src/common -I $(top_srcdir)/src/smithlab_cpp -I $(top_srcdir)/src/bamxx
 
 AM_CXXFLAGS = -Wall -Wextra -Wpedantic -Wno-unknown-attributes
-CXXFLAGS += -O3 -DNDEBUG # default has optimization on
 
 EXTRA_DIST = \
              README.md \

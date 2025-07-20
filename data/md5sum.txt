@@ -18,7 +18,7 @@ d41d8cd98f00b204e9800998ecf8427e  tests/two_epialleles.amr
 001b9d966f62fa439b24cf2198cc3de5  tests/reads.counts.sym
 2b8a0406015458be51b8b1c9e58b3602  tests/tRex1_promoters.roi.bed
 9bdb361091d1c0626df30be8ba2c408c  tests/reads.sam
-00ca55777ac7d9cd87823bdf293a3d7f  tests/reads.fmt.sam
 98a7f3ae4bb296c32b6751e326977c51  tests/reads.fmt.srt.uniq.sam
 fa21ade51680ef2752768f02e32eb2e8  tests/reads.xcounts
 14e8f72fde8d0f669b17da6cf4a908b6  tests/reads.unxcounts
+dd6657967ff946ad4f194f1a29051f94  tests/reads.fmt.sam

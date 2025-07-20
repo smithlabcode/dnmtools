@@ -15,19 +15,20 @@
 
 #include "dnmtools_utils.hpp"
 
-#include <string>
-#include <sstream>
 #include <algorithm>
 #include <iterator>
+#include <sstream>
+#include <string>
 
-using std::string;
 using std::copy;
-using std::ostringstream;
 using std::ostream_iterator;
+using std::ostringstream;
+using std::string;
 
 auto
-get_command_line(const int argc, const char **const argv) -> string {
-  if (argc == 0) return string();
+get_command_line(const int argc, char *argv[]) -> std::string {
+  if (argc == 0)
+    return std::string{};
   std::ostringstream cmd;
   cmd << '"';
   copy(argv, argv + (argc - 1), ostream_iterator<const char *>(cmd, " "));

@@ -19,6 +19,6 @@
 #include <string>
 
 auto
-get_command_line(const int argc, const char **const argv) -> std::string;
+get_command_line(const int argc, char *argv[]) -> std::string;
 
 #endif

@@ -292,4 +292,7 @@ rlen_from_cigar(const bamxx::bam_rec &aln) {
   return bam_cigar2rlen(get_n_cigar(aln), bam_get_cigar(aln));
 }
 
+void
+revcomp_qseq(bamxx::bam_rec &aln);
+
 #endif

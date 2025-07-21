@@ -254,7 +254,6 @@ radmeth(const bool show_progress, const bool more_na_info,
   static constexpr auto prefix_fmt = "%s\t%ld\t%c\t%s\t";
   static constexpr auto suffix_fmt = "\t%ld\t%ld\t%ld\t%ld\n";
   static constexpr auto buf_size = 1024;
-  static constexpr auto n_lines_at_once = 1024;
 
   // ADS: open the data table file
   std::ifstream table_file(table_filename);
@@ -293,8 +292,7 @@ radmeth(const bool show_progress, const bool more_na_info,
   while (true) {
 
     std::uint32_t n_lines = 0;
-    while (n_lines < n_lines_at_once &&
-           std::getline(table_file, lines[n_lines]))
+    while (n_lines < n_threads && std::getline(table_file, lines[n_lines]))
       ++n_lines;
 
     if (show_progress)
@@ -402,7 +400,7 @@ radmeth(const bool show_progress, const bool more_na_info,
       out.write(bufs[i].data(), n_bytes[i]);
     }
 
-    if (n_lines < n_lines_at_once)
+    if (n_lines < n_threads)
       break;
   }
 }

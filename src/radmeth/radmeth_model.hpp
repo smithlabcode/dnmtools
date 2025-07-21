@@ -19,32 +19,70 @@
 #ifndef RADMETH_MODEL_HPP
 #define RADMETH_MODEL_HPP
 
+#include <cstdint>
+#include <istream>
 #include <string>
 #include <vector>
 
 struct Design {
   std::vector<std::string> factor_names;
   std::vector<std::string> sample_names;
-  std::vector<std::vector<double> > matrix;
-  size_t n_factors() const {return factor_names.size();}
-  size_t n_samples() const {return sample_names.size();}
+  std::vector<std::vector<double>> matrix;
+  std::vector<std::vector<double>> tmatrix;
+  std::size_t
+  n_factors() const {
+    return factor_names.size();
+  }
+  std::size_t
+  n_samples() const {
+    return sample_names.size();
+  }
 };
+
+struct mcounts {
+  std::uint32_t n_reads{};
+  std::uint32_t n_meth{};
+};
+
+[[nodiscard]] inline std::istream &
+operator>>(std::istream &in, mcounts &rm) {
+  return in >> rm.n_reads >> rm.n_meth;
+}
 
 struct SiteProportions {
   std::string chrom;
-  size_t position;
-  std::string strand;
+  std::size_t position{};
+  char strand{};
   std::string context;
-  std::vector<size_t> total;
-  std::vector<size_t> meth;
+  std::vector<mcounts> mc;
+
+  void
+  parse(const std::string &line);
 };
 
 struct Regression {
+  static double tolerance;        // 1e-4;
+  static double stepsize;         // 0.001;
+  static std::uint32_t max_iter;  // 700;
+
   Design design;
   SiteProportions props;
-  double max_loglik;
-  size_t n_factors() const {return design.n_factors();}
-  size_t n_samples() const {return design.n_samples();}
+  double max_loglik{};
+
+  [[nodiscard]] std::size_t
+  n_factors() const {
+    return design.n_factors();
+  }
+
+  [[nodiscard]] std::size_t
+  props_size() const {
+    return std::size(props.mc);
+  }
+
+  [[nodiscard]] std::size_t
+  n_samples() const {
+    return design.n_samples();
+  }
 };
 
 #endif

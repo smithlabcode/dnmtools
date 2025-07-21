@@ -16,6 +16,8 @@
  * General Public License for more details.
  */
 
+#include "radmeth_optimize.hpp"
+
 #include "radmeth_model.hpp"
 
 #include <gsl/gsl_multimin.h>

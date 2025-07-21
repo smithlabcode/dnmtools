@@ -16,15 +16,17 @@
  * General Public License for more details.
  */
 
-#include <gsl/gsl_cdf.h> // GSL header for chisqrd distribution
+#include <gsl/gsl_cdf.h>  // GSL header for chisqrd distribution
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 // smithlab headers
@@ -37,175 +39,107 @@
 #include "radmeth_optimize.hpp"
 
 using std::begin;
-using std::cerr;
 using std::cout;
 using std::distance;
 using std::end;
-using std::endl;
-using std::istringstream;
-using std::runtime_error;
-using std::sort;
-using std::string;
-using std::vector;
+
+struct file_progress {
+  double one_hundred_over_filesize{};
+  std::size_t prev_offset{};
+  explicit file_progress(const std::string &filename) :
+    one_hundred_over_filesize{100.0 / std::filesystem::file_size(filename)} {}
+  void
+  operator()(std::ifstream &in) {
+    const std::size_t curr_offset = in.tellg() * one_hundred_over_filesize;
+    if (curr_offset <= prev_offset)
+      return;
+    std::cerr << "[progress: " << std::setw(3) << curr_offset
+              << (curr_offset == 100 ? "%]\n" : "%]\r");
+    prev_offset = (curr_offset == 100) ? std::numeric_limits<std::size_t>::max()
+                                       : curr_offset;
+  }
+};
 
 static std::istream &
 operator>>(std::istream &is, Design &design) {
-  string header_encoding;
-  getline(is, header_encoding);
+  std::string header_encoding;
+  std::getline(is, header_encoding);
 
-  istringstream header_is(header_encoding);
-  string header_name;
-  while (header_is >> header_name) design.factor_names.push_back(header_name);
+  std::istringstream header_is(header_encoding);
+  std::string header_name;
+  while (header_is >> header_name)
+    design.factor_names.push_back(header_name);
 
-  string row;
-  while (getline(is, row)) {
-    if (row.empty()) continue;
+  std::string row;
+  while (std::getline(is, row)) {
+    if (row.empty())
+      continue;
 
-    istringstream row_is(row);
-    string token;
+    std::istringstream row_is(row);
+    std::string token;
     row_is >> token;
     design.sample_names.push_back(token);
 
-    vector<double> matrix_row;
+    std::vector<double> matrix_row;
     while (row_is >> token) {
-      if (token.length() == 1 && (token == "0" || token == "1"))
-        matrix_row.push_back(token == "1");
-      else
-        throw runtime_error("only binary factor levels are allowed:\n" + row);
+      if (std::size(token) != 1 || (token != "0" && token != "1"))
+        throw std::runtime_error("Must use binary factor levels:\n" + row);
+      matrix_row.push_back(token == "1");
     }
 
-    if (matrix_row.size() != design.n_factors())
-      throw runtime_error(
-        "each row must have as many columns as factors:\n" +
-        row);
+    if (std::size(matrix_row) != design.n_factors())
+      throw std::runtime_error(
+        "each row must have as many columns as factors:\n" + row);
 
-    design.matrix.push_back(vector<double>());
+    design.matrix.push_back(std::vector<double>());
     swap(design.matrix.back(), matrix_row);
   }
+
+  const auto n_row = std::size(design.matrix);
+  const auto n_col = std::size(design.matrix.front());
+  design.tmatrix.resize(n_col, std::vector<double>(n_row, 0.0));
+  for (auto row_idx = 0u; row_idx < n_row; ++row_idx)
+    for (auto col_idx = 0u; col_idx < n_col; ++col_idx)
+      design.tmatrix[col_idx][row_idx] = design.matrix[row_idx][col_idx];
+
   return is;
 }
 
 static std::ostream &
 operator<<(std::ostream &out, const Design &design) {
-  for (size_t factor = 0; factor < design.factor_names.size(); ++factor) {
+  for (std::size_t factor = 0; factor < design.factor_names.size(); ++factor) {
+    if (factor != 0)
+      out << '\t';
     out << design.factor_names[factor];
-    if (factor + 1 != design.factor_names.size()) out << "\t";
   }
-  out << endl;
+  out << '\n';
 
-  for (size_t i = 0; i < design.n_samples(); ++i) {
+  for (std::size_t i = 0; i < design.n_samples(); ++i) {
     out << design.sample_names[i];
-    for (size_t factor = 0; factor < design.factor_names.size(); ++factor)
-      out << "\t" << design.matrix[i][factor];
+    for (std::size_t j = 0; j < design.n_factors(); ++j)
+      out << "\t" << design.matrix[i][j];
     out << "\n";
   }
   return out;
 }
 
 static void
-remove_factor(Design &design, const size_t factor) {
-  design.factor_names.erase(begin(design.factor_names) + factor);
-  for (size_t i = 0; i < design.n_samples(); ++i)
-    design.matrix[i].erase(begin(design.matrix[i]) + factor);
-}
-
-// Parses a natural number from its string representation. Throws exception if
-// the string does not encode one.
-static size_t
-parse_natural_number(string encoding) {
-  istringstream iss(encoding);
-  size_t number;
-  iss >> number;
-  if (!iss)
-    throw runtime_error("The token \"" + encoding +
-                        "\" does not encode a natural number");
-  return number;
-}
-
-static std::istream &
-operator>>(std::istream &table_encoding, SiteProportions &props) {
-  props.chrom.clear();
-  props.position = 0;
-  props.strand.clear();
-  props.context.clear();
-  props.meth.clear();
-  props.total.clear();
-
-  string row_encoding;
-  getline(table_encoding, row_encoding);
-
-  // Skip lines contining only the newline character (e.g. the last line of the
-  // proportion table).
-  if (row_encoding.empty()) return table_encoding;
-
-  // Get the row name (which must be specified like this: "chr:position") and
-  // parse it.
-  istringstream row_stream(row_encoding);
-  string row_name_encoding;
-  row_stream >> row_name_encoding;
-
-  // Every row must start an identifier consisiting of genomic loci of the
-  // corresponding site. Here we check this identifier has the correct number
-  // of colons.
-  const size_t num_colon =
-    count(row_name_encoding.begin(), row_name_encoding.end(), ':');
-
-  if (num_colon != 3)
-    throw runtime_error(
-      "Each row in the count table must start with "
-      "a line chromosome:position:strand:context. Got \"" +
-      row_name_encoding + "\" instead.");
-
-  // First parse the row identifier.
-  istringstream name_stream(row_name_encoding);
-  getline(name_stream, props.chrom, ':');
-
-  if (props.chrom.empty())
-    throw runtime_error("Error parsing " + row_name_encoding +
-                        ": chromosome name is missing.");
-
-  string position_encoding;
-
-  getline(name_stream, position_encoding, ':');
-  props.position = parse_natural_number(position_encoding);
-  getline(name_stream, props.strand, ':');
-  getline(name_stream, props.context, ':');
-
-  // After parsing the row identifier, parse count proportions.
-  size_t total_count, meth_count;
-
-  while (row_stream >> total_count >> meth_count) {
-    props.total.push_back(total_count);
-    props.meth.push_back(meth_count);
-  }
-
-  if (!row_stream.eof())
-    throw runtime_error("Some row entries are not natural numbers: " +
-                        row_stream.str());
-
-  if (props.total.size() != props.meth.size())
-    throw runtime_error(
-      "This row does not encode proportions"
-      "correctly:\n" +
-      row_encoding);
-  return table_encoding;
-}
-
-static bool
-fit_regression_model(Regression &r) {
-  vector<double> initial_params;
-  return fit_regression_model(r, initial_params);
+remove_factor(Design &design, const std::size_t factor_idx) {
+  design.factor_names.erase(std::begin(design.factor_names) + factor_idx);
+  for (std::size_t i = 0; i < design.n_samples(); ++i)
+    design.matrix[i].erase(std::begin(design.matrix[i]) + factor_idx);
 }
 
 /***************** RADMETH ALGORITHM *****************/
 static bool
-consistent_sample_names(const Regression &reg, const string &header) {
-  istringstream iss(header);
-  auto nm_itr(begin(reg.design.sample_names));
-  const auto nm_end(end(reg.design.sample_names));
-  string token;
+consistent_sample_names(const Regression &reg, const std::string &header) {
+  std::istringstream iss(header);
+  auto nm_itr(std::begin(reg.design.sample_names));
+  const auto nm_end(std::end(reg.design.sample_names));
+  std::string token;
   while (iss >> token && nm_itr != nm_end)
-    if (token != *nm_itr++) return false;
+    if (token != *nm_itr++)
+      return false;
   return true;
 }
 
@@ -213,13 +147,13 @@ consistent_sample_names(const Regression &reg, const string &header) {
 // function outputs the p-value of the log-likelihood ratio. *Note* that it is
 // assumed that the reduced model has one fewer factor than the reduced model.
 static double
-loglikratio_test(double null_loglik, double full_loglik) {
+llr_test(double null_loglik, double full_loglik) {
   // The log-likelihood ratio statistic.
   const double log_lik_stat = -2 * (null_loglik - full_loglik);
 
   // It is assumed that null model has one fewer factor than the full
   // model. Hence the number of degrees of freedom is 1.
-  const size_t degrees_of_freedom = 1;
+  const std::size_t degrees_of_freedom = 1;
 
   // Log-likelihood ratio statistic has a chi-sqare distribution.
   const double chisq_p = gsl_cdf_chisq_P(log_lik_stat, degrees_of_freedom);
@@ -229,46 +163,249 @@ loglikratio_test(double null_loglik, double full_loglik) {
 }
 
 static bool
-has_low_coverage(const Regression &reg, const size_t test_fac) {
+has_low_coverage(const Regression &reg, const std::size_t test_fac) {
   bool cvrd_in_test_fact_smpls = false;
-  for (size_t i = 0; i < reg.n_samples() && !cvrd_in_test_fact_smpls; ++i)
+  for (std::size_t i = 0; i < reg.n_samples() && !cvrd_in_test_fact_smpls; ++i)
     cvrd_in_test_fact_smpls =
-      (reg.design.matrix[i][test_fac] == 1 && reg.props.total[i] != 0);
+      (reg.design.matrix[i][test_fac] == 1 && reg.props.mc[i].n_reads != 0);
 
   bool cvrd_in_other_smpls = false;
-  for (size_t i = 0; i < reg.n_samples() && !cvrd_in_other_smpls; ++i)
+  for (std::size_t i = 0; i < reg.n_samples() && !cvrd_in_other_smpls; ++i)
     cvrd_in_other_smpls =
-      (reg.design.matrix[i][test_fac] != 1 && reg.props.total[i] != 0);
+      (reg.design.matrix[i][test_fac] != 1 && reg.props.mc[i].n_reads != 0);
 
   return !cvrd_in_test_fact_smpls || !cvrd_in_other_smpls;
 }
 
-static bool
+[[nodiscard]] static bool
 has_extreme_counts(const Regression &reg) {
-  bool is_maximally_methylated = true;
-  for (size_t i = 0; i < reg.n_samples() && is_maximally_methylated; ++i)
-    is_maximally_methylated = (reg.props.total[i] == reg.props.meth[i]);
+  const auto &mc = reg.props.mc;
 
-  bool is_unmethylated = true;
-  for (size_t i = 0; i < reg.n_samples() && is_unmethylated; ++i)
-    is_unmethylated = (reg.props.meth[i] == 0.0);
+  bool full_meth = true;
+  for (auto i = std::cbegin(mc); i != std::cend(mc) && full_meth; ++i)
+    full_meth = (i->n_reads == i->n_meth);
 
-  return is_maximally_methylated || is_unmethylated;
+  bool no_meth = true;
+  for (auto i = std::cbegin(mc); i != std::cend(mc) && no_meth; ++i)
+    no_meth = (i->n_meth == 0.0);
+
+  return full_meth || no_meth;
 }
 
-
-static bool
-verify_multiple_levels(const Regression &full_regression,
-                       const size_t test_factor) {
-  const size_t n_samples = full_regression.design.n_samples();
-  const auto first_level = full_regression.design.matrix[0][test_factor];
-  bool test_fact_mult_levels = false;
-  for (size_t i = 1; i < n_samples; ++i)
-    if (full_regression.design.matrix[i][test_factor] != first_level)
-      test_fact_mult_levels = true;
-  return test_fact_mult_levels;
+[[nodiscard]] static bool
+has_two_values(const Regression &reg, const std::size_t test_factor) {
+  const auto &v = reg.design.tmatrix[test_factor];
+  for (auto i = std::cbegin(v); i != std::cend(v); ++i)
+    if (*i != v[0])
+      return true;
+  return false;
 }
 
+[[nodiscard]] static std::uint32_t
+get_test_factor_idx(const Regression &model, const std::string &test_factor) {
+  const auto &factors = model.design.factor_names;
+  const auto itr =
+    std::find(std::cbegin(factors), std::cend(factors), test_factor);
+
+  if (itr == std::cend(factors))
+    throw std::runtime_error("Factor not part of design: " + test_factor);
+
+  return std::distance(std::cbegin(factors), itr);
+}
+
+static void
+read_design(const bool verbose, const std::string &design_filename,
+            Design &design) {
+  if (verbose)
+    std::cerr << "design table filename: " << design_filename << std::endl;
+  std::ifstream design_file(design_filename);
+  if (!design_file)
+    throw std::runtime_error("could not open file: " + design_filename);
+
+  // initialize full design matrix from file
+  design_file >> design;
+
+  if (verbose)
+    std::cerr << design << std::endl;
+}
+
+enum class row_status : std::uint8_t {
+  ok,
+  na,
+  na_low_cov,
+  na_extreme_cnt,
+};
+
+[[nodiscard]] static std::vector<double>
+drop_idx(const std::vector<double> &v, const std::size_t to_drop) {
+  std::vector<double> u;
+  u.reserve(std::size(v) - 1);
+  for (auto i = 0u; i < std::size(v); ++i)
+    if (i != to_drop)
+      u.push_back(v[i]);
+  return u;
+}
+
+static void
+radmeth(const bool show_progress, const bool more_na_info,
+        const std::uint32_t n_threads, const std::string &table_filename,
+        const std::string &outfile, const Regression &alt_model,
+        const Regression &null_model, const std::uint32_t test_factor_idx) {
+  static constexpr auto prefix_fmt = "%s\t%ld\t%c\t%s\t";
+  static constexpr auto suffix_fmt = "\t%ld\t%ld\t%ld\t%ld\n";
+  static constexpr auto buf_size = 1024;
+  static constexpr auto n_lines_at_once = 1024;
+
+  // ADS: open the data table file
+  std::ifstream table_file(table_filename);
+  if (!table_file)
+    throw std::runtime_error("could not open file: " + table_filename);
+
+  // Make sure that the first line of the proportion table file contains
+  // names of the samples. Throw an exception if the names or their order
+  // in the proportion table does not match those in the full design matrix.
+  std::string sample_names_header;
+  std::getline(table_file, sample_names_header);
+
+  if (!consistent_sample_names(alt_model, sample_names_header))
+    throw std::runtime_error(
+      "header:\n" + sample_names_header + "\n" +
+      "does not match factor names or their order in the\n"
+      "design matrix. Check that the design matrix and\n"
+      "the proportion table are correctly formatted.");
+
+  const std::size_t n_samples = alt_model.design.n_samples();
+
+  std::ofstream out(outfile);
+  if (!out)
+    throw std::runtime_error("failed to open output file: " + outfile);
+
+  file_progress progress{table_filename};
+
+  std::vector<std::vector<char>> bufs(n_threads,
+                                      std::vector<char>(buf_size, 0));
+  std::vector<int> n_bytes(n_threads, 0);
+  std::vector<Regression> alt_models(n_threads, alt_model);
+  std::vector<Regression> null_models(n_threads, null_model);
+
+  // iterate over rows in the file and do llr test on proportions from each
+  std::vector<std::string> lines(n_threads);
+  while (true) {
+
+    std::uint32_t n_lines = 0;
+    while (n_lines < n_lines_at_once &&
+           std::getline(table_file, lines[n_lines]))
+      ++n_lines;
+
+    if (show_progress)
+      progress(table_file);
+
+    std::vector<std::thread> threads;
+    for (auto th_id = 0u; th_id < std::min(n_lines, n_threads); ++th_id)
+      threads.emplace_back([&, th_id] {
+        auto &t_alt_model = alt_models[th_id];
+        auto &t_null_model = null_models[th_id];
+        t_alt_model.props.parse(lines[th_id]);
+        if (t_alt_model.props_size() != n_samples)
+          throw std::runtime_error("found row with wrong number of columns");
+
+        const auto [p_val, status] = [&]() -> std::tuple<double, row_status> {
+          // Skip the test if (1) no coverage in all cases or in all controls,
+          // or (2) the site is completely methylated or completely
+          // unmethylated across all samples.
+          if (has_low_coverage(t_alt_model, test_factor_idx))
+            return std::tuple{1.0, row_status::na_low_cov};
+
+          if (has_extreme_counts(t_alt_model))
+            return std::tuple{1.0, row_status::na_extreme_cnt};
+
+          std::vector<double> alternate_params;
+          fit_regression_model(t_alt_model, alternate_params);
+          t_null_model.props = t_alt_model.props;
+
+          auto null_params = drop_idx(alternate_params, test_factor_idx);
+
+          fit_regression_model(t_null_model, null_params);
+          const double p_value =
+            llr_test(t_null_model.max_loglik, t_alt_model.max_loglik);
+
+          return (p_value != p_value) ? std::tuple{1.0, row_status::na}
+                                      : std::tuple{p_value, row_status::ok};
+        }();
+
+        std::size_t n_reads_factor = 0;
+        std::size_t n_reads_others = 0;
+        std::size_t n_meth_factor = 0;
+        std::size_t n_meth_others = 0;
+
+        const auto &mc = t_alt_model.props.mc;
+        const auto &vec = t_alt_model.design.tmatrix[test_factor_idx];
+        for (std::size_t s = 0; s < n_samples; ++s)
+          if (vec[s] != 0) {
+            n_reads_factor += mc[s].n_reads;
+            n_meth_factor += mc[s].n_meth;
+          }
+          else {
+            n_reads_others += mc[s].n_reads;
+            n_meth_others += mc[s].n_meth;
+          }
+
+        n_bytes[th_id] = [&] {
+          // clang-format off
+          const int n_prefix_bytes = std::sprintf(bufs[th_id].data(), prefix_fmt,
+                                                  t_alt_model.props.chrom.data(),
+                                                  t_alt_model.props.position,
+                                                  t_alt_model.props.strand,
+                                                  t_alt_model.props.context.data());
+          // clang-format on
+          if (n_prefix_bytes < 0)
+            return n_prefix_bytes;
+
+          auto cursor = bufs[th_id].data() + n_prefix_bytes;
+
+          const int n_pval_bytes = [&] {
+            if (status == row_status::ok)
+              return std::sprintf(cursor, "%.6g", p_val);
+            if (!more_na_info || status == row_status::na)
+              return std::sprintf(cursor, "NA");
+            if (status == row_status::na_extreme_cnt)
+              return std::sprintf(cursor, "NA_EXTREME_CNT");
+            // if (status == row_status::na_low_cov)
+            return std::sprintf(cursor, "NA_LOW_COV");
+          }();
+
+          if (n_pval_bytes < 0)
+            return n_pval_bytes;
+
+          cursor += n_pval_bytes;
+
+          // clang-format off
+          const int n_suffix_bytes = std::sprintf(cursor, suffix_fmt,
+                                                  n_reads_factor,
+                                                  n_meth_factor,
+                                                  n_reads_others,
+                                                  n_meth_others);
+          // clang-format on
+          if (n_suffix_bytes < 0)
+            return n_suffix_bytes;
+
+          return n_prefix_bytes + n_pval_bytes + n_suffix_bytes;
+        }();
+      });
+
+    for (auto &thread : threads)
+      thread.join();
+
+    for (auto i = 0u; i < std::min(n_lines, n_threads); ++i) {
+      if (n_bytes[i] < 0)
+        throw std::runtime_error("failed to write to output buffer");
+      out.write(bufs[i].data(), n_bytes[i]);
+    }
+
+    if (n_lines < n_lines_at_once)
+      break;
+  }
+}
 
 /***********************************************************************
  * Run beta-binoimial regression using the specified table with
@@ -277,171 +414,83 @@ verify_multiple_levels(const Regression &full_regression,
 int
 main_radmeth(int argc, char *argv[]) {
   try {
-    static const string description =
+    static const std::string description =
       "calculate differential methylation scores";
 
-    string outfile;
-    string test_factor_name;
-    bool VERBOSE = false;
-    bool more_na_info = false;
+    std::string outfile;
+    std::string test_factor;
+    bool verbose{false};
+    bool show_progress{false};
+    bool more_na_info{false};
+    std::uint32_t n_threads{1};
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description,
                            "<design-matrix> <data-matrix>");
     opt_parse.set_show_defaults();
-    opt_parse.add_opt("out", 'o', "output file (default: stdout)", false,
-                      outfile);
-    opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
+    opt_parse.add_opt("out", 'o', "output file", true, outfile);
+    opt_parse.add_opt("threads", 't', "number of threads to use", false,
+                      n_threads);
+    opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
+    opt_parse.add_opt("progress", '\0', "show progress", false, show_progress);
     opt_parse.add_opt(
       "na-info", 'n',
       "if a p-value is not calculated, print NAs in more detail: "
       "low count (NA_LOW_COV) extreme values (NA_EXTREME_CNT) or "
       "numerical errors in likelihood ratios (NA)",
       false, more_na_info);
-    opt_parse.add_opt("factor", 'f', "a factor to test", true,
-                      test_factor_name);
+    opt_parse.add_opt("factor", 'f', "a factor to test", true, test_factor);
 
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.help_message() << std::endl
+                << opt_parse.about_message() << std::endl;
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.about_message() << std::endl;
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      std::cerr << opt_parse.option_missing_message() << std::endl;
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 2) {
-      cerr << opt_parse.help_message() << endl;
+      std::cerr << opt_parse.help_message() << std::endl;
       return EXIT_SUCCESS;
     }
-    const string design_filename(leftover_args.front());
-    const string table_filename(leftover_args.back());
+    const std::string design_filename(leftover_args.front());
+    const std::string table_filename(leftover_args.back());
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (VERBOSE) cerr << "design table filename: " << design_filename << endl;
-    std::ifstream design_file(design_filename);
-    if (!design_file)
-      throw runtime_error("could not open file: " + design_filename);
-
     // initialize full design matrix from file
-    Regression full_regression;
-    design_file >> full_regression.design;
-
-    if (VERBOSE) cerr << full_regression.design << endl;
+    Regression orig_alt_model;
+    read_design(verbose, design_filename, orig_alt_model.design);
 
     // Check that provided test factor name exists and find its index.
-    // Identify test factors with their indexes to simplify naming
-    auto test_fact_it =
-      find(begin(full_regression.design.factor_names),
-           end(full_regression.design.factor_names), test_factor_name);
-
-    if (test_fact_it == end(full_regression.design.factor_names))
-      throw runtime_error(test_factor_name +
-                          " factor not part of design specification");
-
-    const size_t test_factor =
-      distance(begin(full_regression.design.factor_names), test_fact_it);
+    const auto test_factor_idx =
+      get_test_factor_idx(orig_alt_model, test_factor);
 
     // verify that the design includes more than one level for the
     // test factor
-    if (!verify_multiple_levels(full_regression, test_factor)) {
-      const auto first_level = full_regression.design.matrix[0][test_factor];
-      throw runtime_error("test factor only one level: " +
-                          test_factor_name + ", " +
-                          std::to_string(first_level));
+    if (!has_two_values(orig_alt_model, test_factor_idx)) {
+      const auto first_level = orig_alt_model.design.matrix[0][test_factor_idx];
+      throw std::runtime_error("test factor only one level: " + test_factor +
+                               ", " + std::to_string(first_level));
     }
 
-    Regression null_regression;
-    null_regression.design = full_regression.design;
-    remove_factor(null_regression.design, test_factor);
+    Regression orig_null_model;
+    orig_null_model.design = orig_alt_model.design;
+    remove_factor(orig_null_model.design, test_factor_idx);
     // ADS: done setup for the model
 
-    // ADS: open the data table file
-    std::ifstream table_file(table_filename);
-    if (!table_file)
-      throw runtime_error("could not open file: " + table_filename);
-
-    // Make sure that the first line of the proportion table file contains
-    // names of the samples. Throw an exception if the names or their order
-    // in the proportion table does not match those in the full design matrix.
-    string sample_names_header;
-    getline(table_file, sample_names_header);
-
-    if (!consistent_sample_names(full_regression, sample_names_header))
-      throw runtime_error("header:\n" + sample_names_header + "\n" +
-                          "does not match factor names or their order in the\n"
-                          "design matrix. Check that the design matrix and\n"
-                          "the proportion table are correctly formatted.");
-
-    const size_t n_samples = full_regression.design.n_samples();
-
-    // ADS: now open the output file because each row is processed
-    // sequentially
-    std::ofstream of;
-    if (!outfile.empty()) of.open(outfile);
-    std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
-
-    // Performing the log-likelihood ratio test on proportions from each row
-    // of the proportion table.
-    while (table_file >> full_regression.props) {
-      if (full_regression.props.total.size() != n_samples)
-        throw runtime_error("found row with wrong number of columns");
-
-      size_t coverage_factor = 0, coverage_rest = 0, meth_factor = 0,
-             meth_rest = 0;
-
-      for (size_t s = 0; s < n_samples; ++s) {
-        if (full_regression.design.matrix[s][test_factor] != 0) {
-          coverage_factor += full_regression.props.total[s];
-          meth_factor += full_regression.props.meth[s];
-        }
-        else {
-          coverage_rest += full_regression.props.total[s];
-          meth_rest += full_regression.props.meth[s];
-        }
-      }
-
-      out << full_regression.props.chrom << "\t"
-          << full_regression.props.position << "\t"
-          << full_regression.props.strand << "\t"
-          << full_regression.props.context << "\t";
-
-      // Do not perform the test if there's no coverage in either all
-      // case or all control samples. Also do not test if the site is
-      // completely methylated or completely unmethylated across all
-      // samples.
-      if (has_low_coverage(full_regression, test_factor)) {
-        out << ((more_na_info) ? "NA_LOW_COV" : "NA");
-      }
-      else if (has_extreme_counts(full_regression)) {
-        out << ((more_na_info) ? "NA_EXTREME_CNT" : "NA");
-      }
-      else {
-        fit_regression_model(full_regression);
-        null_regression.props = full_regression.props;
-        fit_regression_model(null_regression);
-        const double p_value = loglikratio_test(null_regression.max_loglik,
-                                                full_regression.max_loglik);
-
-        // If error occured in fitting (p-val = nan or -nan).
-        if (p_value != p_value)
-          out << "NA";
-        else
-          out << p_value;
-      }
-      out << "\t" << coverage_factor << "\t" << meth_factor << "\t"
-          << coverage_rest << "\t" << meth_rest << endl;
-    }
+    radmeth(show_progress, more_na_info, n_threads, table_filename, outfile,
+            orig_alt_model, orig_null_model, test_factor_idx);
   }
   catch (const std::exception &e) {
-    cerr << "ERROR: " << e.what() << endl;
-    exit(EXIT_FAILURE);
+    std::cerr << "ERROR: " << e.what() << std::endl;
+    return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }

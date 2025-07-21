@@ -19,10 +19,11 @@
 #ifndef RADMETH_OPTIMIZE_HPP
 #define RADMETH_OPTIMIZE_HPP
 
+#include <vector>
+
 struct Regression;
 
 bool
 fit_regression_model(Regression &r, std::vector<double> &initial_params);
-
 
 #endif

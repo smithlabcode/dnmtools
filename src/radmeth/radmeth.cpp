@@ -246,6 +246,22 @@ drop_idx(const std::vector<double> &v, const std::size_t to_drop) {
   return u;
 }
 
+template <typename T>
+static inline std::vector<std::pair<T, T>>
+get_chunk_bounds(const T n_elements, const T n_chunks) {
+  std::vector<std::pair<T, T>> chunks;
+  const T q = n_elements / n_chunks;
+  const T r = n_elements - q * n_chunks;
+  T block_start{};
+  for (std::size_t i = 0; i < n_chunks; ++i) {
+    const auto sz = (i < r) ? q + 1 : q;
+    const auto block_end = block_start + sz;
+    chunks.emplace_back(block_start, block_end);
+    block_start = block_end;
+  }
+  return chunks;
+}
+
 static void
 radmeth(const bool show_progress, const bool more_na_info,
         const std::uint32_t n_threads, const std::string &table_filename,
@@ -254,6 +270,7 @@ radmeth(const bool show_progress, const bool more_na_info,
   static constexpr auto prefix_fmt = "%s\t%ld\t%c\t%s\t";
   static constexpr auto suffix_fmt = "\t%ld\t%ld\t%ld\t%ld\n";
   static constexpr auto buf_size = 1024;
+  static constexpr auto max_lines = 256;
 
   // ADS: open the data table file
   std::ifstream table_file(table_filename);
@@ -281,120 +298,129 @@ radmeth(const bool show_progress, const bool more_na_info,
 
   file_progress progress{table_filename};
 
-  std::vector<std::vector<char>> bufs(n_threads,
+  std::vector<std::vector<char>> bufs(max_lines,
                                       std::vector<char>(buf_size, 0));
-  std::vector<int> n_bytes(n_threads, 0);
+  std::vector<int> n_bytes(max_lines, 0);
+  std::vector<std::string> lines(max_lines);
+
   std::vector<Regression> alt_models(n_threads, alt_model);
   std::vector<Regression> null_models(n_threads, null_model);
 
-  // iterate over rows in the file and do llr test on proportions from each
-  std::vector<std::string> lines(n_threads);
+  // Iterate over rows in the file and do llr test on proportions from
+  // each. Do this in sets of rows to avoid having to spawn too many threads.
   while (true) {
-
     std::uint32_t n_lines = 0;
-    while (n_lines < n_threads && std::getline(table_file, lines[n_lines]))
+    while (n_lines < max_lines && std::getline(table_file, lines[n_lines]))
       ++n_lines;
+    if (n_lines == 0)
+      break;
 
     if (show_progress)
       progress(table_file);
 
+    const auto chunks = get_chunk_bounds(n_lines, n_threads);
+
     std::vector<std::thread> threads;
-    for (auto th_id = 0u; th_id < std::min(n_lines, n_threads); ++th_id)
-      threads.emplace_back([&, th_id] {
-        auto &t_alt_model = alt_models[th_id];
-        auto &t_null_model = null_models[th_id];
-        t_alt_model.props.parse(lines[th_id]);
-        if (t_alt_model.props_size() != n_samples)
-          throw std::runtime_error("found row with wrong number of columns");
+    for (auto thread_id = 0u; thread_id < n_threads; ++thread_id) {
+      threads.emplace_back([&, thread_id] {
+        const auto &[chunk_beg, chunk_end] = chunks[thread_id];
+        auto &t_alt_model = alt_models[thread_id];
+        auto &t_null_model = null_models[thread_id];
+        for (auto b = chunk_beg; b != chunk_end; ++b) {
+          t_alt_model.props.parse(lines[b]);
+          if (t_alt_model.props_size() != n_samples)
+            throw std::runtime_error("found row with wrong number of columns");
 
-        const auto [p_val, status] = [&]() -> std::tuple<double, row_status> {
-          // Skip the test if (1) no coverage in all cases or in all controls,
-          // or (2) the site is completely methylated or completely
-          // unmethylated across all samples.
-          if (has_low_coverage(t_alt_model, test_factor_idx))
-            return std::tuple{1.0, row_status::na_low_cov};
+          const auto [p_val, status] = [&]() -> std::tuple<double, row_status> {
+            // Skip the test if (1) no coverage in all cases or in all controls,
+            // or (2) the site is completely methylated or completely
+            // unmethylated across all samples.
+            if (has_low_coverage(t_alt_model, test_factor_idx))
+              return std::tuple{1.0, row_status::na_low_cov};
 
-          if (has_extreme_counts(t_alt_model))
-            return std::tuple{1.0, row_status::na_extreme_cnt};
+            if (has_extreme_counts(t_alt_model))
+              return std::tuple{1.0, row_status::na_extreme_cnt};
 
-          std::vector<double> alternate_params;
-          fit_regression_model(t_alt_model, alternate_params);
-          t_null_model.props = t_alt_model.props;
+            std::vector<double> alternate_params;
+            fit_regression_model(t_alt_model, alternate_params);
+            t_null_model.props = t_alt_model.props;
 
-          auto null_params = drop_idx(alternate_params, test_factor_idx);
+            auto null_params = drop_idx(alternate_params, test_factor_idx);
 
-          fit_regression_model(t_null_model, null_params);
-          const double p_value =
-            llr_test(t_null_model.max_loglik, t_alt_model.max_loglik);
+            fit_regression_model(t_null_model, null_params);
+            const double p_value =
+              llr_test(t_null_model.max_loglik, t_alt_model.max_loglik);
 
-          return (p_value != p_value) ? std::tuple{1.0, row_status::na}
-                                      : std::tuple{p_value, row_status::ok};
-        }();
-
-        std::size_t n_reads_factor = 0;
-        std::size_t n_reads_others = 0;
-        std::size_t n_meth_factor = 0;
-        std::size_t n_meth_others = 0;
-
-        const auto &mc = t_alt_model.props.mc;
-        const auto &vec = t_alt_model.design.tmatrix[test_factor_idx];
-        for (std::size_t s = 0; s < n_samples; ++s)
-          if (vec[s] != 0) {
-            n_reads_factor += mc[s].n_reads;
-            n_meth_factor += mc[s].n_meth;
-          }
-          else {
-            n_reads_others += mc[s].n_reads;
-            n_meth_others += mc[s].n_meth;
-          }
-
-        n_bytes[th_id] = [&] {
-          // clang-format off
-          const int n_prefix_bytes = std::sprintf(bufs[th_id].data(), prefix_fmt,
-                                                  t_alt_model.props.chrom.data(),
-                                                  t_alt_model.props.position,
-                                                  t_alt_model.props.strand,
-                                                  t_alt_model.props.context.data());
-          // clang-format on
-          if (n_prefix_bytes < 0)
-            return n_prefix_bytes;
-
-          auto cursor = bufs[th_id].data() + n_prefix_bytes;
-
-          const int n_pval_bytes = [&] {
-            if (status == row_status::ok)
-              return std::sprintf(cursor, "%.6g", p_val);
-            if (!more_na_info || status == row_status::na)
-              return std::sprintf(cursor, "NA");
-            if (status == row_status::na_extreme_cnt)
-              return std::sprintf(cursor, "NA_EXTREME_CNT");
-            // if (status == row_status::na_low_cov)
-            return std::sprintf(cursor, "NA_LOW_COV");
+            return (p_value != p_value) ? std::tuple{1.0, row_status::na}
+                                        : std::tuple{p_value, row_status::ok};
           }();
 
-          if (n_pval_bytes < 0)
-            return n_pval_bytes;
+          std::size_t n_reads_factor = 0;
+          std::size_t n_reads_others = 0;
+          std::size_t n_meth_factor = 0;
+          std::size_t n_meth_others = 0;
 
-          cursor += n_pval_bytes;
+          const auto &mc = t_alt_model.props.mc;
+          const auto &vec = t_alt_model.design.tmatrix[test_factor_idx];
+          for (std::size_t s = 0; s < n_samples; ++s)
+            if (vec[s] != 0) {
+              n_reads_factor += mc[s].n_reads;
+              n_meth_factor += mc[s].n_meth;
+            }
+            else {
+              n_reads_others += mc[s].n_reads;
+              n_meth_others += mc[s].n_meth;
+            }
 
-          // clang-format off
+          n_bytes[b] = [&] {
+            // clang-format off
+            const int n_prefix_bytes = std::sprintf(bufs[b].data(), prefix_fmt,
+                                                    t_alt_model.props.chrom.data(),
+                                                    t_alt_model.props.position,
+                                                    t_alt_model.props.strand,
+                                                    t_alt_model.props.context.data());
+            // clang-format on
+            if (n_prefix_bytes < 0)
+              return n_prefix_bytes;
+
+            auto cursor = bufs[b].data() + n_prefix_bytes;
+
+            const int n_pval_bytes = [&] {
+              if (status == row_status::ok)
+                return std::sprintf(cursor, "%.6g", p_val);
+              if (!more_na_info || status == row_status::na)
+                return std::sprintf(cursor, "NA");
+              if (status == row_status::na_extreme_cnt)
+                return std::sprintf(cursor, "NA_EXTREME_CNT");
+              // if (status == row_status::na_low_cov)
+              return std::sprintf(cursor, "NA_LOW_COV");
+            }();
+
+            if (n_pval_bytes < 0)
+              return n_pval_bytes;
+
+            cursor += n_pval_bytes;
+
+            // clang-format off
           const int n_suffix_bytes = std::sprintf(cursor, suffix_fmt,
                                                   n_reads_factor,
                                                   n_meth_factor,
                                                   n_reads_others,
                                                   n_meth_others);
-          // clang-format on
-          if (n_suffix_bytes < 0)
-            return n_suffix_bytes;
+            // clang-format on
+            if (n_suffix_bytes < 0)
+              return n_suffix_bytes;
 
-          return n_prefix_bytes + n_pval_bytes + n_suffix_bytes;
-        }();
+            return n_prefix_bytes + n_pval_bytes + n_suffix_bytes;
+          }();
+        }
       });
+    }
 
     for (auto &thread : threads)
       thread.join();
 
-    for (auto i = 0u; i < std::min(n_lines, n_threads); ++i) {
+    for (auto i = 0u; i < n_lines; ++i) {
       if (n_bytes[i] < 0)
         throw std::runtime_error("failed to write to output buffer");
       out.write(bufs[i].data(), n_bytes[i]);

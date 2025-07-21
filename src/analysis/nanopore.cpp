@@ -760,7 +760,6 @@ consistent_existing_targets(
   return true;
 }
 
-int counter{};
 struct read_processor {
   static constexpr auto default_expected_basecall_model =
     "dna_r10.4.1_e8.2_400bps_hac@v4.3.0";

@@ -75,6 +75,7 @@ struct Regression {
   Design design;
   SiteProportions props;
   double max_loglik{};
+  std::vector<double> p_v;  // scratch space
 
   [[nodiscard]] std::size_t
   n_factors() const {

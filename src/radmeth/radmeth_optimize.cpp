@@ -29,8 +29,9 @@
 #include <stdexcept>
 #include <vector>
 
+template <typename T>
 [[nodiscard]] static double
-pi(const std::vector<double> &v, const gsl_vector *params) {
+pi(const std::vector<T> &v, const gsl_vector *params) {
   // ADS: this function doesn't have a very helpful name
   const auto a = v.data();
   const double dot = std::inner_product(a, a + std::size(v), params->data, 0.0);

@@ -24,9 +24,9 @@
 #include <string>
 #include <vector>
 
-double Regression::tolerance = 1e-4;
+double Regression::tolerance = 1e-3;
 double Regression::stepsize = 0.001;
-std::uint32_t Regression::max_iter = 700;
+std::uint32_t Regression::max_iter = 250;
 
 void
 SiteProportions::parse(const std::string &line) {

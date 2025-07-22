@@ -60,69 +60,6 @@ struct file_progress {
   }
 };
 
-static std::istream &
-operator>>(std::istream &is, Design &design) {
-  std::string header_encoding;
-  std::getline(is, header_encoding);
-
-  std::istringstream header_is(header_encoding);
-  std::string header_name;
-  while (header_is >> header_name)
-    design.factor_names.push_back(header_name);
-
-  std::string row;
-  while (std::getline(is, row)) {
-    if (row.empty())
-      continue;
-
-    std::istringstream row_is(row);
-    std::string token;
-    row_is >> token;
-    design.sample_names.push_back(token);
-
-    std::vector<double> matrix_row;
-    while (row_is >> token) {
-      if (std::size(token) != 1 || (token != "0" && token != "1"))
-        throw std::runtime_error("Must use binary factor levels:\n" + row);
-      matrix_row.push_back(token == "1");
-    }
-
-    if (std::size(matrix_row) != design.n_factors())
-      throw std::runtime_error(
-        "each row must have as many columns as factors:\n" + row);
-
-    design.matrix.push_back(std::vector<double>());
-    swap(design.matrix.back(), matrix_row);
-  }
-
-  const auto n_row = std::size(design.matrix);
-  const auto n_col = std::size(design.matrix.front());
-  design.tmatrix.resize(n_col, std::vector<double>(n_row, 0.0));
-  for (auto row_idx = 0u; row_idx < n_row; ++row_idx)
-    for (auto col_idx = 0u; col_idx < n_col; ++col_idx)
-      design.tmatrix[col_idx][row_idx] = design.matrix[row_idx][col_idx];
-
-  return is;
-}
-
-static std::ostream &
-operator<<(std::ostream &out, const Design &design) {
-  for (std::size_t factor = 0; factor < design.factor_names.size(); ++factor) {
-    if (factor != 0)
-      out << '\t';
-    out << design.factor_names[factor];
-  }
-  out << '\n';
-
-  for (std::size_t i = 0; i < design.n_samples(); ++i) {
-    out << design.sample_names[i];
-    for (std::size_t j = 0; j < design.n_factors(); ++j)
-      out << "\t" << design.matrix[i][j];
-    out << "\n";
-  }
-  return out;
-}
-
 static void
 remove_factor(Design &design, const std::size_t factor_idx) {
   design.factor_names.erase(std::begin(design.factor_names) + factor_idx);
@@ -270,7 +207,7 @@ radmeth(const bool show_progress, const bool more_na_info,
   static constexpr auto prefix_fmt = "%s\t%ld\t%c\t%s\t";
   static constexpr auto suffix_fmt = "\t%ld\t%ld\t%ld\t%ld\n";
   static constexpr auto buf_size = 1024;
-  static constexpr auto max_lines = 256;
+  static constexpr auto max_lines = 4096;
 
   // ADS: open the data table file
   std::ifstream table_file(table_filename);
@@ -507,7 +444,6 @@ main_radmeth(int argc, char *argv[]) {
     Regression orig_null_model;
     orig_null_model.design = orig_alt_model.design;
     remove_factor(orig_null_model.design, test_factor_idx);
-    // ADS: done setup for the model
 
     radmeth(show_progress, more_na_info, n_threads, table_filename, outfile,
             orig_alt_model, orig_null_model, test_factor_idx);

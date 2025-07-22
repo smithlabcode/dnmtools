@@ -183,20 +183,18 @@ drop_idx(const std::vector<double> &v, const std::size_t to_drop) {
   return u;
 }
 
-template <typename T>
-static inline std::vector<std::pair<T, T>>
-get_chunk_bounds(const T n_elements, const T n_chunks) {
-  std::vector<std::pair<T, T>> chunks;
-  const T q = n_elements / n_chunks;
-  const T r = n_elements - q * n_chunks;
-  T block_start{};
+static inline void
+get_chunk_bounds(const std::uint32_t n_elements, const std::uint32_t n_chunks,
+                 std::vector<std::pair<std::uint32_t, std::uint32_t>> &chunks) {
+  const std::uint32_t q = n_elements / n_chunks;
+  const std::uint32_t r = n_elements - q * n_chunks;
+  std::uint32_t block_start{};
   for (std::size_t i = 0; i < n_chunks; ++i) {
     const auto sz = (i < r) ? q + 1 : q;
     const auto block_end = block_start + sz;
-    chunks.emplace_back(block_start, block_end);
+    chunks[i] = {block_start, block_end};
     block_start = block_end;
   }
-  return chunks;
 }
 
 static void
@@ -207,7 +205,7 @@ radmeth(const bool show_progress, const bool more_na_info,
   static constexpr auto prefix_fmt = "%s\t%ld\t%c\t%s\t";
   static constexpr auto suffix_fmt = "\t%ld\t%ld\t%ld\t%ld\n";
   static constexpr auto buf_size = 1024;
-  static constexpr auto max_lines = 4096;
+  static constexpr auto max_lines = 16384;
 
   // ADS: open the data table file
   std::ifstream table_file(table_filename);
@@ -243,6 +241,8 @@ radmeth(const bool show_progress, const bool more_na_info,
   std::vector<Regression> alt_models(n_threads, alt_model);
   std::vector<Regression> null_models(n_threads, null_model);
 
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> chunks(n_threads);
+
   // Iterate over rows in the file and do llr test on proportions from
   // each. Do this in sets of rows to avoid having to spawn too many threads.
   while (true) {
@@ -252,10 +252,7 @@ radmeth(const bool show_progress, const bool more_na_info,
     if (n_lines == 0)
       break;
 
-    if (show_progress)
-      progress(table_file);
-
-    const auto chunks = get_chunk_bounds(n_lines, n_threads);
+    get_chunk_bounds(n_lines, n_threads, chunks);
 
     std::vector<std::thread> threads;
     for (auto thread_id = 0u; thread_id < n_threads; ++thread_id) {
@@ -362,6 +359,9 @@ radmeth(const bool show_progress, const bool more_na_info,
         throw std::runtime_error("failed to write to output buffer");
       out.write(bufs[i].data(), n_bytes[i]);
     }
+
+    if (show_progress)
+      progress(table_file);
 
     if (n_lines < n_threads)
       break;

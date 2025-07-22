@@ -166,7 +166,6 @@ neg_loglik_and_grad(const gsl_vector *params, void *object, double *loglik_val,
 
 bool
 fit_regression_model(Regression &r, std::vector<double> &params_init) {
-  const auto tolerance = Regression::tolerance;
   const auto stepsize = Regression::stepsize;
   const auto max_iter = Regression::max_iter;
 
@@ -176,6 +175,9 @@ fit_regression_model(Regression &r, std::vector<double> &params_init) {
     params_init.resize(n_params, 0.0);
     params_init.back() = -2.5;
   }
+
+  const double tolerance =
+    std::sqrt(n_params) * r.n_samples() * Regression::tolerance;
 
   if (params_init.size() != n_params)
     throw std::runtime_error("Wrong number of initial parameters.");

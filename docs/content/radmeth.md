@@ -376,6 +376,15 @@ then you are probably better off using a general regression package.
 The name of the output file (default: stdout).
 
 ```txt
+ -t, -threads
+```
+
+Use multiple threads. This gives very good speedup as long as you do not
+exceed the number of available physical cores. Most CPUs support 2 hardware
+threads per physical core via SMT/Hyper-Threading, so check your number of
+cores if you are unsure.
+
+```txt
  -n -na-info
 ```
 
@@ -403,10 +412,15 @@ The name of the factor on which to test differences. This must be the
 name of one of the columns in file design matrix. This is required.
 
 ```txt
- -t, -threads
+ -tolerance
 ```
 
-Use multiple threads. This gives very good speedup as long as you do not
-exceed the number of available physical cores. Most CPUs support 2 hardware
-threads per physical core via SMT/Hyper-Threading, so check your number of
-cores if you are unsure.
+The numerical tolerance for convergence when estimating model parameters.
+This cutoff is applied to the norm of the gradient of the log-likelihood
+function for MLE parameter estimation.
+
+```txt
+ -max-iter
+```
+
+The maximum iterations to allow when estimating model parameters.

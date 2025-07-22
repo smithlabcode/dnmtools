@@ -18,8 +18,11 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdint>
+#include <istream>
+#include <ostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 double Regression::tolerance = 1e-4;
 double Regression::stepsize = 0.001;
@@ -100,4 +103,67 @@ SiteProportions::parse(const std::string &line) {
 
   if (failed)
     throw std::runtime_error("failed to parse counts from:\n" + line);
+}
+
+std::istream &
+operator>>(std::istream &is, Design &design) {
+  std::string header_encoding;
+  std::getline(is, header_encoding);
+
+  std::istringstream header_is(header_encoding);
+  std::string header_name;
+  while (header_is >> header_name)
+    design.factor_names.push_back(header_name);
+
+  std::string row;
+  while (std::getline(is, row)) {
+    if (row.empty())
+      continue;
+
+    std::istringstream row_is(row);
+    std::string token;
+    row_is >> token;
+    design.sample_names.push_back(token);
+
+    std::vector<std::uint8_t> matrix_row;
+    while (row_is >> token) {
+      if (std::size(token) != 1 || (token != "0" && token != "1"))
+        throw std::runtime_error("Must use binary factor levels:\n" + row);
+      matrix_row.push_back(token == "1");
+    }
+
+    if (std::size(matrix_row) != design.n_factors())
+      throw std::runtime_error(
+        "each row must have as many columns as factors:\n" + row);
+
+    design.matrix.push_back(std::vector<std::uint8_t>());
+    swap(design.matrix.back(), matrix_row);
+  }
+
+  const auto n_row = std::size(design.matrix);
+  const auto n_col = std::size(design.matrix.front());
+  design.tmatrix.resize(n_col, std::vector<std::uint8_t>(n_row, 0.0));
+  for (auto row_idx = 0u; row_idx < n_row; ++row_idx)
+    for (auto col_idx = 0u; col_idx < n_col; ++col_idx)
+      design.tmatrix[col_idx][row_idx] = design.matrix[row_idx][col_idx];
+
+  return is;
+}
+
+std::ostream &
+operator<<(std::ostream &out, const Design &design) {
+  for (std::size_t factor = 0; factor < design.factor_names.size(); ++factor) {
+    if (factor != 0)
+      out << '\t';
+    out << design.factor_names[factor];
+  }
+  out << '\n';
+
+  for (std::size_t i = 0; i < design.n_samples(); ++i) {
+    out << design.sample_names[i];
+    for (std::size_t j = 0; j < design.n_factors(); ++j)
+      out << "\t" << design.matrix[i][j];
+    out << "\n";
+  }
+  return out;
 }

@@ -21,14 +21,15 @@
 
 #include <cstdint>
 #include <istream>
+#include <ostream>
 #include <string>
 #include <vector>
 
 struct Design {
   std::vector<std::string> factor_names;
   std::vector<std::string> sample_names;
-  std::vector<std::vector<double>> matrix;
-  std::vector<std::vector<double>> tmatrix;
+  std::vector<std::vector<std::uint8_t>> matrix;
+  std::vector<std::vector<std::uint8_t>> tmatrix;
   std::size_t
   n_factors() const {
     return factor_names.size();
@@ -38,6 +39,12 @@ struct Design {
     return sample_names.size();
   }
 };
+
+std::istream &
+operator>>(std::istream &is, Design &design);
+
+std::ostream &
+operator<<(std::ostream &os, const Design &design);
 
 struct mcounts {
   std::uint32_t n_reads{};

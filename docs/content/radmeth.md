@@ -116,7 +116,15 @@ neighboring CpGs using [radadjust](../radadjust).
 
 ## Tutorial
 
-This tutorial aims to answer questions users often have about the assumptions
+The data used here is available at:
+
+```txt
+https://github.com/andrewdavidsmith/radmeth-demo-simulated-data
+```
+
+And the results below were generated with v1.5.1 on Linux.
+
+This tutorial should answer questions users often have about the assumptions
 of radmeth and how to interepret the results. We will assume a factor of
 interest, with levels A and B. We will also assume a potentially confounding
 factor, sex, with levels M and F. Further, we have 8 total samples, 2 samples
@@ -274,16 +282,16 @@ differential methylation between levels for our factor of interest (named
 
 ```console
 $ head sim/samples.radmeth
-chr1    163 +   CG  0.0864953   35  22  45  36
-chr1    206 +   CG  0.444024    37  30  43  38
-chr1    232 +   CG  0.756591    28  20  35  26
-chr1    278 +   CG  0.780385    43  35  37  31
-chr1    296 +   CG  0.64704 33  29  38  32
-chr1    310 +   CG  0.640826    37  28  31  22
-chr1    322 +   CG  0.0971364   38  33  47  35
-chr1    324 +   CG  0.257851    40  29  31  26
-chr1    350 +   CG  0.893476    36  30  35  29
-chr1    356 +   CG  0.0527032   37  35  42  33
+chr1    163 +   CG  0.0877822   35  22  45  36
+chr1    206 +   CG  0.442745    37  30  43  38
+chr1    232 +   CG  0.756925    28  20  35  26
+chr1    278 +   CG  0.794626    43  35  37  31
+chr1    296 +   CG  0.635986    33  29  38  32
+chr1    310 +   CG  0.641986    37  28  31  22
+chr1    322 +   CG  0.0973903   38  33  47  35
+chr1    324 +   CG  0.260703    40  29  31  26
+chr1    350 +   CG  0.888242    36  30  35  29
+chr1    356 +   CG  0.0535286   37  35  42  33
 ```
 
 Focusing on the 5th column, we see values between 0 and 1, but none of them
@@ -294,7 +302,7 @@ for all 4 different original sets of features:
 
 ```shell
 for i in M F A B; do
-    dnmtools selectsites -o sim/features_${i}.txt sim/features_${i}.bed sim/samples.radmeth;
+    dnmtools selectsites -relaxed -o sim/features_${i}.txt sim/features_${i}.bed sim/samples.radmeth;
 done
 ```
 
@@ -303,11 +311,11 @@ above identifies sites as significant when they differ between levels A and B
 of the factor of interest:
 
 ```console
-$ for i in sim/features_*.counts; do echo $i `awk 'BEGIN{k=0;c=0}{k+=$5;c+=1}END{print k,c,k/c}' $i`; done | column -t
-sim/features_A.counts  0.255448  430  0.000594064
-sim/features_B.counts  0.114256  372  0.00030714
-sim/features_F.counts  196.093   400  0.490232
-sim/features_M.counts  295.234   588  0.502099
+$ for i in sim/features_[ABFM].txt; do echo $i `awk 'BEGIN{k=0;c=0}{k+=$5;c+=1}END{print k,c,k/c}' $i`; done | column -t
+sim/features_A.txt  0.256072  430  0.000595517
+sim/features_B.txt  0.114786  372  0.000308564
+sim/features_F.txt  197.332   400  0.493329
+sim/features_M.txt  297.728   588  0.50634
 ```
 
 The p-values in features associated with either M or F are averaging around
@@ -344,12 +352,12 @@ analogous but with this modified design matrix:
 
 ```console
 $ dnmtools radmeth -o sim/samples_noint.radmeth -f factor design_noint.txt sim/table.txt
-$ for i in M F A B; do dnmtools selectsites -o sim/features_noint_${i}.txt sim/features_${i}.bed sim/samples_noint.radmeth; done
+$ for i in M F A B; do dnmtools selectsites -relaxed -o sim/features_noint_${i}.txt sim/features_${i}.bed sim/samples_noint.radmeth; done
 $ for i in sim/*_noint_*.txt; do echo $i `awk 'BEGIN{k=0;c=0}{k+=$5;c+=1}END{print k,c,k/c}' $i`; done | column -t
-sim/features_noint_A.txt  8.27788  430  0.0192509
-sim/features_noint_B.txt  15.2391  372  0.0409653
-sim/features_noint_F.txt  77.2438  400  0.193109
-sim/features_noint_M.txt  93.7181  588  0.159385
+sim/features_noint_A.txt  8.27931  430  0.0192542
+sim/features_noint_B.txt  15.2397  372  0.040967
+sim/features_noint_F.txt  77.2656  400  0.193164
+sim/features_noint_M.txt  93.7312  588  0.159407
 ```
 
 Although the sites within features corresponding to A and B are much lower on

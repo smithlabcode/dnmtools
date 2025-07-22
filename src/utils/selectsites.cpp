@@ -294,6 +294,7 @@ main_selectsites(int argc, char *argv[]) {
     bool VERBOSE = false;
     bool keep_file_on_disk = false;
     bool compress_output = false;
+    bool allow_extra_fields = false;
 
     std::string outfile("-");
     std::string summary_file;
@@ -315,6 +316,8 @@ main_selectsites(int argc, char *argv[]) {
     opt_parse.add_opt("summary", 'S', "write summary to this file", false,
                       summary_file);
     opt_parse.add_opt("zip", 'z', "output gzip format", false, compress_output);
+    opt_parse.add_opt("relaxed", '\0', "input has extra fields", false,
+                      allow_extra_fields);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     opt_parse.set_show_defaults();
     std::vector<std::string> leftover_args;
@@ -339,6 +342,8 @@ main_selectsites(int argc, char *argv[]) {
     const std::string regions_file = leftover_args.front();
     const std::string sites_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
+
+    MSite::no_extra_fields = (allow_extra_fields == false);
 
     selectsites_summary summary;
     summary.command_line = get_command_line(argc, argv);

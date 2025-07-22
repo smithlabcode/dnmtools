@@ -401,6 +401,12 @@ main_radmeth(int argc, char *argv[]) {
       "numerical errors in likelihood ratios (NA)",
       false, more_na_info);
     opt_parse.add_opt("factor", 'f', "a factor to test", true, test_factor);
+    opt_parse.add_opt("tolerance", '\0',
+                      "numerical tolerance to test convergence", false,
+                      Regression::tolerance);
+    opt_parse.add_opt("max-iter", '\0',
+                      "max iterations when estimating parameters", false,
+                      Regression::max_iter);
 
     std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);

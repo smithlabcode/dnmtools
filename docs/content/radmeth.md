@@ -417,7 +417,9 @@ name of one of the columns in file design matrix. This is required.
 
 The numerical tolerance for convergence when estimating model parameters.
 This cutoff is applied to the norm of the gradient of the log-likelihood
-function for MLE parameter estimation.
+function for MLE parameter estimation, and is multiplied by both the square
+root of the number of parameters and by the number of methylomes in the
+analysis.
 
 ```txt
  -max-iter

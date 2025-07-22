@@ -105,6 +105,18 @@ SiteProportions::parse(const std::string &line) {
     throw std::runtime_error("failed to parse counts from:\n" + line);
 }
 
+template <typename T>
+static void
+transpose(const std::vector<std::vector<T>> &mat,
+          std::vector<std::vector<T>> &tmat) {
+  const auto n_row = std::size(mat);
+  const auto n_col = std::size(mat.front());
+  tmat.resize(n_col, std::vector<T>(n_row, 0.0));
+  for (auto row_idx = 0u; row_idx < n_row; ++row_idx)
+    for (auto col_idx = 0u; col_idx < n_col; ++col_idx)
+      tmat[col_idx][row_idx] = mat[row_idx][col_idx];
+}
+
 std::istream &
 operator>>(std::istream &is, Design &design) {
   std::string header_encoding;
@@ -136,16 +148,10 @@ operator>>(std::istream &is, Design &design) {
       throw std::runtime_error(
         "each row must have as many columns as factors:\n" + row);
 
-    design.matrix.push_back(std::vector<std::uint8_t>());
-    swap(design.matrix.back(), matrix_row);
+    design.matrix.push_back(matrix_row);
   }
 
-  const auto n_row = std::size(design.matrix);
-  const auto n_col = std::size(design.matrix.front());
-  design.tmatrix.resize(n_col, std::vector<std::uint8_t>(n_row, 0.0));
-  for (auto row_idx = 0u; row_idx < n_row; ++row_idx)
-    for (auto col_idx = 0u; col_idx < n_col; ++col_idx)
-      design.tmatrix[col_idx][row_idx] = design.matrix[row_idx][col_idx];
+  transpose(design.matrix, design.tmatrix);
 
   return is;
 }

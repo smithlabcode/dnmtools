@@ -24,6 +24,7 @@
 #include <iostream>
 #include <iterator>
 #include <numeric>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>

@@ -1,6 +1,6 @@
-/* kmersites: a program to generate a wiggle format file (using the
- * UCSC Genome Browser wiggle format) to indicate the location of
- * sites matching a specific k-mer
+/* kmersites: a program to generate a wiggle format file (using the UCSC
+ * Genome Browser wiggle format) to indicate the location of sites matching a
+ * specific k-mer
  *
  * Copyright (C) 2023 Andrew D. Smith
  *
@@ -17,36 +17,26 @@
  * General Public License for more details.
  */
 
-#include <string>
-#include <vector>
+#include <algorithm>
+#include <cstdint>  // for [u]int[0-9]+_t
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <numeric>
 #include <stdexcept>
-#include <cstdint> // for [u]int[0-9]+_t
-#include <filesystem>
-#include <iterator>
-#include <algorithm>
+#include <string>
+#include <vector>
 
 #include "OptionParser.hpp"
-#include "dnmt_error.hpp"
 #include "smithlab_os.hpp"
 
 #include <bamxx.hpp>
 
-namespace fs = std::filesystem;
-
-using bamxx::bgzf_file;
-
-using std::string;
-using std::vector;
-using std::cerr;
-using std::endl;
-using std::to_string;
-
 static inline auto
-process_chrom_wig(const string &kmer, const int offset, const string &name,
-                  const string &chrom, bgzf_file &out) -> void {
-
+process_chrom_wig(const std::string &kmer, const int offset,
+                  const std::string &name, const std::string &chrom,
+                  bamxx::bgzf_file &out) -> void {
   static const auto variable_step_chrom_header = "variableStep chrom=";
 
   out.write(variable_step_chrom_header + name + "\n");
@@ -54,138 +44,176 @@ process_chrom_wig(const string &kmer, const int offset, const string &name,
   const auto kmer_size = size(kmer);
   const auto chrom_size = size(chrom);
   if (kmer_size > chrom_size)
-    throw dnmt_error("kmer size " + to_string(kmer_size) +
-                     " larger than chrom size " + to_string(chrom_size));
+    throw std::runtime_error("kmer size " + std::to_string(kmer_size) +
+                             " larger than chrom size " +
+                             std::to_string(chrom_size));
 
-  const auto beg_kmer = cbegin(kmer);
-  const auto end_kmer = cend(kmer);
+  const auto beg_kmer = std::cbegin(kmer);
+  const auto end_kmer = std::cend(kmer);
 
-  const auto end_chrom = cend(chrom);
-  auto chrom_itr = cbegin(chrom);
+  const auto end_chrom = std::cend(chrom);
+  auto chrom_itr = std::cbegin(chrom);
   auto chrom_itr_k = chrom_itr + kmer_size;
 
   auto pos = 0;
   while (chrom_itr_k != end_chrom) {
     if (std::equal(beg_kmer, end_kmer, chrom_itr++, chrom_itr_k++))
-      out.write(to_string(pos + offset) + "\t1\n");
+      out.write(std::to_string(pos + offset) + "\t1\n");
     ++pos;
   }
 }
 
+[[nodiscard]] static auto
+read_fasta_file(const std::string &filename)
+  -> std::tuple<std::vector<std::string>, std::vector<std::string>> {
+
+  std::ifstream in(filename);
+  if (!in)
+    throw std::runtime_error("cannot open input file " + filename);
+
+  std::vector<std::string> names;
+  std::vector<std::string> sequences;
+
+  std::string line;
+  while (std::getline(in, line)) {
+    if (line[0] == '>') {
+      const auto first_space = line.find_first_of(" \t", 1);
+      if (first_space == std::string::npos)
+        names.push_back(line.substr(1));
+      else
+        names.push_back(line.substr(1, first_space - 1));
+      sequences.emplace_back();
+    }
+    else
+      sequences.back() += line;
+  }
+  return {names, sequences};
+}
+
 static inline auto
-process_chrom_with_named_lines(const string &kmer, const int offset,
-                               const string &name, const string &chrom,
-                               bgzf_file &out) -> void {
+process_chrom_with_named_lines(const std::string &kmer, const int offset,
+                               const std::string &name,
+                               const std::string &chrom,
+                               bamxx::bgzf_file &out) {
 
   const auto kmer_size = size(kmer);
   const auto chrom_size = size(chrom);
   if (kmer_size > chrom_size)
-    throw dnmt_error("kmer size " + to_string(kmer_size) +
-                     " larger than chrom size " + to_string(chrom_size));
+    throw std::runtime_error("kmer size " + std::to_string(kmer_size) +
+                             " larger than chrom size " +
+                             std::to_string(chrom_size));
 
-  const auto beg_kmer = cbegin(kmer);
-  const auto end_kmer = cend(kmer);
+  const auto beg_kmer = std::cbegin(kmer);
+  const auto end_kmer = std::cend(kmer);
 
-  const auto end_chrom = cend(chrom);
-  auto chrom_itr = cbegin(chrom);
+  const auto end_chrom = std::cend(chrom);
+  auto chrom_itr = std::cbegin(chrom);
   auto chrom_itr_k = chrom_itr + kmer_size;
 
   auto pos = 0;
   while (chrom_itr_k != end_chrom) {
     if (std::equal(beg_kmer, end_kmer, chrom_itr++, chrom_itr_k++))
-      out.write(name + "\t" + to_string(pos + offset) + "\t1\n");
+      out.write(name + "\t" + std::to_string(pos + offset) + "\t1\n");
     ++pos;
   }
+}
+
+[[nodiscard]] static inline auto
+bad_dna_kmer(const std::string &kmer) -> bool {
+  const auto x =
+    std::find_if(std::cbegin(kmer), std::cend(kmer), [](const auto c) {
+      return c != 'A' && c != 'C' && c != 'G' && c != 'T';
+    });
+  return x != std::cend(kmer);
 }
 
 auto
 kmersites(const int argc, char *argv[]) -> int {
   try {
 
-    bool verbose = false;
-    bool show_progress = false;
-    bool compress_output = false;
-    bool name_each_line = false;
+    bool verbose{false};
+    bool show_progress{false};
+    bool compress_output{false};
+    bool name_each_line{false};
 
-    string kmer = "CG";
-    string outfile;
-    // int n_threads = 1;
+    std::string kmer = "CG";
+    std::string outfile;
     int offset = 1;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(fs::path(string(*argv)).filename(),
-                           "get sites matching kmer",
+    OptionParser opt_parse("dnmtools kmersites", "get sites matching kmer",
                            "<fasta-file>");
-    // opt_parse.add_opt("threads", 't', "threads to use (few needed)",
-    //                   false, n_threads);
     opt_parse.add_opt("output", 'o', "output file name (default: stdout)",
                       false, outfile);
-    opt_parse.add_opt("offset", 'O', "offset within kmer to report",
-                      false, offset);
+    opt_parse.add_opt("offset", 'O', "offset within kmer to report", false,
+                      offset);
     opt_parse.add_opt("kmer", 'k', "kmer to report", false, kmer);
     opt_parse.add_opt("zip", 'z', "output gzip format", false, compress_output);
     opt_parse.add_opt("name-each-line", '\0', "name each line with chrom",
                       false, name_each_line);
     opt_parse.add_opt("progress", '\0', "show progress", false, show_progress);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (opt_parse.about_requested() || opt_parse.help_requested() ||
         leftover_args.empty()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
-    const string chroms_file = leftover_args.front();
+    const std::string chroms_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (offset < 0)
-      throw dnmt_error("offset must be non-negative (specified=" +
-                       to_string(offset));
+    if (bad_dna_kmer(kmer)) {
+      std::cerr << "invalid DNA kmer: " << kmer << "\n";
+      return EXIT_FAILURE;
+    }
 
-    // if (n_threads < 0)
-    //   throw dnmt_error("thread count cannot be negative");
+    if (offset < 0)
+      throw std::runtime_error("offset must be non-negative (specified=" +
+                               std::to_string(offset) + ")");
 
     std::ostringstream cmd;
-    copy(argv, argv + argc, std::ostream_iterator<const char *>(cmd, " "));
+    std::copy(argv, argv + argc, std::ostream_iterator<const char *>(cmd, " "));
 
     // file types from HTSlib use "-" for the filename to go to stdout
-    if (outfile.empty()) outfile = "-";
+    if (outfile.empty())
+      outfile = "-";
 
     if (verbose)
-      cerr << "[input fastq file: " << chroms_file << "]" << endl
-           << "[output file: " << outfile << "]" << endl
-           << "[output format: " << (compress_output ? "bgzf" : "text") << "]"
-           << endl
-           // << "[threads requested: " << n_threads << "]" << endl
-           << "[k-mer to report: " << kmer << "]" << endl
-           << "[command line: \"" << cmd.str() << "\"]" << endl;
+      std::cerr << "[input fastq file: " << chroms_file << "]\n"
+                << "[output file: " << outfile << "]\n"
+                << "[output format: " << (compress_output ? "bgzf" : "text")
+                << "]\n"
+                << "[k-mer sequence to report: " << kmer << "]\n"
+                << "[command line: " << cmd.str() << "]\n";
 
-    vector<string> names, chroms;
-    read_fasta_file_short_names(chroms_file, names, chroms);
+    auto [names, chroms] = read_fasta_file(chroms_file);
     for (auto &chrom : chroms)
-      std::transform(cbegin(chrom), cend(chrom), begin(chrom),
+      std::transform(std::cbegin(chrom), std::cend(chrom), std::begin(chrom),
                      [](const char c) { return std::toupper(c); });
 
     // open the output file
-    const auto output_mode = compress_output ? "w" : "wu";
-    bamxx::bgzf_file out(outfile, output_mode);
-    if (!out) throw dnmt_error("error opening output file: " + outfile);
+    bamxx::bgzf_file out(outfile, compress_output ? "w" : "wu");
+    if (!out)
+      throw std::runtime_error("error opening output file: " + outfile);
 
-    for (auto i = 0u; i < size(names); ++i) {
-      if (show_progress) cerr << "processing: " << names[i] << endl;
+    auto chrom_itr = std::cbegin(chroms);
+    for (const auto &name : names) {
+      if (show_progress)
+        std::cerr << "processing: " << name << '\n';
       if (name_each_line)
-        process_chrom_with_named_lines(kmer, offset, names[i], chroms[i], out);
+        process_chrom_with_named_lines(kmer, offset, name, *chrom_itr++, out);
       else
-        process_chrom_wig(kmer, offset, names[i], chroms[i], out);
+        process_chrom_wig(kmer, offset, name, *chrom_itr++, out);
     }
   }
   catch (const std::exception &e) {
-    cerr << e.what() << endl;
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

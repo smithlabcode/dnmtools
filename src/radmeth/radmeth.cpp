@@ -1,9 +1,7 @@
-/* Copyright (C) 2013-2023 University of Southern California and
- *                         Egor Dolzhenko
- *                         Andrew D Smith
- *                         Guilherme Sena
+/* Copyright (C) 2013-2025 Andrew D Smith
  *
- * Authors: Andrew D. Smith and Egor Dolzhenko and Guilherme Sena
+ * Author: Andrew D. Smith
+ * Contributors: Andrew D. Smith and Egor Dolzhenko and Guilherme Sena
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -15,6 +13,15 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
  */
+
+#include "radmeth_model.hpp"
+#include "radmeth_optimize.hpp"
+
+// smithlab headers
+#include "GenomicRegion.hpp"
+#include "OptionParser.hpp"
+#include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
 
 #include <gsl/gsl_cdf.h>  // GSL header for chisqrd distribution
 
@@ -28,20 +35,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-// smithlab headers
-#include "GenomicRegion.hpp"
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
-
-#include "radmeth_model.hpp"
-#include "radmeth_optimize.hpp"
-
-using std::begin;
-using std::cout;
-using std::distance;
-using std::end;
 
 struct file_progress {
   double one_hundred_over_filesize{};
@@ -67,7 +60,6 @@ remove_factor(Design &design, const std::size_t factor_idx) {
     design.matrix[i].erase(std::begin(design.matrix[i]) + factor_idx);
 }
 
-/***************** RADMETH ALGORITHM *****************/
 static bool
 consistent_sample_names(const Regression &reg, const std::string &header) {
   std::istringstream iss(header);
@@ -84,7 +76,7 @@ consistent_sample_names(const Regression &reg, const std::string &header) {
 // function outputs the p-value of the log-likelihood ratio. *Note* that it is
 // assumed that the reduced model has one fewer factor than the reduced model.
 static double
-llr_test(double null_loglik, double full_loglik) {
+llr_test(const double null_loglik, const double full_loglik) {
   // The log-likelihood ratio statistic.
   const double log_lik_stat = -2 * (null_loglik - full_loglik);
 
@@ -100,16 +92,15 @@ llr_test(double null_loglik, double full_loglik) {
 }
 
 static bool
-has_low_coverage(const Regression &reg, const std::size_t test_fac) {
+has_low_coverage(const Regression &reg, const std::size_t test_factor) {
   bool cvrd_in_test_fact_smpls = false;
+  const auto &tcol = reg.design.tmatrix[test_factor];
   for (std::size_t i = 0; i < reg.n_samples() && !cvrd_in_test_fact_smpls; ++i)
-    cvrd_in_test_fact_smpls =
-      (reg.design.matrix[i][test_fac] == 1 && reg.props.mc[i].n_reads != 0);
+    cvrd_in_test_fact_smpls = (tcol[i] == 1 && reg.props.mc[i].n_reads != 0);
 
   bool cvrd_in_other_smpls = false;
   for (std::size_t i = 0; i < reg.n_samples() && !cvrd_in_other_smpls; ++i)
-    cvrd_in_other_smpls =
-      (reg.design.matrix[i][test_fac] != 1 && reg.props.mc[i].n_reads != 0);
+    cvrd_in_other_smpls = (tcol[i] != 1 && reg.props.mc[i].n_reads != 0);
 
   return !cvrd_in_test_fact_smpls || !cvrd_in_other_smpls;
 }
@@ -131,9 +122,9 @@ has_extreme_counts(const Regression &reg) {
 
 [[nodiscard]] static bool
 has_two_values(const Regression &reg, const std::size_t test_factor) {
-  const auto &v = reg.design.tmatrix[test_factor];
-  for (auto i = std::cbegin(v); i != std::cend(v); ++i)
-    if (*i != v[0])
+  const auto &tcol = reg.design.tmatrix[test_factor];
+  for (const auto x : tcol)
+    if (x != tcol[0])
       return true;
   return false;
 }
@@ -145,7 +136,7 @@ get_test_factor_idx(const Regression &model, const std::string &test_factor) {
     std::find(std::cbegin(factors), std::cend(factors), test_factor);
 
   if (itr == std::cend(factors))
-    throw std::runtime_error("Factor not part of design: " + test_factor);
+    throw std::runtime_error("factor not part of design: " + test_factor);
 
   return std::distance(std::cbegin(factors), itr);
 }
@@ -154,16 +145,15 @@ static void
 read_design(const bool verbose, const std::string &design_filename,
             Design &design) {
   if (verbose)
-    std::cerr << "design table filename: " << design_filename << std::endl;
+    std::cerr << "design table filename: " << design_filename << '\n';
   std::ifstream design_file(design_filename);
   if (!design_file)
     throw std::runtime_error("could not open file: " + design_filename);
 
   // initialize full design matrix from file
   design_file >> design;
-
   if (verbose)
-    std::cerr << design << std::endl;
+    std::cerr << design << '\n';
 }
 
 enum class row_status : std::uint8_t {
@@ -174,11 +164,11 @@ enum class row_status : std::uint8_t {
 };
 
 [[nodiscard]] static std::vector<double>
-drop_idx(const std::vector<double> &v, const std::size_t to_drop) {
+drop_idx(const std::vector<double> &v, const std::size_t idx_to_drop) {
   std::vector<double> u;
   u.reserve(std::size(v) - 1);
   for (auto i = 0u; i < std::size(v); ++i)
-    if (i != to_drop)
+    if (i != idx_to_drop)
       u.push_back(v[i]);
   return u;
 }
@@ -218,12 +208,16 @@ radmeth(const bool show_progress, const bool more_na_info,
   std::string sample_names_header;
   std::getline(table_file, sample_names_header);
 
-  if (!consistent_sample_names(alt_model, sample_names_header))
-    throw std::runtime_error(
-      "header:\n" + sample_names_header + "\n" +
-      "does not match factor names or their order in the\n"
-      "design matrix. Check that the design matrix and\n"
-      "the proportion table are correctly formatted.");
+  if (!consistent_sample_names(alt_model, sample_names_header)) {
+    // clang-format off
+    const auto message =
+      R"(
+does not match factor names or their order in the design matrix. Check
+that the design matrix and the proportion table are correctly formatted.
+)";
+    // clang-format on
+    throw std::runtime_error("header:\n" + sample_names_header + message);
+  }
 
   const std::size_t n_samples = alt_model.design.n_samples();
 
@@ -266,9 +260,9 @@ radmeth(const bool show_progress, const bool more_na_info,
             throw std::runtime_error("found row with wrong number of columns");
 
           const auto [p_val, status] = [&]() -> std::tuple<double, row_status> {
-            // Skip the test if (1) no coverage in all cases or in all controls,
-            // or (2) the site is completely methylated or completely
-            // unmethylated across all samples.
+            // Skip the test if (1) no coverage in all cases or in all
+            // controls, or (2) the site is completely methylated or
+            // completely unmethylated across all samples.
             if (has_low_coverage(t_alt_model, test_factor_idx))
               return std::tuple{1.0, row_status::na_low_cov};
 
@@ -336,11 +330,11 @@ radmeth(const bool show_progress, const bool more_na_info,
             cursor += n_pval_bytes;
 
             // clang-format off
-          const int n_suffix_bytes = std::sprintf(cursor, suffix_fmt,
-                                                  n_reads_factor,
-                                                  n_meth_factor,
-                                                  n_reads_others,
-                                                  n_meth_others);
+            const int n_suffix_bytes = std::sprintf(cursor, suffix_fmt,
+                                                    n_reads_factor,
+                                                    n_meth_factor,
+                                                    n_reads_others,
+                                                    n_meth_others);
             // clang-format on
             if (n_suffix_bytes < 0)
               return n_suffix_bytes;
@@ -368,10 +362,6 @@ radmeth(const bool show_progress, const bool more_na_info,
   }
 }
 
-/***********************************************************************
- * Run beta-binoimial regression using the specified table with
- * proportions and design matrix
- */
 int
 main_radmeth(int argc, char *argv[]) {
   try {
@@ -455,7 +445,7 @@ main_radmeth(int argc, char *argv[]) {
             orig_alt_model, orig_null_model, test_factor_idx);
   }
   catch (const std::exception &e) {
-    std::cerr << "ERROR: " << e.what() << std::endl;
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

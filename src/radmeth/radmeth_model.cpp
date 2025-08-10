@@ -29,7 +29,7 @@ double Regression::stepsize = 0.001;
 std::uint32_t Regression::max_iter = 250;
 
 void
-SiteProportions::parse(const std::string &line) {
+SiteProp::parse(const std::string &line) {
   const auto first_ws = line.find_first_of(" \t");
 
   // Parse the row name (must be like: "chr:position:strand:context")
@@ -105,6 +105,27 @@ SiteProportions::parse(const std::string &line) {
     throw std::runtime_error("failed to parse counts from:\n" + line);
 }
 
+static void
+make_groups(Design &design) {
+  auto s = design.matrix;
+  std::sort(std::begin(s), std::end(s));
+  s.erase(std::unique(std::begin(s), std::end(s)), std::end(s));
+  design.groups = std::move(s);
+}
+
+static void
+assign_groups(Design &design) {
+  const auto &matrix = design.matrix;
+  const auto &s = design.groups;
+  const auto n_samples = design.n_samples();
+  auto &group_id = design.group_id;
+  group_id.resize(n_samples);
+  for (auto i = 0u; i < n_samples; ++i) {
+    const auto x = std::find(std::cbegin(s), std::cend(s), matrix[i]);
+    group_id[i] = std::distance(std::cbegin(s), x);
+  }
+}
+
 template <typename T>
 static void
 transpose(const std::vector<std::vector<T>> &mat,
@@ -152,8 +173,31 @@ operator>>(std::istream &is, Design &design) {
   }
 
   transpose(design.matrix, design.tmatrix);
+  make_groups(design);
+  assign_groups(design);
 
   return is;
+}
+
+[[nodiscard]] Design
+Design::drop_factor(const std::size_t factor_idx) {
+  // clang-format off
+  Design design{
+    factor_names,
+    sample_names,
+    matrix,
+    tmatrix,
+    groups,
+    group_id,
+  };
+  // clang-format on
+  design.factor_names.erase(std::begin(design.factor_names) + factor_idx);
+  for (auto i = 0u; i < n_samples(); ++i)
+    design.matrix[i].erase(std::begin(design.matrix[i]) + factor_idx);
+  transpose(design.matrix, design.tmatrix);
+  make_groups(design);
+  assign_groups(design);
+  return design;
 }
 
 std::ostream &
@@ -168,8 +212,9 @@ operator<<(std::ostream &out, const Design &design) {
   for (std::size_t i = 0; i < design.n_samples(); ++i) {
     out << design.sample_names[i];
     for (std::size_t j = 0; j < design.n_factors(); ++j)
-      out << "\t" << design.matrix[i][j];
+      out << "\t" << static_cast<std::uint32_t>(design.matrix[i][j]);
     out << "\n";
   }
+
   return out;
 }

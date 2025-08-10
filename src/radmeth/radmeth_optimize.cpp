@@ -1,9 +1,8 @@
-/* Copyright (C) 2013-2023 University of Southern California and
- *                         Egor Dolzhenko
+/* Copyright (C) 2013-2025 University of Southern California and
  *                         Andrew D Smith
- *                         Guilherme Sena
  *
- * Authors: Andrew D. Smith and Egor Dolzhenko and Guilherme Sena
+ * Author: Andrew D. Smith
+ * Contributors: Egor Dolzhenko and Guilherme Sena
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -23,140 +22,133 @@
 #include <gsl/gsl_multimin.h>
 #include <gsl/gsl_vector.h>
 
-#include <iomanip>
-#include <iostream>
 #include <numeric>
 #include <stdexcept>
 #include <vector>
 
+#include <iomanip>
+#include <iostream>
+
+[[nodiscard]] static inline double
+logistic(const double x) {
+  return 1.0 / (1.0 / std::exp(x) + 1.0);
+}
+
 template <typename T>
 [[nodiscard]] static double
-pi(const std::vector<T> &v, const gsl_vector *params) {
-  // ADS: this function doesn't have a very helpful name
+get_p(const std::vector<T> &v, const gsl_vector *params) {
   const auto a = v.data();
-  const double dot = std::inner_product(a, a + std::size(v), params->data, 0.0);
-  // const double p = std::exp(dot) / (1.0 + std::exp(dot));
-  return 1.0 / (1.0 / std::exp(dot) + 1.0);
+  return logistic(std::inner_product(a, a + std::size(v), params->data, 0.0));
 }
 
 [[nodiscard]] static double
 neg_loglik(const gsl_vector *params, void *object) {
   Regression *reg = (Regression *)(object);
 
-  // ADS: the dispersion parameter phi is the last element of
-  // parameter vector
+  // ADS: dispersion param phi is the last element of parameter vector
   const double disp_param = gsl_vector_get(params, reg->design.n_factors());
-  // const double phi = std::exp(disp_param) / (1.0 + std::exp(disp_param));
-  const double phi = 1.0 / (1.0 / std::exp(disp_param) + 1.0);
+  const double phi = logistic(disp_param);
   const double one_minus_phi = 1.0 - phi;
 
-  const auto &mc = reg->props.mc;
-  const auto &mat = reg->design.matrix;
+  const auto n_groups = reg->n_groups();
+  const auto &groups = reg->design.groups;
+  const auto &cumul = reg->cumul;
 
   double log_lik = 0;
-  const std::size_t n_samples = reg->design.n_samples();
-  for (std::size_t col_idx = 0; col_idx < n_samples; ++col_idx) {
-    const auto n = mc[col_idx].n_reads;
-    const auto y = mc[col_idx].n_meth;
-    const double p = pi(mat[col_idx], params);
+  for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
+    const double p = get_p(groups[g_idx], params);
     const double one_minus_p = 1.0 - p;
 
     const double term1 = one_minus_phi * p;
-    for (auto k = 0u; k < y; ++k)
-      log_lik += std::log(term1 + phi * k);
+    const auto &cumul_y = cumul[g_idx].m_counts;
+    for (std::size_t k = 0; k < std::size(cumul_y); ++k)
+      log_lik += cumul_y[k] * std::log(term1 + phi * k);
 
     const double term2 = one_minus_phi * one_minus_p;
-    for (auto k = 0u; k < n - y; ++k)
-      log_lik += std::log(term2 + phi * k);
+    const auto &cumul_d = cumul[g_idx].d_counts;
+    for (std::size_t k = 0; k < std::size(cumul_d); ++k)
+      log_lik += cumul_d[k] * std::log(term2 + phi * k);
 
-    for (auto k = 0u; k < n; ++k)
-      // log_lik -= std::log(1.0 + phi * (k - 1.0));
-      log_lik -= std::log1p(phi * (k - 1.0));
+    const auto &cumul_n = cumul[g_idx].r_counts;
+    for (std::size_t k = 0; k < std::size(cumul_n); ++k)
+      log_lik -= cumul_n[k] * std::log1p(phi * (k - 1.0));
   }
+
   return -log_lik;
 }
 
 static void
 neg_gradient(const gsl_vector *params, void *object, gsl_vector *output) {
   Regression *reg = (Regression *)(object);
-  const std::size_t n_samples = reg->design.n_samples();
-  const std::size_t n_factors = reg->design.n_factors();
 
-  /// ADS: using scratch space held in reg instead of allocating here
-  // std::vector<double> p_v(n_samples, 0.0);
+  const auto n_groups = reg->n_groups();
+  const auto &groups = reg->design.groups;
+  const auto &cumul = reg->cumul;
+
+  // ADS: using scratch space held in reg instead of allocating here
   auto &p_v = reg->p_v;
-  for (auto col_idx = 0u; col_idx < n_samples; ++col_idx)
-    p_v[col_idx] = pi(reg->design.matrix[col_idx], params);
+  for (auto g_idx = 0u; g_idx < n_groups; ++g_idx)
+    p_v[g_idx] = get_p(groups[g_idx], params);
 
+  const std::size_t n_factors = reg->design.n_factors();
   const double disp_param = gsl_vector_get(params, n_factors);
 
-  const auto &tmat = reg->design.tmatrix;
-  // const double phi = std::exp(disp_param) / (1.0 + std::exp(disp_param));
-  const double phi = 1.0 / (1.0 / std::exp(disp_param) + 1.0);
+  const double phi = logistic(disp_param);
   const double one_minus_phi = 1.0 - phi;
 
-  const auto &mc = reg->props.mc;
+  // init output to zero for all factors
+  gsl_vector_set_all(output, 0.0);
 
-  for (std::size_t factor_idx = 0; factor_idx < n_factors; ++factor_idx) {
-    double deriv = 0;
-    const auto &vec = tmat[factor_idx];
-    for (std::size_t col_idx = 0; col_idx < n_samples; ++col_idx) {
-      const auto n = mc[col_idx].n_reads;
-      const auto y = mc[col_idx].n_meth;
-      const double p = p_v[col_idx];
-      const double one_minus_p = 1.0 - p;
+  for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
+    const double p = p_v[g_idx];
+    const double one_minus_p = 1.0 - p;
+    const double denom_term1 = one_minus_phi * p;
+    const double denom_term2 = one_minus_phi * one_minus_p;
 
-      const double denom_term1 = one_minus_phi * p;
-      const double factor = denom_term1 * one_minus_p * vec[col_idx];
-      if (factor == 0)
+    double term = 0;
+
+    const auto &cumul_y = cumul[g_idx].m_counts;
+    for (auto k = 0u; k < std::size(cumul_y); ++k)
+      term += cumul_y[k] / (denom_term1 + phi * k);
+
+    const auto &cumul_d = cumul[g_idx].d_counts;
+    for (auto k = 0u; k < std::size(cumul_d); ++k)
+      term -= cumul_d[k] / (denom_term2 + phi * k);
+
+    const auto &g = groups[g_idx];
+
+    for (std::size_t factor_idx = 0; factor_idx < n_factors; ++factor_idx) {
+      const auto level = g[factor_idx];
+      if (level == 0)
         continue;
-
-      double term = 0;
-
-      const auto accum_term = [&](auto k, const auto lim,
-                                  const double denom_base) {
-        for (; k < lim; ++k)
-          term += 1.0 / (denom_base + phi * k);
-      };
-
-      const auto accum_subtract_term = [&](auto k, const auto lim,
-                                           const double denom_base) {
-        for (; k < lim; ++k)
-          term -= 1.0 / (denom_base + phi * k);
-      };
-
-      accum_term(0u, y, denom_term1);
-      accum_subtract_term(0u, n - y, one_minus_phi * one_minus_p);
-
+      const double factor = denom_term1 * one_minus_p * level;
+      double deriv = gsl_vector_get(output, factor_idx);
       deriv += term * factor;
+      gsl_vector_set(output, factor_idx, deriv);
     }
-    gsl_vector_set(output, factor_idx, deriv);
   }
 
   double deriv = 0;
-  for (std::size_t col_idx = 0; col_idx < n_samples; ++col_idx) {
-    const auto n = mc[col_idx].n_reads;
-    const auto y = mc[col_idx].n_meth;
-    const double p = p_v[col_idx];
+  for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
+    const double p = get_p(groups[g_idx], params);
     const double one_minus_p = 1.0 - p;
 
-    double term = 0;
-    const auto accum_term = [&](auto k, const auto lim, const double num_shift,
-                                const double denom_base) {
-      for (; k < lim; ++k)
-        term += (k - num_shift) / (denom_base + phi * k);
-    };
-    const auto accum_subtract_term = [&](auto k, const auto lim) {
-      for (; k < lim; ++k)
-        term -= (k - 1.0) / (1.0 + phi * (k - 1.0));
-    };
+    const double term1 = one_minus_phi * p;
+    const auto &cumul_y = cumul[g_idx].m_counts;
+    for (auto k = 0u; k < std::size(cumul_y); ++k)
+      deriv += cumul_y[k] * (k - p) / (term1 + phi * k);
 
-    accum_term(0u, y, p, one_minus_phi * p);
-    accum_term(0u, n - y, one_minus_p, one_minus_phi * one_minus_p);
-    accum_subtract_term(0u, n);
+    const double term2 = one_minus_phi * one_minus_p;
+    const auto &cumul_d = cumul[g_idx].d_counts;
+    for (auto k = 0u; k < std::size(cumul_d); ++k)
+      deriv += cumul_d[k] * (k - one_minus_p) / (term2 + phi * k);
 
-    deriv += term * phi * one_minus_phi;
+    const auto &cumul_n = cumul[g_idx].r_counts;
+    for (std::size_t k = 0; k < std::size(cumul_n); ++k)
+      deriv -= cumul_n[k] * (k - 1.0) / (1.0 + phi * (k - 1.0));
   }
+  deriv *= (phi * one_minus_phi);
+
   gsl_vector_set(output, n_factors, deriv);
   gsl_vector_scale(output, -1.0);
 }
@@ -168,10 +160,60 @@ neg_loglik_and_grad(const gsl_vector *params, void *object, double *loglik_val,
   neg_gradient(params, object, d_loglik_val);
 }
 
-bool
+static void
+get_cumulative(const std::vector<std::uint32_t> &group_id,
+               const std::uint32_t n_groups, const std::vector<mcounts> &mc,
+               std::vector<cumulative_counts> &cumul) {
+  const auto n_cols = std::size(mc);
+  cumul.clear();
+  cumul.resize(n_groups);
+
+  const auto compute_cumulative = [&](auto get_value, auto get_vector) {
+    // phase 1: determine max value for each group
+    for (auto g_idx = 0u; g_idx < n_groups; ++g_idx) {
+      std::uint32_t max_v{};
+      for (auto c_idx = 0u; c_idx < n_cols; ++c_idx) {
+        if (group_id[c_idx] == g_idx) {
+          const auto val = get_value(mc[c_idx]);
+          if (val > max_v)
+            max_v = val;
+        }
+      }
+      get_vector(cumul[g_idx]).resize(max_v, 0);
+    }
+
+    // phase 2: fill cumulative counts
+    for (auto c_idx = 0u; c_idx < n_cols; ++c_idx) {
+      const auto g_idx = group_id[c_idx];
+      const auto val = get_value(mc[c_idx]);
+      auto &vec = get_vector(cumul[g_idx]);
+      for (auto i = 0u; i < val; ++i)
+        vec[i]++;
+    }
+  };
+  // call the lambda 3 times for m_counts, r_counts, d_counts
+  compute_cumulative([](const mcounts &m) { return m.n_meth; },
+                     [](cumulative_counts &c) -> std::vector<std::uint32_t> & {
+                       return c.m_counts;
+                     });
+
+  compute_cumulative([](const mcounts &m) { return m.n_reads; },
+                     [](cumulative_counts &c) -> std::vector<std::uint32_t> & {
+                       return c.r_counts;
+                     });
+
+  compute_cumulative([](const mcounts &m) { return m.n_reads - m.n_meth; },
+                     [](cumulative_counts &c) -> std::vector<std::uint32_t> & {
+                       return c.d_counts;
+                     });
+}
+
+[[nodiscard]] bool
 fit_regression_model(Regression &r, std::vector<double> &params_init) {
   const auto stepsize = Regression::stepsize;
   const auto max_iter = Regression::max_iter;
+
+  get_cumulative(r.design.group_id, r.design.n_groups(), r.props.mc, r.cumul);
 
   // one more than the number of factors
   const std::size_t n_params = r.n_factors() + 1;
@@ -180,7 +222,7 @@ fit_regression_model(Regression &r, std::vector<double> &params_init) {
     params_init.back() = -2.5;
   }
 
-  r.p_v.resize(r.n_samples());
+  r.p_v.resize(r.n_groups());
 
   const double tolerance =
     std::sqrt(n_params) * r.n_samples() * Regression::tolerance;
@@ -204,7 +246,7 @@ fit_regression_model(Regression &r, std::vector<double> &params_init) {
   // - gsl_multimin_fdfminimizer_vector_bfgs2
   // - gsl_multimin_fdfminimizer_steepest_descent
   const gsl_multimin_fdfminimizer_type *minimizer =
-    gsl_multimin_fdfminimizer_conjugate_fr;
+    gsl_multimin_fdfminimizer_conjugate_pr;
 
   gsl_multimin_fdfminimizer *s =
     gsl_multimin_fdfminimizer_alloc(minimizer, n_params);
@@ -225,7 +267,6 @@ fit_regression_model(Regression &r, std::vector<double> &params_init) {
     // check status from gradient
     status = gsl_multimin_test_gradient(s->gradient, tolerance);
   } while (status == GSL_CONTINUE && ++iter < max_iter);
-  // ADS: What is a reasonable number of iterations?
 
   r.max_loglik = -1.0 * neg_loglik(s->x, &r);
 

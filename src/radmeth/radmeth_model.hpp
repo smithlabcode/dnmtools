@@ -25,7 +25,7 @@
 #include <string>
 #include <vector>
 
-struct cumulative_counts {
+struct cumul_counts {
   std::vector<std::uint32_t> m_counts;
   std::vector<std::uint32_t> r_counts;
   std::vector<std::uint32_t> d_counts;
@@ -94,7 +94,7 @@ struct Regression {
   SiteProp props;
   double max_loglik{};
 
-  std::vector<cumulative_counts> cumul;
+  std::vector<cumul_counts> cumul;
   std::vector<double> p_v;  // scratch space
 
   [[nodiscard]] std::size_t

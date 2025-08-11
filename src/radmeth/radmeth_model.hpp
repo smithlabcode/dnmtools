@@ -25,19 +25,37 @@
 #include <string>
 #include <vector>
 
+struct cumul_counts {
+  std::vector<std::uint32_t> m_counts;
+  std::vector<std::uint32_t> r_counts;
+  std::vector<std::uint32_t> d_counts;
+};
+
 struct Design {
   std::vector<std::string> factor_names;
   std::vector<std::string> sample_names;
   std::vector<std::vector<std::uint8_t>> matrix;
   std::vector<std::vector<std::uint8_t>> tmatrix;
-  std::size_t
+  std::vector<std::vector<std::uint8_t>> groups;
+  std::vector<std::uint32_t> group_id;
+
+  [[nodiscard]] std::size_t
   n_factors() const {
-    return factor_names.size();
+    return std::size(factor_names);
   }
-  std::size_t
+
+  [[nodiscard]] std::size_t
+  n_groups() const {
+    return std::size(groups);
+  }
+
+  [[nodiscard]] std::size_t
   n_samples() const {
-    return sample_names.size();
+    return std::size(sample_names);
   }
+
+  [[nodiscard]] Design
+  drop_factor(const std::size_t factor_idx);
 };
 
 std::istream &
@@ -56,7 +74,7 @@ operator>>(std::istream &in, mcounts &rm) {
   return in >> rm.n_reads >> rm.n_meth;
 }
 
-struct SiteProportions {
+struct SiteProp {
   std::string chrom;
   std::size_t position{};
   char strand{};
@@ -68,18 +86,27 @@ struct SiteProportions {
 };
 
 struct Regression {
-  static double tolerance;        // 1e-4;
+  static double tolerance;        // 1e-3;
   static double stepsize;         // 0.001;
-  static std::uint32_t max_iter;  // 700;
+  static std::uint32_t max_iter;  // 250;
 
   Design design;
-  SiteProportions props;
+  SiteProp props;
   double max_loglik{};
-  std::vector<double> p_v;  // scratch space
+
+  // scratch space
+  std::vector<cumul_counts> cumul;
+  std::vector<double> p_v;
+  std::vector<double> log1p_fact_v;
 
   [[nodiscard]] std::size_t
   n_factors() const {
     return design.n_factors();
+  }
+
+  [[nodiscard]] std::size_t
+  n_groups() const {
+    return design.n_groups();
   }
 
   [[nodiscard]] std::size_t

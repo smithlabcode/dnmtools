@@ -43,22 +43,16 @@ struct file_progress {
     one_hundred_over_filesize{100.0 / std::filesystem::file_size(filename)} {}
   void
   operator()(std::ifstream &in) {
-    const std::size_t curr_offset = in.tellg() * one_hundred_over_filesize;
+    const std::size_t curr_offset =
+      in.eof() ? 100 : in.tellg() * one_hundred_over_filesize;
     if (curr_offset <= prev_offset)
       return;
-    std::cerr << "[progress: " << std::setw(3) << curr_offset
-              << (curr_offset == 100 ? "%]\n" : "%]\r");
+    std::cerr << "\r[progress: " << std::setw(3) << curr_offset
+              << (curr_offset == 100 ? "%]\n" : "%]");
     prev_offset = (curr_offset == 100) ? std::numeric_limits<std::size_t>::max()
                                        : curr_offset;
   }
 };
-
-static void
-remove_factor(Design &design, const std::size_t factor_idx) {
-  design.factor_names.erase(std::begin(design.factor_names) + factor_idx);
-  for (std::size_t i = 0; i < design.n_samples(); ++i)
-    design.matrix[i].erase(std::begin(design.matrix[i]) + factor_idx);
-}
 
 static bool
 consistent_sample_names(const Regression &reg, const std::string &header) {
@@ -141,19 +135,14 @@ get_test_factor_idx(const Regression &model, const std::string &test_factor) {
   return std::distance(std::cbegin(factors), itr);
 }
 
-static void
-read_design(const bool verbose, const std::string &design_filename,
-            Design &design) {
-  if (verbose)
-    std::cerr << "design table filename: " << design_filename << '\n';
+[[nodiscard]] static Design
+read_design(const std::string &design_filename) {
   std::ifstream design_file(design_filename);
   if (!design_file)
     throw std::runtime_error("could not open file: " + design_filename);
-
-  // initialize full design matrix from file
+  Design design;
   design_file >> design;
-  if (verbose)
-    std::cerr << design << '\n';
+  return design;
 }
 
 enum class row_status : std::uint8_t {
@@ -219,7 +208,7 @@ that the design matrix and the proportion table are correctly formatted.
     throw std::runtime_error("header:\n" + sample_names_header + message);
   }
 
-  const std::size_t n_samples = alt_model.design.n_samples();
+  const std::size_t n_samples = alt_model.n_samples();
 
   std::ofstream out(outfile);
   if (!out)
@@ -302,11 +291,12 @@ that the design matrix and the proportion table are correctly formatted.
 
           n_bytes[b] = [&] {
             // clang-format off
-            const int n_prefix_bytes = std::sprintf(bufs[b].data(), prefix_fmt,
-                                                    t_alt_model.props.chrom.data(),
-                                                    t_alt_model.props.position,
-                                                    t_alt_model.props.strand,
-                                                    t_alt_model.props.context.data());
+            const int n_prefix_bytes =
+              std::sprintf(bufs[b].data(), prefix_fmt,
+                           t_alt_model.props.chrom.data(),
+                           t_alt_model.props.position,
+                           t_alt_model.props.strand,
+                           t_alt_model.props.context.data());
             // clang-format on
             if (n_prefix_bytes < 0)
               return n_prefix_bytes;
@@ -360,6 +350,9 @@ that the design matrix and the proportion table are correctly formatted.
     if (n_lines < n_threads)
       break;
   }
+
+  if (show_progress)
+    progress(table_file);
 }
 
 int
@@ -421,28 +414,33 @@ main_radmeth(int argc, char *argv[]) {
     const std::string table_filename(leftover_args.back());
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    if (verbose)
+      std::cerr << "design table filename: " << design_filename << '\n';
+
     // initialize full design matrix from file
-    Regression orig_alt_model;
-    read_design(verbose, design_filename, orig_alt_model.design);
+    Regression alt_model;
+    alt_model.design = read_design(design_filename);
+    if (verbose)
+      std::cerr << "Alternate model:\n" << alt_model.design << '\n';
 
     // Check that provided test factor name exists and find its index.
-    const auto test_factor_idx =
-      get_test_factor_idx(orig_alt_model, test_factor);
+    const auto test_factor_idx = get_test_factor_idx(alt_model, test_factor);
 
     // verify that the design includes more than one level for the
     // test factor
-    if (!has_two_values(orig_alt_model, test_factor_idx)) {
-      const auto first_level = orig_alt_model.design.matrix[0][test_factor_idx];
+    if (!has_two_values(alt_model, test_factor_idx)) {
+      const auto first_level = alt_model.design.matrix[0][test_factor_idx];
       throw std::runtime_error("test factor only one level: " + test_factor +
                                ", " + std::to_string(first_level));
     }
 
-    Regression orig_null_model;
-    orig_null_model.design = orig_alt_model.design;
-    remove_factor(orig_null_model.design, test_factor_idx);
+    Regression null_model = alt_model;
+    null_model.design = alt_model.design.drop_factor(test_factor_idx);
+    if (verbose)
+      std::cerr << "Null model:\n" << null_model.design << '\n';
 
     radmeth(show_progress, more_na_info, n_threads, table_filename, outfile,
-            orig_alt_model, orig_null_model, test_factor_idx);
+            alt_model, null_model, test_factor_idx);
   }
   catch (const std::exception &e) {
     std::cerr << e.what() << '\n';

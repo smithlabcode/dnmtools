@@ -75,10 +75,7 @@ operator>>(std::istream &in, mcounts &rm) {
 }
 
 struct SiteProp {
-  std::string chrom;
-  std::size_t position{};
-  char strand{};
-  std::string context;
+  std::string rowname;
   std::vector<mcounts> mc;
 
   void

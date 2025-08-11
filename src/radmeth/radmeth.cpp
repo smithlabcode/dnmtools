@@ -37,25 +37,20 @@
 #include <vector>
 
 struct file_progress {
-  double one_thousand_over_filesize{};
+  double one_hundred_over_filesize{};
   std::size_t prev_offset{};
   explicit file_progress(const std::string &filename) :
-    one_thousand_over_filesize{1000.0 / std::filesystem::file_size(filename)} {}
+    one_hundred_over_filesize{100.0 / std::filesystem::file_size(filename)} {}
   void
   operator()(std::ifstream &in) {
     const std::size_t curr_offset =
-      in.eof() ? 1000 : in.tellg() * one_thousand_over_filesize;
+      in.eof() ? 100 : in.tellg() * one_hundred_over_filesize;
     if (curr_offset <= prev_offset)
       return;
-    std::ios old_state(nullptr);
-    old_state.copyfmt(std::cerr);
-    std::cerr << "\r[progress: " << std::setw(5) << std::fixed
-              << std::setprecision(1) << (curr_offset / 10.0)
-              << (curr_offset == 1000 ? "%]\n" : "%]");
-    std::cerr.copyfmt(old_state);
-    prev_offset = (curr_offset == 1000)
-                    ? std::numeric_limits<std::size_t>::max()
-                    : curr_offset;
+    std::cerr << "\r[progress: " << std::setw(3) << curr_offset
+              << (curr_offset == 100 ? "%]\n" : "%]");
+    prev_offset = (curr_offset == 100) ? std::numeric_limits<std::size_t>::max()
+                                       : curr_offset;
   }
 };
 
@@ -167,9 +162,6 @@ drop_idx(const std::vector<double> &v, const std::size_t idx_to_drop) {
   return u;
 }
 
-/// ADS: this function is not currently used, as the threads do not operate in
-/// "chunks"
-/*
 static inline void
 get_chunk_bounds(const std::uint32_t n_elements, const std::uint32_t n_chunks,
                  std::vector<std::pair<std::uint32_t, std::uint32_t>> &chunks) {
@@ -183,7 +175,6 @@ get_chunk_bounds(const std::uint32_t n_elements, const std::uint32_t n_chunks,
     block_start = block_end;
   }
 }
-*/
 
 static void
 radmeth(const bool show_progress, const bool more_na_info,
@@ -233,7 +224,7 @@ that the design matrix and the proportion table are correctly formatted.
   std::vector<Regression> alt_models(n_threads, alt_model);
   std::vector<Regression> null_models(n_threads, null_model);
 
-  // std::vector<std::pair<std::uint32_t, std::uint32_t>> chunks(n_threads);
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> chunks(n_threads);
 
   // Iterate over rows in the file and do llr test on proportions from
   // each. Do this in sets of rows to avoid having to spawn too many threads.
@@ -244,21 +235,15 @@ that the design matrix and the proportion table are correctly formatted.
     if (n_lines == 0)
       break;
 
-    /// ADS: chunks not used
-    // get_chunk_bounds(n_lines, n_threads, chunks);
+    get_chunk_bounds(n_lines, n_threads, chunks);
 
     std::vector<std::thread> threads;
     for (auto thread_id = 0u; thread_id < n_threads; ++thread_id) {
       threads.emplace_back([&, thread_id] {
-        /// ADS: chunks not used
-        // const auto &[chunk_beg, chunk_end] = chunks[thread_id];
+        const auto &[chunk_beg, chunk_end] = chunks[thread_id];
         auto &t_alt_model = alt_models[thread_id];
         auto &t_null_model = null_models[thread_id];
-        /// ADS: chunks not used
-        // for (auto b = chunk_beg; b != chunk_end; ++b) {
-        for (auto b = 0u; b < n_lines; ++b) {
-          if (b % n_threads != thread_id)
-            continue;
+        for (auto b = chunk_beg; b != chunk_end; ++b) {
           t_alt_model.props.parse(lines[b]);
           if (t_alt_model.props_size() != n_samples)
             throw std::runtime_error("found row with wrong number of columns");

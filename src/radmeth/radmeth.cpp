@@ -26,6 +26,7 @@
 #include <gsl/gsl_cdf.h>  // GSL header for chisqrd distribution
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -35,6 +36,24 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+[[nodiscard]] static std::string
+format_duration(const std::chrono::duration<double> elapsed) {
+  static constexpr auto s_per_h = 3600;
+  static constexpr auto s_per_m = 60;
+  const double tot_s = elapsed.count();
+
+  // break down into hours, minutes, seconds
+  const std::uint32_t hours = tot_s / 3600;
+  const std::uint32_t minutes = (static_cast<int>(tot_s) % s_per_h) / s_per_m;
+  const double seconds = tot_s - (hours * s_per_h) - (minutes * s_per_m);
+
+  std::ostringstream oss;
+  oss << std::setfill('0') << std::setw(2) << hours << ":" << std::setfill('0')
+      << std::setw(2) << minutes << ":" << std::fixed << std::setprecision(2)
+      << std::setw(5) << seconds;
+  return oss.str();
+}
 
 struct file_progress {
   double one_thousand_over_filesize{};
@@ -454,8 +473,14 @@ main_radmeth(int argc, char *argv[]) {
     if (verbose)
       std::cerr << "Null model:\n" << null_model.design << '\n';
 
+    const auto start_time = std::chrono::steady_clock::now();
     radmeth(show_progress, more_na_info, n_threads, table_filename, outfile,
             alt_model, null_model, test_factor_idx);
+    const auto stop_time = std::chrono::steady_clock::now();
+
+    if (verbose)
+      std::cerr << "[total time: " << format_duration(stop_time - start_time)
+                << "]\n";
   }
   catch (const std::exception &e) {
     std::cerr << e.what() << '\n';

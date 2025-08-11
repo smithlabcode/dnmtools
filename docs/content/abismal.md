@@ -1,8 +1,9 @@
 # abismal - another bisulfite mapping algorithm
 
 ## Synopsis
+
 ```console
-$ dnmtools abismal [OPTIONS] input.fq [input-r2.fq]
+dnmtools abismal [OPTIONS] input.fq [input-r2.fq]
 ```
 
 # Description
@@ -53,10 +54,13 @@ potential mapping locations for reads that begin with their sequence.
 To produce this index run the following command:
 
 ```console
-$ abismalidx  <genome folder or file> <index file>
+$ dnmtools abismalidx genome.fa genome.idx
 ```
 
-For the human genome, whose size is 3 GB, the resulting index is
+Where `genome.fa` is the name of your reference genome, and `genome.idx` is
+what you decided to name your abismal index file (you can name it anything).
+
+For the human genome hg38 reference, with size 3 GB, the resulting index is
 approximately 2.5 GB.
 
 ### Decompressing and isolating paired-end reads
@@ -211,10 +215,10 @@ $ mkdir reads_split
 $ for i in reads/*.txt; do split -a 3 -d -l 12000000 ${i} reads_split/$(basename $i); done
 ```
 
-Notice that the number of lines per split file is 12M, since we want
-3M reads, and there are 4 lines per read. If you split the reads like
-this, you will need to "unsplit" them after the mapping is done. This
-can be done using the `samtools merge` command.
+Notice that the number of lines per split file is 12M, since we want 3M reads,
+and there are 4 lines per read. If you split the reads like this, you will
+need to "unsplit" them after the mapping is done. This can be done using the
+`samtools merge` command.
 
 Abismal also exists as a standalon program, and more details on
 abismal are available in its [documentation

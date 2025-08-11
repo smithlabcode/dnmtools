@@ -168,6 +168,7 @@ static void
 neg_gradient(const gsl_vector *params, void *object, gsl_vector *output) {
   auto reg = static_cast<Regression *>(object);
   gradient(params, *reg, output);
+  gsl_vector_scale(output, -1.0);
 }
 
 static void

@@ -37,19 +37,32 @@ get_p(const std::vector<T> &v, const gsl_vector *params) {
 }
 
 static inline auto
-cache_log1p_factors(Regression &reg, const double phi) {
+set_max_r_count(Regression &reg) {
   const auto &cumul = reg.cumul;
   const auto max_itr = std::max_element(
     std::cbegin(cumul), std::cend(cumul), [](const auto &a, const auto &b) {
       return std::size(a.r_counts) < std::size(b.r_counts);
     });
-  const std::size_t max_k = std::size(max_itr->r_counts);
-  auto &cache = reg.log1p_fact_v;
+  reg.max_r_count = std::size(max_itr->r_counts);
   // ADS: avoid the realloc that can happen even for resize(smaller_size)
-  if (max_k > std::size(cache))
-    cache.resize(max_k, 0.0);
+  if (reg.max_r_count > std::size(reg.cache))
+    reg.cache.resize(reg.max_r_count);
+}
+
+static inline auto
+cache_log1p_factors(Regression &reg, const double phi) {
+  const std::size_t max_k = reg.max_r_count;
+  auto &cache = reg.cache;
   for (std::size_t k = 0; k < max_k; ++k)
     cache[k] = std::log1p(phi * (k - 1.0));
+}
+
+static inline auto
+cache_dispersion_effect(Regression &reg, const double phi) {
+  const std::size_t max_k = reg.max_r_count;
+  auto &cache = reg.cache;
+  for (std::size_t k = 0; k < max_k; ++k)
+    cache[k] = (k - 1.0) / (1.0 + phi * (k - 1.0));
 }
 
 [[nodiscard]] static double
@@ -64,7 +77,7 @@ log_likelihood(const gsl_vector *params, Regression &reg) {
   // ADS: precompute the log1p(phi * (k - 1.0)) values, which are reused for
   // each group.
   cache_log1p_factors(reg, phi);
-  const auto &log1p_fact_v = reg.log1p_fact_v;
+  const auto &log1p_fact_v = reg.cache;
 
   double log_lik = 0.0;
   for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
@@ -102,10 +115,14 @@ gradient(const gsl_vector *params, Regression &reg, gsl_vector *output) {
   for (auto g_idx = 0u; g_idx < n_groups; ++g_idx)
     p_v[g_idx] = get_p(groups[g_idx], params);
 
+  cache_dispersion_effect(reg, phi);
+  const auto &dispersion_effect = reg.cache;  // (k-1)/(1 + phi(k-1))
+
   // init output to zero for all factors
   gsl_vector_set_all(output, 0.0);
   auto &data = output->data;
 
+  double disp_deriv = 0.0;
   for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
     const auto p = p_v[g_idx];
     const auto one_minus_p = 1.0 - p;
@@ -114,13 +131,26 @@ gradient(const gsl_vector *params, Regression &reg, gsl_vector *output) {
 
     const auto denom_term1 = one_minus_phi * p;
     const auto &cumul_y = cumul[g_idx].m_counts;
-    for (auto k = 0u; k < std::size(cumul_y); ++k)
-      deriv += cumul_y[k] / (denom_term1 + phi * k);
+    const auto y_lim = std::size(cumul_y);
+    for (auto k = 0u; k < y_lim; ++k) {
+      const auto common_factor = cumul_y[k] / (denom_term1 + phi * k);
+      deriv += common_factor;
+      disp_deriv += (k - p) * common_factor;
+    }
 
     const auto denom_term2 = one_minus_phi * one_minus_p;
     const auto &cumul_d = cumul[g_idx].d_counts;
-    for (auto k = 0u; k < std::size(cumul_d); ++k)
-      deriv -= cumul_d[k] / (denom_term2 + phi * k);
+    const auto d_lim = std::size(cumul_d);
+    for (auto k = 0u; k < d_lim; ++k) {
+      const auto common_factor = cumul_d[k] / (denom_term2 + phi * k);
+      deriv -= common_factor;
+      disp_deriv += (k - one_minus_p) * common_factor;
+    }
+
+    const auto &cumul_n = cumul[g_idx].r_counts;
+    const auto n_lim = std::size(cumul_n);
+    for (auto k = 0u; k < n_lim; ++k)
+      disp_deriv -= cumul_n[k] * dispersion_effect[k];
 
     const auto &g = groups[g_idx];
     const auto denom_term1_one_minus_p = denom_term1 * one_minus_p;
@@ -131,31 +161,7 @@ gradient(const gsl_vector *params, Regression &reg, gsl_vector *output) {
       data[fact_idx] += deriv * (denom_term1_one_minus_p * level);
     }
   }
-
-  double deriv = 0.0;
-  auto cumul_itr = std::cbegin(cumul);
-  for (auto g_idx = 0u; g_idx < n_groups; ++g_idx, ++cumul_itr) {
-    const auto p = get_p(groups[g_idx], params);
-    const auto one_minus_p = 1.0 - p;
-
-    const auto term1 = one_minus_phi * p;
-    const auto &cumul_y = cumul_itr->m_counts;
-    const auto y_lim = std::size(cumul_y);
-    for (auto k = 0u; k < y_lim; ++k)
-      deriv += cumul_y[k] * (k - p) / (term1 + phi * k);
-
-    const auto term2 = one_minus_phi * one_minus_p;
-    const auto &cumul_d = cumul_itr->d_counts;
-    const auto d_lim = std::size(cumul_d);
-    for (auto k = 0u; k < d_lim; ++k)
-      deriv += cumul_d[k] * (k - one_minus_p) / (term2 + phi * k);
-
-    const auto &cumul_n = cumul_itr->r_counts;
-    const auto n_lim = std::size(cumul_n);
-    for (auto k = 0u; k < n_lim; ++k)
-      deriv -= cumul_n[k] * (k - 1.0) / (1.0 + phi * (k - 1.0));
-  }
-  gsl_vector_set(output, n_factors, deriv * (phi * one_minus_phi));
+  gsl_vector_set(output, n_factors, disp_deriv * (phi * one_minus_phi));
 }
 
 [[nodiscard]] static double
@@ -230,6 +236,7 @@ fit_regression_model(Regression &r, std::vector<double> &params_init) {
   const auto max_iter = Regression::max_iter;
 
   get_cumulative(r.design.group_id, r.design.n_groups(), r.props.mc, r.cumul);
+  set_max_r_count(r);
 
   // one more than the number of factors
   const std::size_t n_params = r.n_factors() + 1;

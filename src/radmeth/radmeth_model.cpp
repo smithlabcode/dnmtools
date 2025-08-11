@@ -33,45 +33,12 @@ SiteProp::parse(const std::string &line) {
   const auto first_ws = line.find_first_of(" \t");
 
   // Parse the row name (must be like: "chr:position:strand:context")
-  bool failed = false;
+  bool failed = (first_ws == std::string::npos);
 
-  const auto label_end = line.data() + first_ws;
   auto field_s = line.data();
-  auto field_e = std::find(field_s + 1, label_end, ':');
-  if (field_e == label_end)
-    failed = true;
-
-  {
-    const std::uint32_t d = std::distance(field_s, field_e);
-    chrom = std::string{field_s, d};
-  }
-
-  field_s = field_e + 1;
-  field_e = std::find(field_s + 1, label_end, ':');
-  failed = failed || (field_e == label_end);
-
-  {
-    const auto [ptr, ec] = std::from_chars(field_s, field_e, position);
-    failed = failed || (ptr == field_s);
-  }
-
-  field_s = field_e + 1;
-  field_e = std::find(field_s + 1, label_end, ':');
-  failed = failed || (field_e != field_s + 1 || field_e == label_end);
-
-  strand = *field_s;
-  failed = failed || (strand != '-' && strand != '+');
-
-  field_s = field_e + 1;
-  field_e = std::find_if(field_s + 1, label_end,
-                         [](const auto x) { return x == ' ' || x == '\t'; });
-  failed = failed || (field_e != label_end);
-
-  {
-    const std::uint32_t d = std::distance(field_s, field_e);
-    context = std::string{field_s, d};
-  }
-
+  auto field_e = line.data() + first_ws;
+  rowname = std::string{field_s, field_e};
+  std::replace(std::begin(rowname), std::end(rowname), ':', '\t');
   if (failed)
     throw std::runtime_error("failed to parse label from:\n" + line);
 

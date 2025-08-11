@@ -94,8 +94,10 @@ struct Regression {
   SiteProp props;
   double max_loglik{};
 
+  // scratch space
   std::vector<cumul_counts> cumul;
-  std::vector<double> p_v;  // scratch space
+  std::vector<double> p_v;
+  std::vector<double> log1p_fact_v;
 
   [[nodiscard]] std::size_t
   n_factors() const {

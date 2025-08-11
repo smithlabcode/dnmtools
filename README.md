@@ -23,11 +23,11 @@ The documentation for DNMTools can be found
 ## Installation
 
 - **Linux**
-  [binary](https://github.com/smithlabcode/dnmtools/releases/download/v1.5.0/dnmtools-1.5.0-Linux.tar.gz).
+  [binary](https://github.com/smithlabcode/dnmtools/releases/download/v1.5.1/dnmtools-1.5.1-Linux.tar.gz).
   Should work on any Linux distribution since roughly 2017.
 
 - **Mac**
-  [binary](https://github.com/smithlabcode/dnmtools/releases/download/v1.5.0/dnmtools-1.5.0-macOS.tar.gz).
+  [binary](https://github.com/smithlabcode/dnmtools/releases/download/v1.5.1/dnmtools-1.5.1-macOS.tar.gz).
   Should work on any Mac hardware and macOS-13 (Ventura) or newer.
 
 - **Conda**
@@ -36,7 +36,7 @@ The documentation for DNMTools can be found
   ```
 
 - **Source**
-  [dnmtools-1.5.0.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.5.0/dnmtools-1.5.0.tar.gz). Dependencies:
+  [dnmtools-1.5.1.tar.gz](https://github.com/smithlabcode/dnmtools/releases/download/v1.5.1/dnmtools-1.5.1.tar.gz). Dependencies:
   [GSL](http://www.gnu.org/software/gsl),
   [HTSlib](https://github.com/samtools/htslib),
   [libdeflate](https://github.com/ebiggers/libdeflate) and
@@ -45,8 +45,8 @@ The documentation for DNMTools can be found
 
   Build DNMTools like this:
   ```console
-  tar -xf dnmtools-1.5.0.tar.gz
-  cd dnmtools-1.5.0
+  tar -xf dnmtools-1.5.1.tar.gz
+  cd dnmtools-1.5.1
   ./configure --prefix=$HOME
   make
   make install

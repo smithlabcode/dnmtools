@@ -97,7 +97,8 @@ struct Regression {
   // scratch space
   std::vector<cumul_counts> cumul;
   std::vector<double> p_v;
-  std::vector<double> log1p_fact_v;
+  std::vector<double> cache;
+  std::uint32_t max_r_count{};
 
   [[nodiscard]] std::size_t
   n_factors() const {

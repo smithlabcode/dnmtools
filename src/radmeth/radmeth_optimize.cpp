@@ -1,8 +1,6 @@
-/* Copyright (C) 2013-2025 University of Southern California and
- *                         Andrew D Smith
+/* Copyright (C) 2013-2025 Andrew D Smith
  *
  * Author: Andrew D. Smith
- * Contributors: Egor Dolzhenko and Guilherme Sena
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -21,6 +19,7 @@
 #include <gsl/gsl_multimin.h>
 #include <gsl/gsl_vector.h>
 
+#include <algorithm>
 #include <numeric>
 #include <stdexcept>
 #include <vector>
@@ -37,14 +36,35 @@ get_p(const std::vector<T> &v, const gsl_vector *params) {
   return logistic(std::inner_product(a, a + std::size(v), params->data, 0.0));
 }
 
+static inline auto
+cache_log1p_factors(Regression &reg, const double phi) {
+  const auto &cumul = reg.cumul;
+  const auto max_itr = std::max_element(
+    std::cbegin(cumul), std::cend(cumul), [](const auto &a, const auto &b) {
+      return std::size(a.r_counts) < std::size(b.r_counts);
+    });
+  const std::size_t max_k = std::size(max_itr->r_counts);
+  auto &cache = reg.log1p_fact_v;
+  // ADS: avoid the realloc that can happen even for resize(smaller_size)
+  if (max_k > std::size(cache))
+    cache.resize(max_k, 0.0);
+  for (std::size_t k = 0; k < max_k; ++k)
+    cache[k] = std::log1p(phi * (k - 1.0));
+}
+
 [[nodiscard]] static double
-log_likelihood(const gsl_vector *params, const Regression &reg) {
+log_likelihood(const gsl_vector *params, Regression &reg) {
   const auto phi = logistic(gsl_vector_get(params, reg.design.n_factors()));
   const auto one_minus_phi = 1.0 - phi;
 
   const auto n_groups = reg.n_groups();
   const auto &groups = reg.design.groups;
   const auto &cumul = reg.cumul;
+
+  // ADS: precompute the log1p(phi * (k - 1.0)) values, which are reused for
+  // each group.
+  cache_log1p_factors(reg, phi);
+  const auto &log1p_fact_v = reg.log1p_fact_v;
 
   double log_lik = 0.0;
   for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
@@ -63,7 +83,7 @@ log_likelihood(const gsl_vector *params, const Regression &reg) {
 
     const auto &cumul_n = cumul[g_idx].r_counts;
     for (std::size_t k = 0; k < std::size(cumul_n); ++k)
-      log_lik -= cumul_n[k] * std::log1p(phi * (k - 1.0));
+      log_lik -= cumul_n[k] * log1p_fact_v[k];
   }
   return log_lik;
 }
@@ -103,11 +123,12 @@ gradient(const gsl_vector *params, Regression &reg, gsl_vector *output) {
       deriv -= cumul_d[k] / (denom_term2 + phi * k);
 
     const auto &g = groups[g_idx];
+    const auto denom_term1_one_minus_p = denom_term1 * one_minus_p;
     for (auto fact_idx = 0u; fact_idx < n_factors; ++fact_idx) {
       const auto level = g[fact_idx];
       if (level == 0)
         continue;
-      data[fact_idx] += deriv * (denom_term1 * one_minus_p * level);
+      data[fact_idx] += deriv * (denom_term1_one_minus_p * level);
     }
   }
 

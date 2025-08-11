@@ -209,7 +209,6 @@ radmeth(const bool show_progress, const bool more_na_info,
         const std::uint32_t n_threads, const std::string &table_filename,
         const std::string &outfile, const Regression &alt_model,
         const Regression &null_model, const std::uint32_t test_factor_idx) {
-  static constexpr auto prefix_fmt = "%s\t%ld\t%c\t%s\t";
   static constexpr auto suffix_fmt = "\t%ld\t%ld\t%ld\t%ld\n";
   static constexpr auto buf_size = 1024;
   static constexpr auto max_lines = 16384;
@@ -326,11 +325,8 @@ that the design matrix and the proportion table are correctly formatted.
           n_bytes[b] = [&] {
             // clang-format off
             const int n_prefix_bytes =
-              std::sprintf(bufs[b].data(), prefix_fmt,
-                           t_alt_model.props.chrom.data(),
-                           t_alt_model.props.position,
-                           t_alt_model.props.strand,
-                           t_alt_model.props.context.data());
+              std::sprintf(bufs[b].data(), "%s\t",
+                           t_alt_model.props.rowname.data());
             // clang-format on
             if (n_prefix_bytes < 0)
               return n_prefix_bytes;

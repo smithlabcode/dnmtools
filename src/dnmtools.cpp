@@ -87,6 +87,8 @@ main_hypermr(int argc, char *argv[]);
 int
 main_levels(int argc, char *argv[]);
 int
+main_autocorr(int argc, char *argv[]);
+int
 main_methentropy(int argc, char *argv[]);
 int
 main_methstates(int argc, char *argv[]);
@@ -187,7 +189,8 @@ main(int argc, char *argv[]) {
    {"entropy",   "compute methylation entropy in sliding window", main_methentropy},
    {"pmd",       "identify partially methylated domains", main_pmd},
    {"roi",       "get average CpG methylation in each of a set of genomic interval", main_roimethstat},
-   {"cpgbins",    "get average CpG methylation in genomic bins", main_cpgbins},
+   {"autocorr",  "computes statistics on the autocorrelation of methylation levels", main_autocorr},
+   {"cpgbins",   "get average CpG methylation in genomic bins", main_cpgbins},
    {"multistat", "same as roi except for multiple samples/input files", main_multimethstat},
    {"mlml",      "program to estimate hydroxymethylation levels", main_mlml}}}},
 

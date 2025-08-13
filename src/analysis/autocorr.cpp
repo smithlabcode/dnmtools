@@ -18,16 +18,17 @@
 #include "OptionParser.hpp"
 
 #include <algorithm>
-#include <charconv>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
 #include <filesystem>
-#include <format>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <sstream>
-#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 constexpr auto description =
@@ -73,7 +74,8 @@ region_precedes_site(const genomic_interval &region,
 }
 
 static auto
-region_contains_site(const genomic_interval region, const MSite &site) -> bool {
+region_contains_site(const genomic_interval &region,
+                     const MSite &site) -> bool {
   // check if a given site is contained in a given region location
   // Containment is for half open intervals [a, b)
   return (region.chrom == site.chrom && region.start_pos <= site.pos &&

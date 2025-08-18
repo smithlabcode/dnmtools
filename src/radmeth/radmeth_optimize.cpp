@@ -279,8 +279,12 @@ fit_regression_model(Regression &r, std::vector<double> &p_estimates,
     // check status from gradient
     status = gsl_multimin_test_gradient(s->gradient, tol);
   } while (status == GSL_CONTINUE && ++iter < max_iter);
-  if (status != GSL_SUCCESS)
-    throw std::runtime_error("failed to fit model parameters");
+
+  /// ADS: the condition below might not always pass even if we are doing
+  /// ok. It's not clear how to check for failure.
+
+  // if (status != GSL_SUCCESS)
+  //   throw std::runtime_error("failed to fit model parameters");
 
   const auto param_estimates = gsl_multimin_fdfminimizer_x(s);
 

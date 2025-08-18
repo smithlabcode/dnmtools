@@ -169,7 +169,7 @@ Design::drop_factor(const std::size_t factor_idx) {
 
 std::ostream &
 operator<<(std::ostream &out, const Design &design) {
-  static constexpr std::uint32_t max_samples_to_report = 100;
+  static constexpr std::uint32_t max_samples_to_report = 200;
   const auto n_samples = design.n_samples();
   const auto n_factors = design.n_factors();
   if (n_samples <= max_samples_to_report) {

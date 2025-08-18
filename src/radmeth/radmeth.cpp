@@ -413,7 +413,6 @@ main_radmeth(int argc, char *argv[]) {
     // initialize full design matrix from file
     Regression alt_model;
     alt_model.design = read_design(design_filename);
-    const auto n_samples = alt_model.n_samples();
 
     if (verbose)
       std::cerr << "Alternate model:\n" << alt_model.design << '\n';

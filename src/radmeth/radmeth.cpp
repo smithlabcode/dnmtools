@@ -305,6 +305,8 @@ that the design matrix and the proportion table are correctly formatted.
 
             const int n_param_bytes = [&] {
               std::int32_t n_bytes = 0;
+              if (p_estim_alt.empty())
+                p_estim_alt.resize(n_groups, 0.0);
               for (auto g_idx = 0u; g_idx < n_groups; ++g_idx) {
                 const int n = std::sprintf(cursor, "\t%f", p_estim_alt[g_idx]);
                 cursor += n;

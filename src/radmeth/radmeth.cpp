@@ -176,40 +176,11 @@ enum class row_status : std::uint8_t {
   na_extreme_cnt,
 };
 
-[[nodiscard]] static std::vector<double>
-drop_idx(const std::vector<double> &v, const std::size_t idx_to_drop) {
-  std::vector<double> u;
-  u.reserve(std::size(v) - 1);
-  for (auto i = 0u; i < std::size(v); ++i)
-    if (i != idx_to_drop)
-      u.push_back(v[i]);
-  return u;
-}
-
-/// ADS: this function is not currently used, as the threads do not operate in
-/// "chunks"
-/*
-static inline void
-get_chunk_bounds(const std::uint32_t n_elements, const std::uint32_t n_chunks,
-                 std::vector<std::pair<std::uint32_t, std::uint32_t>> &chunks) {
-  const std::uint32_t q = n_elements / n_chunks;
-  const std::uint32_t r = n_elements - q * n_chunks;
-  std::uint32_t block_start{};
-  for (std::size_t i = 0; i < n_chunks; ++i) {
-    const auto sz = (i < r) ? q + 1 : q;
-    const auto block_end = block_start + sz;
-    chunks[i] = {block_start, block_end};
-    block_start = block_end;
-  }
-}
-*/
-
 static void
 radmeth(const bool show_progress, const bool more_na_info,
         const std::uint32_t n_threads, const std::string &table_filename,
         const std::string &outfile, const Regression &alt_model,
         const Regression &null_model, const std::uint32_t test_factor_idx) {
-  static constexpr auto suffix_fmt = "\t%ld\t%ld\t%ld\t%ld\n";
   static constexpr auto buf_size = 1024;
   static constexpr auto max_lines = 16384;
 
@@ -251,7 +222,7 @@ that the design matrix and the proportion table are correctly formatted.
   std::vector<Regression> alt_models(n_threads, alt_model);
   std::vector<Regression> null_models(n_threads, null_model);
 
-  // std::vector<std::pair<std::uint32_t, std::uint32_t>> chunks(n_threads);
+  const auto n_groups = alt_model.n_groups();
 
   // Iterate over rows in the file and do llr test on proportions from
   // each. Do this in sets of rows to avoid having to spawn too many threads.
@@ -262,19 +233,20 @@ that the design matrix and the proportion table are correctly formatted.
     if (n_lines == 0)
       break;
 
-    /// ADS: chunks not used
-    // get_chunk_bounds(n_lines, n_threads, chunks);
-
     std::vector<std::thread> threads;
     for (auto thread_id = 0u; thread_id < n_threads; ++thread_id) {
       threads.emplace_back([&, thread_id] {
-        /// ADS: chunks not used
-        // const auto &[chunk_beg, chunk_end] = chunks[thread_id];
+        std::vector<double> p_estim_alt;
+        std::vector<double> p_estim_null;
+        double phi_estim_alt{};
+        double phi_estim_null{};
+
         auto &t_alt_model = alt_models[thread_id];
         auto &t_null_model = null_models[thread_id];
-        /// ADS: chunks not used
-        // for (auto b = chunk_beg; b != chunk_end; ++b) {
         for (auto b = 0u; b < n_lines; ++b) {
+          // ADS: rows done by different threads are interleaved because the
+          // difficult (e.g., high-coverage) rows can be consecutive and this
+          // balances work better.
           if (b % n_threads != thread_id)
             continue;
           t_alt_model.props.parse(lines[b]);
@@ -291,36 +263,18 @@ that the design matrix and the proportion table are correctly formatted.
             if (has_extreme_counts(t_alt_model))
               return std::tuple{1.0, row_status::na_extreme_cnt};
 
-            std::vector<double> alternate_params;
-            fit_regression_model(t_alt_model, alternate_params);
+            fit_regression_model(t_alt_model, p_estim_alt, phi_estim_alt);
+
             t_null_model.props = t_alt_model.props;
 
-            auto null_params = drop_idx(alternate_params, test_factor_idx);
+            fit_regression_model(t_null_model, p_estim_null, phi_estim_null);
 
-            fit_regression_model(t_null_model, null_params);
             const double p_value =
               llr_test(t_null_model.max_loglik, t_alt_model.max_loglik);
 
             return (p_value != p_value) ? std::tuple{1.0, row_status::na}
                                         : std::tuple{p_value, row_status::ok};
           }();
-
-          std::size_t n_reads_factor = 0;
-          std::size_t n_reads_others = 0;
-          std::size_t n_meth_factor = 0;
-          std::size_t n_meth_others = 0;
-
-          const auto &mc = t_alt_model.props.mc;
-          const auto &vec = t_alt_model.design.tmatrix[test_factor_idx];
-          for (std::size_t s = 0; s < n_samples; ++s)
-            if (vec[s] != 0) {
-              n_reads_factor += mc[s].n_reads;
-              n_meth_factor += mc[s].n_meth;
-            }
-            else {
-              n_reads_others += mc[s].n_reads;
-              n_meth_others += mc[s].n_meth;
-            }
 
           n_bytes[b] = [&] {
             // clang-format off
@@ -349,17 +303,26 @@ that the design matrix and the proportion table are correctly formatted.
 
             cursor += n_pval_bytes;
 
-            // clang-format off
-            const int n_suffix_bytes = std::sprintf(cursor, suffix_fmt,
-                                                    n_reads_factor,
-                                                    n_meth_factor,
-                                                    n_reads_others,
-                                                    n_meth_others);
-            // clang-format on
-            if (n_suffix_bytes < 0)
-              return n_suffix_bytes;
+            const int n_param_bytes = [&] {
+              std::int32_t n_bytes = 0;
+              for (auto g_idx = 0u; g_idx < n_groups; ++g_idx) {
+                const int n = std::sprintf(cursor, "\t%f", p_estim_alt[g_idx]);
+                cursor += n;
+                if (n < 0)
+                  return n;
+                n_bytes += n;
+              }
+              const int n = std::sprintf(cursor, "\t%f\n", phi_estim_alt);
+              if (n < 0)
+                return n;
+              n_bytes += n;
+              return n_bytes;
+            }();
 
-            return n_prefix_bytes + n_pval_bytes + n_suffix_bytes;
+            if (n_param_bytes < 0)
+              return n_param_bytes;
+
+            return n_prefix_bytes + n_pval_bytes + n_param_bytes;
           }();
         }
       });
@@ -450,6 +413,8 @@ main_radmeth(int argc, char *argv[]) {
     // initialize full design matrix from file
     Regression alt_model;
     alt_model.design = read_design(design_filename);
+    const auto n_samples = alt_model.n_samples();
+
     if (verbose)
       std::cerr << "Alternate model:\n" << alt_model.design << '\n';
 

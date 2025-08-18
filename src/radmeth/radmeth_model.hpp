@@ -108,6 +108,11 @@ struct Regression {
   }
 
   [[nodiscard]] std::size_t
+  n_params() const {
+    return n_factors() + 1;
+  }
+
+  [[nodiscard]] std::size_t
   props_size() const {
     return std::size(props.mc);
   }

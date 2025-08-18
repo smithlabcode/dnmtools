@@ -212,7 +212,7 @@ get_cumulative(const std::vector<std::uint32_t> &group_id,
       const auto val = get_value(mc[c_idx]);
       auto &vec = get_vector(cumul[g_idx]);
       for (auto i = 0u; i < val; ++i)
-        vec[i]++;
+        ++vec[i];
     }
   };
   // call the lambda 3 times for m_counts, r_counts, d_counts
@@ -229,24 +229,20 @@ get_cumulative(const std::vector<std::uint32_t> &group_id,
     [](cumul_counts &c) -> std::vector<std::uint32_t> & { return c.d_counts; });
 }
 
-[[nodiscard]] bool
-fit_regression_model(Regression &r, std::vector<double> &params_init) {
+void
+fit_regression_model(Regression &r, std::vector<double> &p_estimates,
+                     double &dispersion_estimate) {
   static constexpr auto init_dispersion_param = -2.5;
   const auto stepsize = Regression::stepsize;
   const auto max_iter = Regression::max_iter;
 
-  get_cumulative(r.design.group_id, r.design.n_groups(), r.props.mc, r.cumul);
+  const auto n_groups = r.n_groups();
+  get_cumulative(r.design.group_id, n_groups, r.props.mc, r.cumul);
   set_max_r_count(r);
 
-  // one more than the number of factors
-  const std::size_t n_params = r.n_factors() + 1;
-  if (params_init.empty()) {
-    params_init.resize(n_params, 0.0);
-    params_init.back() = init_dispersion_param;
-  }
-  if (std::size(params_init) != n_params)
-    throw std::runtime_error("Wrong number of initial parameters.");
-  r.p_v.resize(r.n_groups());
+  r.p_v.resize(n_groups);
+
+  const std::size_t n_params = r.n_params();
   const auto tol = std::sqrt(n_params) * r.n_samples() * Regression::tolerance;
   // clang-format off
   auto loglik_bundle = gsl_multimin_function_fdf{
@@ -258,6 +254,12 @@ fit_regression_model(Regression &r, std::vector<double> &params_init) {
   };
   // clang-format on
 
+  // set the parameters: zero for "p" parameters and the final one for
+  // dispersion using the constant
+  auto params = gsl_vector_alloc(n_params);
+  gsl_vector_set_all(params, 0.0);
+  gsl_vector_set(params, n_params - 1, init_dispersion_param);
+
   // Alternatives:
   // - gsl_multimin_fdfminimizer_conjugate_pr
   // - gsl_multimin_fdfminimizer_conjugate_fr
@@ -265,10 +267,6 @@ fit_regression_model(Regression &r, std::vector<double> &params_init) {
   // - gsl_multimin_fdfminimizer_steepest_descent
   const auto minimizer = gsl_multimin_fdfminimizer_conjugate_pr;
   auto s = gsl_multimin_fdfminimizer_alloc(minimizer, n_params);
-
-  auto params = gsl_vector_alloc(n_params);
-  for (auto i = 0u; i < n_params; ++i)
-    gsl_vector_set(params, i, params_init[i]);
 
   gsl_multimin_fdfminimizer_set(s, &loglik_bundle, params, stepsize, tol);
 
@@ -281,12 +279,20 @@ fit_regression_model(Regression &r, std::vector<double> &params_init) {
     // check status from gradient
     status = gsl_multimin_test_gradient(s->gradient, tol);
   } while (status == GSL_CONTINUE && ++iter < max_iter);
+  if (status != GSL_SUCCESS)
+    throw std::runtime_error("failed to fit model parameters");
 
   const auto param_estimates = gsl_multimin_fdfminimizer_x(s);
+
+  const auto &groups = r.design.groups;
+  p_estimates.clear();
+  for (auto g_idx = 0u; g_idx < n_groups; ++g_idx)
+    p_estimates.push_back(get_p(groups[g_idx], param_estimates));
+  const auto disp_param = gsl_vector_get(param_estimates, n_params - 1);
+  dispersion_estimate = 1.0 / std::exp(disp_param);
+
   r.max_loglik = log_likelihood(param_estimates, r);
 
   gsl_multimin_fdfminimizer_free(s);
   gsl_vector_free(params);
-
-  return status == GSL_SUCCESS;
 }

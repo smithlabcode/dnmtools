@@ -23,7 +23,8 @@
 
 struct Regression;
 
-bool
-fit_regression_model(Regression &r, std::vector<double> &initial_params);
+void
+fit_regression_model(Regression &r, std::vector<double> &p_estimates,
+                     double &dispersion_estimate);
 
 #endif

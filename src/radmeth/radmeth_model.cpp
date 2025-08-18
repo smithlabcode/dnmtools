@@ -169,18 +169,37 @@ Design::drop_factor(const std::size_t factor_idx) {
 
 std::ostream &
 operator<<(std::ostream &out, const Design &design) {
-  for (std::size_t factor = 0; factor < design.factor_names.size(); ++factor) {
-    if (factor != 0)
-      out << '\t';
-    out << design.factor_names[factor];
-  }
-  out << '\n';
+  static constexpr std::uint32_t max_samples_to_report = 100;
+  const auto n_samples = design.n_samples();
+  const auto n_factors = design.n_factors();
+  if (n_samples <= max_samples_to_report) {
+    for (std::size_t factor = 0; factor < n_factors; ++factor) {
+      if (factor != 0)
+        out << '\t';
+      out << design.factor_names[factor];
+    }
+    out << '\n';
 
-  for (std::size_t i = 0; i < design.n_samples(); ++i) {
-    out << design.sample_names[i];
-    for (std::size_t j = 0; j < design.n_factors(); ++j)
-      out << "\t" << static_cast<std::uint32_t>(design.matrix[i][j]);
-    out << "\n";
+    for (std::size_t i = 0; i < n_samples; ++i) {
+      out << design.sample_names[i];
+      for (std::size_t j = 0; j < n_factors; ++j)
+        out << '\t' << static_cast<std::uint32_t>(design.matrix[i][j]);
+      out << '\n';
+    }
+  }
+
+  // compute the number of samples per group
+  const auto n_groups = design.n_groups();
+  std::vector<std::uint32_t> n_samples_per_group(n_groups, 0);
+  for (auto s_idx = 0u; s_idx < n_samples; ++s_idx)
+    ++n_samples_per_group[design.group_id[s_idx]];
+
+  out << "group_id | factor_levels (" << n_factors << " factors) | n_samples\n";
+  for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
+    out << g_idx;
+    for (std::size_t f_idx = 0; f_idx < n_factors; ++f_idx)
+      out << '\t' << static_cast<std::uint32_t>(design.groups[g_idx][f_idx]);
+    out << '\t' << n_samples_per_group[g_idx] << '\n';
   }
 
   return out;

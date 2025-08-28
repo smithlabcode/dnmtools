@@ -1,20 +1,20 @@
-/* amrfinder: program for resolving epialleles in a sliding window
- * along a chromosome.
+/* amrfinder: program for resolving epialleles in a sliding window along a
+ * chromosome.
  *
- * Copyright (C) 2014-2025 University of Southern California and
+ * Copyright (C) 2014-2025 University of Southern California
  *                         Andrew D. Smith and Benjamin E. Decato
  *
  * Authors: Fang Fang and Benjamin E. Decato and Andrew D. Smith
  *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
 
 #include "EpireadStats.hpp"
@@ -33,8 +33,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-using bamxx::bgzf_file;
 
 struct amr_summary {
   amr_summary(const std::vector<GenomicRegion> &amrs) {
@@ -80,7 +78,7 @@ read_epiread(bamxx::bgzf_file &f, epiread &er) {
 static inline bool
 validate_epiread_bgzf_file(const std::string &filename) {
   constexpr std::size_t max_lines_to_validate = 10000;
-  bgzf_file in(filename, "r");
+  bamxx::bgzf_file in(filename, "r");
   if (!in)
     throw std::runtime_error("failed to open file: " + filename);
 
@@ -219,14 +217,14 @@ convert_coordinates(const std::size_t n_threads, const std::string &genome_file,
   std::atomic_uint32_t conv_failure = 0;
 
   std::vector<std::thread> threads;
-  for (auto i = 0ul; i < n_threads; ++i) {
-    const auto p_beg = parts_beg + i * n_per;
+  for (auto i = 0ul; i < std::min(n_threads, n_parts); ++i) {
+    const auto p_beg = parts_beg + std::min(i * n_per, n_parts);
     const auto p_end = parts_beg + std::min((i + 1) * n_per, n_parts);
     threads.emplace_back([&, p_beg, p_end] {
       for (auto p = p_beg; p != p_end; ++p) {
         const std::string chrom_name = amrs[p->first].get_chrom();
-        auto c_itr = chrom_lookup.find(chrom_name);
-        if (c_itr == std::end(chrom_lookup))
+        const auto c_itr = chrom_lookup.find(chrom_name);
+        if (c_itr == std::cend(chrom_lookup))
           conv_failure++;
         else {
           std::vector<std::uint32_t> cpgs = collect_cpgs(c_itr->second);
@@ -335,7 +333,7 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
   if (verbose)
     std::cerr << "processing " << chrom_name << " "
               << "[reads: " << std::size(epireads) << "] "
-              << "[cpgs: " << n_cpgs << "]" << std::endl;
+              << "[cpgs: " << n_cpgs << "]\n";
 
   const auto n_blocks = n_threads * blocks_per_thread;
 
@@ -462,20 +460,20 @@ main_amrfinder(int argc, char *argv[]) {
     std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      std::cerr << opt_parse.help_message() << std::endl
-                << opt_parse.about_message() << std::endl;
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      std::cerr << opt_parse.about_message() << std::endl;
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      std::cerr << opt_parse.option_missing_message() << std::endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
-    if (leftover_args.size() != 1) {
-      std::cerr << opt_parse.help_message() << std::endl;
+    if (std::size(leftover_args) != 1) {
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     const std::string reads_file(leftover_args.front());
@@ -489,13 +487,13 @@ main_amrfinder(int argc, char *argv[]) {
     if (verbose)
       std::cerr << "AMR TESTING OPTIONS: "
                 << "[test=" << (use_bic ? "BIC" : "LRT") << "] "
-                << "[iterations=" << max_itr << "]" << std::endl;
+                << "[iterations=" << max_itr << "]\n";
 
     const EpireadStats epistat{low_prob, high_prob, critical_value,
                                max_itr,  use_bic,   correct_for_read_count};
 
     bamxx::bam_tpool tp(n_threads);
-    bgzf_file in(reads_file, "r");
+    bamxx::bgzf_file in(reads_file, "r");
     if (!in)
       throw std::runtime_error("failed to open input file: " + reads_file);
     if (n_threads > 1 && in.is_bgzf())
@@ -533,7 +531,7 @@ main_amrfinder(int argc, char *argv[]) {
     std::for_each(std::begin(amrs), std::end(amrs), rename_amr());
 
     if (verbose)
-      std::cerr << "========= POST PROCESSING =========" << std::endl;
+      std::cerr << "========= POST PROCESSING =========\n";
 
     // windows_accepted is the number of sliding windows in the
     // methylome that were found to have a significant signal of
@@ -592,7 +590,7 @@ main_amrfinder(int argc, char *argv[]) {
       const auto n_collapsed_amrs = std::size(amrs);
 
       if (!convert_coordinates(n_threads, genome_file, amrs)) {
-        std::cerr << "failed converting coordinates" << std::endl;
+        std::cerr << "failed converting coordinates\n";
         return EXIT_FAILURE;
       }
 
@@ -650,11 +648,11 @@ main_amrfinder(int argc, char *argv[]) {
       std::ofstream summary_out(summary_file);
       if (!summary_out)
         throw std::runtime_error("failed to open: " + summary_file);
-      summary_out << amr_summary(amrs).tostring() << std::endl;
+      summary_out << amr_summary(amrs).tostring() << '\n';
     }
   }
   catch (const std::exception &e) {
-    std::cerr << e.what() << std::endl;
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

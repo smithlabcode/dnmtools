@@ -1,50 +1,40 @@
-/* xcounts: reformat counts so they only give the m and u counts in a
- * dynamic step wig format
+/* xcounts: reformat counts so they only give the m and u counts in a dynamic
+ * step wig format
  *
  * Copyright (C) 2023 Andrew D. Smith
  *
  * Authors: Andrew D. Smith
  *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
 
-#include <bamxx.hpp>
+#include "MSite.hpp"
+#include "counts_header.hpp"
+#include "dnmt_error.hpp"
 
-#include <charconv>
-#include <iostream>
-#include <stdexcept>
-#include <string>
-#include <system_error>
-#include <type_traits>  // std::underlying_type_t
-#include <vector>
+#include <bamxx.hpp>
 
 // from smithlab_cpp
 #include "OptionParser.hpp"
 #include "smithlab_os.hpp"
 #include "smithlab_utils.hpp"
 
-#include "MSite.hpp"
-#include "counts_header.hpp"
-#include "dnmt_error.hpp"
-
-using std::cerr;
-using std::cout;
-using std::endl;
-using std::runtime_error;
-using std::string;
-using std::to_chars;
-using std::to_string;
-using std::vector;
-
-using bamxx::bgzf_file;
+#include <charconv>
+#include <cstdint>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <system_error>
+#include <type_traits>  // std::underlying_type_t
+#include <vector>
 
 enum class xcounts_err {
   // clang-format off
@@ -92,14 +82,14 @@ make_error_code(xcounts_err e) {
 }
 
 template <typename T>
-static inline uint32_t
-fill_output_buffer(const uint32_t offset, const MSite &s, T &buf) {
+static inline std::uint32_t
+fill_output_buffer(const std::uint32_t offset, const MSite &s, T &buf) {
   auto buf_end = buf.data() + buf.size();
-  auto res = to_chars(buf.data(), buf_end, s.pos - offset);
+  auto res = std::to_chars(buf.data(), buf_end, s.pos - offset);
   *res.ptr++ = '\t';
-  res = to_chars(res.ptr, buf_end, s.n_meth());
+  res = std::to_chars(res.ptr, buf_end, s.n_meth());
   *res.ptr++ = '\t';
-  res = to_chars(res.ptr, buf_end, s.n_unmeth());
+  res = std::to_chars(res.ptr, buf_end, s.n_unmeth());
   *res.ptr++ = '\n';
   return std::distance(buf.data(), res.ptr);
 }
@@ -111,12 +101,12 @@ main_xcounts(int argc, char *argv[]) {
     bool gzip_output = false;
     bool keep_all_sites = false;
     bool require_coverage = false;
-    size_t n_threads = 1;
-    string genome_file;
-    string header_file;
+    std::size_t n_threads = 1;
+    std::string genome_file;
+    std::string header_file;
 
-    string outfile{"-"};
-    const string description =
+    std::string outfile{"-"};
+    const std::string description =
       "compress counts files by removing context information";
 
     /****************** COMMAND LINE OPTIONS ********************/
@@ -138,30 +128,30 @@ main_xcounts(int argc, char *argv[]) {
                       "gzip compress output (automatic if input is gzip)",
                       false, gzip_output);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
-    std::vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << endl;
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
-    const string filename(leftover_args.front());
+    const std::string filename(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    vector<string> chrom_names;
-    vector<uint64_t> chrom_sizes;
+    std::vector<std::string> chrom_names;
+    std::vector<std::uint64_t> chrom_sizes;
     if (!genome_file.empty()) {
       const int ret = get_chrom_sizes_for_counts_header(
         n_threads, genome_file, chrom_names, chrom_sizes);
@@ -170,13 +160,13 @@ main_xcounts(int argc, char *argv[]) {
     }
 
     bamxx::bam_tpool tpool(n_threads);
-    bgzf_file in(filename, "r");
+    bamxx::bgzf_file in(filename, "r");
     if (!in)
       throw dnmt_error{"could not open file: " + filename};
 
     const auto outfile_mode = (gzip_output || in.is_compressed()) ? "w" : "wu";
 
-    bgzf_file out(outfile, outfile_mode);
+    bamxx::bgzf_file out(outfile, outfile_mode);
     if (!out)
       throw dnmt_error{"error opening output file: " + outfile};
 
@@ -186,7 +176,7 @@ main_xcounts(int argc, char *argv[]) {
       tpool.set_io(out);
     }
 
-    std::unordered_map<string, uint32_t> chrom_order;
+    std::unordered_map<std::string, std::uint32_t> chrom_order;
     if (!header_file.empty())
       chrom_order = write_counts_header_from_file(header_file, out);
     else if (!genome_file.empty())
@@ -199,15 +189,15 @@ main_xcounts(int argc, char *argv[]) {
     if (ret)
       throw dnmt_error("failed to acquire buffer");
 
-    vector<char> buf(128);
+    std::vector<char> buf(128);
 
-    uint32_t offset = 0;
-    string prev_chrom;
+    std::uint32_t offset = 0;
+    std::string prev_chrom;
     bool found_header = (!genome_file.empty() || !header_file.empty());
 
     std::error_code ec{};
 
-    uint32_t chrom_counter = 0;
+    std::uint32_t chrom_counter = 0;
 
     MSite site;
     while (ec == std::errc{} && bamxx::getline(in, line)) {
@@ -215,7 +205,7 @@ main_xcounts(int argc, char *argv[]) {
         if (!genome_file.empty() || !header_file.empty())
           continue;
         found_header = true;
-        const string header_line{line.s};
+        const std::string header_line{line.s};
         write_counts_header_line(header_line, out);
         continue;
       }
@@ -231,7 +221,7 @@ main_xcounts(int argc, char *argv[]) {
 
       if (site.chrom != prev_chrom) {
         if (verbose)
-          cerr << "processing: " << site.chrom << endl;
+          std::cerr << "processing: " << site.chrom << '\n';
 
         if (!chrom_order.empty()) {
           const auto expected_chrom_counter = chrom_order.find(site.chrom);
@@ -245,7 +235,7 @@ main_xcounts(int argc, char *argv[]) {
           }
         }
 
-        chrom_counter++;
+        ++chrom_counter;
 
         prev_chrom = site.chrom;
         offset = 0;
@@ -265,13 +255,13 @@ main_xcounts(int argc, char *argv[]) {
     ks_free(&line);
 
     if (ec) {
-      cerr << "failed converting " << filename << " to " << outfile << endl
-           << ec << endl;
+      std::cerr << "failed converting " << filename << " to " << outfile << '\n'
+           << ec.message() << '\n';
       return EXIT_FAILURE;
     }
   }
   catch (const std::exception &e) {
-    cerr << e.what() << endl;
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

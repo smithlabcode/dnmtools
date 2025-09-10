@@ -1,7 +1,7 @@
 /* Copyright (C) 2013-2025 Andrew D Smith
  *
  * Author: Andrew D. Smith
- * Contributors: Andrew D. Smith and Egor Dolzhenko and Guilherme Sena
+ * Contributors: Egor Dolzhenko and Guilherme Sena
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -410,7 +410,7 @@ main_radmeth(int argc, char *argv[]) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (verbose)
-      std::cerr << "design table filename: " << design_filename << '\n';
+      std::cerr << "design table filename: " << design_filename << "\n\n";
 
     // initialize full design matrix from file
     Regression alt_model;
@@ -435,6 +435,20 @@ main_radmeth(int argc, char *argv[]) {
     if (verbose)
       std::cerr << "Null model:\n" << null_model.design << '\n';
 
+    // clang-format off
+    if (verbose)
+      std::cerr << "Output columns:\n"
+                << "(1) chrom\n"
+                << "(2) position\n"
+                << "(3) strand\n"
+                << "(4) cytosine context\n"
+                << "(5) p-value\n"
+                << "(6) estimated methylation 0\n"
+                << "(7) estimated methylation 1\n"
+                << "(8) estimated dispersion\n"
+                << "estimated methylation is for test factor value (0 or 1)\n"
+                << '\n';
+    // clang-format on
     const auto start_time = std::chrono::steady_clock::now();
     radmeth(show_progress, more_na_info, n_threads, table_filename, outfile,
             alt_model, null_model, test_factor_idx);

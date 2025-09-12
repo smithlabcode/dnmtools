@@ -78,7 +78,7 @@ struct file_progress {
   }
 };
 
-static bool
+[[nodiscard]] static bool
 consistent_sample_names(const Regression &reg, const std::string &header) {
   std::istringstream iss(header);
   auto nm_itr(std::begin(reg.design.sample_names));
@@ -88,6 +88,16 @@ consistent_sample_names(const Regression &reg, const std::string &header) {
     if (token != *nm_itr++)
       return false;
   return true;
+}
+
+[[nodiscard]] static std::vector<std::string>
+get_sample_names_from_header(const std::string &header) {
+  std::istringstream iss(header);
+  std::string token;
+  std::vector<std::string> sample_names;
+  while (iss >> token)
+    sample_names.push_back(token);
+  return sample_names;
 }
 
 // Given the maximum likelihood estimates of the full and reduced models, the
@@ -195,6 +205,7 @@ radmeth(const bool show_progress, const bool more_na_info,
   std::string sample_names_header;
   std::getline(table_file, sample_names_header);
 
+  const auto sample_names = get_sample_names_from_header(sample_names_header);
   if (!consistent_sample_names(alt_model, sample_names_header)) {
     // clang-format off
     const auto message =
@@ -434,6 +445,17 @@ main_radmeth(int argc, char *argv[]) {
     null_model.design = alt_model.design.drop_factor(test_factor_idx);
     if (verbose)
       std::cerr << "Null model:\n" << null_model.design << '\n';
+
+    {
+      std::ifstream table_file(table_filename);
+      if (!table_file)
+        throw std::runtime_error("could not open file: " + table_filename);
+      std::string header;
+      std::getline(table_file, header);
+      const auto sample_names = get_sample_names_from_header(header);
+      alt_model.order_samples(sample_names);
+      null_model.order_samples(sample_names);
+    }
 
     // clang-format off
     if (verbose)

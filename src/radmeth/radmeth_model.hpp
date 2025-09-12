@@ -34,10 +34,10 @@ struct cumul_counts {
 struct Design {
   std::vector<std::string> factor_names;
   std::vector<std::string> sample_names;
-  std::vector<std::vector<std::uint8_t>> matrix;
-  std::vector<std::vector<std::uint8_t>> tmatrix;
-  std::vector<std::vector<std::uint8_t>> groups;
-  std::vector<std::uint32_t> group_id;
+  std::vector<std::vector<std::uint8_t>> matrix;   // samples=rows, factors=cols
+  std::vector<std::vector<std::uint8_t>> tmatrix;  // factors=rows, samples=cols
+  std::vector<std::vector<std::uint8_t>> groups;   // combs of fact levels
+  std::vector<std::uint32_t> group_id;             // assign group to sample
 
   [[nodiscard]] std::size_t
   n_factors() const {
@@ -56,6 +56,9 @@ struct Design {
 
   [[nodiscard]] Design
   drop_factor(const std::size_t factor_idx);
+
+  void
+  order_samples(const std::vector<std::string> &ordered_names);
 };
 
 std::istream &
@@ -120,6 +123,11 @@ struct Regression {
   [[nodiscard]] std::size_t
   n_samples() const {
     return design.n_samples();
+  }
+
+  void
+  order_samples(const std::vector<std::string> &ordered_names) {
+    design.order_samples(ordered_names);
   }
 };
 

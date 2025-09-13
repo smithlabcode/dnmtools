@@ -170,37 +170,40 @@ Design::drop_factor(const std::size_t factor_idx) {
 
 void
 Design::order_samples(const std::vector<std::string> &ordered_names) {
-  const auto lookup = [&] {
-    std::unordered_map<std::string, std::uint32_t> tmp;
-    std::uint32_t idx{};
-    for (const auto &name : ordered_names)
-      tmp.emplace(name, idx++);
-    return tmp;
+  // Build lookup: sample name -> original index
+  const auto sample_to_index = [&] {
+    std::unordered_map<std::string, std::uint32_t> sample_to_index;
+    std::uint32_t index = 0;
+    for (const auto &sample : sample_names)
+      sample_to_index.emplace(sample, index++);
+    return sample_to_index;
   }();
 
-  auto tmp_sample_names = sample_names;
-  auto tmp_matrix = matrix;
-  auto tmp_group_id = group_id;
+  std::vector<std::string> ord_sample_names;
+  std::vector<std::vector<std::uint8_t>> ord_matrix;
+  std::vector<std::uint32_t> ord_group_id;
   // factor names should not change
   // groups should not change
   // tmatrix will be changed after matrix
 
   const auto n_names = std::size(ordered_names);
-  for (auto i = 0u; i < std::size(tmp_sample_names); ++i) {
-    const auto itr = lookup.find(tmp_sample_names[i]);
-    if (itr == std::cend(lookup))
-      throw std::runtime_error("sample not found: " + tmp_sample_names[i]);
-    const std::uint32_t idx = itr->second;
-    sample_names[idx] = tmp_sample_names[i];
-    matrix[idx] = tmp_matrix[i];
-    group_id[idx] = tmp_group_id[i];
-  }
+  ord_sample_names.reserve(n_names);
+  ord_matrix.reserve(n_names);
+  ord_group_id.reserve(n_names);
 
-  // make sure no extra entries for samples in the design but that don't have
-  // data in the table
-  sample_names.resize(n_names);
-  matrix.resize(n_names);
-  group_id.resize(n_names);
+  for (const auto &name : ordered_names) {
+    const auto it = sample_to_index.find(name);
+    if (it == std::cend(sample_to_index))
+      throw std::runtime_error("Sample not found: " + name);
+
+    const auto original_index = it->second;
+    ord_sample_names.push_back(sample_names[original_index]);
+    ord_matrix.push_back(matrix[original_index]);
+    ord_group_id.push_back(group_id[original_index]);
+  }
+  sample_names = std::move(ord_sample_names);
+  matrix = std::move(ord_matrix);
+  group_id = std::move(ord_group_id);
 
   // update tmatrix using matrix
   transpose(matrix, tmatrix);

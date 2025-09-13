@@ -361,6 +361,19 @@ that the design matrix and the proportion table are correctly formatted.
     progress(table_file);
 }
 
+static void
+ensure_sample_order(const std::string &table_filename, Regression &alt_model,
+                    Regression &null_model) {
+  std::ifstream table_file(table_filename);
+  if (!table_file)
+    throw std::runtime_error("could not open file: " + table_filename);
+  std::string header;
+  std::getline(table_file, header);
+  const auto sample_names = get_sample_names_from_header(header);
+  alt_model.order_samples(sample_names);
+  null_model.order_samples(sample_names);
+}
+
 int
 main_radmeth(int argc, char *argv[]) {
   try {
@@ -446,16 +459,7 @@ main_radmeth(int argc, char *argv[]) {
     if (verbose)
       std::cerr << "Null model:\n" << null_model.design << '\n';
 
-    {
-      std::ifstream table_file(table_filename);
-      if (!table_file)
-        throw std::runtime_error("could not open file: " + table_filename);
-      std::string header;
-      std::getline(table_file, header);
-      const auto sample_names = get_sample_names_from_header(header);
-      alt_model.order_samples(sample_names);
-      null_model.order_samples(sample_names);
-    }
+    ensure_sample_order(table_filename, alt_model, null_model);
 
     // clang-format off
     if (verbose)

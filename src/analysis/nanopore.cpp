@@ -775,6 +775,8 @@ struct read_processor {
   std::uint32_t n_threads{1};
   int strand{0};
   std::string expected_basecall_model{};
+  std::uint32_t skipped_not_mapped{};
+  std::uint32_t skipped_l_qseq{};
 
   [[nodiscard]] std::string
   tostring() const {
@@ -1054,13 +1056,20 @@ struct read_processor {
     mod_prob_buffer mod_buf;
 
     bool current_target_present = false;
+    std::uint64_t skipped_l_qseq{};
+    std::uint64_t skipped_not_mapped{};
 
     while (hts.read(hdr, aln)) {
       const std::int32_t tid = get_tid(aln);
-      if (get_l_qseq(aln) == 0)
+      if (get_l_qseq(aln) == 0) {
+        ++skipped_l_qseq;
         continue;
-      if (tid == -1)  // ADS: skip reads that have no tid -- they are not mapped
+      }
+      if (tid == -1) {
+        // ADS: skip reads that have no tid -- they are not mapped
+        ++skipped_not_mapped;
         continue;
+      }
       if (tid != prev_tid) {  // chrom changed, output results, get next chrom
         // write output if any; counts is empty on first and missing chroms
         if (!counts.empty())
@@ -1209,7 +1218,9 @@ main_nanocount(int argc, char *argv[]) {
       if (!stats_out)
         throw std::runtime_error("Error opening stats file: " + stats_file);
       stats_out << R"({"matches":)" << mc.json() << ","
-                << R"("probabilities":)" << pc.json() << "}\n";
+                << R"("probabilities":)" << pc.json() << ","
+                << R"("reads_not_mapped":)" << ","
+                << R"("read_length_zero:")" << "}\n";
     }
   }
   catch (const std::exception &e) {

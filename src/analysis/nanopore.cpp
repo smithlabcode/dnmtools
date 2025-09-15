@@ -1219,8 +1219,8 @@ main_nanocount(int argc, char *argv[]) {
         throw std::runtime_error("Error opening stats file: " + stats_file);
       stats_out << R"({"matches":)" << mc.json() << ","
                 << R"("probabilities":)" << pc.json() << ","
-                << R"("reads_not_mapped":)" << ","
-                << R"("read_length_zero:")" << "}\n";
+                << R"("reads_not_mapped":)" << rp.skipped_not_mapped << ","
+                << R"("read_length_zero:")" << rp.skipped_l_qseq << "}\n";
     }
   }
   catch (const std::exception &e) {

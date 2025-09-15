@@ -23,8 +23,6 @@
 #include "smithlab_os.hpp"
 #include "smithlab_utils.hpp"
 
-#include <gsl/gsl_cdf.h>  // GSL header for chisqrd distribution
-
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -32,6 +30,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -100,10 +99,73 @@ get_sample_names_from_header(const std::string &header) {
   return sample_names;
 }
 
+// Series representation for the lower incomplete gamma P(a,x)
+[[nodiscard]] static double
+gamma_p_series(const double a, const double x) {
+  constexpr auto eps = std::numeric_limits<double>::epsilon();
+  constexpr auto max_iter = 100;
+  double sum = 1.0 / a;
+  double term = sum;
+  for (auto n = 1; n < max_iter; ++n) {
+    term *= x / (a + n);
+    sum += term;
+    if (term < eps * sum)
+      break;
+  }
+  return sum * std::exp(-x + a * std::log(x) - std::lgamma(a));
+}
+
+[[nodiscard]] static inline double
+safe_floor(const double x, const double floor_val) {
+  return std::abs(x) < floor_val ? floor_val : x;
+}
+
+// Continued fraction representation for the upper incomplete gamma Q(a,x)
+[[nodiscard]] static double
+gamma_q_contfrac(const double a, const double x) {
+  constexpr auto epsilon = std::numeric_limits<double>::epsilon();
+  constexpr auto fpmin = std::numeric_limits<double>::min() / epsilon;
+  constexpr auto max_iter = 100;
+  double b = x + 1 - a;
+  double c = 1.0 / fpmin;
+  double d = 1.0 / b;
+  double h = d;
+  for (auto i = 1; i < max_iter; ++i) {
+    const double an = -i * (i - a);
+    b += 2;
+    d = safe_floor(an * d + b, fpmin);
+    c = safe_floor(b + an / c, fpmin);
+    d = 1.0 / d;
+    const double delta = d * c;
+    h *= delta;
+    if (std::abs(delta - 1.0) < epsilon)
+      break;
+  }
+  return std::exp(-x + a * std::log(x) - std::lgamma(a)) * h;
+}
+
+// Regularized lower incomplete gamma P(a,x)
+[[nodiscard]] static double
+gamma_p(const double a, const double x) {
+  if (x < 0 || a <= 0)
+    return 0.0;
+  if (x == 0)
+    return 0.0;
+  if (x < a + 1.0)
+    return gamma_p_series(a, x);
+  return 1.0 - gamma_q_contfrac(a, x);
+}
+
+// chi-square CDF: P(k/2, x/2)
+[[nodiscard]] static double
+chi_square_cdf(const double x, const double k) {
+  return gamma_p(k * 0.5, x * 0.5);
+}
+
 // Given the maximum likelihood estimates of the full and reduced models, the
 // function outputs the p-value of the log-likelihood ratio. *Note* that it is
 // assumed that the reduced model has one fewer factor than the reduced model.
-static double
+[[nodiscard]] static double
 llr_test(const double null_loglik, const double full_loglik) {
   // The log-likelihood ratio statistic.
   const double log_lik_stat = -2 * (null_loglik - full_loglik);
@@ -113,7 +175,8 @@ llr_test(const double null_loglik, const double full_loglik) {
   const std::size_t degrees_of_freedom = 1;
 
   // Log-likelihood ratio statistic has a chi-sqare distribution.
-  const double chisq_p = gsl_cdf_chisq_P(log_lik_stat, degrees_of_freedom);
+  const double chisq_p = chi_square_cdf(log_lik_stat, degrees_of_freedom);
+
   const double p_value = 1.0 - chisq_p;
 
   return p_value;

@@ -19,19 +19,36 @@
 #ifndef XCOUNTS_UTILS_HPP
 #define XCOUNTS_UTILS_HPP
 
-#include <string>
-#include <vector>
 #include <cstdint>
+#include <ostream>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 struct xcounts_entry {
-  uint64_t pos{};  // absolute position
-  uint32_t n_meth{};
-  uint32_t n_unmeth{};
+  std::uint64_t pos{};  // absolute position
+  std::uint32_t n_meth{};
+  std::uint32_t n_unmeth{};
+
+  [[nodiscard]] std::uint32_t
+  n_reads() const {
+    return n_meth + n_unmeth;
+  }
+
+  [[nodiscard]] double
+  frac() const {
+    return static_cast<double>(n_meth) / n_reads();
+  }
 };
 
+inline std::ostream &
+operator<<(std::ostream &o, const xcounts_entry &e) {
+  return o << e.pos << '\t' << e.n_meth << '\t' << e.n_unmeth;
+}
+
 std::unordered_map<std::string, std::vector<xcounts_entry>>
-read_xcounts_by_chrom(const uint32_t n_threads, const std::string &xcounts_file);
+read_xcounts_by_chrom(const std::uint32_t n_threads,
+                      const std::string &xcounts_file);
 
 bool
 get_is_xcounts_file(const std::string &filename);

@@ -37,25 +37,11 @@
 #include <unordered_map>
 #include <vector>
 
-using std::cerr;
-using std::cout;
-using std::distance;
-using std::endl;
-using std::ifstream;
-using std::ostream;
-using std::runtime_error;
-using std::size;
-using std::string;
-using std::uint32_t;
-using std::uint64_t;
-using std::unordered_map;
-using std::vector;
-
 using bamxx::bgzf_file;
 
 namespace fs = std::filesystem;
 
-static string
+static std::string
 format_levels_counter(const LevelsCounter &lc) {
   // ...
   // (7) weighted mean methylation
@@ -73,53 +59,57 @@ format_levels_counter(const LevelsCounter &lc) {
       << lc.total_sites << '\t'
       << lc.sites_covered << '\t'
       << lc.total_c << '\t'
-      << (lc.total_c + lc.total_t);
+      << (lc.total_c + lc.total_t) << '\t'
+      << lc.total_meth << '\t'
+      << lc.sites_covered;
   // clang-format on
   return oss.str();
 }
 
-static unordered_map<string, uint64_t>
-get_chrom_sizes(const string &chrom_sizes_file) {
-  unordered_map<string, uint64_t> chrom_sizes;
+static std::unordered_map<std::string, std::uint64_t>
+get_chrom_sizes(const std::string &chrom_sizes_file) {
+  std::unordered_map<std::string, std::uint64_t> chrom_sizes;
 
-  ifstream in(chrom_sizes_file);
+  std::ifstream in(chrom_sizes_file);
   if (!in)
-    throw runtime_error("failed to open file: " + chrom_sizes_file);
+    throw std::runtime_error("failed to open file: " + chrom_sizes_file);
 
-  string line;
+  std::string line;
   while (getline(in, line)) {
     std::istringstream iss(line);
-    string chrom_name{};
-    uint64_t chrom_size{};
+    std::string chrom_name{};
+    std::uint64_t chrom_size{};
     if (!(iss >> chrom_name >> chrom_size))
-      throw runtime_error("bad line in " + chrom_sizes_file + ":\n" + line);
-    string dummy;
+      throw std::runtime_error("bad line in " + chrom_sizes_file + ":\n" +
+                               line);
+    std::string dummy;
     if (iss >> dummy)
-      throw runtime_error("too many columns: " + line);
+      throw std::runtime_error("too many columns: " + line);
 
-    if (chrom_sizes.find(chrom_name) != cend(chrom_sizes))
-      throw runtime_error("repeated entry " + chrom_name + " in " +
-                          chrom_sizes_file);
+    if (chrom_sizes.find(chrom_name) != std::cend(chrom_sizes))
+      throw std::runtime_error("repeated entry " + chrom_name + " in " +
+                               chrom_sizes_file);
 
     chrom_sizes[chrom_name] = chrom_size;
   }
   return chrom_sizes;
 }
 
-static vector<string>
-get_chrom_names(const string &chrom_sizes_file) {
-  ifstream in(chrom_sizes_file);
+static std::vector<std::string>
+get_chrom_names(const std::string &chrom_sizes_file) {
+  std::ifstream in(chrom_sizes_file);
   if (!in)
-    throw runtime_error("failed to open file: " + chrom_sizes_file);
+    throw std::runtime_error("failed to open file: " + chrom_sizes_file);
 
-  vector<string> chrom_names;
+  std::vector<std::string> chrom_names;
 
-  string line;
+  std::string line;
   while (getline(in, line)) {
     std::istringstream iss(line);
-    string chrom_name{};
+    std::string chrom_name{};
     if (!(iss >> chrom_name))
-      throw runtime_error("bad line in " + chrom_sizes_file + ":\n" + line);
+      throw std::runtime_error("bad line in " + chrom_sizes_file + ":\n" +
+                               line);
 
     chrom_names.push_back(chrom_name);
   }
@@ -128,13 +118,13 @@ get_chrom_names(const string &chrom_sizes_file) {
 
 static void
 update(LevelsCounter &lc, const xcounts_entry &xce) {
-  const uint64_t n_reads = xce.n_meth + xce.n_unmeth;
+  const std::uint64_t n_reads = xce.n_reads();
   if (n_reads > 0) {
     ++lc.sites_covered;
     lc.max_depth = std::max(lc.max_depth, n_reads);
     lc.total_c += xce.n_meth;
     lc.total_t += xce.n_unmeth;
-    const auto meth = static_cast<double>(xce.n_unmeth) / n_reads;
+    const auto meth = xce.frac();
     lc.total_meth += meth;
     double lower = 0.0, upper = 0.0;
     wilson_ci_for_binomial(lc.alpha, n_reads, meth, lower, upper);
@@ -146,18 +136,18 @@ update(LevelsCounter &lc, const xcounts_entry &xce) {
 
 static void
 process_chrom(const bool report_more_info, const char level_code,
-              const string &chrom_name, const uint64_t chrom_size,
-              const uint64_t bin_size, const vector<xcounts_entry> &sites,
-              ostream &out) {
+              const std::string &chrom_name, const std::uint64_t chrom_size,
+              const std::uint64_t bin_size,
+              const std::vector<xcounts_entry> &sites, std::ostream &out) {
   GenomicRegion r(chrom_name, 0, 0, "CpG", 0.0, '+');
 
-  uint64_t j = 0;
+  std::uint64_t j = 0;
   for (auto i = 0ul; i < chrom_size; i += bin_size) {
-    while (j < size(sites) && sites[j].pos < i)
+    while (j < std::size(sites) && sites[j].pos < i)
       ++j;
 
     LevelsCounter lc;
-    while (j < size(sites) && sites[j].pos < i + bin_size)
+    while (j < std::size(sites) && sites[j].pos < i + bin_size)
       update(lc, sites[j++]);
 
     r.set_start(i);
@@ -178,12 +168,12 @@ process_chrom(const bool report_more_info, const char level_code,
 }
 
 static void
-process_chrom(const bool report_more_info, const string &chrom_name,
-              const uint64_t chrom_size, const uint64_t bin_size,
-              ostream &out) {
+process_chrom(const bool report_more_info, const std::string &chrom_name,
+              const std::uint64_t chrom_size, const std::uint64_t bin_size,
+              std::ostream &out) {
   GenomicRegion r(chrom_name, 0, 0, "CpG_0", 0.0, '+');
   LevelsCounter lc;
-  const string lc_formatted = format_levels_counter(lc);
+  const std::string lc_formatted = format_levels_counter(lc);
   for (auto i = 0ul; i < chrom_size; i += bin_size) {
     r.set_start(i);
     r.set_end(std::min(i + bin_size, chrom_size));
@@ -197,7 +187,7 @@ process_chrom(const bool report_more_info, const string &chrom_name,
 int
 main_cpgbins(int argc, char *argv[]) {
   try {
-    static const string description = R"""(
+    static const std::string description = R"""(
 Compute average site methylation levels in each non-overlapping
 genomic bin of the specified size. The 5th column (the "score" column
 in BED format) is determined by the '-l' or '-level' argument.
@@ -212,15 +202,15 @@ Columns (beyond the first 6) in the BED format output:
 (13) total number of observations from reads in the region
 )""";
 
-    static const string default_name_prefix = "X";
+    static const std::string default_name_prefix = "X";
 
     bool verbose = false;
     bool report_more_info = false;
-    uint32_t n_threads = 1;
-    // uint64_t bin_size = 1000;
+    std::uint32_t n_threads = 1;
+    // std::uint64_t bin_size = 1000;
     size_t bin_size = 1000;  // ADS: for macOS gcc-14.2.0
-    string level_code = "w";
-    string outfile;
+    std::string level_code = "w";
+    std::string outfile;
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description,
@@ -237,35 +227,36 @@ Columns (beyond the first 6) in the BED format output:
     opt_parse.add_opt("more-levels", 'M', "report more methylation information",
                       false, report_more_info);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested() ||
         opt_parse.about_requested()) {
-      cerr << opt_parse.help_message() << opt_parse.about_message_raw() << endl;
+      std::cerr << opt_parse.help_message() << opt_parse.about_message_raw()
+                << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_FAILURE;
     }
-    if (leftover_args.size() != 2) {
-      cerr << opt_parse.help_message() << endl;
+    if (std::size(leftover_args) != 2) {
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_FAILURE;
     }
     if (level_code != "w" && level_code != "u" && level_code != "f") {
-      cerr << "selected level must be in {w, u, f}" << endl;
+      std::cerr << "selected level must be in {w, u, f}" << '\n';
       return EXIT_FAILURE;
     }
-    const string chrom_sizes_file = leftover_args.front();
-    const string xcounts_file = leftover_args.back();
+    const std::string chrom_sizes_file = leftover_args.front();
+    const std::string xcounts_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (!fs::is_regular_file(chrom_sizes_file))
-      throw runtime_error("chromosome sizes file not a regular file: " +
-                          chrom_sizes_file);
+      throw std::runtime_error("chromosome sizes file not a regular file: " +
+                               chrom_sizes_file);
 
     if (!fs::is_regular_file(xcounts_file))
-      throw runtime_error("xsym file not a regular file: " + xcounts_file);
+      throw std::runtime_error("xsym file not a regular file: " + xcounts_file);
 
     const auto sites_by_chrom = read_xcounts_by_chrom(n_threads, xcounts_file);
     const auto chrom_names = get_chrom_names(chrom_sizes_file);
@@ -275,16 +266,16 @@ Columns (beyond the first 6) in the BED format output:
     if (!outfile.empty()) {
       of.open(outfile);
       if (!of)
-        throw runtime_error("failed to open outfile: " + outfile);
+        throw std::runtime_error("failed to open outfile: " + outfile);
     }
-    std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
+    std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
     for (const auto &chrom_name : chrom_names) {
       const auto sites = sites_by_chrom.find(chrom_name);
       const auto chrom_size = chrom_sizes.find(chrom_name);
-      if (chrom_size == cend(chrom_sizes))
-        throw runtime_error("failed chrom size lookup");
-      if (sites != cend(sites_by_chrom))
+      if (chrom_size == std::cend(chrom_sizes))
+        throw std::runtime_error("failed chrom size lookup");
+      if (sites != std::cend(sites_by_chrom))
         process_chrom(report_more_info, level_code[0], chrom_name,
                       chrom_size->second, bin_size, sites->second, out);
       else
@@ -293,7 +284,7 @@ Columns (beyond the first 6) in the BED format output:
     }
   }
   catch (const std::exception &e) {
-    cerr << e.what() << endl;
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

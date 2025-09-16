@@ -134,6 +134,19 @@ update(LevelsCounter &lc, const xcounts_entry &xce) {
   ++lc.total_sites;
 }
 
+[[nodiscard]] static std::string
+get_name(const bool report_more_info, const char level_code,
+         const LevelsCounter &lc) {
+  static const std::string tag = "CpG";
+  return tag + (report_more_info
+                  ? ""
+                  : "_" + std::to_string(
+                            (level_code == 'w'
+                               ? lc.coverage()
+                               : (level_code == 'u' ? lc.sites_covered
+                                                    : lc.total_called()))));
+}
+
 static void
 process_chrom(const bool report_more_info, const char level_code,
               const std::string &chrom_name, const std::uint64_t chrom_size,
@@ -155,11 +168,9 @@ process_chrom(const bool report_more_info, const char level_code,
     r.set_score(level_code == 'w' ? lc.mean_meth_weighted()
                                   : (level_code == 'u' ? lc.mean_meth()
                                                        : lc.fractional_meth()));
-    r.set_name("CpG_" +
-               std::to_string((level_code == 'w'
-                                 ? lc.coverage()
-                                 : (level_code == 'u' ? lc.sites_covered
-                                                      : lc.total_called()))));
+
+    r.set_name(get_name(report_more_info, level_code, lc));
+
     out << r;
     if (report_more_info)
       out << '\t' << format_levels_counter(lc);
@@ -217,7 +228,7 @@ Columns (beyond the first 6) in the BED format output:
                            "<chrom-sizes> <xsym-file>");
     opt_parse.set_show_defaults();
     opt_parse.add_opt("output", 'o', "name of output file (default: stdout)",
-                      false, outfile);
+                      true, outfile);
     opt_parse.add_opt("bin", 'b', "bin size in base pairs", false, bin_size);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("level", 'l',
@@ -262,13 +273,9 @@ Columns (beyond the first 6) in the BED format output:
     const auto chrom_names = get_chrom_names(chrom_sizes_file);
     const auto chrom_sizes = get_chrom_sizes(chrom_sizes_file);
 
-    std::ofstream of;
-    if (!outfile.empty()) {
-      of.open(outfile);
-      if (!of)
-        throw std::runtime_error("failed to open outfile: " + outfile);
-    }
-    std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
+    std::ofstream out(outfile);
+    if (!out)
+      throw std::runtime_error("failed to open outfile: " + outfile);
 
     for (const auto &chrom_name : chrom_names) {
       const auto sites = sites_by_chrom.find(chrom_name);

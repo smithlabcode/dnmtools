@@ -25,6 +25,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <iostream>
+
 double Regression::tolerance = 1e-4;
 double Regression::stepsize = 0.01;
 std::uint32_t Regression::max_iter = 250;
@@ -144,11 +146,15 @@ operator>>(std::istream &is, Design &design) {
   make_groups(design);
   assign_groups(design);
 
+  design.g_idx_map.resize(design.n_groups());
+  for (auto i = 0u; i < design.n_groups(); ++i)
+    design.g_idx_map[i] = i;
+
   return is;
 }
 
 [[nodiscard]] Design
-Design::drop_factor(const std::size_t factor_idx) {
+Design::drop_factor(const std::uint32_t factor_idx) {
   // clang-format off
   Design design{
     factor_names,
@@ -157,7 +163,9 @@ Design::drop_factor(const std::size_t factor_idx) {
     tmatrix,
     groups,
     group_id,
+    g_idx_map,
   };
+  const auto orig_group_id = group_id;
   // clang-format on
   design.factor_names.erase(std::begin(design.factor_names) + factor_idx);
   for (auto i = 0u; i < n_samples(); ++i)
@@ -165,6 +173,22 @@ Design::drop_factor(const std::size_t factor_idx) {
   transpose(design.matrix, design.tmatrix);
   make_groups(design);
   assign_groups(design);
+
+  std::unordered_map<std::uint32_t, std::uint32_t> orig_id_to_updated_id;
+  for (auto i = 0u; i < n_samples(); ++i) {
+    const auto orig_id = orig_group_id[i];
+    const auto updated_id = design.group_id[i];
+    const auto itr = orig_id_to_updated_id.find(orig_id);
+    if (itr == std::cend(orig_id_to_updated_id))
+      orig_id_to_updated_id[orig_id] = updated_id;
+    else if (itr->second != updated_id)
+      throw std::runtime_error("Inconsistent group id mapping");
+  }
+
+  design.g_idx_map.resize(std::size(orig_id_to_updated_id));
+  for (const auto &u : orig_id_to_updated_id)
+    design.g_idx_map[u.first] = u.second;
+
   return design;
 }
 
@@ -215,16 +239,16 @@ operator<<(std::ostream &out, const Design &design) {
   const auto n_samples = design.n_samples();
   const auto n_factors = design.n_factors();
   if (n_samples <= max_samples_to_report) {
-    for (std::size_t factor = 0; factor < n_factors; ++factor) {
+    for (std::uint32_t factor = 0; factor < n_factors; ++factor) {
       if (factor != 0)
         out << '\t';
       out << design.factor_names[factor];
     }
     out << '\n';
 
-    for (std::size_t i = 0; i < n_samples; ++i) {
+    for (std::uint32_t i = 0; i < n_samples; ++i) {
       out << design.sample_names[i];
-      for (std::size_t j = 0; j < n_factors; ++j)
+      for (std::uint32_t j = 0; j < n_factors; ++j)
         out << '\t' << static_cast<std::uint32_t>(design.matrix[i][j]);
       out << '\n';
     }
@@ -237,9 +261,9 @@ operator<<(std::ostream &out, const Design &design) {
     ++n_samples_per_group[design.group_id[s_idx]];
 
   out << "group_id | factor_levels (" << n_factors << " factors) | n_samples\n";
-  for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
+  for (std::uint32_t g_idx = 0; g_idx < n_groups; ++g_idx) {
     out << g_idx;
-    for (std::size_t f_idx = 0; f_idx < n_factors; ++f_idx)
+    for (std::uint32_t f_idx = 0; f_idx < n_factors; ++f_idx)
       out << '\t' << static_cast<std::uint32_t>(design.groups[g_idx][f_idx]);
     out << '\t' << n_samples_per_group[g_idx] << '\n';
   }

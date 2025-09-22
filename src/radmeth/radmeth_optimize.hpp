@@ -25,6 +25,6 @@ struct Regression;
 
 void
 fit_regression_model(Regression &r, std::vector<double> &p_estimates,
-                     double &dispersion_estimate);
+                     std::vector<double> &dispersion_estimate);
 
 #endif

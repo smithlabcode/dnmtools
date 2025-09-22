@@ -80,11 +80,11 @@ struct file_progress {
 [[nodiscard]] static bool
 consistent_sample_names(const Regression &reg, const std::string &header) {
   std::istringstream iss(header);
-  auto nm_itr(std::begin(reg.design.sample_names));
-  const auto nm_end(std::end(reg.design.sample_names));
+  auto name_itr(std::begin(reg.get_sample_names()));
+  const auto nm_end(std::cend(reg.get_sample_names()));
   std::string token;
-  while (iss >> token && nm_itr != nm_end)
-    if (token != *nm_itr++)
+  for (; iss >> token && name_itr != nm_end; ++name_itr)
+    if (token != *name_itr)
       return false;
   return true;
 }
@@ -185,7 +185,7 @@ llr_test(const double null_loglik, const double full_loglik) {
 static bool
 has_low_coverage(const Regression &reg, const std::size_t test_factor) {
   bool cvrd_in_test_fact_smpls = false;
-  const auto &tcol = reg.design.tmatrix[test_factor];
+  const auto &tcol = reg.get_tmatrix()[test_factor];
   for (std::size_t i = 0; i < reg.n_samples() && !cvrd_in_test_fact_smpls; ++i)
     cvrd_in_test_fact_smpls = (tcol[i] == 1 && reg.props.mc[i].n_reads != 0);
 
@@ -212,8 +212,8 @@ has_extreme_counts(const Regression &reg) {
 }
 
 [[nodiscard]] static bool
-has_two_values(const Regression &reg, const std::size_t test_factor) {
-  const auto &tcol = reg.design.tmatrix[test_factor];
+has_two_values(const Design &design, const std::size_t test_factor) {
+  const auto &tcol = design.tmatrix[test_factor];
   for (const auto x : tcol)
     if (x != tcol[0])
       return true;
@@ -221,8 +221,8 @@ has_two_values(const Regression &reg, const std::size_t test_factor) {
 }
 
 [[nodiscard]] static std::uint32_t
-get_test_factor_idx(const Regression &model, const std::string &test_factor) {
-  const auto &factors = model.design.factor_names;
+get_test_factor_idx(const Design &design, const std::string &test_factor) {
+  const auto &factors = design.factor_names;
   const auto itr =
     std::find(std::cbegin(factors), std::cend(factors), test_factor);
 
@@ -312,8 +312,8 @@ that the design matrix and the proportion table are correctly formatted.
       threads.emplace_back([&, thread_id] {
         std::vector<double> p_estim_alt;
         std::vector<double> p_estim_null;
-        double phi_estim_alt{};
-        double phi_estim_null{};
+        std::vector<double> phi_estim_alt{};
+        std::vector<double> phi_estim_null{};
 
         auto &t_alt_model = alt_models[thread_id];
         auto &t_null_model = null_models[thread_id];
@@ -388,10 +388,19 @@ that the design matrix and the proportion table are correctly formatted.
                   return n;
                 n_bytes += n;
               }
-              const int n = std::sprintf(cursor, "\t%f\n", phi_estim_alt);
-              if (n < 0)
-                return n;
-              n_bytes += n;
+              for (auto g_idx = 0u; g_idx < n_groups; ++g_idx) {
+                const int n =
+                  std::sprintf(cursor, "\t%f\n", phi_estim_alt[g_idx]);
+                if (n < 0)
+                  return n;
+                n_bytes += n;
+              }
+              // const int n = std::sprintf(cursor, "\t%f", p_estim_alt[g_idx]);
+              //   cursor += n;
+              //   if (n < 0)
+              //     return n;
+              //   n_bytes += n;
+              // }
               return n_bytes;
             }();
 
@@ -501,26 +510,36 @@ main_radmeth(int argc, char *argv[]) {
 
     // initialize full design matrix from file
     Regression alt_model;
-    alt_model.design = read_design(design_filename);
+    alt_model.design_p = read_design(design_filename);
+    alt_model.design_disp = read_design(design_filename);
 
     if (verbose)
-      std::cerr << "Alternate model:\n" << alt_model.design << '\n';
+      std::cerr << "Alternate model (p):\n"
+                << alt_model.design_p << '\n'
+                << "Alternate model (phi):\n"
+                << alt_model.design_disp << '\n';
 
     // Check that provided test factor name exists and find its index.
-    const auto test_factor_idx = get_test_factor_idx(alt_model, test_factor);
+    const auto test_factor_idx =
+      get_test_factor_idx(alt_model.design_p, test_factor);
 
     // verify that the design includes more than one level for the
     // test factor
-    if (!has_two_values(alt_model, test_factor_idx)) {
-      const auto first_level = alt_model.design.matrix[0][test_factor_idx];
+    if (!has_two_values(alt_model.design_p, test_factor_idx)) {
+      const auto first_level = alt_model.design_p.matrix[0][test_factor_idx];
       throw std::runtime_error("test factor only one level: " + test_factor +
                                ", " + std::to_string(first_level));
     }
 
     Regression null_model = alt_model;
-    null_model.design = alt_model.design.drop_factor(test_factor_idx);
+    null_model.design_p = alt_model.design_p.drop_factor(test_factor_idx);
+    // null_model.design_disp =
+    // alt_model.design_disp.drop_factor(test_factor_idx);
     if (verbose)
-      std::cerr << "Null model:\n" << null_model.design << '\n';
+      std::cerr << "Null model (p):\n"
+                << null_model.design_p << '\n'
+                << "Null model (phi):\n"
+                << null_model.design_disp << '\n';
 
     ensure_sample_order(table_filename, alt_model, null_model);
 

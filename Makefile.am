@@ -238,6 +238,7 @@ dnmtools_SOURCES += src/radmeth/dmr.cpp
 dnmtools_SOURCES += src/radmeth/methdiff.cpp
 dnmtools_SOURCES += src/radmeth/radmeth_optimize.cpp
 dnmtools_SOURCES += src/radmeth/radmeth_model.cpp
+dnmtools_SOURCES += src/radmeth/radmeth_summary_stats.cpp
 dnmtools_SOURCES += src/radmeth/radmeth.cpp
 dnmtools_SOURCES += src/radmeth/radmeth-adjust.cpp
 dnmtools_SOURCES += src/radmeth/radmeth-merge.cpp

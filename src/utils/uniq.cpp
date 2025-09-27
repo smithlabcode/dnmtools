@@ -73,18 +73,10 @@ struct rd_stats {  // keep track of good bases/reads in and out
 
 struct uniq_summary {
   uniq_summary(const rd_stats &rs_in, const rd_stats &rs_out,
-               const std::size_t reads_duped) {
-    total_reads = rs_in.reads;
-    total_bases = rs_in.bases;
-    unique_reads = rs_out.reads;
-    unique_read_bases = rs_out.bases;
-    reads_removed = rs_in.reads - rs_out.reads;
-    non_duplicate_fraction = static_cast<double>(rs_out.reads - reads_duped) /
-                             std::max(1ul, rs_in.reads);
-    duplication_rate = static_cast<double>(reads_removed + reads_duped) /
-                       std::max(1ul, reads_duped);
-    duplicate_reads = reads_duped;
-  }
+               const std::size_t reads_duped) :
+    total_reads(rs_in.reads), total_bases(rs_in.bases),
+    unique_reads(rs_out.reads), unique_read_bases(rs_out.bases),
+    duplicate_reads(reads_duped) {}
 
   // total_reads is the number of input reads
   std::size_t total_reads{};
@@ -94,16 +86,30 @@ struct uniq_summary {
   std::size_t unique_reads{};
   // unique_read_bases is the total number of bases for the unique reads
   std::size_t unique_read_bases{};
-  // non_duplicate_fraction is the ratio of the number of unique reads with
-  // no duplicates to that of the input reads
-  double non_duplicate_fraction{};
   // duplicate_reads is the number of unique reads with at least one duplicate
   std::size_t duplicate_reads{};
+
   // reads_removed is the number of duplicate reads that have been removed
-  std::size_t reads_removed{};
+  [[nodiscard]] std::size_t
+  reads_removed() const {
+    return total_reads - unique_reads;
+  }
+
+  // non_duplicate_fraction is the ratio of the number of unique reads with
+  // no duplicates to that of the input reads
+  [[nodiscard]] double
+  non_duplicate_fraction() const {
+    return static_cast<double>(unique_reads - duplicate_reads) /
+           std::max(1ul, total_reads);
+  }
+
   // duplication_rate is the average number of duplicates for the reads with
   // at least one duplicate (>1 by definition)
-  double duplication_rate{};
+  [[nodiscard]] double
+  duplication_rate() const {
+    return static_cast<double>(reads_removed() + duplicate_reads) /
+           std::max(1ul, duplicate_reads);
+  }
 
   std::string
   to_string() {
@@ -112,10 +118,10 @@ struct uniq_summary {
         << "total_bases: " << total_bases << "\n"
         << "unique_reads: " << unique_reads << "\n"
         << "unique_read_bases: " << unique_read_bases << "\n"
-        << "non_duplicate_fraction: " << non_duplicate_fraction << "\n"
+        << "non_duplicate_fraction: " << non_duplicate_fraction() << "\n"
         << "duplicate_reads: " << duplicate_reads << "\n"
-        << "reads_removed: " << reads_removed << "\n"
-        << "duplication_rate: " << duplication_rate;
+        << "reads_removed: " << reads_removed() << "\n"
+        << "duplication_rate: " << duplication_rate();
     return oss.str();
   }
 };

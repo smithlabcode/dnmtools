@@ -31,78 +31,109 @@
 #include <numeric>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
-using std::accumulate;
-using std::cerr;
-using std::cout;
-using std::endl;
-using std::for_each;
-using std::max;
-using std::numeric_limits;
-using std::pair;
-using std::runtime_error;
-using std::string;
-using std::unordered_map;
-using std::unordered_set;
-using std::vector;
-
-using bamxx::bam_rec;
 
 struct bsrate_summary {
   // converted_count_positive is the number of nucleotides covering a
   // cytosine in the reference that show a thymine in the read, and
   // for reads mapping to the positive strand.
-  uint64_t converted_count_positive{};
+  std::uint64_t converted_count_positive{};
+
   // total_count_positive is the number of nucleotides covering a
   // cytosine in the reference that show either a cytosine or a
   // thymine in the read, and for reads mapping to the positive
   // strand.
-  uint64_t total_count_positive{};
-  // bisulfite_conversion_rate_positive is equal to
-  // converted_count_positive divided by total_count_positive, a value
-  // that is always between 0 and 1. When total_count_positive is 0,
-  // then bisulfite_conversion_rate_positive is given a value of 0.
-  double bisulfite_conversion_rate_positive{};
+  std::uint64_t total_count_positive{};
 
   // converted_count_negative is the number of nucleotides covering a
   // cytosine in the reference that show a thymine in the read, and
   // for reads mapping to the negative strand.
-  uint64_t converted_count_negative{};
+  std::uint64_t converted_count_negative{};
+
   // total_count_negative is the number of nucleotides covering a
   // cytosine in the reference that show either a cytosine or a
   // thymine in the read, and for reads mapping to the negative
   // strand.
-  uint64_t total_count_negative{};
-  // bisulfite_conversion_rate_negative is equal to
-  // converted_count_negative divided by total_count_negative, a value
-  // that is always between 0 and 1. When total_count_negative is 0,
-  // then bisulfite_conversion_rate_negative is given a value of 0.
-  double bisulfite_conversion_rate_negative{};
+  std::uint64_t total_count_negative{};
+
+  // error_count_positive is the number of nucleotides covering a cytosine in
+  // the reference shows either an A or a G in a read mapping on the positive
+  // strand.
+  std::uint64_t error_count_positive{};
+
+  // error_count_negative is the number of nucleotides covering a cytosine in
+  // the reference shows either an A or a G in a read mapping on the negative
+  // strand.
+  std::uint64_t error_count_negative{};
+
+  // total_count is equal to the sum of total_count_positive and
+  // total_count_negative
+  [[nodiscard]] std::uint64_t
+  total_count() const {
+    return total_count_positive + total_count_negative;
+  }
 
   // converted_count is equal to the sum of converted_count_positive
   // and converted_count_negative.
-  uint64_t converted_count{};
-  // total_count is equal to the sum of total_count_positive and
-  // total_count_negative
-  uint64_t total_count{};
+  [[nodiscard]] std::uint64_t
+  converted_count() const {
+    return converted_count_positive + converted_count_negative;
+  }
+
+  // bisulfite_conversion_rate_positive is equal to converted_count_positive
+  // divided by total_count_positive, a value that is always between 0 and
+  // 1. When total_count_positive is 0, then
+  // bisulfite_conversion_rate_positive is given a value of 0.
+  [[nodiscard]] double
+  bisulfite_conversion_rate_positive() const {
+    return static_cast<double>(converted_count_positive) /
+           std::max(total_count_positive, static_cast<std::uint64_t>(1));
+  }
+
+  // bisulfite_conversion_rate_negative is equal to converted_count_negative
+  // divided by total_count_negative, a value that is always between 0 and
+  // 1. When total_count_negative is 0, then
+  // bisulfite_conversion_rate_negative is given a value of 0.
+  [[nodiscard]] double
+  bisulfite_conversion_rate_negative() const {
+    return static_cast<double>(converted_count_negative) /
+           std::max(total_count_negative, static_cast<std::uint64_t>(1));
+  }
+
   // bisulfite_conversion_rate is equal to converted_count divided by
   // total_count, a value that is always between 0 and 1. When
   // total_count is 0, then bisulfite_conversion_rate is given a value
   // of 0.
-  double bisulfite_conversion_rate{};
+  [[nodiscard]] double
+  bisulfite_conversion_rate() const {
+    return static_cast<double>(converted_count()) /
+           std::max(total_count(), static_cast<std::uint64_t>(1));
+  }
 
-  // error_count is the number of nucleotides covering a cytosine in
-  // the reference shows either an A or a G in the read.
-  uint64_t error_count{};
+  // error_count is equal to the sum of error_count_positive and
+  // error_count_negative
+  [[nodiscard]] std::uint64_t
+  error_count() const {
+    return error_count_positive + error_count_negative;
+  }
+
   // valid_count is the number of nucleotides covering a cytosine in
   // the reference shows any nucleotide that is not an N in the read.
-  uint64_t valid_count{};
+  [[nodiscard]] std::uint64_t
+  valid_count() const {
+    return total_count() + error_count();
+  }
+
   // error_rate is equal to error_count divided by valid_count, and is
   // a value that is always between 0 and 1. When valid_count is 0,
   // then error_rate is given a value of 0.
-  double error_rate{};
+  [[nodiscard]] double
+  error_rate() const {
+    return static_cast<double>(error_count()) /
+           std::max(valid_count(), static_cast<std::uint64_t>(1));
+  }
 
   void
   update_pos(const char nt) {
@@ -111,7 +142,7 @@ struct bsrate_summary {
       converted_count_positive += (nt == 'T');
     }
     else if (nt != 'N')
-      ++error_count;
+      ++error_count_positive;
   }
 
   void
@@ -121,55 +152,21 @@ struct bsrate_summary {
       converted_count_negative += (nt == 'T');
     }
     else if (nt != 'N')
-      ++error_count;
+      ++error_count_negative;
   }
 
   bsrate_summary &
   operator+=(const bsrate_summary &rhs) {
-    // ADS: the "rates" are set to 0.0 here to ensure that they are
-    // computed properly using the full data after any accumulation of
-    // integer values has completed.
     converted_count_positive += rhs.converted_count_positive;
     total_count_positive += rhs.total_count_positive;
-    bisulfite_conversion_rate_positive = 0.0;
-
     converted_count_negative += rhs.converted_count_negative;
     total_count_negative += rhs.total_count_negative;
-    bisulfite_conversion_rate_negative = 0.0;
-
-    converted_count += rhs.converted_count;
-    total_count += rhs.total_count;
-    bisulfite_conversion_rate = 0.0;
-
-    error_count += rhs.error_count;
-    valid_count += rhs.valid_count;
-    error_rate = 0.0;
+    error_count_positive += rhs.error_count_positive;
+    error_count_negative += rhs.error_count_negative;
     return *this;
   }
 
-  void
-  set_values() {
-    bisulfite_conversion_rate_positive =
-      static_cast<double>(converted_count_positive) /
-      max(total_count_positive, static_cast<uint64_t>(1));
-
-    bisulfite_conversion_rate_negative =
-      static_cast<double>(converted_count_negative) /
-      max(total_count_negative, static_cast<uint64_t>(1));
-
-    converted_count = converted_count_positive + converted_count_negative;
-    total_count = total_count_positive + total_count_negative;
-
-    bisulfite_conversion_rate = static_cast<double>(converted_count) /
-                                max(total_count, static_cast<uint64_t>(1));
-
-    valid_count = total_count + error_count;
-
-    error_rate = static_cast<double>(error_count) /
-                 max(valid_count, static_cast<uint64_t>(1));
-  }
-
-  string
+  std::string
   tostring_as_row() const {
     static constexpr auto precision_val = 5u;
     std::ostringstream oss;
@@ -178,22 +175,22 @@ struct bsrate_summary {
     // clang-format off
     oss << total_count_positive << '\t'
         << converted_count_positive << '\t'
-        << bisulfite_conversion_rate_positive << '\t';
+        << bisulfite_conversion_rate_positive() << '\t';
     oss << total_count_negative << '\t'
         << converted_count_negative << '\t'
-        << bisulfite_conversion_rate_negative << '\t';
-    oss << total_count << '\t'
-        << converted_count << '\t'
-        << bisulfite_conversion_rate << '\t';
-    oss << error_count << '\t'
-        << valid_count << '\t'
-        << error_rate;
+        << bisulfite_conversion_rate_negative() << '\t';
+    oss << total_count() << '\t'
+        << converted_count() << '\t'
+        << bisulfite_conversion_rate() << '\t';
+    oss << error_count() << '\t'
+        << valid_count() << '\t'
+        << error_rate();
     // clang-format on
     return oss.str();
   }
 
-  string
-  tostring_as_yaml_list(const uint32_t position) const {
+  std::string
+  tostring_as_yaml_list(const std::uint32_t position) const {
     static constexpr auto precision_val = 5u;
     std::ostringstream oss;
     oss.precision(precision_val);
@@ -202,21 +199,21 @@ struct bsrate_summary {
     oss << "  - base: " << position << '\n'
         << "    ptot: " << total_count_positive << '\n'
         << "    pconv: " << converted_count_positive << '\n'
-        << "    prate: " << bisulfite_conversion_rate_positive << '\n'
+        << "    prate: " << bisulfite_conversion_rate_positive() << '\n'
         << "    ntot: " << total_count_negative << '\n'
         << "    nconv: " << converted_count_negative << '\n'
-        << "    nrate: " << bisulfite_conversion_rate_negative << '\n'
-        << "    bthtot: " << total_count << '\n'
-        << "    bthconv: " << converted_count << '\n'
-        << "    bthrate: " << bisulfite_conversion_rate << '\n'
-        << "    err: " << error_count << '\n'
-        << "    all: " << valid_count << '\n'
-        << "    errrate: " << error_rate << '\n';
+        << "    nrate: " << bisulfite_conversion_rate_negative() << '\n'
+        << "    bthtot: " << total_count() << '\n'
+        << "    bthconv: " << converted_count() << '\n'
+        << "    bthrate: " << bisulfite_conversion_rate() << '\n'
+        << "    err: " << error_count() << '\n'
+        << "    all: " << valid_count() << '\n'
+        << "    errrate: " << error_rate() << '\n';
     // clang-format on
     return oss.str();
   }
 
-  string
+  std::string
   tostring() const {
     static constexpr auto sep = ": ";
     std::ostringstream oss;
@@ -226,7 +223,7 @@ struct bsrate_summary {
     oss << "total_count_positive" << sep << total_count_positive << '\n';
 
     oss << "bisulfite_conversion_rate_positive" << sep
-        << bisulfite_conversion_rate_positive << '\n';
+        << bisulfite_conversion_rate_positive() << '\n';
 
     oss << "converted_count_negative" << sep << converted_count_negative
         << '\n';
@@ -234,17 +231,17 @@ struct bsrate_summary {
     oss << "total_count_negative" << sep << total_count_negative << '\n';
 
     oss << "bisulfite_conversion_rate_negative" << sep
-        << bisulfite_conversion_rate_negative << '\n';
+        << bisulfite_conversion_rate_negative() << '\n';
 
-    oss << "converted_count" << sep << converted_count << '\n';
-    oss << "total_count" << sep << total_count << '\n';
+    oss << "converted_count" << sep << converted_count() << '\n';
+    oss << "total_count" << sep << total_count() << '\n';
 
-    oss << "bisulfite_conversion_rate" << sep << bisulfite_conversion_rate
+    oss << "bisulfite_conversion_rate" << sep << bisulfite_conversion_rate()
         << '\n';
 
-    oss << "error_count" << sep << error_count << '\n';
-    oss << "valid_count" << sep << valid_count << '\n';
-    oss << "error_rate" << sep << error_rate;
+    oss << "error_count" << sep << error_count() << '\n';
+    oss << "valid_count" << sep << valid_count() << '\n';
+    oss << "error_rate" << sep << error_rate();
 
     return oss.str();
   }
@@ -256,11 +253,11 @@ operator+(bsrate_summary lhs, const bsrate_summary &rhs) {
   return lhs;
 }
 
-static pair<uint32_t, uint32_t>
-count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
-                 const bam_rec &aln, vector<bsrate_summary> &summaries,
-                 size_t &hanging) {
-  uint32_t n_conv = 0, n_uconv = 0;
+static std::pair<std::uint32_t, std::uint32_t>
+count_states_pos(const bool INCLUDE_CPGS, const std::string &chrom,
+                 const bamxx::bam_rec &aln,
+                 std::vector<bsrate_summary> &summaries, std::size_t &hanging) {
+  std::uint32_t n_conv = 0, n_uconv = 0;
 
   /* iterate through reference, query/read and fragment */
   const auto seq = bam_get_seq(aln);
@@ -278,7 +275,8 @@ count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
     if (cigar_eats_ref(op) && cigar_eats_query(op)) {
       const decltype(qpos) end_qpos = qpos + n;
       for (; qpos < end_qpos; ++qpos, ++rpos, ++fpos) {
-        if (rpos > chrom_lim) ++hanging;
+        if (rpos > chrom_lim)
+          ++hanging;
         if (is_cytosine(chrom[rpos]) &&
             (rpos >= chrom_lim || !is_guanine(chrom[rpos + 1]) ||
              INCLUDE_CPGS)) {
@@ -290,20 +288,23 @@ count_states_pos(const bool INCLUDE_CPGS, const string &chrom,
       }
     }
     else {
-      if (cigar_eats_query(op)) qpos += n;
-      if (cigar_eats_ref(op)) rpos += n;
-      if (cigar_eats_frag(op)) fpos += n;
+      if (cigar_eats_query(op))
+        qpos += n;
+      if (cigar_eats_ref(op))
+        rpos += n;
+      if (cigar_eats_frag(op))
+        fpos += n;
     }
   }
   assert(qpos == get_l_qseq(aln));
   return {n_conv, n_conv + n_uconv};
 }
 
-static pair<uint32_t, uint32_t>
-count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
-                 const bam_rec &aln, vector<bsrate_summary> &summaries,
-                 size_t &hanging) {
-  uint32_t n_conv = 0, n_uconv = 0;
+static std::pair<std::uint32_t, std::uint32_t>
+count_states_neg(const bool INCLUDE_CPGS, const std::string &chrom,
+                 const bamxx::bam_rec &aln,
+                 std::vector<bsrate_summary> &summaries, std::size_t &hanging) {
+  std::uint32_t n_conv = 0, n_uconv = 0;
 
   /* iterate backward over query/read positions but forward over
      reference and fragment positions */
@@ -322,7 +323,8 @@ count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
     if (cigar_eats_ref(op) && cigar_eats_query(op)) {
       const decltype(qpos) end_qpos = qpos - n;
       for (; qpos > end_qpos; --qpos, ++rpos, ++fpos) {
-        if (rpos > chrom_lim) ++hanging;
+        if (rpos > chrom_lim)
+          ++hanging;
         if (is_guanine(chrom[rpos]) &&
             (rpos == 0 || !is_cytosine(chrom[rpos - 1]) || INCLUDE_CPGS)) {
           const auto nt = seq_nt16_str[bam_seqi(seq, qpos - 1)];
@@ -333,9 +335,12 @@ count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
       }
     }
     else {
-      if (cigar_eats_query(op)) qpos -= n;
-      if (cigar_eats_ref(op)) rpos += n;
-      if (cigar_eats_frag(op)) fpos += n;
+      if (cigar_eats_query(op))
+        qpos -= n;
+      if (cigar_eats_ref(op))
+        rpos += n;
+      if (cigar_eats_frag(op))
+        fpos += n;
     }
   }
   assert(qpos == 0);
@@ -343,22 +348,25 @@ count_states_neg(const bool INCLUDE_CPGS, const string &chrom,
 }
 
 static void
-write_output(const string &outfile, const vector<bsrate_summary> &summaries) {
+write_output(const std::string &outfile,
+             const std::vector<bsrate_summary> &summaries) {
   std::ofstream of;
-  if (!outfile.empty()) of.open(outfile.c_str());
+  if (!outfile.empty())
+    of.open(outfile.c_str());
   std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
-  if (!out) throw dnmt_error("failed to open output file");
+  if (!out)
+    throw dnmt_error("failed to open output file");
 
-  bsrate_summary overall_summary = reduce(cbegin(summaries), cend(summaries));
-  overall_summary.set_values();
+  const bsrate_summary overall_summary =
+    std::reduce(std::cbegin(summaries), std::cend(summaries));
 
   out << "OVERALL CONVERSION RATE = "
-      << overall_summary.bisulfite_conversion_rate << '\n'
+      << overall_summary.bisulfite_conversion_rate() << '\n'
       << "POS CONVERSION RATE = "
-      << overall_summary.bisulfite_conversion_rate_positive << '\t'
+      << overall_summary.bisulfite_conversion_rate_positive() << '\t'
       << overall_summary.total_count_positive << '\n'
       << "NEG CONVERSION RATE = "
-      << overall_summary.bisulfite_conversion_rate_negative << '\t'
+      << overall_summary.bisulfite_conversion_rate_negative() << '\t'
       << overall_summary.total_count_negative << '\n';
 
   // clang-format off
@@ -374,12 +382,12 @@ write_output(const string &outfile, const vector<bsrate_summary> &summaries) {
       << "BTHRATE" << '\t'
       << "ERR" << '\t'
       << "ALL" << '\t'
-      << "ERRRATE"  << endl;
+      << "ERRRATE"  << '\n';
   // clang-format on
 
   // figure out how many positions to print in the output, capped at 1000
   auto output_len = std::min(std::size(summaries), 1000ul);
-  while (output_len > 0 && summaries[output_len - 1].total_count == 0)
+  while (output_len > 0 && summaries[output_len - 1].total_count() == 0)
     --output_len;
 
   for (auto i = 0u; i < output_len; ++i)
@@ -387,27 +395,30 @@ write_output(const string &outfile, const vector<bsrate_summary> &summaries) {
 }
 
 static void
-write_output_yaml(const string &outfile,
-                  const vector<bsrate_summary> &summaries) {
+write_output_yaml(const std::string &outfile,
+                  const std::vector<bsrate_summary> &summaries) {
   std::ofstream of;
-  if (!outfile.empty()) of.open(outfile.c_str());
+  if (!outfile.empty())
+    of.open(outfile.c_str());
   std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
-  if (!out) throw dnmt_error("failed to open output file");
+  if (!out)
+    throw dnmt_error("failed to open output file");
 
-  bsrate_summary overall_summary = reduce(cbegin(summaries), cend(summaries));
-  overall_summary.set_values();
+  const bsrate_summary overall_summary =
+    std::reduce(std::cbegin(summaries), std::cend(summaries));
+  // overall_summary.set_values();
   out << "overall_conversion_rate: "
-      << overall_summary.bisulfite_conversion_rate << '\n'
+      << overall_summary.bisulfite_conversion_rate() << '\n'
       << "pos_conversion_rate: "
-      << overall_summary.bisulfite_conversion_rate_positive << '\n'
+      << overall_summary.bisulfite_conversion_rate_positive() << '\n'
       << "pos_count: " << overall_summary.total_count_positive << '\n'
       << "neg_conversion_rate: "
-      << overall_summary.bisulfite_conversion_rate_negative << '\n'
+      << overall_summary.bisulfite_conversion_rate_negative() << '\n'
       << "neg_count: " << overall_summary.total_count_negative << '\n';
 
   // figure out how many positions to print in the output, capped at 1000
   auto output_len = std::min(std::size(summaries), 1000ul);
-  while (output_len > 0 && summaries[output_len - 1].total_count == 0)
+  while (output_len > 0 && summaries[output_len - 1].total_count() == 0)
     --output_len;
 
   out << "rows:\n";
@@ -416,28 +427,31 @@ write_output_yaml(const string &outfile,
 }
 
 static void
-write_summary(const string &summary_file, vector<bsrate_summary> &summaries) {
-  auto s = reduce(cbegin(summaries), cend(summaries));
-  s.set_values();
-
+write_summary(const std::string &summary_file,
+              std::vector<bsrate_summary> &summaries) {
+  const auto s = std::reduce(std::cbegin(summaries), std::cend(summaries));
   std::ofstream out(summary_file);
-  if (!out) throw dnmt_error("failed to open file: " + summary_file);
+  if (!out)
+    throw dnmt_error("failed to open file: " + summary_file);
   out << s.tostring() << '\n';
 }
 
-template<typename T> static inline void
-update_per_read_stats(const pair<T, T> &x, vector<vector<T>> &tab) {
-  if (x.second < std::size(tab)) ++tab[x.second][x.first];
+template <typename T>
+static inline void
+update_per_read_stats(const std::pair<T, T> &x,
+                      std::vector<std::vector<T>> &tab) {
+  if (x.second < std::size(tab))
+    ++tab[x.second][x.first];
 }
 
-static inline vector<double>
-format_histogram(const vector<vector<uint32_t>> &tab,
-                 const size_t n_hist_bins) {
+static inline std::vector<double>
+format_histogram(const std::vector<std::vector<std::uint32_t>> &tab,
+                 const std::size_t n_hist_bins) {
   static constexpr auto epsilon = 1e-6;
-  vector<double> hist(n_hist_bins, 0.0);
-  for (size_t i = 1; i < tab.size(); ++i) {
+  std::vector<double> hist(n_hist_bins, 0.0);
+  for (std::size_t i = 1; i < tab.size(); ++i) {
     const double denom = i + epsilon;
-    for (size_t j = 0; j <= i; ++j) {
+    for (std::size_t j = 0; j <= i; ++j) {
       const double frac = j / denom;
       const auto bin_id = std::floor(frac * n_hist_bins);
       assert(bin_id < hist.size());
@@ -448,48 +462,49 @@ format_histogram(const vector<vector<uint32_t>> &tab,
 }
 
 static void
-write_hanging_read_message(std::ostream &out, const size_t n_hanging) {
+write_hanging_read_message(std::ostream &out, const std::size_t n_hanging) {
   out << "Warning: hanging reads detected at chromosome ends "
-      << "(N=" << n_hanging << ")." << endl
-      << "High numbers of hanging reads suggest inconsistent " << endl
-      << "reference genomes between stages of analysis." << endl
-      << "This is likely to result in analysis errors." << endl;
+      << "(N=" << n_hanging << ")." << '\n'
+      << "High numbers of hanging reads suggest inconsistent " << '\n'
+      << "reference genomes between stages of analysis." << '\n'
+      << "This is likely to result in analysis errors." << '\n';
 }
 
-template<typename T> static void
-write_per_read_histogram(const vector<vector<T>> &tab, const size_t n_hist_bins,
-                         std::ostream &out) {
+template <typename T>
+static void
+write_per_read_histogram(const std::vector<std::vector<T>> &tab,
+                         const std::size_t n_hist_bins, std::ostream &out) {
   const auto hist = format_histogram(tab, n_hist_bins);
   out << std::fixed;
   for (auto i = 0.0; i < hist.size(); ++i)
     out << std::setprecision(3) << i / hist.size() << '\t'
         << std::setprecision(3) << (i + 1) / hist.size() << '\t'
-        << std::setprecision(0) << hist[i] << endl;
+        << std::setprecision(0) << hist[i] << '\n';
 }
 
 int
 main_bsrate(int argc, char *argv[]) {
   try {
     // assumed maximum length of a fragment
-    static constexpr const size_t output_size = 10000;
+    static constexpr const std::size_t output_size = 10000;
 
     // Assumed maximum cytosines per fragment. Currently the per-read
     // information is collected as counts in a 2D array, so that later
     // features may be able to fit distributions based these counts.
-    static constexpr const size_t max_cytosine_per_frag = 1000;
+    static constexpr const std::size_t max_cytosine_per_frag = 1000;
 
     bool VERBOSE = false;
     bool INCLUDE_CPGS = false;
     bool output_yaml = false;
     bool reads_are_a_rich = false;
     bool report_per_read = false;
-    size_t n_threads = 1;
-    size_t n_hist_bins = 20;
+    std::size_t n_threads = 1;
+    std::size_t n_hist_bins = 20;
 
-    string chroms_file;
-    string summary_file;
-    string outfile;
-    string seq_to_use;  // use only this chrom/sequence in the analysis
+    std::string chroms_file;
+    std::string summary_file;
+    std::string outfile;
+    std::string seq_to_use;  // use only this chrom/sequence in the analysis
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]),
@@ -515,82 +530,88 @@ main_bsrate(int argc, char *argv[]) {
     opt_parse.add_opt("yaml", 'y', "output in yaml format", false, output_yaml);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << endl;
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
-    const string bam_file = leftover_args.front();
+    const std::string bam_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    vector<string> chroms;
-    vector<string> names;
+    std::vector<std::string> chroms;
+    std::vector<std::string> names;
     read_fasta_file_short_names(chroms_file, names, chroms);
     for (auto &&chrom : chroms)
-      std::for_each(begin(chrom), end(chrom),
+      std::for_each(std::begin(chrom), std::end(chrom),
                     [](const char c) { return std::toupper(c); });
 
     if (VERBOSE)
-      cerr << "[n chroms in reference: " << chroms.size() << "]" << endl;
+      std::cerr << "[n chroms in reference: " << chroms.size() << "]" << '\n';
 
     bamxx::bam_tpool tp(n_threads);
 
     bamxx::bam_in hts(bam_file);
-    if (!hts) throw dnmt_error("failed to open input file: " + bam_file);
+    if (!hts)
+      throw dnmt_error("failed to open input file: " + bam_file);
     bamxx::bam_header hdr(hts);
-    if (!hdr) throw dnmt_error("failed to read header");
+    if (!hdr)
+      throw dnmt_error("failed to read header");
 
-    if (n_threads > 1) tp.set_io(hts);
+    if (n_threads > 1)
+      tp.set_io(hts);
 
     // map the bam header index for each "target" to a sequence in the
     // reference genome
-    unordered_map<int32_t, size_t> chrom_lookup;
-    size_t chrom_idx_to_use = numeric_limits<size_t>::max();
+    std::unordered_map<std::int32_t, std::size_t> chrom_lookup;
+    std::size_t chrom_idx_to_use = std::numeric_limits<std::size_t>::max();
     for (auto i = 0u; i < std::size(chroms); ++i) {
-      if (names[i] == seq_to_use) chrom_idx_to_use = i;
+      if (names[i] == seq_to_use)
+        chrom_idx_to_use = i;
       chrom_lookup.emplace(sam_hdr_name2tid(hdr.h, names[i].data()), i);
     }
 
-    vector<vector<uint32_t>> per_read_counts(
-      max_cytosine_per_frag, vector<uint32_t>(max_cytosine_per_frag, 0));
+    std::vector<std::vector<std::uint32_t>> per_read_counts(
+      max_cytosine_per_frag,
+      std::vector<std::uint32_t>(max_cytosine_per_frag, 0));
 
-    vector<bsrate_summary> summaries(output_size);
+    std::vector<bsrate_summary> summaries(output_size);
 
-    int32_t current_tid = -1;
-    size_t chrom_idx = numeric_limits<size_t>::max();
-    size_t hanging = 0;
+    std::int32_t current_tid = -1;
+    std::size_t chrom_idx = std::numeric_limits<std::size_t>::max();
+    std::size_t hanging = 0;
 
     bool use_this_chrom = seq_to_use.empty();
 
-    bam_rec aln;
-    unordered_set<int32_t> chroms_seen;
+    bamxx::bam_rec aln;
+    std::unordered_set<std::int32_t> chroms_seen;
 
     while (hts.read(hdr, aln)) {
-      const int32_t the_tid = get_tid(aln);
+      const std::int32_t the_tid = get_tid(aln);
       if (the_tid == -1)
         continue;
 
-      if (reads_are_a_rich) flip_conversion(aln);
+      if (reads_are_a_rich)
+        flip_conversion(aln);
 
       // get the correct chrom if it has changed
       if (the_tid != current_tid) {
         // make sure all reads from same chrom are contiguous in the file
         if (chroms_seen.find(the_tid) != end(chroms_seen))
-          throw runtime_error("chroms out of order in mapped reads file");
+          throw std::runtime_error("chroms out of order in mapped reads file");
 
         current_tid = the_tid;
 
@@ -598,12 +619,13 @@ main_bsrate(int argc, char *argv[]) {
 
         auto chrom_itr = chrom_lookup.find(the_tid);
         if (chrom_itr == end(chrom_lookup))
-          throw runtime_error("could not find chrom: " +
-                              std::to_string(the_tid));
+          throw std::runtime_error("could not find chrom: " +
+                                   std::to_string(the_tid));
 
         chrom_idx = chrom_itr->second;
 
-        if (VERBOSE) cerr << "processing " << names[chrom_idx] << endl;
+        if (VERBOSE)
+          std::cerr << "processing " << names[chrom_idx] << '\n';
 
         use_this_chrom = seq_to_use.empty() || chrom_idx == chrom_idx_to_use;
       }
@@ -620,25 +642,22 @@ main_bsrate(int argc, char *argv[]) {
       }
     }
 
-    // before writing the output we need to ensure the derived
-    // quantities in bsrate_summary have been calculated
-    for_each(begin(summaries), end(summaries),
-             [](bsrate_summary &s) { s.set_values(); });
-
     if (output_yaml)
       write_output_yaml(outfile, summaries);
     else
       write_output(outfile, summaries);
 
-    if (hanging > 0) write_hanging_read_message(cerr, hanging);
+    if (hanging > 0)
+      write_hanging_read_message(std::cerr, hanging);
 
-    if (!summary_file.empty()) write_summary(summary_file, summaries);
+    if (!summary_file.empty())
+      write_summary(summary_file, summaries);
 
     if (report_per_read)
-      write_per_read_histogram(per_read_counts, n_hist_bins, cout);
+      write_per_read_histogram(per_read_counts, n_hist_bins, std::cout);
   }
-  catch (const runtime_error &e) {
-    cerr << e.what() << endl;
+  catch (const std::runtime_error &e) {
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

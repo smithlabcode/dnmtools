@@ -76,6 +76,27 @@ struct LevelsCounter {
     return total_c + total_t;
   }
 
+  // mean_depth is the average number of reads contributing to methylation
+  // calls over all sites.
+  [[nodiscard]] double
+  mean_depth() const {
+    return static_cast<double>(coverage()) / total_sites;
+  }
+
+  // mean_depth_covered is the average number of reads contributing to
+  // methylation calls over all sites that are covered at least once.
+  [[nodiscard]] double
+  mean_depth_covered() const {
+    return static_cast<double>(coverage()) / sites_covered;
+  }
+
+  // sites_covered_fraction is the fraction of all sites that are covered at
+  // least once.
+  [[nodiscard]] double
+  sites_covered_fraction() const {
+    return static_cast<double>(sites_covered) / total_sites;
+  }
+
   // total_called is equal to called_meth plus called_unmeth
   [[nodiscard]] std::uint64_t
   total_called() const {

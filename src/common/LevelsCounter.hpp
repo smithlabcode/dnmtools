@@ -90,10 +90,10 @@ struct LevelsCounter {
     return static_cast<double>(coverage()) / sites_covered;
   }
 
-  // sites_covered_fraction is the fraction of all sites that are covered at
-  // least once.
+  // sites_covered_frac is the fraction of all sites that are covered at least
+  // once.
   [[nodiscard]] double
-  sites_covered_fraction() const {
+  sites_covered_frac() const {
     return static_cast<double>(sites_covered) / total_sites;
   }
 

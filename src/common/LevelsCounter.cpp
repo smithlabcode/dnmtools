@@ -16,13 +16,13 @@
 #include "LevelsCounter.hpp"
 #include "bsutils.hpp"
 
-#include <string>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 
+using std::runtime_error;
 using std::string;
 using std::to_string;
-using std::runtime_error;
 
 void
 LevelsCounter::update(const MSite &s) {
@@ -43,9 +43,9 @@ LevelsCounter::update(const MSite &s) {
   ++total_sites;
 }
 
-string
+std::string
 LevelsCounter::tostring() const {
-  static const string indent = string(2, ' ');
+  static const std::string indent = std::string(2, ' ');
   const bool good = (sites_covered != 0);
   std::ostringstream oss;
   // directly counted values
@@ -62,22 +62,20 @@ LevelsCounter::tostring() const {
 
   // derived values
   oss << indent << "coverage: " << coverage() << '\n'
-      << indent << "sites_covered_fraction: "
-      << static_cast<double>(sites_covered)/total_sites << '\n'
-      << indent << "mean_depth: "
-      << static_cast<double>(coverage())/total_sites << '\n'
-      << indent << "mean_depth_covered: "
-      << static_cast<double>(coverage())/sites_covered << '\n'
-      << indent << "mean_meth: "
-      << (good ? to_string(mean_meth()) : "NA")  << '\n'
+      << indent << "sites_covered_fraction: " << sites_covered_fraction()
+      << '\n'
+      << indent << "mean_depth: " << mean_depth() << '\n'
+      << indent << "mean_depth_covered: " << mean_depth_covered() << '\n'
+      << indent << "mean_meth: " << (good ? std::to_string(mean_meth()) : "NA")
+      << '\n'
       << indent << "mean_meth_weighted: "
-      << (good ? to_string(mean_meth_weighted()) : "NA") << '\n'
+      << (good ? std::to_string(mean_meth_weighted()) : "NA") << '\n'
       << indent << "fractional_meth: "
-      << (good ? to_string(fractional_meth()) : "NA");
+      << (good ? std::to_string(fractional_meth()) : "NA");
   return oss.str();
 }
 
-string
+std::string
 LevelsCounter::format_row() const {
   const bool good = (sites_covered > 0);
   std::ostringstream oss;
@@ -104,7 +102,7 @@ LevelsCounter::format_row() const {
   return oss.str();
 }
 
-string
+std::string
 LevelsCounter::format_header() {
   std::ostringstream oss;
   // directly counted values
@@ -136,42 +134,43 @@ operator<<(std::ostream &out, const LevelsCounter &cs) {
 }
 
 static void
-check_label(const string &observed, const string expected) {
+check_label(const std::string &observed, const std::string expected) {
   if (observed != expected)
-    throw runtime_error("bad levels format [" + observed + "," + expected + "]");
+    throw runtime_error("bad levels format [" + observed + "," + expected +
+                        "]");
 }
 
 std::istream &
 operator>>(std::istream &in, LevelsCounter &cs) {
-  in >> cs.context; // get the context
+  in >> cs.context;  // get the context
   cs.context = cs.context.substr(0, cs.context.find_first_of(":"));
 
-  string label;
-  in >> label >> cs.total_sites; // the total sites
+  std::string label;
+  in >> label >> cs.total_sites;  // the total sites
   check_label(label, "total_sites:");
 
-  in >> label >> cs.sites_covered; // the sites covered
+  in >> label >> cs.sites_covered;  // the sites covered
   check_label(label, "sites_covered:");
 
-  in >> label >> cs.total_c; // the total c
+  in >> label >> cs.total_c;  // the total c
   check_label(label, "total_c:");
 
-  in >> label >> cs.total_t; // the total t
+  in >> label >> cs.total_t;  // the total t
   check_label(label, "total_t:");
 
-  in >> label >> cs.max_depth; // the max depth
+  in >> label >> cs.max_depth;  // the max depth
   check_label(label, "max_depth:");
 
-  in >> label >> cs.mutations; // the number of mutations
+  in >> label >> cs.mutations;  // the number of mutations
   check_label(label, "mutations:");
 
-  in >> label >> cs.called_meth; // the number of sites called methylated
+  in >> label >> cs.called_meth;  // the number of sites called methylated
   check_label(label, "called_meth:");
 
-  in >> label >> cs.called_unmeth; // the number of sites called unmethylated
+  in >> label >> cs.called_unmeth;  // the number of sites called unmethylated
   check_label(label, "called_unmeth:");
 
-  in >> label >> cs.total_meth; // the mean aggregate
+  in >> label >> cs.total_meth;  // the mean aggregate
   check_label(label, "total_meth:");
 
   return in;

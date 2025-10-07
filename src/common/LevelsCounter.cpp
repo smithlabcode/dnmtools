@@ -62,8 +62,7 @@ LevelsCounter::tostring() const {
 
   // derived values
   oss << indent << "coverage: " << coverage() << '\n'
-      << indent << "sites_covered_fraction: " << sites_covered_fraction()
-      << '\n'
+      << indent << "sites_covered_frac: " << sites_covered_frac() << '\n'
       << indent << "mean_depth: " << mean_depth() << '\n'
       << indent << "mean_depth_covered: " << mean_depth_covered() << '\n'
       << indent << "mean_meth: " << (good ? std::to_string(mean_meth()) : "NA")

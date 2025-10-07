@@ -1,34 +1,33 @@
 /* roimethstat: average methylation in each of a set of regions
  *
- * Copyright (C) 2014-2024 Andrew D. Smith
+ * Copyright (C) 2014-2025 Andrew D. Smith
  *
  * Authors: Andrew D. Smith and Masaru Nakajima
  *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
 
 #include <bamxx.hpp>
 
 #include <algorithm>
+#include <charconv>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
-#include <filesystem>
-#include <charconv>
 
 #include "GenomicRegion.hpp"
 #include "LevelsCounter.hpp"
@@ -38,31 +37,7 @@
 #include "smithlab_utils.hpp"
 #include "xcounts_utils.hpp"
 
-using std::cerr;
-using std::cout;
-using std::distance;
-using std::endl;
-using std::ifstream;
-using std::is_sorted;
-using std::pair;
-using std::runtime_error;
-using std::string;
-using std::to_string;
-using std::unordered_map;
-using std::unordered_set;
-using std::vector;
-using std::from_chars;
-using std::size;
-using std::cend;
-using std::ostream;
-using std::size;
-
-using bamxx::bgzf_file;
-
-namespace fs = std::filesystem;
-
-
-static string
+[[nodiscard]] static std::string
 format_levels_counter(const LevelsCounter &lc) {
   // ...
   // (7) weighted mean methylation
@@ -80,22 +55,20 @@ format_levels_counter(const LevelsCounter &lc) {
       << lc.total_sites << '\t'
       << lc.sites_covered << '\t'
       << lc.total_c << '\t'
-      << (lc.total_c + lc.total_t);
+      << lc.coverage();
   // clang-format on
   return oss.str();
 }
 
-
 struct genomic_interval {
-  string chrom{};
-  uint64_t start_pos{};
-  uint64_t end_pos{};
+  std::string chrom{};
+  std::uint64_t start_pos{};
+  std::uint64_t end_pos{};
 };
-
 
 static void
 update(LevelsCounter &lc, const xcounts_entry &xse) {
-  const uint64_t n_reads = xse.n_meth + xse.n_unmeth;
+  const std::uint64_t n_reads = xse.n_meth + xse.n_unmeth;
   if (n_reads > 0) {
     ++lc.sites_covered;
     lc.max_depth = std::max(lc.max_depth, n_reads);
@@ -113,62 +86,61 @@ update(LevelsCounter &lc, const xcounts_entry &xse) {
 
 static void
 process_chrom(const bool report_more_info, const char level_code,
-              const vector<GenomicRegion> &intervals,
-              const vector<xcounts_entry> &sites,
-              ostream &out) {
+              const std::vector<GenomicRegion> &intervals,
+              const std::vector<xcounts_entry> &sites, std::ostream &out) {
 
-  uint64_t j = 0;
-  for (auto i = 0ul; i < intervals.size(); ++i) {
-    while (j < size(sites) && sites[j].pos < intervals[i].get_start()) ++j;
+  std::uint64_t j = 0;
+  for (auto i = 0ul; i < std::size(intervals); ++i) {
+    while (j < std::size(sites) && sites[j].pos < intervals[i].get_start())
+      ++j;
 
     LevelsCounter lc;
-    while (j < size(sites) && sites[j].pos < intervals[i].get_end())
+    while (j < std::size(sites) && sites[j].pos < intervals[i].get_end())
       update(lc, sites[j++]);
 
     GenomicRegion r(intervals[i]);
     r.set_score(level_code == 'w' ? lc.mean_meth_weighted()
-                : (level_code == 'u' ? lc.mean_meth()
-                   : lc.fractional_meth()));
+                                  : (level_code == 'u' ? lc.mean_meth()
+                                                       : lc.fractional_meth()));
     r.set_name(r.get_name() + "_" +
                std::to_string((level_code == 'w'
-                               ? lc.coverage()
-                               : (level_code == 'u' ? lc.sites_covered
-                                  : lc.total_called()))));
+                                 ? lc.coverage()
+                                 : (level_code == 'u' ? lc.sites_covered
+                                                      : lc.total_called()))));
     out << r;
-    if (report_more_info) out << '\t' << format_levels_counter(lc);
+    if (report_more_info)
+      out << '\t' << format_levels_counter(lc);
     out << '\n';
   }
 }
 
 static void
 process_chrom(const bool report_more_info,
-              const vector<GenomicRegion> &intervals,
-              ostream &out) {
+              const std::vector<GenomicRegion> &intervals, std::ostream &out) {
   LevelsCounter lc;
-  const string lc_formatted = format_levels_counter(lc);
-  for (const auto &r: intervals) {
+  const std::string lc_formatted = format_levels_counter(lc);
+  for (const auto &r : intervals) {
     out << r;
-    if (report_more_info) out << '\t' << lc_formatted;
+    if (report_more_info)
+      out << '\t' << lc_formatted;
     out << '\n';
   }
 }
 
-
 static void
-process_from_xcounts(const uint32_t n_threads,
-                     const bool report_more_info,
-                     const char level_code, const string &xsym_file,
-                     const vector<GenomicRegion> &intervals,
-                     ostream &out) {
+process_from_xcounts(const std::uint32_t n_threads, const bool report_more_info,
+                     const char level_code, const std::string &xsym_file,
+                     const std::vector<GenomicRegion> &intervals,
+                     std::ostream &out) {
 
   const auto sites_by_chrom = read_xcounts_by_chrom(n_threads, xsym_file);
   // const auto intervals = get_GenomicRegions(intervals_file);
 
-  vector<vector<GenomicRegion>> intervals_by_chrom;
-  string prev_chrom;
-  for (auto i = 0u; i < size(intervals); ++i) {
+  std::vector<std::vector<GenomicRegion>> intervals_by_chrom;
+  std::string prev_chrom;
+  for (auto i = 0u; i < std::size(intervals); ++i) {
     if (intervals[i].get_chrom() != prev_chrom) {
-      intervals_by_chrom.push_back(vector<GenomicRegion>());
+      intervals_by_chrom.push_back(std::vector<GenomicRegion>());
       prev_chrom = intervals[i].get_chrom();
     }
     intervals_by_chrom.back().push_back(intervals[i]);
@@ -177,76 +149,85 @@ process_from_xcounts(const uint32_t n_threads,
   for (const auto &intervals : intervals_by_chrom) {
     const auto chrom_name = intervals.front().get_chrom();
     const auto sites = sites_by_chrom.find(chrom_name);
-    if (sites != cend(sites_by_chrom))
-      process_chrom(report_more_info, level_code,
-                    intervals, sites->second, out);
+    if (sites != std::cend(sites_by_chrom))
+      process_chrom(report_more_info, level_code, intervals, sites->second,
+                    out);
     else
       process_chrom(report_more_info, intervals, out);
   }
 }
 
-
-
-bool
+[[nodiscard]] bool
 cmp_within_chrom(const GenomicRegion &r1, const GenomicRegion &r2) {
-  return (r1.get_start() < r2.get_start() ||
-          (r1.get_start() == r2.get_start() &&
-           (r1.get_end() < r2.get_end() ||
-            (r1.get_end() == r2.get_end() &&
-             (r1.get_strand() < r2.get_strand())))));
+  return r1.get_start() < r2.get_start() ||
+         (r1.get_start() == r2.get_start() &&
+          (r1.get_end() < r2.get_end() ||
+           (r1.get_end() == r2.get_end() &&
+            (r1.get_strand() < r2.get_strand()))));
 }
 
-bool
+[[nodiscard]] bool
 cmp_within_chrom(const MSite &s1, const MSite &s2) {
   return s1.pos < s2.pos;
 }
 
-template<class T> typename T::const_iterator
+template <class T>
+[[nodiscard]] typename T::const_iterator
 get_chrom_order(const T &order, const MSite &s) {
   return order.find(s.chrom);
 }
 
-template<class T> typename T::const_iterator
+template <class T>
+[[nodiscard]] typename T::const_iterator
 get_chrom_order(const T &order, const GenomicRegion &r) {
   return order.find(r.get_chrom());
 }
 
 struct cmp_chrom_order {
-  cmp_chrom_order(const unordered_map<string, uint32_t> &m): order{m} {}
+  cmp_chrom_order(const std::unordered_map<std::string, std::uint32_t> &m) :
+    order{m} {}
 
-  template<class T> bool operator()(const T &a, const T &b) const {
+  template <class T>
+  [[nodiscard]] bool
+  operator()(const T &a, const T &b) const {
     const auto ac = get_chrom_order(order, a);
-    if (ac == cend(order)) return false;
+    if (ac == std::cend(order))
+      return false;
     const auto bc = get_chrom_order(order, b);
-    if (bc == cend(order)) return true;
+    if (bc == std::cend(order))
+      return true;
     const auto c = static_cast<int>(ac->second) - static_cast<int>(bc->second);
     return c < 0 || (c == 0 && cmp_within_chrom(a, b));
   }
 
-  const unordered_map<string, uint32_t> &order;
+  const std::unordered_map<std::string, std::uint32_t> &order;
 };
 
-static vector<string>
-get_chroms(const string &filename) {
+[[nodiscard]] static std::vector<std::string>
+get_chroms(const std::string &filename) {
   // this function might look slow but it seems not to bottleneck
-  constexpr auto not_in_chrom = [](const uint8_t c) {
+  constexpr auto not_in_chrom = [](const std::uint8_t c) {
     return c == ' ' || c == '\t' || c == '\n';
   };
 
-  bgzf_file in(filename, "r");
-  if (!in) throw runtime_error("cannot open file: " + filename);
+  bamxx::bgzf_file in(filename, "r");
+  if (!in)
+    throw std::runtime_error("cannot open file: " + filename);
 
-  string prev_chrom;
-  string line;
-  vector<string> chroms_seen;
+  std::string prev_chrom;
+  std::string line;
+  std::vector<std::string> chroms_seen;
   while (getline(in, line)) {
-    const auto chrom_end = find_if(cbegin(line), cend(line), not_in_chrom);
-    if (chrom_end == cend(line))
-      throw runtime_error("bad counts line: " + line);
-    if (!equal(cbegin(prev_chrom), cend(prev_chrom), cbegin(line), chrom_end)) {
-      const string chrom{cbegin(line), chrom_end};
-      auto x = find(cbegin(chroms_seen), cend(chroms_seen), chrom);
-      if (x != cend(chroms_seen)) throw runtime_error("chroms not sorted");
+    const auto chrom_end =
+      std::find_if(std::cbegin(line), std::cend(line), not_in_chrom);
+    if (chrom_end == std::cend(line))
+      throw std::runtime_error("bad counts line: " + line);
+    if (!std::equal(std::cbegin(prev_chrom), std::cend(prev_chrom),
+                    std::cbegin(line), chrom_end)) {
+      const std::string chrom{std::cbegin(line), chrom_end};
+      auto x = find(std::cbegin(chroms_seen), std::cend(chroms_seen), chrom);
+      if (x != std::cend(chroms_seen))
+        throw std::runtime_error("chroms not sorted");
       chroms_seen.push_back(chrom);
       prev_chrom = std::move(chrom);
     }
@@ -255,17 +236,17 @@ get_chroms(const string &filename) {
 }
 
 template <class ForwardIt, class T>
-static inline pair<ForwardIt, ForwardIt>
-region_bounds(const unordered_map<string, uint32_t> &chrom_order,
+[[nodiscard]] static inline std::pair<ForwardIt, ForwardIt>
+region_bounds(const std::unordered_map<std::string, std::uint32_t> &chrom_order,
               ForwardIt first, ForwardIt last, const T &region) {
   // ADS: in the sites below, a and b, the strand is set to '+'
   // always. Otherwise the ordering on MSite would force strand to be
-  // used. The consequence is that sites on the positive strand would
-  // not be included if they begin at the same nucleotide where a
-  // region starts if that region is on the negative strand
-  // const char strand(region.get_strand());
+  // used. The consequence is that sites on the positive strand would not be
+  // included if they begin at the same nucleotide where a region starts if
+  // that region is on the negative strand const char
+  // strand(region.get_strand());
 
-  const string chrom(region.get_chrom());
+  const std::string chrom(region.get_chrom());
   const MSite a(chrom, region.get_start(), '+', "", 0, 0);
   const MSite b(chrom, region.get_end(), '+', "", 0, 0);
 
@@ -277,53 +258,59 @@ region_bounds(const unordered_map<string, uint32_t> &chrom_order,
   return {lower_bound(first, last, a, cmp), lower_bound(first, last, b, cmp)};
 }
 
-
-static bool
-is_sorted_within_chrom(const vector<MSite> &sites) {
+[[nodiscard]] static bool
+is_sorted_within_chrom(const std::vector<MSite> &sites) {
   constexpr auto pos_cmp = [](const MSite &s1, const MSite &s2) {
     return s1.pos < s2.pos;
   };
-  auto a = cbegin(sites);
-  while (a != cend(sites)) {
+  auto a = std::cbegin(sites);
+  while (a != std::cend(sites)) {
     const auto a_chrom = a->chrom;
-    const auto b = find_if(a, cend(sites), [&a_chrom](const MSite &s) {
+    const auto b = find_if(a, std::cend(sites), [&a_chrom](const MSite &s) {
       return s.chrom != a_chrom;
     });
-    if (!is_sorted(a, b, pos_cmp)) return false;
+    if (!std::is_sorted(a, b, pos_cmp))
+      return false;
     a = b;
   }
   return true;
 }
 
-static vector<MSite>
-read_sites(const string &filename) {
-  vector<MSite> sites;
-  bgzf_file in(filename, "r");
+[[nodiscard]] static std::vector<MSite>
+read_sites(const std::string &filename) {
+  std::vector<MSite> sites;
+  bamxx::bgzf_file in(filename, "r");
   if (in) {
     MSite s;
-    while (read_site(in, s)) sites.push_back(s);
+    while (read_site(in, s))
+      sites.push_back(s);
   }
   return sites;
 }
 
 static void
-process_preloaded(const bool VERBOSE, const bool report_more_info,
-                  const char level_code, const string &sites_file,
-                  const unordered_map<string, uint32_t> &chrom_order,
-                  const vector<GenomicRegion> &regions, ostream &out) {
+process_preloaded(
+  const bool VERBOSE, const bool report_more_info, const char level_code,
+  const std::string &sites_file,
+  const std::unordered_map<std::string, std::uint32_t> &chrom_order,
+  const std::vector<GenomicRegion> &regions, std::ostream &out) {
 
   const auto sites = read_sites(sites_file);
-  if (sites.empty()) throw runtime_error("failed to read sites: " + sites_file);
+  if (sites.empty())
+    throw std::runtime_error("failed to read sites: " + sites_file);
 
   if (!is_sorted_within_chrom(sites))
-    throw runtime_error("sites not sorted: " + sites_file);
+    throw std::runtime_error("sites not sorted: " + sites_file);
 
-  if (VERBOSE) cerr << "[n_sites=" << sites.size() << "]" << endl;
+  if (VERBOSE)
+    std::cerr << "[n_sites=" << std::size(sites) << "]\n";
 
   for (auto &r : regions) {
     LevelsCounter lc;
-    const auto b = region_bounds(chrom_order, cbegin(sites), cend(sites), r);
-    for (auto c = b.first; c != b.second; ++c) lc.update(*c);
+    const auto b =
+      region_bounds(chrom_order, std::cbegin(sites), std::cend(sites), r);
+    for (auto c = b.first; c != b.second; ++c)
+      lc.update(*c);
 
     const double score =
       level_code == 'w'
@@ -338,30 +325,33 @@ process_preloaded(const bool VERBOSE, const bool report_more_info,
   }
 }
 
-template<class T> static inline bool
-not_after(const T &chrom_order, const MSite &site, const uint32_t &chrom_idx,
-          const size_t end_pos) {
+template <class T>
+[[nodiscard]] static inline bool
+not_after(const T &chrom_order, const MSite &site,
+          const std::uint32_t &chrom_idx, const std::size_t end_pos) {
   const auto sc_itr = chrom_order.find(site.chrom);
-  if (sc_itr == cend(chrom_order))
-    throw runtime_error("lookup failure: " + site.chrom);
+  if (sc_itr == std::cend(chrom_order))
+    throw std::runtime_error("lookup failure: " + site.chrom);
   const auto sc = sc_itr->second;
   return (sc == chrom_idx && site.pos < end_pos) || sc < chrom_idx;
 }
 
-static inline bool
-at_or_after(const MSite &site, const string &chrom, const size_t start_pos) {
+[[nodiscard]] static inline bool
+at_or_after(const MSite &site, const std::string &chrom,
+            const std::size_t start_pos) {
   // not using dictionary in this function because equality of chrom
   // can be tested using the strings regardless of index
   return (start_pos <= site.pos && site.chrom == chrom);
 }
 
-static LevelsCounter
-calc_site_stats(ifstream &sites_in, const GenomicRegion &region,
-                const unordered_map<string, uint32_t> &chrom_order) {
-  const string chrom{region.get_chrom()};
+[[nodiscard]] static LevelsCounter
+calc_site_stats(
+  std::ifstream &sites_in, const GenomicRegion &region,
+  const std::unordered_map<std::string, std::uint32_t> &chrom_order) {
+  const std::string chrom{region.get_chrom()};
   const auto chrom_itr = chrom_order.find(chrom);
-  if (chrom_itr == cend(chrom_order))
-    throw runtime_error("lookup failure: " + chrom);
+  if (chrom_itr == std::cend(chrom_order))
+    throw std::runtime_error("lookup failure: " + chrom);
   const auto chrom_idx = chrom_itr->second;
   const auto start_pos = region.get_start();
   const auto end_pos = region.get_end();
@@ -371,7 +361,8 @@ calc_site_stats(ifstream &sites_in, const GenomicRegion &region,
 
   MSite site;
   while (sites_in >> site && not_after(chrom_order, site, chrom_idx, end_pos))
-    if (at_or_after(site, chrom, start_pos)) lc.update(site);
+    if (at_or_after(site, chrom, start_pos))
+      lc.update(site);
 
   sites_in.clear();  // clear here otherwise an eof means we skip later
                      // intervals, which could be valid
@@ -379,12 +370,14 @@ calc_site_stats(ifstream &sites_in, const GenomicRegion &region,
 }
 
 static void
-process_on_disk(const bool report_more_info, const char level_code,
-                const string &sites_file,
-                const unordered_map<string, uint32_t> &chrom_order,
-                const vector<GenomicRegion> &regions, ostream &out) {
-  ifstream in(sites_file);
-  if (!in) throw runtime_error("failed to open file: " + sites_file);
+process_on_disk(
+  const bool report_more_info, const char level_code,
+  const std::string &sites_file,
+  const std::unordered_map<std::string, std::uint32_t> &chrom_order,
+  const std::vector<GenomicRegion> &regions, std::ostream &out) {
+  std::ifstream in(sites_file);
+  if (!in)
+    throw std::runtime_error("failed to open file: " + sites_file);
 
   for (auto &region : regions) {
     const auto lc = calc_site_stats(in, region, chrom_order);
@@ -401,27 +394,28 @@ process_on_disk(const bool report_more_info, const char level_code,
   }
 }
 
-static size_t
-get_bed_columns(const string &regions_file) {
-  ifstream in(regions_file);
-  if (!in) throw runtime_error("failed to open file: " + regions_file);
+[[nodiscard]] static std::size_t
+get_bed_columns(const std::string &regions_file) {
+  std::ifstream in(regions_file);
+  if (!in)
+    throw std::runtime_error("failed to open file: " + regions_file);
 
-  string line;
-  getline(in, line);
+  std::string line;
+  std::getline(in, line);
 
   std::istringstream iss(line);
-  string token;
-  size_t n_columns = 0;
-  while (iss >> token) ++n_columns;
+  std::string token;
+  std::size_t n_columns = 0;
+  while (iss >> token)
+    ++n_columns;
 
   return n_columns;
 }
 
-
 int
 main_roimethstat(int argc, char *argv[]) {
   try {
-    static const string description = R"""(
+    static const std::string description = R"""(
 Compute average site methylation levels in each interval from a given
 set of genomic intervals. The 5th column (the "score" column in BED
 format) is determined by the '-l' or '-level' argument.
@@ -436,18 +430,19 @@ Columns (beyond the first 6) in the BED format output:
 (13) total number of observations from reads in the region
 )""";
 
-    static const string default_name_prefix = "X";
+    static const std::string default_name_prefix = "X";
 
     bool VERBOSE = false;
     bool print_numeric_only = false;
     bool preload = false;
     bool report_more_info = false;
     bool sort_data_if_needed = false;
-    uint32_t n_threads = 1;
+    bool allow_extra_fields = false;
+    std::uint32_t n_threads = 1;
 
-    string level_code = "w";
+    std::string level_code = "w";
 
-    string outfile;
+    std::string outfile;
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(strip_path(argv[0]), description,
@@ -468,85 +463,97 @@ Columns (beyond the first 6) in the BED format output:
                       false, report_more_info);
     opt_parse.add_opt("threads", 't', "threads to use (if input compressed)",
                       false, n_threads);
+    opt_parse.add_opt("relaxed", '\0',
+                      "input has extra fields (used for nanopore)", false,
+                      allow_extra_fields);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message()
-           << opt_parse.about_message_raw() << endl;
+      std::cerr << opt_parse.help_message() << opt_parse.about_message_raw()
+                << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message_raw() << endl;
+      std::cerr << opt_parse.about_message_raw() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_FAILURE;
     }
-    if (leftover_args.size() != 2) {
-      cerr << opt_parse.help_message() << endl;
+    if (std::size(leftover_args) != 2) {
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_FAILURE;
     }
     if (level_code != "w" && level_code != "u" && level_code != "f") {
-      cerr << "selected level must be in {w, u, f}" << endl;
+      std::cerr << "selected level must be in {w, u, f}\n";
       return EXIT_FAILURE;
     }
-    const string regions_file = leftover_args.front();
-    const string sites_file = leftover_args.back();
+    const std::string regions_file = leftover_args.front();
+    const std::string sites_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
+
+    MSite::no_extra_fields = (allow_extra_fields == false);
 
     const bool is_xcounts = get_is_xcounts_file(sites_file);
     if (!is_msite_file(sites_file) && !is_xcounts)
-      throw runtime_error("dnmtools counts or xcounts format required: " +
-                          sites_file);
+      throw std::runtime_error("dnmtools counts or xcounts format required: " +
+                               sites_file);
 
     // make a map that specifies their order; otherwise we can't
     // ensure regions are sorted in the same way
-    unordered_map<string, uint32_t> chrom_order;
+    std::unordered_map<std::string, std::uint32_t> chrom_order;
     if (!is_xcounts)
       for (auto &i : get_chroms(sites_file))
-        chrom_order.emplace(i, chrom_order.size());
+        chrom_order.emplace(i, std::size(chrom_order));
 
-    if (VERBOSE) cerr << "loading regions" << endl;
+    if (VERBOSE)
+      std::cerr << "loading regions" << '\n';
 
-    if (!fs::is_regular_file(regions_file))
+    if (!std::filesystem::is_regular_file(regions_file))
       // otherwise we could not read the file twice
-      throw runtime_error("regions file must be regular file");
+      throw std::runtime_error("regions file must be regular file");
 
     // MAGIC: below allow for ==3 or >=6 columns in the bed format
     const auto n_columns = get_bed_columns(regions_file);
     if (n_columns != 3 && n_columns < 6)
-      throw runtime_error("format must be 3 or 6+ column bed: " + regions_file);
+      throw std::runtime_error("format must be 3 or 6+ column bed: " +
+                               regions_file);
     if (is_msite_file(regions_file))
-      throw runtime_error("seems to be a counts file: " + regions_file + "\n" +
-                          "check order of input arguments");
+      throw std::runtime_error("seems to be a counts file: " + regions_file +
+                               "\ncheck order of input arguments");
 
-    vector<GenomicRegion> regions;
+    std::vector<GenomicRegion> regions;
     ReadBEDFile(regions_file, regions);
-    if (!is_sorted(begin(regions), end(regions))) {
+    if (!std::is_sorted(std::begin(regions), std::end(regions))) {
       if (sort_data_if_needed) {
-        if (VERBOSE) cerr << "sorting regions" << endl;
-        sort(begin(regions), end(regions), cmp_chrom_order(chrom_order));
+        if (VERBOSE)
+          std::cerr << "sorting regions\n";
+        std::sort(std::begin(regions), std::end(regions),
+                  cmp_chrom_order(chrom_order));
       }
       else
-        throw runtime_error("not sorted: " + regions_file + " (consider -s)");
+        throw std::runtime_error("not sorted: " + regions_file +
+                                 " (consider -s)");
     }
 
     // if columns are 3 we name the regions otherwise that column will
     // be empty and the output format will be wrong
     if (n_columns == 3)
-      for (auto i = 0u; i < regions.size(); ++i)
-        regions[i].set_name(default_name_prefix + to_string(i));
+      for (auto i = 0u; i < std::size(regions); ++i)
+        regions[i].set_name(default_name_prefix + std::to_string(i));
 
-    if (VERBOSE) cerr << "[n_regions=" << regions.size() << "]" << endl;
+    if (VERBOSE)
+      std::cerr << "[n_regions=" << std::size(regions) << "]\n";
 
     std::ofstream of;
     if (!outfile.empty()) {
       of.open(outfile);
-      if (!of) throw runtime_error("failed to open outfile: " + outfile);
+      if (!of)
+        throw std::runtime_error("failed to open outfile: " + outfile);
     }
-    ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
+    std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
     if (is_xcounts)
       process_from_xcounts(n_threads, report_more_info, level_code[0],
@@ -559,7 +566,7 @@ Columns (beyond the first 6) in the BED format output:
                       regions, out);
   }
   catch (const std::exception &e) {
-    cerr << e.what() << endl;
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

@@ -1,16 +1,16 @@
-/* Copyright (C) 2018-2022 Andrew D. Smith
+/* Copyright (C) 2018-2025 Andrew D. Smith
  *
  * Authors: Andrew D. Smith
  *
- * This is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU General Public License as published by the Free Software
+ * Foundation, either version 3 of the License, or (at your option) any later
+ * version.
  *
  * This software is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * for more details.
  */
 
 #include "LevelsCounter.hpp"
@@ -19,10 +19,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-
-using std::runtime_error;
-using std::string;
-using std::to_string;
 
 void
 LevelsCounter::update(const MSite &s) {
@@ -135,8 +131,8 @@ operator<<(std::ostream &out, const LevelsCounter &cs) {
 static void
 check_label(const std::string &observed, const std::string expected) {
   if (observed != expected)
-    throw runtime_error("bad levels format [" + observed + "," + expected +
-                        "]");
+    throw std::runtime_error("bad levels format [" + observed + "," + expected +
+                             "]");
 }
 
 std::istream &

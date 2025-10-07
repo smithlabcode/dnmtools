@@ -27,6 +27,15 @@
  * A-rich and then changing that format to indicate T-rich.
  */
 
+// from dnmtools
+#include "bam_record_utils.hpp"
+#include "dnmt_error.hpp"
+
+// from smithlab
+#include "OptionParser.hpp"
+#include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
+
 #include <config.h>
 
 #include <algorithm>
@@ -40,21 +49,10 @@
 #include <unordered_map>
 #include <vector>
 
-// from smithlab
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
-
-// from dnmtools
-#include "bam_record_utils.hpp"
-#include "dnmt_error.hpp"
-
-using bamxx::bam_rec;
-
 static std::int32_t
-merge_mates(bam_rec &one, bam_rec &two, bam_rec &merged) {
+merge_ends(bamxx::bam_rec &one, bamxx::bam_rec &two, bamxx::bam_rec &merged) {
   if (!are_mates(one, two))
-    return -std::numeric_limits<std::int32_t>::max();
+    return -std::numeric_limits<std::int32_t>::min();
 
   // arithmetic easier using base 0 so subtracting 1 from pos
   const int one_s = get_pos(one);
@@ -159,7 +157,7 @@ load_read_names(const std::string &inputfile, const std::size_t n_reads) {
   if (!hdr)
     throw dnmt_error("failed to get header: " + inputfile);
 
-  bam_rec aln;
+  bamxx::bam_rec aln;
   std::vector<std::string> names;
   std::size_t count = 0;
   while (hts.read(hdr, aln) && count++ < n_reads)
@@ -303,7 +301,7 @@ check_format_in_header(const std::string &input_format,
 }
 
 static inline bool
-same_name(const bamxx::bam_rec &a, const bam_rec &b,
+same_name(const bamxx::bam_rec &a, const bamxx::bam_rec &b,
           const std::size_t suff_len) {
   // "+ 1" below: extranul counts *extras*; we don't want *any* nulls
   const std::uint16_t a_l = a.b->core.l_qname - (a.b->core.l_extranul + 1);
@@ -315,16 +313,15 @@ same_name(const bamxx::bam_rec &a, const bam_rec &b,
 }
 
 static inline void
-swap(bam_rec &a, bam_rec &b) {
+swap(bamxx::bam_rec &a, bamxx::bam_rec &b) {
   std::swap(a.b, b.b);
 }
 
 static void
-format(const bool sam_orientation, const std::string &cmd,
-       const std::size_t n_threads, const std::string &inputfile,
-       const std::string &outfile, const bool bam_format,
-       const std::string &input_format, const std::size_t suff_len,
-       const std::int32_t max_frag_len) {
+format(const std::string &cmd, const std::size_t n_threads,
+       const std::string &inputfile, const std::string &outfile,
+       const bool bam_format, const std::string &input_format,
+       const std::size_t suff_len, const std::int32_t max_frag_len) {
   static const dnmt_error bam_write_err{"error writing bam"};
 
   bamxx::bam_tpool tp(n_threads);
@@ -348,7 +345,7 @@ format(const bool sam_orientation, const std::string &cmd,
     tp.set_io(out);
   }
 
-  bam_rec aln, prev_aln, merged;
+  bamxx::bam_rec aln, prev_aln, merged;
   bool previous_was_merged = false;
 
   const bool empty_reads_file = !hts.read(hdr, aln);
@@ -359,7 +356,7 @@ format(const bool sam_orientation, const std::string &cmd,
     // in the flags has been reverse complemented and is not the original
     // sequence from the FASTQ file. So we need to undo the reverse
     // complementing.
-    if (sam_orientation && bam_is_rev(aln))
+    if (bam_is_rev(aln))
       revcomp_qseq(aln);
 
     standardize_format(input_format, aln);
@@ -371,7 +368,7 @@ format(const bool sam_orientation, const std::string &cmd,
       if (get_tid(aln) == -1)
         continue;
 
-      if (sam_orientation && bam_is_rev(aln))
+      if (bam_is_rev(aln))
         revcomp_qseq(aln);
 
       standardize_format(input_format, aln);
@@ -379,7 +376,7 @@ format(const bool sam_orientation, const std::string &cmd,
         // below: essentially check for dovetail
         if (!bam_is_rev(aln))
           swap(prev_aln, aln);
-        const auto frag_len = merge_mates(prev_aln, aln, merged);
+        const auto frag_len = merge_ends(prev_aln, aln, merged);
         if (frag_len > 0 && frag_len < max_frag_len) {
           if (is_a_rich(merged))
             flip_conversion(merged);
@@ -446,7 +443,6 @@ main_format(int argc, char *argv[]) {
     std::size_t suff_len = 0;
     bool single_end{false};
     bool verbose{false};
-    bool sam_orientation{false};
     bool force{false};
     std::size_t n_threads{1};
 
@@ -471,9 +467,6 @@ main_format(int argc, char *argv[]) {
     opt_parse.add_opt("check", 'c',
                       "number of reads to confirm read name suffix", false,
                       n_reads_to_check);
-    opt_parse.add_opt("sam", 'S',
-                      "negative strand mappers are reverse complemented", false,
-                      sam_orientation);
     opt_parse.add_opt("force", 'F',
                       "force formatting for "
                       "mixed single and paired reads",
@@ -526,8 +519,6 @@ main_format(int argc, char *argv[]) {
                 << "[output type: " << (bam_format ? "B" : "S") << "AM]\n"
                 << "[force formatting: " << (force ? "yes" : "no") << "]\n"
                 << "[threads requested: " << n_threads << "]\n"
-                << "[SAM orientation: " << std::boolalpha << sam_orientation
-                << "]\n"
                 << "[command line: \"" << command << "\"]\n";
 
     check_input_file(infile);
@@ -559,8 +550,8 @@ main_format(int argc, char *argv[]) {
     if (verbose && !single_end)
       std::cerr << "[readname suffix length: " << suff_len << "]" << '\n';
 
-    format(sam_orientation, command, n_threads, infile, outfile, bam_format,
-           input_format, suff_len, max_frag_len);
+    format(command, n_threads, infile, outfile, bam_format, input_format,
+           suff_len, max_frag_len);
   }
   catch (const std::exception &e) {
     std::cerr << e.what() << '\n';

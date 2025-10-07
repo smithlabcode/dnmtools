@@ -52,7 +52,7 @@
 static std::int32_t
 merge_ends(bamxx::bam_rec &one, bamxx::bam_rec &two, bamxx::bam_rec &merged) {
   if (!are_mates(one, two))
-    return -std::numeric_limits<std::int32_t>::min();
+    return std::numeric_limits<std::int32_t>::min();
 
   // arithmetic easier using base 0 so subtracting 1 from pos
   const int one_s = get_pos(one);

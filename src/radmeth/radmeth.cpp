@@ -242,6 +242,11 @@ read_design(const std::string &design_filename) {
   return design;
 }
 
+[[nodiscard]] static inline double
+overdispersion_factor(const std::uint32_t n_samples, const double dispersion) {
+  return (n_samples - 1) / (dispersion + 1);
+}
+
 enum class row_status : std::uint8_t {
   ok,
   na,
@@ -388,7 +393,8 @@ that the design matrix and the proportion table are correctly formatted.
                   return n;
                 n_bytes += n;
               }
-              const int n = std::sprintf(cursor, "\t%f\n", phi_estim_alt);
+              const auto od = overdispersion_factor(n_samples, phi_estim_alt);
+              const int n = std::sprintf(cursor, "\t%f\n", od);
               if (n < 0)
                 return n;
               n_bytes += n;

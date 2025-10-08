@@ -358,8 +358,7 @@ that the design matrix and the proportion table are correctly formatted.
           n_bytes[b] = [&] {
             // clang-format off
             const int n_prefix_bytes =
-              std::sprintf(bufs[b].data(), "%s\t",
-                           t_alt_model.props.rowname.data());
+              std::sprintf(bufs[b].data(), "%s\t", t_alt_model.rowname().data());
             // clang-format on
             if (n_prefix_bytes < 0)
               return n_prefix_bytes;

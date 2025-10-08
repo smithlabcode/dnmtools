@@ -25,12 +25,6 @@
 #include <string>
 #include <vector>
 
-struct cumul_counts {
-  std::vector<std::uint32_t> m_counts;
-  std::vector<std::uint32_t> r_counts;
-  std::vector<std::uint32_t> d_counts;
-};
-
 struct Design {
   std::vector<std::string> factor_names;
   std::vector<std::string> sample_names;
@@ -85,6 +79,18 @@ struct SiteProp {
   parse(const std::string &line);
 };
 
+struct vars_cache {
+  double p{};
+  double a{};
+  double b{};
+  double lgamma_a{};
+  double lgamma_b{};
+  double lgamma_a_b{};
+  double digamma_a{};
+  double digamma_b{};
+  double digamma_a_b{};
+};
+
 struct Regression {
   static double tolerance;        // 1e-3;
   static double stepsize;         // 0.001;
@@ -94,11 +100,7 @@ struct Regression {
   SiteProp props;
   double max_loglik{};
 
-  // scratch space
-  std::vector<cumul_counts> cumul;
-  std::vector<double> p_v;
-  std::vector<double> cache;
-  std::uint32_t max_r_count{};
+  std::vector<vars_cache> cache;  // scratch space
 
   [[nodiscard]] std::size_t
   n_factors() const {
@@ -123,6 +125,11 @@ struct Regression {
   [[nodiscard]] std::size_t
   n_samples() const {
     return design.n_samples();
+  }
+
+  [[nodiscard]] std::string
+  rowname() const {
+    return props.rowname;
   }
 
   void

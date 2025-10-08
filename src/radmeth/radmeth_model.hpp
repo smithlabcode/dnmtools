@@ -69,7 +69,7 @@ operator<<(std::ostream &os, const Design &design);
 
 struct mcounts {
   std::uint32_t n_reads{};
-  std::uint32_t n_meth{};
+  double n_meth{};
 };
 
 [[nodiscard]] inline std::istream &

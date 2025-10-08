@@ -37,27 +37,47 @@ get_p(const std::vector<T> &v, const gsl_vector *params) {
   return logistic(std::inner_product(a, a + std::size(v), params->data, 0.0));
 }
 
+static void
+get_cache_lgamma(const std::vector<std::uint8_t> &group,
+                 const gsl_vector *params, const double phi,
+                 vars_cache &cache) {
+  const auto p = get_p(group, params);
+  const auto a = p * phi;
+  const auto b = (1.0 - p) * phi;
+  cache.p = p;
+  cache.a = a;
+  cache.b = b;
+  cache.lgamma_a = std::lgamma(a);
+  cache.lgamma_b = std::lgamma(b);
+  cache.lgamma_a_b = std::lgamma(a + b);
+}
+
 [[nodiscard]] static double
 log_likelihood(const gsl_vector *params, Regression &reg) {
   const auto phi = 1.0 / std::exp(gsl_vector_get(params, reg.n_factors()));
 
-  const auto &mc = reg.props.mc;
-  const auto &matrix = reg.design.matrix;
+  const auto n_groups = reg.n_groups();
+  const auto &groups = reg.design.groups;
+  auto &cache = reg.cache;
+  for (auto g_idx = 0u; g_idx < n_groups; ++g_idx)
+    get_cache_lgamma(groups[g_idx], params, phi, cache[g_idx]);
 
+  const auto &group_id = reg.design.group_id;
+  const auto &mc = reg.props.mc;
   double ll = 0.0;
   const auto n_samples = reg.n_samples();
   for (auto i = 0u; i < n_samples; ++i) {
-    const auto p = get_p(matrix[i], params);
     const auto y = mc[i].n_meth;
     const auto n = mc[i].n_reads;
 
-    const auto a = p * phi;
-    const auto b = (1.0 - p) * phi;
+    const auto &c = cache[group_id[i]];
+    const auto a = c.a;
+    const auto b = c.b;
 
     // clang-format off
-    ll += ((std::lgamma(y + a) - std::lgamma(a)) +
-           (std::lgamma(n - y + b) - std::lgamma(b)) +
-           (std::lgamma(a + b) - std::lgamma(n + a + b)));
+    ll += ((std::lgamma(y + a) - c.lgamma_a) +
+           (std::lgamma(n - y + b) - c.lgamma_b) +
+           (c.lgamma_a_b - std::lgamma(n + a + b)));
     // clang-format on
   }
 
@@ -69,29 +89,19 @@ digamma(const double x) {
   return gsl_sf_psi(x);
 }
 
-// gradient contribution for one obs wrt p
-[[nodiscard]] static double
-grad_loglik_p(const double y, const std::uint32_t n, const double p,
-              const double phi) {
+static void
+get_cache_digamma(const std::vector<std::uint8_t> &group,
+                  const gsl_vector *params, const double phi,
+                  vars_cache &cache) {
+  const auto p = get_p(group, params);
   const auto a = p * phi;
   const auto b = (1.0 - p) * phi;
-  return phi * (digamma(y + a) - digamma(a) - digamma(n - y + b) + digamma(b));
-}
-
-[[nodiscard]] static double
-grad_loglik_phi_single_obs(const double y, const std::uint32_t n,
-                           const double p, const double phi) {
-  const auto a = p * phi;
-  const auto b = (1.0 - p) * phi;
-
-  const auto digamma_aplusb = digamma(a + b);
-  const auto digamma_n_aplusb = digamma(n + a + b);
-  const auto dg_delta = digamma_aplusb - digamma_n_aplusb;
-
-  const auto term1 = p * (digamma(y + a) - digamma(a) + dg_delta);
-  const auto term2 = (1.0 - p) * (digamma(n - y + b) - digamma(b) + dg_delta);
-
-  return term1 + term2;
+  cache.p = p;
+  cache.a = a;
+  cache.b = b;
+  cache.digamma_a = digamma(a);
+  cache.digamma_b = digamma(b);
+  cache.digamma_a_b = digamma(a + b);
 }
 
 static void
@@ -102,28 +112,49 @@ gradient(const gsl_vector *params, Regression &reg, gsl_vector *output) {
   const auto &mc = reg.props.mc;
   const auto &matrix = reg.design.matrix;
 
+  const auto n_groups = reg.n_groups();
+  const auto &groups = reg.design.groups;
+  auto &cache = reg.cache;  // ADS: reusing scratch space
+  for (auto g_idx = 0u; g_idx < n_groups; ++g_idx)
+    get_cache_digamma(groups[g_idx], params, phi, cache[g_idx]);
+
   gsl_vector_set_all(output, 0.0);  // init output to zero for all factors
   auto &data = output->data;
 
+  const auto &group_id = reg.design.group_id;
   double grad_phi = 0.0;
   const auto n_samples = reg.n_samples();
   for (auto i = 0u; i < n_samples; ++i) {
-    const auto &matrix_i = matrix[i];
-    const auto p = get_p(matrix_i, params);
     const auto y = mc[i].n_meth;
     const auto n = mc[i].n_reads;
 
-    const auto dlogl_dp = grad_loglik_p(y, n, p, phi);  // grad wrt p
-    const auto dp_deta = p * (1.0 - p);          // chain rule: d p / d param
-    const auto dlogl_deta = dlogl_dp * dp_deta;  // grad wrt params
+    const auto &c = cache[group_id[i]];
+    const auto p = c.p;
+    const auto a = c.a;
+    const auto b = c.b;
 
-    for (auto fact_idx = 0u; fact_idx < n_factors; ++fact_idx) {
-      const auto level = matrix_i[fact_idx];
-      if (level == 0)
-        continue;
-      data[fact_idx] += dlogl_deta;
-    }
-    grad_phi += grad_loglik_phi_single_obs(y, n, p, phi);
+    const auto digamma_a = c.digamma_a;
+    const auto digamma_b = c.digamma_b;
+    const auto digamma_y_a = digamma(y + a);
+    const auto digamma_n_y_b = digamma(n - y + b);
+
+    // grad wrt p
+    const auto dlogl_dp =
+      phi * (digamma_y_a - digamma_a - digamma_n_y_b + digamma_b);
+    const auto dp_delta = p * (1.0 - p);           // chain rule: d p / d param
+    const auto dlogl_delta = dlogl_dp * dp_delta;  // grad wrt params
+
+    auto matrix_itr = std::cbegin(matrix[i]);
+    const auto data_end = data + n_factors;
+    for (auto data_itr = data; data_itr != data_end; ++data_itr)
+      *data_itr += (*matrix_itr++) * dlogl_delta;
+
+    const auto digamma_delta = c.digamma_a_b - digamma(n + a + b);
+    const auto dphi_term1 = p * (digamma_y_a - digamma_a + digamma_delta);
+    const auto dphi_term2 =
+      (1.0 - p) * (digamma_n_y_b - digamma_b + digamma_delta);
+
+    grad_phi += dphi_term1 + dphi_term2;
   }
 
   const auto grad_theta = -grad_phi * phi;
@@ -157,8 +188,7 @@ fit_regression_model(Regression &r, std::vector<double> &p_estimates,
   const auto stepsize = Regression::stepsize;
   const auto max_iter = Regression::max_iter;
   const auto n_groups = r.n_groups();
-
-  r.p_v.resize(n_groups);
+  r.cache.resize(n_groups);  // make sure scratch space is allocated
 
   const std::size_t n_params = r.n_params();
   const auto tol = std::sqrt(n_params) * r.n_samples() * Regression::tolerance;

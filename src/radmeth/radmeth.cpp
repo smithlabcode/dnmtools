@@ -540,7 +540,7 @@ main_radmeth(int argc, char *argv[]) {
                 << "(5) p-value\n"
                 << "(6) estimated methylation 0\n"
                 << "(7) estimated methylation 1\n"
-                << "(8) estimated dispersion\n"
+                << "(8) overdispersion factor (variance above binomial)\n"
                 << "estimated methylation is for test factor value (0 or 1)\n"
                 << '\n';
     // clang-format on

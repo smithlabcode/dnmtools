@@ -56,14 +56,20 @@ SiteProp::parse(const std::string &line) {
     field_e = std::find_if(field_s + 1, line_end, is_sep);
     {
       const auto [ptr, ec] = std::from_chars(field_s, field_e, mc1.n_reads);
-      failed = failed || (ptr != field_e);
+      failed = failed || (ec != std::errc{});
     }
 
+    // get the methylated count
     field_s = std::find_if(field_e + 1, line_end, not_sep);
     field_e = std::find_if(field_s + 1, line_end, is_sep);
     {
+#ifdef __APPLE__
+      const int ret = std::sscanf(field_s, "%lf", &mc1.n_meth);
+      failed = failed || (ret < 1);
+#else
       const auto [ptr, ec] = std::from_chars(field_s, field_e, mc1.n_meth);
-      failed = failed || (ptr != field_e);
+      failed = failed || (ec != std::errc{});
+#endif
     }
 
     mc.push_back(mc1);

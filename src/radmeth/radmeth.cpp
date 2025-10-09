@@ -3,15 +3,15 @@
  * Author: Andrew D. Smith
  * Contributors: Egor Dolzhenko and Guilherme Sena
  *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
 
 #include "radmeth_model.hpp"
@@ -332,7 +332,7 @@ that the design matrix and the proportion table are correctly formatted.
           if (t_alt_model.props_size() != n_samples)
             throw std::runtime_error("found row with wrong number of columns");
 
-          const auto [p_val, status] = [&]() -> std::tuple<double, row_status> {
+          const auto p_val_status = [&]() -> std::tuple<double, row_status> {
             // Skip the test if (1) no coverage in all cases or in all
             // controls, or (2) the site is completely methylated or
             // completely unmethylated across all samples.
@@ -354,6 +354,9 @@ that the design matrix and the proportion table are correctly formatted.
             return (p_value != p_value) ? std::tuple{1.0, row_status::na}
                                         : std::tuple{p_value, row_status::ok};
           }();
+          // ADS: avoid capture structured binding in C++17
+          const auto p_val = std::get<0>(p_val_status);
+          const auto status = std::get<1>(p_val_status);
 
           n_bytes[b] = [&] {
             // clang-format off

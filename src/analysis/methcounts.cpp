@@ -1,20 +1,19 @@
-/* counts: a program for counting the methylated and unmethylated
- * reads mapping over each CpG or C
+/* counts: a program for counting the methylated and unmethylated reads
+ * mapping over each CpG or C
  *
- * Copyright (C) 2011-2023 University of Southern California and
- *                         Andrew D. Smith
+ * Copyright (C) 2011-2025 Andrew D. Smith
  *
  * Authors: Andrew D. Smith, Song Qiang, Guilherme Sena, and Masaru Nakajima
  *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
 
 #include "bam_record_utils.hpp"
@@ -235,13 +234,13 @@ write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
 
       const bool mut = has_mutated(base, counts[i]);
       // clang-format off
-      const int n = std::sprintf(buf, fmt,
-                                 sam_hdr_tid2name_ptr(hdr, tid),
-                                 i,
-                                 (is_c ? '+' : '-'),
-                                 tag_values[tag_with_mut(the_tag, mut)],
-                                 (n_reads > 0 ? unconverted / n_reads : 0.0),
-                                 n_reads);
+      const int n = std::snprintf(buf, buf_size, fmt,
+                                  sam_hdr_tid2name_ptr(hdr, tid),
+                                  i,
+                                  (is_c ? '+' : '-'),
+                                  tag_values[tag_with_mut(the_tag, mut)],
+                                  (n_reads > 0 ? unconverted / n_reads : 0.0),
+                                  n_reads);
       // clang-format on
       if (n < 0 || !out.write(buf, n))
         throw std::runtime_error("error formatting output");

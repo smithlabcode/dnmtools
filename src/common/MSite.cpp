@@ -22,6 +22,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 
 #include "counts_header.hpp"
 #include "smithlab_utils.hpp"
@@ -50,7 +51,7 @@ MSite::initialize(const char *c, const char *c_end) {
     failed = true;
 
   {
-    const uint32_t d = std::distance(field_s, field_e);
+    const std::uint32_t d = std::distance(field_s, field_e);
     chrom = string{field_s, d};
   }
 
@@ -75,7 +76,7 @@ MSite::initialize(const char *c, const char *c_end) {
   failed = failed || (field_e == c_end);
 
   {
-    const uint32_t d = std::distance(field_s, field_e);
+    const std::uint32_t d = std::distance(field_s, field_e);
     context = string{field_s, d};
   }
 
@@ -217,12 +218,10 @@ find_offset_for_msite(const std::string &chr, const size_t idx,
   }
 }
 
-#include <unordered_map>
-using std::unordered_map;
 void
-find_offset_for_msite(const unordered_map<string, uint32_t> &chrom_order,
-                      const std::string &chr, const size_t idx,
-                      std::ifstream &site_in) {
+find_offset_for_msite(
+  const std::unordered_map<string, std::uint32_t> &chrom_order,
+  const std::string &chr, const size_t idx, std::ifstream &site_in) {
 
   site_in.seekg(0, ios_base::beg);
   const size_t begin_pos = site_in.tellg();

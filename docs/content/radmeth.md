@@ -3,37 +3,48 @@
 ## Synopsis
 
 ```console
-dnmtools radmeth -factor case -o output.txt design_matrix.txt proportion_table.txt
+dnmtools radmeth -factor case -o output.txt design_matrix.txt data_matrix.txt
 ```
 
 ## Description
 
 The differential-methylation detection method described in this section is
 based on the beta-binomial regression. We recommend using this method when
-more than three replicates are available in each group. For rapid differential
-methylation analysis the regression-based method should be run on a large
-machine with many cores. Note that the actual processing time depends on the
-coverage of each methylome, the number of sites analyzed, and the number of
-methylomes in the dataset.
+more than three replicates are available in each group, or for a more
+complicated experimental design, there are enough samples to fit the
+parameters. The radmeth command can take advantage of multiple cores for
+improved speed. The processing time depends on the number of sites analyzed
+and the number of methylomes in the dataset.
 
-### Generating proportion tables
+### Generating input tables
 
-The first step in the differential methylation analysis is to assemble a
-proportion table containing read proportions for all target
-methylomes. Dnmtools includes a program [merge](../merge) to generate a
-proportion table from the given collection of methylomes. Suppose that we want
-to compare methylomes named `control-a.meth`, `control-b.meth`,
-`control-c.meth` to the methylomes `case-a.meth`, `case-b.meth`,
-`case-c.meth`.  The proportion table can be created with the following
-command:
+The first step in the differential methylation analysis is to assemble a table
+with the counts of total reads and methylated reads for each site (rows) and
+each methylome (columns). Dnmtools includes a command [merge](../merge) to
+generate this kind of table from the given collection of methylomes in
+[counts](../counts) format.
+
+Features: although the explanation here focuses on individual CpG sites, the
+identical method can be applied to genomic intervals as features (rows). The
+common requirement is that in each row, each "column" has a count for total
+reads and a count for reads indicating methylation. One prominent example is
+to run the `roi` command on a set of genomic intervals, and use the output as
+the basis for differential methylation analysis.
+
+Suppose that we want to compare methylomes named `control_a.sym`,
+`control_b.sym`, `control_c.sym` to the methylomes `case_a.sym`, `case_b.sym`,
+`case_c.sym`. Each of these filenames suggests that the methylation is for
+symmetric CpG sites as would be obtained using the [sym](../sym) command.
+
+The data matrix can be created with the following command:
 
 ```console
 $ dnmtools merge -t -radmeth \
-     control-a.meth control-b.meth control-c.meth \
-     case-a.meth case-b.meth case-c.meth > proportion-table.txt
+     control_a.meth control_b.meth control_c.meth \
+     case_a.meth case_b.meth case_c.meth > data_table.txt
 ```
 
-This is what `proportion-table.txt` looks like:
+This is what `data_table.txt` looks like:
 
 ```txt
 control_a       control_b       control_c       case_a  case_b  case_c
@@ -43,17 +54,21 @@ chr1:160:+:CpG 12      8       10      5       17      4       15      14      1
 chr1:309:+:CpG 1       1       1       0       17      12      12      8       2       1       19      8
 ```
 
-As indicated in the header, this proportion table contains information about 6
+As indicated in the header, this table contains information about 6
 methylomes: 3 controls and 3 cases.  Each row of the table contains
-information about a CpG site and a proportion of reads mapping over this site
-in each methylome. For example, the first row describes a cytosine within a
-CpG site located on chromosome 1 at position 108. This site is present in 9
-reads in the methylome control a and is methylated in 6 of them. Note that the
-dnmtools `merge` command adds methylomes into the proportion table in the
-order in which they are listed on the command line.
+information about an individual CpG site, and two values for each column
+heading: one value being the count of total reads and the second the count of
+methylated reads. Note that the second value does not need to be integers,
+which can happen when reads contribute fractionally, as in counts from
+nanopore. For example, the first row describes a cytosine within a CpG site
+located on chromosome 1 at position 108. This site is covered by 9 reads in
+the methylome "control a" and 6 of those reads indicate methylation. Note that
+the dnmtools `merge` command adds methylomes into the data matrix in the order
+in which they are listed on the command line.
 
-Note: the header conforms to a traditional "data frame" from R, which does not
-include a column name for the row names, which are the first column.
+Note: the header does not include a column name for the first column, and for
+each methylome, currently there is only one column name for each pair of
+columns in this format.
 
 ### Design matrix
 
@@ -71,25 +86,25 @@ case_c 1       1
 ```
 
 The design matrix shows that samples in this dataset are associated with two
-factors: base and case. The first column corresponds to the base factor and
-will always be present in the design matrix. Think of it as stating that all
+factors: base and case. The first column corresponds to the intercept and will
+always be present in the design matrix. Think of it as stating that all
 samples have the same baseline mean methylation level. To distinguish cases
 from controls we add another factor case (second column). The `1`s in this
-column correspond to the samples which belong to the cases group. You can use
-this design matrix as a template to create design matrices for two-group
+second column indicate the methylomes that belong to the cases group. You can
+use this design matrix as a template to create design matrices for two-group
 comparisons involving arbitrary many methylomes.
 
-After creating the proportion table and the design matrix, we are now ready to
-start the differential methylation analysis.  It consists of (1) regression,
+After creating the data matrix and the design matrix, we are now ready to
+start the differential methylation analysis. It consists of (1) regression,
 (2) combining significance, and (3) multiple testing adjustment steps.
 
 ### Regression
 
-Suppose that the `proportion-table.txt` and `design-matrix.txt` are as
+Suppose that the `data_table.txt` and `design_matrix.txt` are as
 described above. The regression step is run with the command
 
 ```console
-$ dnmtools radmeth -factor case -o output.txt design-matrix.txt proportion-table.txt
+$ dnmtools radmeth -factor case -o output.txt design_matrix.txt data_table.txt
 ```
 
 The `-factor` parameter specifies the factor with respect to which we want to
@@ -101,18 +116,36 @@ respectively. The p-value (5-th column) is given by the log-likelihood ratio
 test.
 
 Depending on the distribution of methylated and unmethylated CpGs, some
-p-values may not be calculated. If there are no reads that cover a given CpG,
-the value `NA_LOW_COV` will be printed instead of a p-value. If all CpGs are
-fully methylated and fully methylated in both case and control, we say the CpG
-has an "extreme distribution". In these cases, we cannot reject the null and
-output `NA_EXTREME_CNT`.  Finally, if there are numerical errors in the
-log-likelihood ratio test, we simply print `NA`. You can opt out of these
-additional NA informations by not using the `-n` flag.
+p-values may not be calculated, and a value of NA will be output. If the
+argument `-na-info` is used, the following detail will be given. If there are
+no reads that cover a given CpG, the value `NA_LOW_COV` will be printed
+instead of a p-value. If all CpGs are fully methylated and fully methylated in
+both case and control, we say the CpG has a "extreme" counts. In these cases,
+we cannot reject the null and output `NA_EXTREME_CNT`.  Finally, if there are
+numerical errors in the log-likelihood ratio test, we simply print `NA`.
 
-We do not recommend relying too much on the individual p-values of CpGs from
-radmeth, as they often do not contain sufficient coverage for significant
-biological interpretations. Instead, we recommend merging p-values of
-neighboring CpGs using [radadjust](../radadjust).
+## Output format
+
+The output for `radmeth` is one line for each row of the input data matrix.
+If the input data matrix has rownames with "tokens" separated by colons, for
+example "chr3:67363494:+:CpG", then this will appear in the output but with
+the colons replaced by tabs. If the rownames in the input file do not have
+colons, they will be output as is, in the first column of the output file.
+
+- The second column, or the first column after the (possibly transformed)
+  rowname, is the p-value for that column, or an NA value (see above).
+- After the p-value, the mean methylation per "group" is given in each
+  subsequent column. Here, a "group" is a combination of factor levels,
+  assuming binary factors. The order of groups corresponds to the order of
+  their binary representation in the design matrix. The order for the groups
+  in the example design matrix below would be (MB=100, MA=101, FB=110,
+  FA=111).
+- The final column in the output is the "overdispersion factor" for the
+  beta-binomial. Assume `phi` is the dispersion. The binomial variance is
+  `np(1-p)` and the beta-binomial variance is `np(1-p)((n+phi)/(phi+1))`. So
+  `(n - 1)/(phi + 1)` is the factor by which the variance for the
+  beta-binomial exceeds that of the binomial. An overdispersion factor of 0
+  means the beta-binomial is behaving just like a binomial.
 
 ## Tutorial
 
@@ -281,17 +314,17 @@ differential methylation between levels for our factor of interest (named
 "factor" in the design matrix).  Here is a look at part of the output:
 
 ```console
-$ head sim/samples.radmeth
-chr1    163 +   CG  0.0877822   35  22  45  36
-chr1    206 +   CG  0.442745    37  30  43  38
-chr1    232 +   CG  0.756925    28  20  35  26
-chr1    278 +   CG  0.794626    43  35  37  31
-chr1    296 +   CG  0.635986    33  29  38  32
-chr1    310 +   CG  0.641986    37  28  31  22
-chr1    322 +   CG  0.0973903   38  33  47  35
-chr1    324 +   CG  0.260703    40  29  31  26
-chr1    350 +   CG  0.888242    36  30  35  29
-chr1    356 +   CG  0.0535286   37  35  42  33
+$ head samples.radmeth | column -t
+chr1  163  +  CG  0.0863989  0.818157  0.653660  0.775035  0.591029  0.000052
+chr1  206  +  CG  0.443989   0.841557  0.764998  0.908700  0.859154  0.000091
+chr1  232  +  CG  0.756234   0.776885  0.744420  0.725115  0.688140  0.000242
+chr1  278  +  CG  0.77863    0.831485  0.807046  0.842138  0.818908  0.000808
+chr1  296  +  CG  0.648263   0.848138  0.884828  0.836674  0.875727  0.000341
+chr1  310  +  CG  0.640836   0.729179  0.780351  0.689915  0.745921  0.139695
+chr1  322  +  CG  0.0972604  0.679385  0.849711  0.789027  0.908915  0.000235
+chr1  324  +  CG  0.25803    0.861294  0.753022  0.822346  0.694456  0.008238
+chr1  350  +  CG  0.890771   0.844111  0.855183  0.807851  0.820951  0.000267
+chr1  356  +  CG  0.0527503  0.750013  0.933344  0.818157  0.954543  0.000315
 ```
 
 Focusing on the 5th column, we see values between 0 and 1, but none of them
@@ -306,16 +339,19 @@ for i in M F A B; do
 done
 ```
 
+(The argument `-relaxed` to the [selectsites](../selectsites) command is to
+allow for flexibility in the column format after the first 6.)
+
 The result allows us to verify that `radmeth` with the design matrix given
 above identifies sites as significant when they differ between levels A and B
 of the factor of interest:
 
 ```console
 $ for i in sim/features_[ABFM].txt; do echo $i `awk 'BEGIN{k=0;c=0}{k+=$5;c+=1}END{print k,c,k/c}' $i`; done | column -t
-sim/features_A.txt  0.256072  430  0.000595517
-sim/features_B.txt  0.114786  372  0.000308564
-sim/features_F.txt  197.332   400  0.493329
-sim/features_M.txt  297.728   588  0.50634
+sim/features_A.txt  0.255514  430  0.000594218
+sim/features_B.txt  0.11431   372  0.000307286
+sim/features_F.txt  196.602   400  0.491505
+sim/features_M.txt  296.222   588  0.50378
 ```
 
 The p-values in features associated with either M or F are averaging around
@@ -354,10 +390,10 @@ analogous but with this modified design matrix:
 $ dnmtools radmeth -o sim/samples_noint.radmeth -f factor design_noint.txt sim/table.txt
 $ for i in M F A B; do dnmtools selectsites -relaxed -o sim/features_noint_${i}.txt sim/features_${i}.bed sim/samples_noint.radmeth; done
 $ for i in sim/*_noint_*.txt; do echo $i `awk 'BEGIN{k=0;c=0}{k+=$5;c+=1}END{print k,c,k/c}' $i`; done | column -t
-sim/features_noint_A.txt  8.27931  430  0.0192542
-sim/features_noint_B.txt  15.2397  372  0.040967
-sim/features_noint_F.txt  77.2656  400  0.193164
-sim/features_noint_M.txt  93.7312  588  0.159407
+sim/features_noint_A.txt  8.27797  430  0.0192511
+sim/features_noint_B.txt  15.2391  372  0.0409654
+sim/features_noint_F.txt  77.2454  400  0.193114
+sim/features_noint_M.txt  93.7184  588  0.159385
 ```
 
 Although the sites within features corresponding to A and B are much lower on

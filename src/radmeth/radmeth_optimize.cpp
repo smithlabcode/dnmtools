@@ -21,9 +21,78 @@
 #include <gsl/gsl_vector.h>
 
 #include <algorithm>
+#include <array>
 #include <numeric>
 #include <stdexcept>
 #include <vector>
+
+/* Coefficients for the Chebyschev polynomial for the digamma function in the
+   range 0-1 */
+// clang-format off
+static constexpr std::array<double, 23> psi1_cs {
+  -0.038057080835217922, // == -0.019028540417608961*2
+   0.491415393029387130,
+  -0.056815747821244730,
+   0.008357821225914313,
+  -0.001333232857994342,
+   0.000220313287069308,
+  -0.000037040238178456,
+   0.000006283793654854,
+  -0.000001071263908506,
+   0.000000183128394654,
+  -0.000000031353509361,
+   0.000000005372808776,
+  -0.000000000921168141,
+   0.000000000157981265,
+  -0.000000000027098646,
+   0.000000000004648722,
+  -0.000000000000797527,
+   0.000000000000136827,
+  -0.000000000000023475,
+   0.000000000000004027,
+  -0.000000000000000691,
+   0.000000000000000118,
+  -0.000000000000000020
+};
+// clang-format on
+
+/* Alternate set of coefficients for the Chebyschev polynomial for the digamma
+   function */
+// clang-format off
+static constexpr std::array<double, 16> psi2_cs = {
+  -0.0204749044678185, // == -0.01023745223390925*2
+  -0.0101801271534859,
+   0.0000559718725387,
+  -0.0000012917176570,
+   0.0000000572858606,
+  -0.0000000038213539,
+   0.0000000003397434,
+  -0.0000000000374838,
+   0.0000000000048990,
+  -0.0000000000007344,
+   0.0000000000001233,
+  -0.0000000000000228,
+   0.0000000000000045,
+  -0.0000000000000009,
+   0.0000000000000002,
+  -0.0000000000000000 ,
+};
+// clang-format on
+
+template <std::size_t T>
+[[nodiscard]] static inline double
+chebyschev(const std::array<double, T> &coeffs, std::uint32_t order,
+           const double y) {
+  const auto y2 = 2.0 * y;
+  double d = 0.0;
+  double dd = 0.0;
+  for (auto j = order; j >= 1; j--) {
+    const auto temp = d;
+    d = y2 * d - dd + coeffs[j];
+    dd = temp;
+  }
+  return y * d - dd + 0.5 * coeffs[0];
+}
 
 [[nodiscard]] static inline double
 logistic(const double x) {
@@ -84,9 +153,18 @@ log_likelihood(const gsl_vector *params, Regression &reg) {
   return ll;
 }
 
-[[nodiscard]] static inline double
-digamma(const double x) {
-  return gsl_sf_psi(x);
+// digamma for x non-negative
+static double
+digamma(const double y) {
+  static constexpr auto psi_order = 7;   // max=22;
+  static constexpr auto apsi_order = 7;  // max=15;
+  if (y >= 2.0) {
+    const auto t = 8.0 / (y * y) - 1.0;
+    return std::log(y) - 0.5 / y + chebyschev(psi2_cs, apsi_order, t);
+  }
+  if (y < 1.0)
+    return -1.0 / y + chebyschev(psi1_cs, psi_order, 2.0 * y - 1.0);
+  return chebyschev(psi1_cs, psi_order, 2.0 * (y - 1.0) - 1.0);
 }
 
 static void

@@ -34,6 +34,7 @@
 #include <string>
 #include <system_error>
 #include <type_traits>  // std::underlying_type_t
+#include <unordered_set>
 #include <vector>
 
 enum class xcounts_err {
@@ -69,7 +70,7 @@ struct xcounts_err_cat : std::error_category {
     std::abort();  // unreacheable
   }
 };
-// clang-format off
+// clang-format on
 
 template <>
 struct std::is_error_code_enum<xcounts_err> : public std::true_type {};
@@ -97,6 +98,9 @@ fill_output_buffer(const std::uint32_t offset, const MSite &s, T &buf) {
 int
 main_xcounts(int argc, char *argv[]) {
   try {
+    // ADS: It might happen that a "chromosome" has no CpG sites (like
+    // Scaffold113377 in strPur2). Therefore, we can't assume each chrom will
+    // appear in the input when attempting to check consistency.
     bool verbose = false;
     bool gzip_output = false;
     bool keep_all_sites = false;
@@ -116,7 +120,8 @@ main_xcounts(int argc, char *argv[]) {
                       false, outfile);
     opt_parse.add_opt("chroms", 'c', "make header from this reference", false,
                       genome_file);
-    opt_parse.add_opt("reads", 'r', "output only sites with reads (on by default)", false,
+    opt_parse.add_opt("reads", 'r',
+                      "output only sites with reads (on by default)", false,
                       require_coverage);
     opt_parse.add_opt("keep", 'k', "keep sites that are not covered", false,
                       keep_all_sites);
@@ -177,6 +182,7 @@ main_xcounts(int argc, char *argv[]) {
     }
 
     std::unordered_map<std::string, std::uint32_t> chrom_order;
+    std::unordered_set<std::uint32_t> chroms_seen;
     if (!header_file.empty())
       chrom_order = write_counts_header_from_file(header_file, out);
     else if (!genome_file.empty())
@@ -224,15 +230,20 @@ main_xcounts(int argc, char *argv[]) {
           std::cerr << "processing: " << site.chrom << '\n';
 
         if (!chrom_order.empty()) {
-          const auto expected_chrom_counter = chrom_order.find(site.chrom);
-          if (expected_chrom_counter == std::cend(chrom_order)) {
+          const auto expected_chrom_order = chrom_order.find(site.chrom);
+          if (expected_chrom_order == std::cend(chrom_order)) {
             ec = xcounts_err::chromosome_not_found;
             break;
           }
-          if (expected_chrom_counter->second != chrom_counter) {
+          if (expected_chrom_order->second < chrom_counter) {
             ec = xcounts_err::inconsistent_chromosome_order;
             break;
           }
+          if (chroms_seen.count(expected_chrom_order->second) > 0) {
+            ec = xcounts_err::inconsistent_chromosome_order;
+            break;
+          }
+          chroms_seen.emplace(expected_chrom_order->second);
         }
 
         ++chrom_counter;
@@ -241,12 +252,12 @@ main_xcounts(int argc, char *argv[]) {
         offset = 0;
 
         site.chrom += '\n';
-        const int64_t sz = size(site.chrom);
+        const std::int64_t sz = size(site.chrom);
         if (bgzf_write(out.f, site.chrom.data(), sz) != sz)
           ec = xcounts_err::failed_to_write_file;
       }
       if (keep_all_sites || site.n_reads > 0) {
-        const int64_t sz = fill_output_buffer(offset, site, buf);
+        const std::int64_t sz = fill_output_buffer(offset, site, buf);
         if (bgzf_write(out.f, buf.data(), sz) != sz)
           ec = xcounts_err::failed_to_write_file;
         offset = site.pos;
@@ -256,7 +267,7 @@ main_xcounts(int argc, char *argv[]) {
 
     if (ec) {
       std::cerr << "failed converting " << filename << " to " << outfile << '\n'
-           << ec.message() << '\n';
+                << ec.message() << '\n';
       return EXIT_FAILURE;
     }
   }

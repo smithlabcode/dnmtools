@@ -111,6 +111,8 @@ main_radmeth_adjust(int argc, char *argv[]);
 int
 main_radmeth(int argc, char *argv[]);
 int
+main_radmeth_nano(int argc, char *argv[]);
+int
 main_radmeth_merge(int argc, char *argv[]);
 int
 main_clean_hairpins(int argc, char *argv[]);
@@ -204,6 +206,7 @@ main(int argc, char *argv[]) {
  {{{"dmr",       "identify DMRs from genomic intervals and single-CpG DM probabilities",  main_dmr},
    {"diff",      "compute single-CpG DM probability between two methylomes", main_methdiff},
    {"radmeth",   "compute DM probabilities for each CpG using multiple methylomes", main_radmeth},
+   {"radmeth-nano", "radmeth designed for nanopore data", main_radmeth_nano},
    {"radadjust", "adjust p-values from radmeth output", main_radmeth_adjust},
    {"radmerge",  "merge significant CpGs in radmeth output", main_radmeth_merge}}}},
 

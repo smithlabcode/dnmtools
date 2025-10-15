@@ -190,7 +190,11 @@ libdnmtools_a_SOURCES += \
 # optimization
 libdnmtools_a_SOURCES += \
         src/radmeth/radmeth_optimize.hpp \
-        src/radmeth/radmeth_model.hpp
+        src/radmeth/radmeth_optimize_nano.hpp \
+        src/radmeth/radmeth_model.hpp \
+        src/radmeth/radmeth_utils.hpp \
+        src/radmeth/radmeth_design.hpp \
+        src/radmeth/radmeth_model_nano.hpp
 
 LDADD = libdnmtools.a src/abismal/libabismal.a src/smithlab_cpp/libsmithlab_cpp.a
 
@@ -236,9 +240,14 @@ dnmtools_SOURCES += src/amrfinder/amrtester.cpp
 
 dnmtools_SOURCES += src/radmeth/dmr.cpp
 dnmtools_SOURCES += src/radmeth/methdiff.cpp
+dnmtools_SOURCES += src/radmeth/radmeth_utils.cpp
 dnmtools_SOURCES += src/radmeth/radmeth_optimize.cpp
+dnmtools_SOURCES += src/radmeth/radmeth_optimize_nano.cpp
+dnmtools_SOURCES += src/radmeth/radmeth_design.cpp
 dnmtools_SOURCES += src/radmeth/radmeth_model.cpp
+dnmtools_SOURCES += src/radmeth/radmeth_model_nano.cpp
 dnmtools_SOURCES += src/radmeth/radmeth.cpp
+dnmtools_SOURCES += src/radmeth/radmeth_nano.cpp
 dnmtools_SOURCES += src/radmeth/radmeth-adjust.cpp
 dnmtools_SOURCES += src/radmeth/radmeth-merge.cpp
 

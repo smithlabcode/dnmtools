@@ -1,23 +1,22 @@
-/* Copyright (C) 2013-2023 University of Southern California and
- *                         Egor Dolzhenko
- *                         Andrew D Smith
- *                         Guilherme Sena
+/* Copyright (C) 2025 Andrew D Smith
  *
- * Authors: Andrew D. Smith and Egor Dolzhenko and Guilherme Sena
+ * Author: Andrew D Smith
  *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
 
 #ifndef RADMETH_MODEL_HPP
 #define RADMETH_MODEL_HPP
+
+#include "radmeth_design.hpp"
 
 #include <cstdint>
 #include <istream>
@@ -25,45 +24,9 @@
 #include <string>
 #include <vector>
 
-struct Design {
-  std::vector<std::string> factor_names;
-  std::vector<std::string> sample_names;
-  std::vector<std::vector<std::uint8_t>> matrix;   // samples=rows, factors=cols
-  std::vector<std::vector<std::uint8_t>> tmatrix;  // factors=rows, samples=cols
-  std::vector<std::vector<std::uint8_t>> groups;   // combs of fact levels
-  std::vector<std::uint32_t> group_id;             // assign group to sample
-
-  [[nodiscard]] std::size_t
-  n_factors() const {
-    return std::size(factor_names);
-  }
-
-  [[nodiscard]] std::size_t
-  n_groups() const {
-    return std::size(groups);
-  }
-
-  [[nodiscard]] std::size_t
-  n_samples() const {
-    return std::size(sample_names);
-  }
-
-  [[nodiscard]] Design
-  drop_factor(const std::size_t factor_idx);
-
-  void
-  order_samples(const std::vector<std::string> &ordered_names);
-};
-
-std::istream &
-operator>>(std::istream &is, Design &design);
-
-std::ostream &
-operator<<(std::ostream &os, const Design &design);
-
 struct mcounts {
   std::uint32_t n_reads{};
-  double n_meth{};
+  std::uint32_t n_meth{};
 };
 
 [[nodiscard]] inline std::istream &
@@ -71,24 +34,10 @@ operator>>(std::istream &in, mcounts &rm) {
   return in >> rm.n_reads >> rm.n_meth;
 }
 
-struct SiteProp {
-  std::string rowname;
-  std::vector<mcounts> mc;
-
-  void
-  parse(const std::string &line);
-};
-
-struct vars_cache {
-  double p{};
-  double a{};
-  double b{};
-  double lgamma_a{};
-  double lgamma_b{};
-  double lgamma_a_b{};
-  double digamma_a{};
-  double digamma_b{};
-  double digamma_a_b{};
+struct cumul_counts {
+  std::vector<std::uint32_t> m_counts;
+  std::vector<std::uint32_t> r_counts;
+  std::vector<std::uint32_t> d_counts;
 };
 
 struct Regression {
@@ -97,10 +46,18 @@ struct Regression {
   static std::uint32_t max_iter;  // 250;
 
   Design design;
-  SiteProp props;
+  std::string rowname;
+  std::vector<mcounts> mc;
   double max_loglik{};
 
-  std::vector<vars_cache> cache;  // scratch space
+  // scratch space
+  std::vector<cumul_counts> cumul;
+  std::vector<double> p_v;
+  std::vector<double> cache;
+  std::uint32_t max_r_count{};
+
+  void
+  parse(const std::string &line);
 
   [[nodiscard]] std::size_t
   n_factors() const {
@@ -119,23 +76,13 @@ struct Regression {
 
   [[nodiscard]] std::size_t
   props_size() const {
-    return std::size(props.mc);
+    return std::size(mc);
   }
 
   [[nodiscard]] std::size_t
   n_samples() const {
     return design.n_samples();
   }
-
-  [[nodiscard]] std::string
-  rowname() const {
-    return props.rowname;
-  }
-
-  void
-  order_samples(const std::vector<std::string> &ordered_names) {
-    design.order_samples(ordered_names);
-  }
 };
 
-#endif
+#endif  // RADMETH_MODEL_HPP

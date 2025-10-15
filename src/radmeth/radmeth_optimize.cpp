@@ -1,98 +1,28 @@
-/* Copyright (C) 2013-2025 Andrew D Smith
+/* Copyright (C) 2025 Andrew D. Smith
  *
  * Author: Andrew D. Smith
  *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
 
 #include "radmeth_optimize.hpp"
 #include "radmeth_model.hpp"
 
 #include <gsl/gsl_multimin.h>
-#include <gsl/gsl_sf_psi.h>  // for gsl_sf_psi (digamma)
 #include <gsl/gsl_vector.h>
 
 #include <algorithm>
-#include <array>
 #include <numeric>
 #include <stdexcept>
 #include <vector>
-
-/* Coefficients for the Chebyschev polynomial for the digamma function in the
-   range 0-1 */
-// clang-format off
-static constexpr std::array<double, 23> psi1_cs {
-  -0.038057080835217922, // == -0.019028540417608961*2
-   0.491415393029387130,
-  -0.056815747821244730,
-   0.008357821225914313,
-  -0.001333232857994342,
-   0.000220313287069308,
-  -0.000037040238178456,
-   0.000006283793654854,
-  -0.000001071263908506,
-   0.000000183128394654,
-  -0.000000031353509361,
-   0.000000005372808776,
-  -0.000000000921168141,
-   0.000000000157981265,
-  -0.000000000027098646,
-   0.000000000004648722,
-  -0.000000000000797527,
-   0.000000000000136827,
-  -0.000000000000023475,
-   0.000000000000004027,
-  -0.000000000000000691,
-   0.000000000000000118,
-  -0.000000000000000020
-};
-// clang-format on
-
-/* Alternate set of coefficients for the Chebyschev polynomial for the digamma
-   function */
-// clang-format off
-static constexpr std::array<double, 16> psi2_cs = {
-  -0.0204749044678185, // == -0.01023745223390925*2
-  -0.0101801271534859,
-   0.0000559718725387,
-  -0.0000012917176570,
-   0.0000000572858606,
-  -0.0000000038213539,
-   0.0000000003397434,
-  -0.0000000000374838,
-   0.0000000000048990,
-  -0.0000000000007344,
-   0.0000000000001233,
-  -0.0000000000000228,
-   0.0000000000000045,
-  -0.0000000000000009,
-   0.0000000000000002,
-  -0.0000000000000000 ,
-};
-// clang-format on
-
-template <std::size_t T>
-[[nodiscard]] static inline double
-chebyschev(const std::array<double, T> &coeffs, std::uint32_t order,
-           const double y) {
-  const auto y2 = 2.0 * y;
-  double d = 0.0;
-  double dd = 0.0;
-  for (auto j = order; j >= 1; j--) {
-    const auto temp = d;
-    d = y2 * d - dd + coeffs[j];
-    dd = temp;
-  }
-  return y * d - dd + 0.5 * coeffs[0];
-}
 
 [[nodiscard]] static inline double
 logistic(const double x) {
@@ -106,137 +36,132 @@ get_p(const std::vector<T> &v, const gsl_vector *params) {
   return logistic(std::inner_product(a, a + std::size(v), params->data, 0.0));
 }
 
-static void
-get_cache_lgamma(const std::vector<std::uint8_t> &group,
-                 const gsl_vector *params, const double phi,
-                 vars_cache &cache) {
-  const auto p = get_p(group, params);
-  const auto a = p * phi;
-  const auto b = (1.0 - p) * phi;
-  cache.p = p;
-  cache.a = a;
-  cache.b = b;
-  cache.lgamma_a = std::lgamma(a);
-  cache.lgamma_b = std::lgamma(b);
-  cache.lgamma_a_b = std::lgamma(a + b);
+static inline auto
+set_max_r_count(Regression &reg) {
+  const auto &cumul = reg.cumul;
+  const auto max_itr = std::max_element(
+    std::cbegin(cumul), std::cend(cumul), [](const auto &a, const auto &b) {
+      return std::size(a.r_counts) < std::size(b.r_counts);
+    });
+  reg.max_r_count = std::size(max_itr->r_counts);
+  // ADS: avoid the realloc that can happen even for resize(smaller_size)
+  if (reg.max_r_count > std::size(reg.cache))
+    reg.cache.resize(reg.max_r_count);
+}
+
+static inline auto
+cache_log1p_factors(Regression &reg, const double phi) {
+  const std::size_t max_k = reg.max_r_count;
+  auto &cache = reg.cache;
+  for (std::size_t k = 0; k < max_k; ++k)
+    cache[k] = std::log1p(phi * (k - 1.0));
+}
+
+static inline auto
+cache_dispersion_effect(Regression &reg, const double phi) {
+  const std::size_t max_k = reg.max_r_count;
+  auto &cache = reg.cache;
+  for (std::size_t k = 0; k < max_k; ++k)
+    cache[k] = (k - 1.0) / (1.0 + phi * (k - 1.0));
 }
 
 [[nodiscard]] static double
 log_likelihood(const gsl_vector *params, Regression &reg) {
-  const auto phi = 1.0 / std::exp(gsl_vector_get(params, reg.n_factors()));
+  const auto phi = logistic(gsl_vector_get(params, reg.design.n_factors()));
+  const auto one_minus_phi = 1.0 - phi;
 
   const auto n_groups = reg.n_groups();
   const auto &groups = reg.design.groups;
-  auto &cache = reg.cache;
-  for (auto g_idx = 0u; g_idx < n_groups; ++g_idx)
-    get_cache_lgamma(groups[g_idx], params, phi, cache[g_idx]);
+  const auto &cumul = reg.cumul;
 
-  const auto &group_id = reg.design.group_id;
-  const auto &mc = reg.props.mc;
-  double ll = 0.0;
-  const auto n_samples = reg.n_samples();
-  for (auto i = 0u; i < n_samples; ++i) {
-    const auto y = mc[i].n_meth;
-    const auto n = mc[i].n_reads;
+  // ADS: precompute the log1p(phi * (k - 1.0)) values, which are reused for
+  // each group.
+  cache_log1p_factors(reg, phi);
+  const auto &log1p_fact_v = reg.cache;
 
-    const auto &c = cache[group_id[i]];
-    const auto a = c.a;
-    const auto b = c.b;
+  double log_lik = 0.0;
+  for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
+    const auto p = get_p(groups[g_idx], params);
+    const auto one_minus_p = 1.0 - p;
 
-    // clang-format off
-    ll += ((std::lgamma(y + a) - c.lgamma_a) +
-           (std::lgamma(n - y + b) - c.lgamma_b) +
-           (c.lgamma_a_b - std::lgamma(n + a + b)));
-    // clang-format on
+    const auto term1 = one_minus_phi * p;
+    const auto &cumul_y = cumul[g_idx].m_counts;
+    for (std::size_t k = 0; k < std::size(cumul_y); ++k)
+      log_lik += cumul_y[k] * std::log(term1 + phi * k);
+
+    const auto term2 = one_minus_phi * one_minus_p;
+    const auto &cumul_d = cumul[g_idx].d_counts;
+    for (std::size_t k = 0; k < std::size(cumul_d); ++k)
+      log_lik += cumul_d[k] * std::log(term2 + phi * k);
+
+    const auto &cumul_n = cumul[g_idx].r_counts;
+    for (std::size_t k = 0; k < std::size(cumul_n); ++k)
+      log_lik -= cumul_n[k] * log1p_fact_v[k];
   }
-
-  return ll;
-}
-
-// digamma for x non-negative
-static double
-digamma(const double y) {
-  static constexpr auto psi_order = 7;   // max=22;
-  static constexpr auto apsi_order = 7;  // max=15;
-  if (y >= 2.0) {
-    const auto t = 8.0 / (y * y) - 1.0;
-    return std::log(y) - 0.5 / y + chebyschev(psi2_cs, apsi_order, t);
-  }
-  if (y < 1.0)
-    return -1.0 / y + chebyschev(psi1_cs, psi_order, 2.0 * y - 1.0);
-  return chebyschev(psi1_cs, psi_order, 2.0 * (y - 1.0) - 1.0);
-}
-
-static void
-get_cache_digamma(const std::vector<std::uint8_t> &group,
-                  const gsl_vector *params, const double phi,
-                  vars_cache &cache) {
-  const auto p = get_p(group, params);
-  const auto a = p * phi;
-  const auto b = (1.0 - p) * phi;
-  cache.p = p;
-  cache.a = a;
-  cache.b = b;
-  cache.digamma_a = digamma(a);
-  cache.digamma_b = digamma(b);
-  cache.digamma_a_b = digamma(a + b);
+  return log_lik;
 }
 
 static void
 gradient(const gsl_vector *params, Regression &reg, gsl_vector *output) {
-  const auto n_factors = reg.n_factors();
-  const auto phi = 1.0 / std::exp(gsl_vector_get(params, n_factors));
-
-  const auto &mc = reg.props.mc;
-  const auto &matrix = reg.design.matrix;
+  const auto n_factors = reg.design.n_factors();
+  const auto phi = logistic(gsl_vector_get(params, n_factors));
+  const auto one_minus_phi = 1.0 - phi;
 
   const auto n_groups = reg.n_groups();
   const auto &groups = reg.design.groups;
-  auto &cache = reg.cache;  // ADS: reusing scratch space
-  for (auto g_idx = 0u; g_idx < n_groups; ++g_idx)
-    get_cache_digamma(groups[g_idx], params, phi, cache[g_idx]);
+  const auto &cumul = reg.cumul;
 
-  gsl_vector_set_all(output, 0.0);  // init output to zero for all factors
+  auto &p_v = reg.p_v;  // ADS: reusing scratch space
+  for (auto g_idx = 0u; g_idx < n_groups; ++g_idx)
+    p_v[g_idx] = get_p(groups[g_idx], params);
+
+  cache_dispersion_effect(reg, phi);
+  const auto &dispersion_effect = reg.cache;  // (k-1)/(1 + phi(k-1))
+
+  // init output to zero for all factors
+  gsl_vector_set_all(output, 0.0);
   auto &data = output->data;
 
-  const auto &group_id = reg.design.group_id;
-  double grad_phi = 0.0;
-  const auto n_samples = reg.n_samples();
-  for (auto i = 0u; i < n_samples; ++i) {
-    const auto y = mc[i].n_meth;
-    const auto n = mc[i].n_reads;
+  double disp_deriv = 0.0;
+  for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
+    const auto p = p_v[g_idx];
+    const auto one_minus_p = 1.0 - p;
 
-    const auto &c = cache[group_id[i]];
-    const auto p = c.p;
-    const auto a = c.a;
-    const auto b = c.b;
+    double deriv = 0.0;
 
-    const auto digamma_a = c.digamma_a;
-    const auto digamma_b = c.digamma_b;
-    const auto digamma_y_a = digamma(y + a);
-    const auto digamma_n_y_b = digamma(n - y + b);
+    const auto denom_term1 = one_minus_phi * p;
+    const auto &cumul_y = cumul[g_idx].m_counts;
+    const auto y_lim = std::size(cumul_y);
+    for (auto k = 0u; k < y_lim; ++k) {
+      const auto common_factor = cumul_y[k] / (denom_term1 + phi * k);
+      deriv += common_factor;
+      disp_deriv += (k - p) * common_factor;
+    }
 
-    // grad wrt p
-    const auto dlogl_dp =
-      phi * (digamma_y_a - digamma_a - digamma_n_y_b + digamma_b);
-    const auto dp_delta = p * (1.0 - p);           // chain rule: d p / d param
-    const auto dlogl_delta = dlogl_dp * dp_delta;  // grad wrt params
+    const auto denom_term2 = one_minus_phi * one_minus_p;
+    const auto &cumul_d = cumul[g_idx].d_counts;
+    const auto d_lim = std::size(cumul_d);
+    for (auto k = 0u; k < d_lim; ++k) {
+      const auto common_factor = cumul_d[k] / (denom_term2 + phi * k);
+      deriv -= common_factor;
+      disp_deriv += (k - one_minus_p) * common_factor;
+    }
 
-    auto matrix_itr = std::cbegin(matrix[i]);
-    const auto data_end = data + n_factors;
-    for (auto data_itr = data; data_itr != data_end; ++data_itr)
-      *data_itr += (*matrix_itr++) * dlogl_delta;
+    const auto &cumul_n = cumul[g_idx].r_counts;
+    const auto n_lim = std::size(cumul_n);
+    for (auto k = 0u; k < n_lim; ++k)
+      disp_deriv -= cumul_n[k] * dispersion_effect[k];
 
-    const auto digamma_delta = c.digamma_a_b - digamma(n + a + b);
-    const auto dphi_term1 = p * (digamma_y_a - digamma_a + digamma_delta);
-    const auto dphi_term2 =
-      (1.0 - p) * (digamma_n_y_b - digamma_b + digamma_delta);
-
-    grad_phi += dphi_term1 + dphi_term2;
+    const auto &g = groups[g_idx];
+    const auto denom_term1_one_minus_p = denom_term1 * one_minus_p;
+    for (auto fact_idx = 0u; fact_idx < n_factors; ++fact_idx) {
+      const auto level = g[fact_idx];
+      if (level == 0)
+        continue;
+      data[fact_idx] += deriv * (denom_term1_one_minus_p * level);
+    }
   }
-
-  const auto grad_theta = -grad_phi * phi;
-  gsl_vector_set(output, n_factors, grad_theta);
+  gsl_vector_set(output, n_factors, disp_deriv * (phi * one_minus_phi));
 }
 
 [[nodiscard]] static double
@@ -259,14 +184,63 @@ neg_loglik_and_grad(const gsl_vector *params, void *object, double *loglik_val,
   neg_gradient(params, object, d_loglik_val);
 }
 
+static void
+get_cumulative(const std::vector<std::uint32_t> &group_id,
+               const std::uint32_t n_groups, const std::vector<mcounts> &mc,
+               std::vector<cumul_counts> &cumul) {
+  const auto n_cols = std::size(mc);
+  cumul.clear();
+  cumul.resize(n_groups);
+
+  const auto comp_cumul = [&](auto get_value, auto get_vector) {
+    // phase 1: determine max value for each group
+    for (auto g_idx = 0u; g_idx < n_groups; ++g_idx) {
+      std::uint32_t max_v{};
+      for (auto c_idx = 0u; c_idx < n_cols; ++c_idx) {
+        if (group_id[c_idx] == g_idx) {
+          const auto val = get_value(mc[c_idx]);
+          if (val > max_v)
+            max_v = val;
+        }
+      }
+      get_vector(cumul[g_idx]).resize(max_v, 0);
+    }
+
+    // phase 2: fill cumulative counts
+    for (auto c_idx = 0u; c_idx < n_cols; ++c_idx) {
+      const auto g_idx = group_id[c_idx];
+      const auto val = get_value(mc[c_idx]);
+      auto &vec = get_vector(cumul[g_idx]);
+      for (auto i = 0u; i < val; ++i)
+        ++vec[i];
+    }
+  };
+  // call the lambda 3 times for m_counts, r_counts, d_counts
+  comp_cumul(
+    [](const mcounts &m) { return m.n_meth; },
+    [](cumul_counts &c) -> std::vector<std::uint32_t> & { return c.m_counts; });
+
+  comp_cumul(
+    [](const mcounts &m) { return m.n_reads; },
+    [](cumul_counts &c) -> std::vector<std::uint32_t> & { return c.r_counts; });
+
+  comp_cumul(
+    [](const mcounts &m) { return m.n_reads - m.n_meth; },
+    [](cumul_counts &c) -> std::vector<std::uint32_t> & { return c.d_counts; });
+}
+
 void
 fit_regression_model(Regression &r, std::vector<double> &p_estimates,
                      double &dispersion_estimate) {
   static constexpr auto init_dispersion_param = -2.5;
   const auto stepsize = Regression::stepsize;
   const auto max_iter = Regression::max_iter;
+
   const auto n_groups = r.n_groups();
-  r.cache.resize(n_groups);  // make sure scratch space is allocated
+  get_cumulative(r.design.group_id, n_groups, r.mc, r.cumul);
+  set_max_r_count(r);
+
+  r.p_v.resize(n_groups);
 
   const std::size_t n_params = r.n_params();
   const auto tol = std::sqrt(n_params) * r.n_samples() * Regression::tolerance;

@@ -20,9 +20,7 @@
 #include <cstdint>
 #include <istream>
 #include <ostream>
-#include <sstream>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 double Regression::tolerance = 1e-4;
@@ -30,7 +28,7 @@ double Regression::stepsize = 0.01;
 std::uint32_t Regression::max_iter = 250;
 
 void
-SiteProp::parse(const std::string &line) {
+Regression::parse(const std::string &line) {
   const auto first_ws = line.find_first_of(" \t");
 
   // Parse the row name (must be like: "chr:position:strand:context")
@@ -56,20 +54,14 @@ SiteProp::parse(const std::string &line) {
     field_e = std::find_if(field_s + 1, line_end, is_sep);
     {
       const auto [ptr, ec] = std::from_chars(field_s, field_e, mc1.n_reads);
-      failed = failed || (ec != std::errc{});
+      failed = failed || (ptr != field_e);
     }
 
-    // get the methylated count
     field_s = std::find_if(field_e + 1, line_end, not_sep);
     field_e = std::find_if(field_s + 1, line_end, is_sep);
     {
-#ifdef __APPLE__
-      const int ret = std::sscanf(field_s, "%lf", &mc1.n_meth);
-      failed = failed || (ret < 1);
-#else
       const auto [ptr, ec] = std::from_chars(field_s, field_e, mc1.n_meth);
-      failed = failed || (ec != std::errc{});
-#endif
+      failed = failed || (ptr != field_e);
     }
 
     mc.push_back(mc1);
@@ -77,178 +69,4 @@ SiteProp::parse(const std::string &line) {
 
   if (failed)
     throw std::runtime_error("failed to parse counts from:\n" + line);
-}
-
-static void
-make_groups(Design &design) {
-  auto s = design.matrix;
-  std::sort(std::begin(s), std::end(s));
-  s.erase(std::unique(std::begin(s), std::end(s)), std::end(s));
-  design.groups = std::move(s);
-}
-
-static void
-assign_groups(Design &design) {
-  const auto &matrix = design.matrix;
-  const auto &s = design.groups;
-  const auto n_samples = design.n_samples();
-  auto &group_id = design.group_id;
-  group_id.resize(n_samples);
-  for (auto i = 0u; i < n_samples; ++i) {
-    const auto x = std::find(std::cbegin(s), std::cend(s), matrix[i]);
-    group_id[i] = std::distance(std::cbegin(s), x);
-  }
-}
-
-template <typename T>
-static void
-transpose(const std::vector<std::vector<T>> &mat,
-          std::vector<std::vector<T>> &tmat) {
-  const auto n_row = std::size(mat);
-  const auto n_col = std::size(mat.front());
-  tmat.resize(n_col, std::vector<T>(n_row, 0.0));
-  for (auto row_idx = 0u; row_idx < n_row; ++row_idx)
-    for (auto col_idx = 0u; col_idx < n_col; ++col_idx)
-      tmat[col_idx][row_idx] = mat[row_idx][col_idx];
-}
-
-std::istream &
-operator>>(std::istream &is, Design &design) {
-  std::string header_encoding;
-  std::getline(is, header_encoding);
-
-  std::istringstream header_is(header_encoding);
-  std::string header_name;
-  while (header_is >> header_name)
-    design.factor_names.push_back(header_name);
-
-  std::string row;
-  while (std::getline(is, row)) {
-    if (row.empty())
-      continue;
-
-    std::istringstream row_is(row);
-    std::string token;
-    row_is >> token;
-    design.sample_names.push_back(token);
-
-    std::vector<std::uint8_t> matrix_row;
-    while (row_is >> token) {
-      if (std::size(token) != 1 || (token != "0" && token != "1"))
-        throw std::runtime_error("Must use binary factor levels:\n" + row);
-      matrix_row.push_back(token == "1");
-    }
-
-    if (std::size(matrix_row) != design.n_factors())
-      throw std::runtime_error(
-        "each row must have as many columns as factors:\n" + row);
-
-    design.matrix.push_back(matrix_row);
-  }
-
-  transpose(design.matrix, design.tmatrix);
-  make_groups(design);
-  assign_groups(design);
-
-  return is;
-}
-
-[[nodiscard]] Design
-Design::drop_factor(const std::size_t factor_idx) {
-  // clang-format off
-  Design design{
-    factor_names,
-    sample_names,
-    matrix,
-    tmatrix,
-    groups,
-    group_id,
-  };
-  // clang-format on
-  design.factor_names.erase(std::begin(design.factor_names) + factor_idx);
-  for (auto i = 0u; i < n_samples(); ++i)
-    design.matrix[i].erase(std::begin(design.matrix[i]) + factor_idx);
-  transpose(design.matrix, design.tmatrix);
-  make_groups(design);
-  assign_groups(design);
-  return design;
-}
-
-void
-Design::order_samples(const std::vector<std::string> &ordered_names) {
-  // Build lookup: sample name -> original index
-  const auto sample_to_index = [&] {
-    std::unordered_map<std::string, std::uint32_t> sample_to_index;
-    std::uint32_t index = 0;
-    for (const auto &sample : sample_names)
-      sample_to_index.emplace(sample, index++);
-    return sample_to_index;
-  }();
-
-  std::vector<std::string> ord_sample_names;
-  std::vector<std::vector<std::uint8_t>> ord_matrix;
-  std::vector<std::uint32_t> ord_group_id;
-  // factor names should not change
-  // groups should not change
-  // tmatrix will be changed after matrix
-
-  const auto n_names = std::size(ordered_names);
-  ord_sample_names.reserve(n_names);
-  ord_matrix.reserve(n_names);
-  ord_group_id.reserve(n_names);
-
-  for (const auto &name : ordered_names) {
-    const auto it = sample_to_index.find(name);
-    if (it == std::cend(sample_to_index))
-      throw std::runtime_error("Sample not found: " + name);
-
-    const auto original_index = it->second;
-    ord_sample_names.push_back(sample_names[original_index]);
-    ord_matrix.push_back(matrix[original_index]);
-    ord_group_id.push_back(group_id[original_index]);
-  }
-  sample_names = std::move(ord_sample_names);
-  matrix = std::move(ord_matrix);
-  group_id = std::move(ord_group_id);
-
-  // update tmatrix using matrix
-  transpose(matrix, tmatrix);
-}
-
-std::ostream &
-operator<<(std::ostream &out, const Design &design) {
-  static constexpr std::uint32_t max_samples_to_report = 20;
-  const auto n_samples = design.n_samples();
-  const auto n_factors = design.n_factors();
-  if (n_samples <= max_samples_to_report) {
-    for (std::size_t factor = 0; factor < n_factors; ++factor) {
-      if (factor != 0)
-        out << '\t';
-      out << design.factor_names[factor];
-    }
-    out << '\n';
-
-    for (std::size_t i = 0; i < n_samples; ++i) {
-      out << design.sample_names[i];
-      for (std::size_t j = 0; j < n_factors; ++j)
-        out << '\t' << static_cast<std::uint32_t>(design.matrix[i][j]);
-      out << '\n';
-    }
-  }
-
-  // compute the number of samples per group
-  const auto n_groups = design.n_groups();
-  std::vector<std::uint32_t> n_samples_per_group(n_groups, 0);
-  for (auto s_idx = 0u; s_idx < n_samples; ++s_idx)
-    ++n_samples_per_group[design.group_id[s_idx]];
-
-  out << "group_id | factor_levels (" << n_factors << " factors) | n_samples\n";
-  for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
-    out << g_idx;
-    for (std::size_t f_idx = 0; f_idx < n_factors; ++f_idx)
-      out << '\t' << static_cast<std::uint32_t>(design.groups[g_idx][f_idx]);
-    out << '\t' << n_samples_per_group[g_idx] << '\n';
-  }
-
-  return out;
 }

@@ -120,7 +120,7 @@ gradient(const gsl_vector *params, Regression &reg, gsl_vector *output) {
 
   // init output to zero for all factors
   gsl_vector_set_all(output, 0.0);
-  auto &data = output->data;
+  const auto &data = output->data;
 
   double disp_deriv = 0.0;
   for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {

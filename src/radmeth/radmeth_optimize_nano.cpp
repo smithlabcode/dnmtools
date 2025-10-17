@@ -75,7 +75,7 @@ static constexpr std::array<double, 16> psi2_cs = {
    0.0000000000000045,
   -0.0000000000000009,
    0.0000000000000002,
-  -0.0000000000000000 ,
+  -0.0000000000000000
 };
 // clang-format on
 
@@ -156,15 +156,15 @@ log_likelihood_nano(const gsl_vector *params, RegressionNano &reg) {
 // digamma for x non-negative
 static double
 digamma(const double y) {
-  static constexpr auto psi_order = 7;   // max=22;
-  static constexpr auto apsi_order = 7;  // max=15;
+  static constexpr auto psi1_order = 22;  // max=22;
+  static constexpr auto psi2_order = 15;  // max=15;
   if (y >= 2.0) {
     const auto t = 8.0 / (y * y) - 1.0;
-    return std::log(y) - 0.5 / y + chebyschev(psi2_cs, apsi_order, t);
+    return std::log(y) - 0.5 / y + chebyschev(psi2_cs, psi2_order, t);
   }
   if (y < 1.0)
-    return -1.0 / y + chebyschev(psi1_cs, psi_order, 2.0 * y - 1.0);
-  return chebyschev(psi1_cs, psi_order, 2.0 * (y - 1.0) - 1.0);
+    return -1.0 / y + chebyschev(psi1_cs, psi1_order, 2.0 * y - 1.0);
+  return chebyschev(psi1_cs, psi1_order, 2.0 * (y - 1.0) - 1.0);
 }
 
 static void

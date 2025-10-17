@@ -198,7 +198,7 @@ gradient_nano(const gsl_vector *params, RegressionNano &reg,
     get_cache_digamma(groups[g_idx], params, phi, cache[g_idx]);
 
   gsl_vector_set_all(output, 0.0);  // init output to zero for all factors
-  auto &data = output->data;
+  const auto &data = output->data;
 
   const auto &group_id = reg.design.group_id;
   double grad_phi = 0.0;

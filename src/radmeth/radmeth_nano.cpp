@@ -1,7 +1,6 @@
-/* Copyright (C) 2013-2025 Andrew D Smith
+/* Copyright (C) 2025 Andrew D Smith
  *
  * Author: Andrew D. Smith
- * Contributors: Egor Dolzhenko and Guilherme Sena
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -77,10 +76,11 @@ enum class row_status : std::uint8_t {
 
 template <typename RegressionType>
 static void
-radmeth(const bool show_progress, const bool more_na_info,
-        const std::uint32_t n_threads, const std::string &table_filename,
-        const std::string &outfile, const RegressionType &alt_model,
-        const RegressionType &null_model, const std::uint32_t test_factor_idx) {
+radmeth_nano(const bool show_progress, const bool more_na_info,
+             const std::uint32_t n_threads, const std::string &table_filename,
+             const std::string &outfile, const RegressionType &alt_model,
+             const RegressionType &null_model,
+             const std::uint32_t test_factor_idx) {
   static constexpr auto buf_size = 1024;
   static constexpr auto max_lines = 16384;
 
@@ -260,7 +260,7 @@ int
 main_radmeth_nano(int argc, char *argv[]) {
   try {
     static const std::string description =
-      "calculate differential methylation scores (optimized for nanopore)";
+      "calculate differential methylation scores for nanopore data";
 
     std::string outfile;
     std::string test_factor;
@@ -335,12 +335,11 @@ main_radmeth_nano(int argc, char *argv[]) {
     }
 
     const Design null_design = design.drop_factor(test_factor_idx);
-    if (verbose)
-      std::cerr << "Null model:\n" << null_design << '\n';
 
     // clang-format off
     if (verbose)
-      std::cerr << "Output columns:\n"
+      std::cerr << "Null model:\n" << null_design << '\n'
+                << "Output columns:\n"
                 << "(1) chrom\n"
                 << "(2) position\n"
                 << "(3) strand\n"
@@ -359,8 +358,8 @@ main_radmeth_nano(int argc, char *argv[]) {
     null_model.design = null_design;
 
     const auto start_time = std::chrono::steady_clock::now();
-    radmeth(show_progress, more_na_info, n_threads, table_filename, outfile,
-            alt_model, null_model, test_factor_idx);
+    radmeth_nano(show_progress, more_na_info, n_threads, table_filename,
+                 outfile, alt_model, null_model, test_factor_idx);
     const auto stop_time = std::chrono::steady_clock::now();
 
     if (verbose)

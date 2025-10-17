@@ -61,8 +61,10 @@ static inline auto
 cache_dispersion_effect(Regression &reg, const double phi) {
   const std::size_t max_k = reg.max_r_count;
   auto &cache = reg.cache;
-  for (std::size_t k = 0; k < max_k; ++k)
-    cache[k] = (k - 1.0) / (1.0 + phi * (k - 1.0));
+  double j = -1.0;
+  const auto lim = std::cbegin(cache) + max_k;
+  for (auto it = std::begin(cache); it != lim; ++it, ++j)
+    *it = j / (1.0 + phi * j);
 }
 
 [[nodiscard]] static double
@@ -86,16 +88,19 @@ log_likelihood(const gsl_vector *params, Regression &reg) {
 
     const auto term1 = one_minus_phi * p;
     const auto &cumul_y = cumul[g_idx].m_counts;
-    for (std::size_t k = 0; k < std::size(cumul_y); ++k)
+    std::size_t sz = std::size(cumul_y);
+    for (std::size_t k = 0; k < sz; ++k)
       log_lik += cumul_y[k] * std::log(term1 + phi * k);
 
     const auto term2 = one_minus_phi * one_minus_p;
     const auto &cumul_d = cumul[g_idx].d_counts;
-    for (std::size_t k = 0; k < std::size(cumul_d); ++k)
+    sz = std::size(cumul_d);
+    for (std::size_t k = 0; k < sz; ++k)
       log_lik += cumul_d[k] * std::log(term2 + phi * k);
 
     const auto &cumul_n = cumul[g_idx].r_counts;
-    for (std::size_t k = 0; k < std::size(cumul_n); ++k)
+    sz = std::size(cumul_n);
+    for (std::size_t k = 0; k < sz; ++k)
       log_lik -= cumul_n[k] * log1p_fact_v[k];
   }
   return log_lik;

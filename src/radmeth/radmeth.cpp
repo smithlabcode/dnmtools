@@ -293,20 +293,20 @@ main_radmeth(int argc, char *argv[]) {
     std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      std::cerr << opt_parse.help_message() << std::endl
-                << opt_parse.about_message() << std::endl;
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      std::cerr << opt_parse.about_message() << std::endl;
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      std::cerr << opt_parse.option_missing_message() << std::endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 2) {
-      std::cerr << opt_parse.help_message() << std::endl;
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     const std::string design_filename(leftover_args.front());
@@ -317,13 +317,14 @@ main_radmeth(int argc, char *argv[]) {
       std::cerr << "design table filename: " << design_filename << "\n\n";
 
     Design design = Design::read_design(design_filename);
-    if (verbose)
-      std::cerr << "Alternate model:\n" << design << '\n';
 
     // Check that provided test factor name exists and find its index.
     const auto test_factor_idx = design.get_test_factor_idx(test_factor);
 
     ensure_sample_order(table_filename, design);
+
+    if (verbose)
+      std::cerr << "Alternate model:\n" << design << '\n';
 
     // verify that the design includes more than one level for the
     // test factor

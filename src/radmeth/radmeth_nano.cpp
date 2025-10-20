@@ -14,8 +14,9 @@
  */
 
 #include "radmeth_design.hpp"
-#include "radmeth_model_nano.hpp"
-#include "radmeth_optimize_nano.hpp"
+#include "radmeth_model.hpp"
+#include "radmeth_optimize_gamma.hpp"
+#include "radmeth_optimize_params.hpp"
 #include "radmeth_utils.hpp"
 
 // smithlab headers
@@ -36,9 +37,8 @@
 #include <thread>
 #include <vector>
 
-template <typename RegressionType>
 [[nodiscard]] static bool
-has_low_coverage(const RegressionType &reg, const std::size_t test_factor) {
+has_low_coverage(const Regression<double> &reg, const std::size_t test_factor) {
   bool cvrd_in_test_fact_smpls = false;
   const auto &tcol = reg.design.tmatrix[test_factor];
   for (std::size_t i = 0; i < reg.n_samples() && !cvrd_in_test_fact_smpls; ++i)
@@ -51,9 +51,8 @@ has_low_coverage(const RegressionType &reg, const std::size_t test_factor) {
   return !cvrd_in_test_fact_smpls || !cvrd_in_other_smpls;
 }
 
-template <typename RegressionType>
 [[nodiscard]] static bool
-has_extreme_counts(const RegressionType &reg) {
+has_extreme_counts(const Regression<double> &reg) {
   const auto &mc = reg.mc;
 
   bool full_meth = true;
@@ -74,13 +73,12 @@ enum class row_status : std::uint8_t {
   na_extreme_cnt,
 };
 
-template <typename RegressionType>
 static void
-radmeth_nano(const bool show_progress, const bool more_na_info,
-             const std::uint32_t n_threads, const std::string &table_filename,
-             const std::string &outfile, const RegressionType &alt_model,
-             const RegressionType &null_model,
-             const std::uint32_t test_factor_idx) {
+radmeth(const bool show_progress, const bool more_na_info,
+        const std::uint32_t n_threads, const std::string &table_filename,
+        const std::string &outfile, const Regression<double> &alt_model,
+        const Regression<double> &null_model,
+        const std::uint32_t test_factor_idx) {
   static constexpr auto buf_size = 1024;
   static constexpr auto max_lines = 16384;
 
@@ -120,8 +118,8 @@ that the design matrix and the proportion table are correctly formatted.
   std::vector<int> n_bytes(max_lines, 0);
   std::vector<std::string> lines(max_lines);
 
-  std::vector<RegressionType> alt_models(n_threads, alt_model);
-  std::vector<RegressionType> null_models(n_threads, null_model);
+  std::vector<Regression<double>> alt_models(n_threads, alt_model);
+  std::vector<Regression<double>> null_models(n_threads, null_model);
 
   const auto n_groups = alt_model.n_groups();
 
@@ -164,13 +162,14 @@ that the design matrix and the proportion table are correctly formatted.
             if (has_extreme_counts(t_alt_model))
               return std::tuple{1.0, row_status::na_extreme_cnt};
 
-            fit_regression_model_nano(t_alt_model, p_estim_alt, phi_estim_alt);
+            fit_regression_model_gamma_fdf(t_alt_model, p_estim_alt,
+                                           phi_estim_alt);
 
             t_null_model.mc = t_alt_model.mc;
             t_null_model.rowname = t_alt_model.rowname;
 
-            fit_regression_model_nano(t_null_model, p_estim_null,
-                                      phi_estim_null);
+            fit_regression_model_gamma_fdf(t_null_model, p_estim_null,
+                                           phi_estim_null);
 
             const double p_value =
               llr_test(t_null_model.max_loglik, t_alt_model.max_loglik);
@@ -287,10 +286,10 @@ main_radmeth_nano(int argc, char *argv[]) {
     opt_parse.add_opt("factor", 'f', "a factor to test", true, test_factor);
     opt_parse.add_opt("tolerance", '\0',
                       "numerical tolerance to test convergence", false,
-                      RegressionNano::tolerance);
+                      radmeth_optimize_params::tolerance);
     opt_parse.add_opt("max-iter", '\0',
                       "max iterations when estimating parameters", false,
-                      RegressionNano::max_iter);
+                      radmeth_optimize_params::max_iter);
     std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
@@ -353,14 +352,14 @@ main_radmeth_nano(int argc, char *argv[]) {
                 << '\n';
     // clang-format on
 
-    RegressionNano alt_model;
+    Regression<double> alt_model;
     alt_model.design = design;
-    RegressionNano null_model;
+    Regression<double> null_model;
     null_model.design = null_design;
 
     const auto start_time = std::chrono::steady_clock::now();
-    radmeth_nano(show_progress, more_na_info, n_threads, table_filename,
-                 outfile, alt_model, null_model, test_factor_idx);
+    radmeth(show_progress, more_na_info, n_threads, table_filename, outfile,
+            alt_model, null_model, test_factor_idx);
     const auto stop_time = std::chrono::steady_clock::now();
 
     if (verbose)

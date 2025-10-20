@@ -18,19 +18,22 @@
 
 #include "radmeth_design.hpp"
 
+#include <algorithm>
+#include <charconv>
 #include <cstdint>
 #include <istream>
 #include <ostream>
 #include <string>
 #include <vector>
 
-struct mcounts {
+template <typename T> struct mcounts {
   std::uint32_t n_reads{};
-  std::uint32_t n_meth{};
+  T n_meth{};
 };
 
+template <typename T>
 [[nodiscard]] inline std::istream &
-operator>>(std::istream &in, mcounts &rm) {
+operator>>(std::istream &in, mcounts<T> &rm) {
   return in >> rm.n_reads >> rm.n_meth;
 }
 
@@ -40,20 +43,34 @@ struct cumul_counts {
   std::vector<std::uint32_t> d_counts;
 };
 
-struct Regression {
+struct vars_cache {
+  double p{};
+  double a{};
+  double b{};
+  double lgamma_a{};
+  double lgamma_b{};
+  double lgamma_a_b{};
+  double digamma_a{};
+  double digamma_b{};
+  double digamma_a_b{};
+};
+
+template <typename T> struct Regression {
   static double tolerance;        // 1e-3;
   static double stepsize;         // 0.001;
   static std::uint32_t max_iter;  // 250;
 
   Design design;
   std::string rowname;
-  std::vector<mcounts> mc;
+  std::vector<mcounts<T>> mc;
   double max_loglik{};
 
   // scratch space
   std::vector<cumul_counts> cumul;
   std::vector<double> p_v;
-  std::vector<double> cache;
+  std::vector<double> cache_log1p_factors;
+  std::vector<double> cache_dispersion_effect;
+  std::vector<vars_cache> cache;  // scratch space
   std::uint32_t max_r_count{};
 
   void
@@ -84,5 +101,50 @@ struct Regression {
     return design.n_samples();
   }
 };
+
+template <typename T>
+void
+Regression<T>::parse(const std::string &line) {
+  const auto first_ws = line.find_first_of(" \t");
+
+  // Parse the row name (must be like: "chr:position:strand:context")
+  bool failed = (first_ws == std::string::npos);
+
+  auto field_s = line.data();
+  auto field_e = line.data() + first_ws;
+  rowname = std::string{field_s, field_e};
+  std::replace(std::begin(rowname), std::end(rowname), ':', '\t');
+  if (failed)
+    throw std::runtime_error("failed to parse label from:\n" + line);
+
+  // Parse the counts of total reads and methylated reads
+  const auto is_sep = [](const auto x) { return std::isspace(x); };
+  const auto not_sep = [](const auto x) { return std::isdigit(x); };
+
+  const auto line_end = line.data() + std::size(line);
+  mcounts<T> mc1{};
+  mc.clear();
+  while (field_e != line_end) {
+    // get the total count
+    field_s = std::find_if(field_e + 1, line_end, not_sep);
+    field_e = std::find_if(field_s + 1, line_end, is_sep);
+    {
+      const auto [ptr, ec] = std::from_chars(field_s, field_e, mc1.n_reads);
+      failed = failed || (ptr != field_e);
+    }
+
+    field_s = std::find_if(field_e + 1, line_end, not_sep);
+    field_e = std::find_if(field_s + 1, line_end, is_sep);
+    {
+      const auto [ptr, ec] = std::from_chars(field_s, field_e, mc1.n_meth);
+      failed = failed || (ptr != field_e);
+    }
+
+    mc.push_back(mc1);
+  }
+
+  if (failed)
+    throw std::runtime_error("failed to parse counts from:\n" + line);
+}
 
 #endif  // RADMETH_MODEL_HPP

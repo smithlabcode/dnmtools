@@ -13,8 +13,8 @@
  * more details.
  */
 
-#include "radmeth_model.hpp"
 #include "radmeth_optimize_gamma.hpp"
+#include "radmeth_model.hpp"
 #include "radmeth_optimize_params.hpp"
 
 #include <gsl/gsl_multimin.h>
@@ -268,15 +268,14 @@ template <typename T>
 static void
 fit_regression_model(Regression<T> &r, std::vector<double> &p_estimates,
                      double &dispersion_estimate) {
-  static constexpr auto init_dispersion_param = -1.0;
+  static constexpr auto init_dispersion_param = -2.5;
   const auto stepsize = radmeth_optimize_params::stepsize;
   const auto max_iter = radmeth_optimize_params::max_iter;
   const auto n_groups = r.n_groups();
   r.cache.resize(n_groups);  // make sure scratch space is allocated
 
   const std::size_t n_params = r.n_params();
-  const auto tol =
-    std::sqrt(n_params) * r.n_samples() * radmeth_optimize_params::tolerance;
+  const auto tol = radmeth_optimize_params::tolerance;
 
   // set the parameters: zero for "p" parameters and the final one for
   // dispersion using the constant
@@ -300,14 +299,13 @@ fit_regression_model(Regression<T> &r, std::vector<double> &p_estimates,
 
   int status = 0;
   std::size_t iter = 0;
-  double size{};
 
   do {
     status = gsl_multimin_fminimizer_iterate(s);  // one iter and get status
     if (status)
       break;
 
-    size = gsl_multimin_fminimizer_size(s);
+    const auto size = gsl_multimin_fminimizer_size(s);
     status = gsl_multimin_test_size(size, tol);
   } while (status == GSL_CONTINUE && ++iter < max_iter);
   // ADS: can't use (status != GSL_SUCCESS)
@@ -332,7 +330,7 @@ template <typename T>
 static void
 fit_regression_model_fdf(Regression<T> &r, std::vector<double> &p_estimates,
                          double &dispersion_estimate) {
-  static constexpr auto init_dispersion_param = -1.0;
+  static constexpr auto init_dispersion_param = -2.5;
   const auto stepsize = radmeth_optimize_params::stepsize;
   const auto max_iter = radmeth_optimize_params::max_iter;
   const auto n_groups = r.n_groups();
@@ -362,7 +360,7 @@ fit_regression_model_fdf(Regression<T> &r, std::vector<double> &p_estimates,
   // - gsl_multimin_fdfminimizer_conjugate_fr
   // - gsl_multimin_fdfminimizer_vector_bfgs2
   // - gsl_multimin_fdfminimizer_steepest_descent
-  const auto minimizer = gsl_multimin_fdfminimizer_conjugate_pr;
+  const auto minimizer = gsl_multimin_fdfminimizer_vector_bfgs2;
   auto s = gsl_multimin_fdfminimizer_alloc(minimizer, n_params);
 
   gsl_multimin_fdfminimizer_set(s, &loglik_bundle, params, stepsize, tol);

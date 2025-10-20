@@ -16,7 +16,8 @@
 
 #include "radmeth_design.hpp"
 #include "radmeth_model.hpp"
-#include "radmeth_optimize.hpp"
+#include "radmeth_optimize_params.hpp"
+#include "radmeth_optimize_series.hpp"
 #include "radmeth_utils.hpp"
 
 // smithlab headers
@@ -286,10 +287,10 @@ main_radmeth(int argc, char *argv[]) {
     opt_parse.add_opt("factor", 'f', "a factor to test", true, test_factor);
     opt_parse.add_opt("tolerance", '\0',
                       "numerical tolerance to test convergence", false,
-                      Regression::tolerance);
+                      radmeth_optimize_params::tolerance);
     opt_parse.add_opt("max-iter", '\0',
                       "max iterations when estimating parameters", false,
-                      Regression::max_iter);
+                      radmeth_optimize_params::max_iter);
     std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
@@ -353,9 +354,9 @@ main_radmeth(int argc, char *argv[]) {
                 << '\n';
     // clang-format on
 
-    Regression alt_model;
+    Regression<std::uint32_t> alt_model;
     alt_model.design = design;
-    Regression null_model;
+    Regression<std::uint32_t> null_model;
     null_model.design = null_design;
 
     const auto start_time = std::chrono::steady_clock::now();

@@ -39,13 +39,6 @@ get_p(const std::vector<T> &v, const gsl_vector *params) -> double {
   return logistic(std::inner_product(a, a + std::size(v), params->data, 0.0));
 }
 
-template <typename T>
-[[nodiscard]] static inline auto
-get_p(const std::vector<T> &v, const std::vector<double> &params) -> double {
-  const auto a = v.data();
-  return logistic(std::inner_product(a, a + std::size(v), params.data(), 0.0));
-}
-
 static inline auto
 set_max_r_count(Regression<std::uint32_t> &reg) {
   const auto &cumul = reg.cumul;
@@ -117,45 +110,6 @@ log_likelihood(const gsl_vector *params, Regression<std::uint32_t> &reg) {
   return log_lik;
 }
 
-[[nodiscard]] static double
-log_likelihood(const std::vector<double> &params,
-               Regression<std::uint32_t> &reg) {
-  const auto phi = logistic(params[reg.design.n_factors()]);
-  const auto one_minus_phi = 1.0 - phi;
-
-  const auto n_groups = reg.n_groups();
-  const auto &groups = reg.design.groups;
-  const auto &cumul = reg.cumul;
-
-  // ADS: precompute log1p(phi * (k - 1.0)), reused for each group
-  get_cached_log1p_factors(reg, phi);
-  const auto &log1p_fact_v = reg.cache_log1p_factors;
-
-  double log_lik = 0.0;
-  for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
-    const auto p = get_p(groups[g_idx], params);
-    const auto one_minus_p = 1.0 - p;
-
-    const auto term1 = one_minus_phi * p;
-    const auto &cumul_y = cumul[g_idx].m_counts;
-    std::size_t sz = std::size(cumul_y);
-    for (std::size_t k = 0; k < sz; ++k)
-      log_lik += cumul_y[k] * std::log(term1 + phi * k);
-
-    const auto term2 = one_minus_phi * one_minus_p;
-    const auto &cumul_d = cumul[g_idx].d_counts;
-    sz = std::size(cumul_d);
-    for (std::size_t k = 0; k < sz; ++k)
-      log_lik += cumul_d[k] * std::log(term2 + phi * k);
-
-    const auto &cumul_n = cumul[g_idx].r_counts;
-    sz = std::size(cumul_n);
-    for (std::size_t k = 0; k < sz; ++k)
-      log_lik -= cumul_n[k] * log1p_fact_v[k];
-  }
-  return -log_lik;
-}
-
 static void
 gradient(const gsl_vector *params, Regression<std::uint32_t> &reg,
          gsl_vector *output) {
@@ -218,111 +172,6 @@ gradient(const gsl_vector *params, Regression<std::uint32_t> &reg,
     }
   }
   gsl_vector_set(output, n_factors, disp_deriv * (phi * one_minus_phi));
-}
-
-static void
-gradient(const std::vector<double> &params, Regression<std::uint32_t> &reg,
-         std::vector<double> &output) {
-  const auto n_factors = reg.design.n_factors();
-  const auto phi = logistic(params[n_factors]);
-  const auto one_minus_phi = 1.0 - phi;
-
-  const auto n_groups = reg.n_groups();
-  const auto &groups = reg.design.groups;
-  const auto &cumul = reg.cumul;
-
-  auto &p_v = reg.p_v;
-  for (auto g_idx = 0u; g_idx < n_groups; ++g_idx)
-    p_v[g_idx] = get_p(groups[g_idx], params);
-
-  get_cached_dispersion_effect(reg, phi);  // (k-1)/(1 + phi(k-1))
-  const auto &dispersion_effect = reg.cache_dispersion_effect;
-
-  // init output to zero for all factors
-  output.clear();
-  output.resize(std::size(params), 0.0);
-  auto &data = output;
-
-  double disp_deriv = 0.0;
-  for (std::size_t g_idx = 0; g_idx < n_groups; ++g_idx) {
-    const auto p = p_v[g_idx];
-    const auto one_minus_p = 1.0 - p;
-
-    // if (p == 0.0 || one_minus_p == 0.0 || phi == 0.0 || one_minus_phi == 0.0)
-    // {
-    //   std::cout << p << '\t' << one_minus_p << std::endl;
-    //   std::cout << phi << '\t' << one_minus_phi << std::endl;
-    // }
-
-    double deriv = 0.0;
-
-    const auto denom_term1 = one_minus_phi * p;
-    const auto &cumul_y = cumul[g_idx].m_counts;
-    const auto y_lim = std::size(cumul_y);
-    for (auto k = 0u; k < y_lim; ++k) {
-      const auto common_factor = cumul_y[k] / (denom_term1 + phi * k);
-      deriv += common_factor;
-      disp_deriv += (k - p) * common_factor;
-      // if (!std::isfinite(disp_deriv)) {
-      //   // clang-format off
-      //   std::cout << "common_factor: " << common_factor << '\n'
-      //             << "cumul_y[k]: " << cumul_y[k] << '\n'
-      //             << "denom_term1: " << denom_term1 << '\n'
-      //             << "phi: " << phi << '\n'
-      //             << "k: " << k << '\n'
-      //             << "p: " << p << '\n'
-      //             << "one_minus_phi: " << one_minus_phi << '\n'
-      //             << "phi: " << phi << '\n'
-      //             << "params[n_factors]: " << params[n_factors] << '\n'
-      //             << "(denom_term1 + phi * k): " << (denom_term1 + phi * k)
-      //             << '\n'
-      //             << std::endl;
-      //   throw std::runtime_error("bad disp_deriv 1");
-      //   // clang-format on
-      // }
-    }
-
-    const auto denom_term2 = one_minus_phi * one_minus_p;
-    const auto &cumul_d = cumul[g_idx].d_counts;
-    const auto d_lim = std::size(cumul_d);
-    for (auto k = 0u; k < d_lim; ++k) {
-      const auto common_factor = cumul_d[k] / (denom_term2 + phi * k);
-      deriv -= common_factor;
-      disp_deriv += (k - one_minus_p) * common_factor;
-      // if (!std::isfinite(disp_deriv))
-      //   throw std::runtime_error("bad disp_deriv 2");
-    }
-
-    const auto &cumul_n = cumul[g_idx].r_counts;
-    const auto n_lim = std::size(cumul_n);
-    for (auto k = 0u; k < n_lim; ++k) {
-      disp_deriv -= cumul_n[k] * dispersion_effect[k];
-      // if (!std::isfinite(disp_deriv))
-      //   throw std::runtime_error("bad disp_deriv 3");
-    }
-
-    const auto &g = groups[g_idx];
-    const auto denom_term1_one_minus_p = denom_term1 * one_minus_p;
-    for (auto fact_idx = 0u; fact_idx < n_factors; ++fact_idx) {
-      const auto level = g[fact_idx];
-      if (level == 0)
-        continue;
-      data[fact_idx] += deriv * (denom_term1_one_minus_p * level);
-    }
-  }
-  // if (!std::isfinite(disp_deriv))
-  //   throw std::runtime_error("bad disp_deriv");
-  output[n_factors] = disp_deriv * (phi * one_minus_phi);
-  // for (auto i = 0u; i <= n_factors; ++i) {
-  //   if (!std::isfinite(output[i]))
-  //     throw std::runtime_error("bad2");
-  // }
-  for (auto i = 0u; i <= n_factors; ++i) {
-    output[i] *= -1.0;
-    // if (!std::isfinite(output[i]))
-    //   throw std::runtime_error("bad");
-  }
-  // std::cout << "grad=" << disp_deriv * (phi * one_minus_phi) << std::endl;
 }
 
 [[nodiscard]] static double

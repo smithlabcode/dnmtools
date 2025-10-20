@@ -73,12 +73,12 @@ enum class row_status : std::uint8_t {
   na_extreme_cnt,
 };
 
+template <typename T>
 static void
 radmeth(const bool show_progress, const bool more_na_info,
         const std::uint32_t n_threads, const std::string &table_filename,
-        const std::string &outfile, const Regression<double> &alt_model,
-        const Regression<double> &null_model,
-        const std::uint32_t test_factor_idx) {
+        const std::string &outfile, const Regression<T> &alt_model,
+        const Regression<T> &null_model, const std::uint32_t test_factor_idx) {
   static constexpr auto buf_size = 1024;
   static constexpr auto max_lines = 16384;
 
@@ -118,8 +118,8 @@ that the design matrix and the proportion table are correctly formatted.
   std::vector<int> n_bytes(max_lines, 0);
   std::vector<std::string> lines(max_lines);
 
-  std::vector<Regression<double>> alt_models(n_threads, alt_model);
-  std::vector<Regression<double>> null_models(n_threads, null_model);
+  std::vector<Regression<T>> alt_models(n_threads, alt_model);
+  std::vector<Regression<T>> null_models(n_threads, null_model);
 
   const auto n_groups = alt_model.n_groups();
 
@@ -182,48 +182,54 @@ that the design matrix and the proportion table are correctly formatted.
           const auto status = std::get<1>(p_val_status);
 
           n_bytes[b] = [&] {
+            auto bufsize = std::size(bufs[b]);
             // clang-format off
             const int n_prefix_bytes =
-              std::sprintf(bufs[b].data(), "%s\t", t_alt_model.rowname.data());
+              std::snprintf(bufs[b].data(), bufsize,
+                           "%s\t", t_alt_model.rowname.data());
             // clang-format on
             if (n_prefix_bytes < 0)
               return n_prefix_bytes;
 
+            bufsize -= n_prefix_bytes;
             auto cursor = bufs[b].data() + n_prefix_bytes;
 
             const int n_pval_bytes = [&] {
               if (status == row_status::ok)
-                return std::sprintf(cursor, "%.6g", p_val);
+                return std::snprintf(cursor, bufsize, "%.6g", p_val);
               if (!more_na_info || status == row_status::na)
-                return std::sprintf(cursor, "NA");
+                return std::snprintf(cursor, bufsize, "NA");
               if (status == row_status::na_extreme_cnt)
-                return std::sprintf(cursor, "NA_EXTREME_CNT");
+                return std::snprintf(cursor, bufsize, "NA_EXTREME_CNT");
               // if (status == row_status::na_low_cov)
-              return std::sprintf(cursor, "NA_LOW_COV");
+              return std::snprintf(cursor, bufsize, "NA_LOW_COV");
             }();
 
             if (n_pval_bytes < 0)
               return n_pval_bytes;
 
+            bufsize -= n_pval_bytes;
             cursor += n_pval_bytes;
 
             const int n_param_bytes = [&] {
-              std::int32_t n_bytes = 0;
+              std::int32_t n_param_bytes = 0;
               if (p_estim_alt.empty())
                 p_estim_alt.resize(n_groups, 0.0);
               for (auto g_idx = 0u; g_idx < n_groups; ++g_idx) {
-                const int n = std::sprintf(cursor, "\t%f", p_estim_alt[g_idx]);
+                const int n =
+                  std::snprintf(cursor, bufsize, "\t%f", p_estim_alt[g_idx]);
+                bufsize -= n;
                 cursor += n;
                 if (n < 0)
                   return n;
-                n_bytes += n;
+                n_param_bytes += n;
               }
               const auto od = overdispersion_factor(n_samples, phi_estim_alt);
-              const int n = std::sprintf(cursor, "\t%f\n", od);
+              const int n = std::snprintf(cursor, bufsize, "\t%f\n", od);
               if (n < 0)
                 return n;
-              n_bytes += n;
-              return n_bytes;
+              n_param_bytes += n;
+              return n_param_bytes;
             }();
 
             if (n_param_bytes < 0)
@@ -313,18 +319,12 @@ main_radmeth_nano(int argc, char *argv[]) {
     const std::string table_filename(leftover_args.back());
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (verbose)
-      std::cerr << "design table filename: " << design_filename << "\n\n";
-
     Design design = Design::read_design(design_filename);
 
     // Check that provided test factor name exists and find its index.
     const auto test_factor_idx = design.get_test_factor_idx(test_factor);
 
     ensure_sample_order(table_filename, design);
-
-    if (verbose)
-      std::cerr << "Alternate model:\n" << design << '\n';
 
     // verify that the design includes more than one level for the
     // test factor
@@ -338,18 +338,18 @@ main_radmeth_nano(int argc, char *argv[]) {
 
     // clang-format off
     if (verbose)
-      std::cerr << "Null model:\n" << null_design << '\n'
+      std::cerr << "design table filename: " << design_filename << "\n\n"
+                << "Alternate model:\n" << design << '\n'
+                << "Null model:\n" << null_design << '\n'
                 << "Output columns:\n"
                 << "(1) chrom\n"
                 << "(2) position\n"
                 << "(3) strand\n"
                 << "(4) cytosine context\n"
                 << "(5) p-value\n"
-                << "(6) estimated methylation 0\n"
-                << "(7) estimated methylation 1\n"
-                << "(8) overdispersion factor (variance above binomial)\n"
-                << "estimated methylation is for test factor value (0 or 1)\n"
-                << '\n';
+                << "(6) overdispersion factor (variance above binomial)\n"
+                << "(7-) estimated methylation for each unique group\n"
+                << "groups are defined by combinations of factor levels\n\n";
     // clang-format on
 
     Regression<double> alt_model;

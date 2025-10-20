@@ -27,9 +27,6 @@
 #include <stdexcept>
 #include <vector>
 
-#include <chrono>    /////////////////////
-#include <iostream>  /////////////////////
-
 [[nodiscard]] static inline auto
 logistic(const double x) -> double {
   return 1.0 / (1.0 / std::exp(x) + 1.0);
@@ -394,71 +391,6 @@ get_cumulative(const std::vector<std::uint32_t> &group_id,
     [](cumul_counts &c) -> std::vector<std::uint32_t> & { return c.d_counts; });
 }
 
-static inline auto
-conjugate_pr(std::vector<double> &params, Regression<std::uint32_t> &reg,
-             const double alpha) -> int {
-  const auto n = std::size(params);
-  const auto max_iter = radmeth_optimize_params::max_iter;
-  const auto tol = radmeth_optimize_params::tolerance;
-
-  std::vector<double> g(n);
-  std::vector<double> g_prev(n);
-  gradient(params, reg, g);
-
-  auto d = g;
-  std::transform(std::begin(d), std::end(d), std::begin(d),
-                 [](const auto x) { return -1.0 * x; });
-
-  // const auto ll = log_likelihood(params, reg);
-  // std::cout << "ll=" << ll << std::endl;
-
-  double gdot{};
-  for (const double gi : g)
-    gdot += gi * gi;
-  double denom = gdot;
-  double gnorm = std::sqrt(gdot);
-
-  std::size_t iter{};
-  for (iter = 0; iter < max_iter; ++iter) {
-    // std::memcpy(g_prev.data(), g.data(), sizeof(double) * n);
-    // update parameters based on directions and step size
-    for (std::size_t i = 0; i < n; ++i)
-      params[i] += alpha * d[i];
-
-    gradient(params, reg, g);
-
-    // get numerator and for norm of gradient
-    gdot = 0.0;
-    for (const double gi : g)
-      gdot += gi * gi;
-    gnorm = std::sqrt(gdot);
-
-    // stop if norm of gradient is small enough
-    if (gnorm < tol)
-      break;
-
-    // // get denom
-    // double denom = 0.0;
-    // for (const double gpi : g_prev)
-    //   denom += gpi * gpi;
-
-    // update conjugate directions
-    const double beta = std::max(0.0, gdot / denom);
-    for (auto i = 0u; i < n; ++i)
-      d[i] = -g[i] + beta * d[i];
-
-    denom = gdot;
-  }
-  return iter;
-  // if (gnorm < tol) {
-  //   std::cout << "Converged in " << iter << " iterations" << "\t" << gnorm
-  //             << '\t' << tol << std::endl;
-  // }
-  // else {
-  //   std::cout << "Did not converge in " << max_iter << " iterations\n";
-  // }
-}
-
 void
 fit_regression_model(Regression<std::uint32_t> &r,
                      std::vector<double> &p_estimates,
@@ -486,61 +418,6 @@ fit_regression_model(Regression<std::uint32_t> &r,
   };
   // clang-format on
 
-  // std::vector<double> x(n_params, 0.0);
-  // // for (auto i = 0u; i < n_params; ++i)
-  // //   x[i] = gsl_vector_get(param_estimates, i);
-  // x.back() = -2.5;
-  // bool all_finite = false;
-  // auto start_time_a = std::chrono::steady_clock::now();
-  // auto ii = 0;
-  // for (ii = 0; ii < 4 && !all_finite; ++ii) {
-  //   double alpha = std::pow(10.0, -1.0 * (ii + 2));
-  //   std::cout << "alpha=" << alpha << std::endl;
-  //   std::vector<double> x_out(x);
-  //   conjugate_pr(x_out, r, alpha);
-  //   all_finite = true;
-  //   for (auto i = 0u; i < std::size(x_out) && all_finite; ++i)
-  //     all_finite = std::isfinite(x_out[i]);
-  //   if (all_finite)
-  //     x = x_out;
-  // }
-  // // if (!all_finite) {
-  // //   alpha = 1e-03;
-  // //   x_out = x;
-  // //   ii = conjugate_pr(x, r, alpha);
-  // //   all_finite = true;
-  // //   for (auto i = 0u; i < std::size(x) && all_finite; ++i)
-  // //     all_finite = std::isfinite(x[i]);
-  // //   if (!all_finite) {
-  // //     alpha = 1e-04;
-  // //     x_out = x;
-  // //     ii = conjugate_pr(x, r, alpha);
-  // //     all_finite = true;
-  // //     for (auto i = 0u; i < std::size(x) && all_finite; ++i)
-  // //       all_finite = std::isfinite(x[i]);
-  // //     if (!all_finite) {
-  // //       alpha = 1e-05;
-  // //       x_out = x;
-  // //       ii = conjugate_pr(x, r, alpha);
-  // //       all_finite = true;
-  // //       for (auto i = 0u; i < std::size(x) && all_finite; ++i)
-  // //         all_finite = std::isfinite(x[i]);
-  // //       if (!all_finite) {
-  // //         alpha = 1e-06;
-  // //         x_out = x;
-  // //         ii = conjugate_pr(x, r, alpha);
-  // //         all_finite = true;
-  // //         for (auto i = 0u; i < std::size(x) && all_finite; ++i)
-  // //           all_finite = std::isfinite(x[i]);
-  // //       }
-  // //     }
-  // //   }
-  // // }
-  // auto stop_time_a = std::chrono::steady_clock::now();
-  // // std::cout << "[total time: " << (stop_time_a - start_time_a).count() <<
-  // // "]\t"
-  // //           << ii << std::endl;
-
   // parameters: 0 for "p" params and final one is a constant for dispersion
   auto params = gsl_vector_alloc(n_params);
   gsl_vector_set_all(params, 0.0);
@@ -551,59 +428,23 @@ fit_regression_model(Regression<std::uint32_t> &r,
   // - gsl_multimin_fdfminimizer_conjugate_fr
   // - gsl_multimin_fdfminimizer_vector_bfgs2
   // - gsl_multimin_fdfminimizer_steepest_descent
-
-  const auto minimizer = gsl_multimin_fdfminimizer_conjugate_fr;
+  const auto minimizer = gsl_multimin_fdfminimizer_vector_bfgs2;
   auto s = gsl_multimin_fdfminimizer_alloc(minimizer, n_params);
   gsl_multimin_fdfminimizer_set(s, &loglik_bundle, params, stepsize, tol);
 
-  // gsl_multimin_function minex_func;
-
-  // minex_func.n = n_params;
-  // minex_func.f = &neg_loglik;
-  // minex_func.params = static_cast<void *>(&r);
-
-  // /* Set initial step sizes to 1 */
-  // auto ss = gsl_vector_alloc(n_params);
-  // gsl_vector_set_all(ss, 1.0);
-
-  // const auto minimizer = gsl_multimin_fminimizer_nmsimplex2;
-  // auto s = gsl_multimin_fminimizer_alloc(minimizer, n_params);
-  // gsl_multimin_fminimizer_set(s, &minex_func, params, ss);
-
-  auto start_time_b = std::chrono::steady_clock::now();
   int status = 0;
   std::size_t iter = 0;
 
-  double size{};
   do {
-    status = gsl_multimin_fdfminimizer_iterate(s);  // one iter and get
-    // status
-    // status = gsl_multimin_fminimizer_iterate(s);  // one iter and get status
+    status = gsl_multimin_fdfminimizer_iterate(s);  // one iter and get status
     if (status)
       break;
     // check status from gradient
-
     status = gsl_multimin_test_gradient(s->gradient, tol);
-
-    // size = gsl_multimin_fminimizer_size(s);
-    // status = gsl_multimin_test_size(size, 1e-2);
-
   } while (status == GSL_CONTINUE && ++iter < max_iter);
   // ADS: can't use (status != GSL_SUCCESS)
-  auto stop_time_b = std::chrono::steady_clock::now();
-  // std::cout << "[total time: "
-  //           << (stop_time_b - start_time_b).count()
-  //           // -
-  //           //              (stop_time_a - start_time_a).count()
-  //           << "]\t" << iter << std::endl;
 
   const auto param_estimates = gsl_multimin_fdfminimizer_x(s);
-  // const auto param_estimates = gsl_multimin_fminimizer_x(s);
-  // for (auto i = 0u; i < n_params; ++i)
-  //   std::cout << "x[i]=" << gsl_vector_get(param_estimates, i) << std::endl;
-
-  // gsl_vector_fprintf(stdout, param_estimates, "%g");
-
   const auto &groups = r.design.groups;
   p_estimates.clear();
   for (auto g_idx = 0u; g_idx < n_groups; ++g_idx)
@@ -614,6 +455,5 @@ fit_regression_model(Regression<std::uint32_t> &r,
   r.max_loglik = log_likelihood(param_estimates, r);
 
   gsl_multimin_fdfminimizer_free(s);
-  // gsl_multimin_fminimizer_free(s);
   gsl_vector_free(params);
 }

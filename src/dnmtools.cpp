@@ -216,7 +216,7 @@ main(int argc, char *argv[]) {
    {"liftfilter", "filter CpGs that are not CpGs in the target genome", main_lift_filter}}}},
 
 {"utilities",
- {{{"cleanhp",       "fix and stat invdup/hairping reads", main_clean_hairpins},
+ {{{"cleanhp",       "fix and stat invdup/hairpin reads", main_clean_hairpins},
    {"guessprotocol", "guess whether protocol is ordinary, pbat or random", main_guessprotocol},
    {"merge-bsrate",  "merge bisulfite conversion rates files from bsrate", main_merge_bsrate},
    {"merge",         "merge multiple counts files into a counts file or a table", main_merge_methcounts},

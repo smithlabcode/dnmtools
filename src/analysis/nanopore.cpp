@@ -845,7 +845,8 @@ struct read_processor {
     if (chrom_name == nullptr)
       throw std::runtime_error("failed to identify chrom for tid: " +
                                std::to_string(tid));
-    const auto chrom_name_offset = std::sprintf(buffer, "%s\t", chrom_name);
+    const auto chrom_name_offset =
+      std::snprintf(buffer, buf_size, "%s\t", chrom_name);
     if (chrom_name_offset < 0)
       throw std::runtime_error("failed to write to output buffer");
     auto buffer_after_chrom = buffer + chrom_name_offset;
@@ -869,14 +870,16 @@ struct read_processor {
         const double mods = counts[chrom_posn].get_mods(is_c) / denom;
 
         // clang-format off
-        const int r = std::sprintf(buffer_after_chrom, out_fmt,
-                                   chrom_posn,
-                                   is_c ? '+' : '-',
-                                   tag_values[the_tag],
-                                   mods,
-                                   n_reads,
-                                   hydroxy,
-                                   methyl);
+        const int r = std::snprintf(buffer_after_chrom,
+                                    buf_size - chrom_name_offset,
+                                    out_fmt,
+                                    chrom_posn,
+                                    is_c ? '+' : '-',
+                                    tag_values[the_tag],
+                                    mods,
+                                    n_reads,
+                                    hydroxy,
+                                    methyl);
         // clang-format on
 
         if (r < 0)
@@ -900,7 +903,8 @@ struct read_processor {
     if (chrom_name == nullptr)
       throw std::runtime_error("failed to identify chrom for tid: " +
                                std::to_string(tid));
-    const auto chrom_name_offset = std::sprintf(buffer, "%s\t", chrom_name);
+    const auto chrom_name_offset =
+      std::snprintf(buffer, buf_size, "%s\t", chrom_name);
     if (chrom_name_offset < 0)
       throw std::runtime_error("failed to write to output buffer");
     auto buffer_after_chrom = buffer + chrom_name_offset;
@@ -935,12 +939,14 @@ struct read_processor {
           const auto mods = hydroxy + methyl;
 
           // clang-format off
-          const int r = std::sprintf(buffer_after_chrom, out_fmt,
-                                     chrom_posn - 1,  // for previous position
-                                     mods,
-                                     n_reads,
-                                     hydroxy,
-                                     methyl);
+          const int r = std::snprintf(buffer_after_chrom,
+                                      buf_size - chrom_name_offset,
+                                      out_fmt,
+                                      chrom_posn - 1,  // for previous position
+                                      mods,
+                                      n_reads,
+                                      hydroxy,
+                                      methyl);
           // clang-format on
 
           if (r < 0)

@@ -105,16 +105,16 @@ write_methdiff_site(T &out, const MSite &a, const MSite &b,
   static char buffer[buf_size];
 
   // clang-format off
-  const int r = std::sprintf(buffer, out_fmt,
-                             a.chrom.data(),
-                             a.pos,
-                             a.strand,
-                             a.context.data(),
-                             diffscore,
-                             a.n_meth(),
-                             a.n_unmeth(),
-                             b.n_meth(),
-                             b.n_unmeth());
+  const int r = std::snprintf(buffer, buf_size, out_fmt,
+                              a.chrom.data(),
+                              a.pos,
+                              a.strand,
+                              a.context.data(),
+                              diffscore,
+                              a.n_meth(),
+                              a.n_unmeth(),
+                              b.n_meth(),
+                              b.n_unmeth());
   // clang-format on
   if (r < 0)
     throw std::runtime_error("failed to write to output buffer");

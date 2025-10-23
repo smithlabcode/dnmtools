@@ -24,6 +24,7 @@
 #include <istream>
 #include <ostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 template <typename T> struct mcounts {
@@ -130,13 +131,13 @@ Regression<T>::parse(const std::string &line) {
     field_e = std::find_if(field_s + 1, line_end, is_sep);
     {
       const auto [ptr, ec] = std::from_chars(field_s, field_e, mc1.n_reads);
-      failed = failed || (ptr != field_e);
+      failed = failed || (ec != std::errc{});
     }
 
     field_s = std::find_if(field_e + 1, line_end, not_sep);
     field_e = std::find_if(field_s + 1, line_end, is_sep);
 
-    {
+    if constexpr (std::is_floating_point_v<T>) {
 #ifdef __APPLE__
       const int ret = std::sscanf(field_s, "%lf", &mc1.n_meth);
       failed = failed || (ret < 1);
@@ -144,6 +145,11 @@ Regression<T>::parse(const std::string &line) {
       const auto [ptr, ec] = std::from_chars(field_s, field_e, mc1.n_meth);
       failed = failed || (ec != std::errc{});
 #endif
+    }
+    else {
+      // Apple clang can do std::from_chars for int types
+      const auto [ptr, ec] = std::from_chars(field_s, field_e, mc1.n_meth);
+      failed = failed || (ec != std::errc{});
     }
 
     mc.push_back(mc1);

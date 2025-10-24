@@ -31,14 +31,4 @@ fit_regression_model_gamma(Regression<double> &r,
                            std::vector<double> &p_estimates,
                            double &dispersion_estimate);
 
-void
-fit_regression_model_gamma_fdf(Regression<std::uint32_t> &r,
-                               std::vector<double> &p_estimates,
-                               double &dispersion_estimate);
-
-void
-fit_regression_model_gamma_fdf(Regression<double> &r,
-                               std::vector<double> &p_estimates,
-                               double &dispersion_estimate);
-
 #endif  // RADMETH_OPTIMIZE_GAMMA_HPP

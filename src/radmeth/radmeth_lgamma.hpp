@@ -36,7 +36,7 @@
 
 namespace radmeth_lgamma {
 
-// ADS: constant 'tc' below is the unique minimum of the gamma function on R+
+// ADS: 'tc' is the unique minimum of the gamma function on R+
 static constexpr std::double_t tc = +1.46163214496836224576e+00;
 static constexpr std::double_t tf = -1.21486290535849611461e-01;
 /* tt = -(tail of tf) */
@@ -137,7 +137,7 @@ static constexpr std::double_t W[7] = {
 [[nodiscard]] inline auto
 noneg_lgamma(double x) -> double {
   // ADS: this function does not work for very small or very large values.
-  assert(std::isfinite(x) && x > 2.2e-16);
+  assert(std::isfinite(x) && x > 2.22045e-16);  // > 2^-52
 
   union {
     double f;  // unused
@@ -153,17 +153,24 @@ noneg_lgamma(double x) -> double {
       static_cast<int>(u.as_bits) == 0)
     return 0;
 
-  // ADS: for x > 2^58 the code below applies. Not using it because this is
-  // only needed for args that would be far from optimal in param estimates.
+  // ADS: for x < 2.22045e-16, just return the value of lgamma at
+  // that 2.22045e-16
+
+  // if (ix < 0x3CB00000)
+  //   return 36.0437;
+
+  // ADS: for x > 2^58 the code below applies. Maxing it out at 1.2994e+19,
+  // because that's large enough and if we see this our estimation is going in
+  // the wrong direction anyway.
 
   // if (ix > 0x43900000)
-  //   return x * (std::log(x) - 1.0);
+  //   return 1.12994e+19;  // proper way: return x * (std::log(x) - 1.0);
 
   // x < 2.0
   if (ix < 0x40000000) {
     int i{};
     std::double_t y{};
-    if (ix <= 0x3feccccc) { /* lgamma(x) = lgamma(x+1)-log(x) */
+    if (ix <= 0x3feccccc) {  // lgamma(x) = lgamma(x+1)-log(x)
       r = -std::log(x);
       if (ix >= 0x3FE76944) {
         y = 1.0 - x;
@@ -180,11 +187,11 @@ noneg_lgamma(double x) -> double {
     }
     else {
       r = 0.0;
-      if (ix >= 0x3FFBB4C3) { /* [1.7316,2] */
+      if (ix >= 0x3FFBB4C3) {  // [1.7316,2]
         y = 2.0 - x;
         i = 0;
       }
-      else if (ix >= 0x3FF3B4C4) { /* [1.23,1.73] */
+      else if (ix >= 0x3FF3B4C4) {  // [1.23,1.73]
         y = x - tc;
         i = 1;
       }
@@ -252,7 +259,7 @@ noneg_lgamma(double x) -> double {
     return r;
   }
 
-  // 8.0 <= x < 2^58 (ix < 0x43900000)
+  // 8.0 <= x (ix < 0x43900000)
   const std::double_t t = std::log(x);
   const std::double_t z = 1.0 / x;
   const std::double_t y = z * z;

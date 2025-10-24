@@ -193,6 +193,7 @@ libdnmtools_a_SOURCES += \
         src/radmeth/radmeth_optimize_gamma.hpp \
         src/radmeth/radmeth_optimize_params.hpp \
         src/radmeth/radmeth_model.hpp \
+        src/radmeth/radmeth_lgamma.hpp \
         src/radmeth/radmeth_utils.hpp \
         src/radmeth/radmeth_design.hpp
 

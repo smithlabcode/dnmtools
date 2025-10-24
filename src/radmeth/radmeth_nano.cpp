@@ -162,14 +162,13 @@ that the design matrix and the proportion table are correctly formatted.
             if (has_extreme_counts(t_alt_model))
               return std::tuple{1.0, row_status::na_extreme_cnt};
 
-            fit_regression_model_gamma_fdf(t_alt_model, p_estim_alt,
-                                           phi_estim_alt);
+            fit_regression_model_gamma(t_alt_model, p_estim_alt, phi_estim_alt);
 
             t_null_model.mc = t_alt_model.mc;
             t_null_model.rowname = t_alt_model.rowname;
 
-            fit_regression_model_gamma_fdf(t_null_model, p_estim_null,
-                                           phi_estim_null);
+            fit_regression_model_gamma(t_null_model, p_estim_null,
+                                       phi_estim_null);
 
             const double p_value =
               llr_test(t_null_model.max_loglik, t_alt_model.max_loglik);

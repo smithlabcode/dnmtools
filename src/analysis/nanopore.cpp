@@ -260,8 +260,8 @@ static const char *tag_values[] = {
 template <typename T>
 [[nodiscard]] static std::tuple<T, T>
 get_hydroxy_sites(const T mod_pos_beg, const T mod_pos_end) {
-  const char hydroxy_tag[] = "C+h?";
-  const auto hydroxy_tag_size = 4;
+  static constexpr auto hydroxy_tag = "C+h";
+  static constexpr auto hydroxy_tag_size = 3;
   if (mod_pos_beg == mod_pos_end)
     return {};
   auto hydroxy_beg = strstr(mod_pos_beg, hydroxy_tag);
@@ -270,15 +270,15 @@ get_hydroxy_sites(const T mod_pos_beg, const T mod_pos_end) {
   auto hydroxy_end = std::find(hydroxy_beg, mod_pos_end, ';');
   if (hydroxy_end == mod_pos_end)
     return std::tuple<T, T>{};
-  hydroxy_beg += hydroxy_tag_size;
+  hydroxy_beg += hydroxy_tag_size + 1;  // plus 1 for the [.?] char after C+h
   return std::tuple<T, T>(hydroxy_beg, hydroxy_end);
 }
 
 template <typename T>
 [[nodiscard]] static std::tuple<T, T>
 get_methyl_sites(const T mod_pos_beg, const T mod_pos_end) {
-  const char methyl_tag[] = "C+h?";
-  const auto methyl_tag_size = 4;
+  static constexpr auto methyl_tag = "C+m";
+  static constexpr auto methyl_tag_size = 3;
   if (mod_pos_beg == mod_pos_end)
     return {};
   auto methyl_beg = strstr(mod_pos_beg, methyl_tag);
@@ -287,7 +287,7 @@ get_methyl_sites(const T mod_pos_beg, const T mod_pos_end) {
   auto methyl_end = std::find(methyl_beg, mod_pos_end, ';');
   if (methyl_end == mod_pos_end)
     return std::tuple<T, T>{};
-  methyl_beg += methyl_tag_size;
+  methyl_beg += methyl_tag_size + 1;  // plus 1 for the [.?] char after C+h
   return std::tuple<T, T>(methyl_beg, methyl_end);
 }
 
@@ -302,8 +302,9 @@ get_modification_positions(const bamxx::bam_rec &aln) {
 }
 
 struct prob_counter {
-  std::array<std::uint64_t, 256> meth_hist{};
-  std::array<std::uint64_t, 256> hydro_hist{};
+  static constexpr auto n_values = 256;
+  std::array<std::uint64_t, n_values> meth_hist{};
+  std::array<std::uint64_t, n_values> hydro_hist{};
   std::string
   json() const {
     std::ostringstream oss;
@@ -314,7 +315,7 @@ struct prob_counter {
       oss << R"(")" << meth_hist[i] << R"(")";
     }
     oss << R"(],"hydroxy_hist":[)";
-    for (auto i = 0; i < 256; ++i) {
+    for (auto i = 0; i < n_values; ++i) {
       if (i > 0)
         oss << ',';
       oss << R"(")" << hydro_hist[i] << R"(")";
@@ -369,6 +370,9 @@ struct mod_prob_buffer {
     // number of commas is number of hydroxy substrates = CpG sites
     const auto n_cpgs = std::count(hydroxy_beg, hydroxy_end, ',');
 
+    // using hydroxy sites because they are the same as methyl sites
+    std::int32_t delta = get_next_mod_pos(hydroxy_beg, hydroxy_end);
+
     const auto qlen = get_l_qseq(aln);
     const auto seq = bam_get_seq(aln);
 
@@ -377,8 +381,6 @@ struct mod_prob_buffer {
 
     hydroxy_probs.clear();
     hydroxy_probs.resize(qlen, 0);
-
-    std::int32_t delta = get_next_mod_pos(hydroxy_beg, hydroxy_end);
 
     auto hydroxy_prob_idx = 0;      // start of modifications
     auto methyl_prob_idx = n_cpgs;  // start methyl after hydroxy
@@ -1036,7 +1038,7 @@ struct read_processor {
                 << std::endl;
     if (!expected_basecall_model.empty() &&
         basecall_model != expected_basecall_model) {
-      std::cerr << "failed to match basecall model:" << "\n"
+      std::cerr << "failed to match basecall model:\n"
                 << "observed="
                 << (basecall_model.empty() ? "NA" : basecall_model) << "\n"
                 << "expected=" << expected_basecall_model_str() << std::endl;

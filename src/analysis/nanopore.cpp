@@ -249,6 +249,11 @@ get_tag_from_genome(const std::string &s, const std::size_t pos) {
   return 4;  // shouldn't be used for anything
 }
 
+enum class missing_code : std::uint8_t {
+  unmodified = 0,
+  unknown = 1,
+};
+
 static const char *tag_values[] = {
   "CpG",  // 0
   "CHH",  // 1
@@ -258,37 +263,44 @@ static const char *tag_values[] = {
 };
 
 template <typename T>
-[[nodiscard]] static std::tuple<T, T>
+[[nodiscard]] static std::tuple<T, T, missing_code>
 get_hydroxy_sites(const T mod_pos_beg, const T mod_pos_end) {
-  const char hydroxy_tag[] = "C+h?";
-  const auto hydroxy_tag_size = 4;
+  static constexpr auto hydroxy_tag = "C+h";
+  static constexpr auto hydroxy_tag_size = 3;
   if (mod_pos_beg == mod_pos_end)
     return {};
   auto hydroxy_beg = strstr(mod_pos_beg, hydroxy_tag);
   if (hydroxy_beg == mod_pos_end)
-    return std::tuple<T, T>{};
+    return std::tuple<T, T, missing_code>{};
   auto hydroxy_end = std::find(hydroxy_beg, mod_pos_end, ';');
   if (hydroxy_end == mod_pos_end)
-    return std::tuple<T, T>{};
+    return std::tuple<T, T, missing_code>{};
   hydroxy_beg += hydroxy_tag_size;
-  return std::tuple<T, T>(hydroxy_beg, hydroxy_end);
+  const auto missing_status =
+    *hydroxy_beg == '?' ? missing_code::unknown : missing_code::unmodified;
+  hydroxy_beg += (*hydroxy_beg == '.' || *hydroxy_beg == '?');
+  return std::tuple<T, T, missing_code>(hydroxy_beg, hydroxy_end,
+                                        missing_status);
 }
 
 template <typename T>
-[[nodiscard]] static std::tuple<T, T>
+[[nodiscard]] static std::tuple<T, T, missing_code>
 get_methyl_sites(const T mod_pos_beg, const T mod_pos_end) {
-  const char methyl_tag[] = "C+h?";
-  const auto methyl_tag_size = 4;
+  static constexpr auto methyl_tag = "C+m";
+  static constexpr auto methyl_tag_size = 3;
   if (mod_pos_beg == mod_pos_end)
     return {};
   auto methyl_beg = strstr(mod_pos_beg, methyl_tag);
   if (methyl_beg == mod_pos_end)
-    return std::tuple<T, T>{};
+    return std::tuple<T, T, missing_code>{};
   auto methyl_end = std::find(methyl_beg, mod_pos_end, ';');
   if (methyl_end == mod_pos_end)
-    return std::tuple<T, T>{};
+    return std::tuple<T, T, missing_code>{};
   methyl_beg += methyl_tag_size;
-  return std::tuple<T, T>(methyl_beg, methyl_end);
+  const auto missing_status =
+    *methyl_beg == '?' ? missing_code::unknown : missing_code::unmodified;
+  methyl_beg += (*methyl_beg == '.' || *methyl_beg == '?');
+  return std::tuple<T, T, missing_code>(methyl_beg, methyl_end, missing_status);
 }
 
 [[nodiscard]] static std::tuple<char *, char *>
@@ -302,19 +314,20 @@ get_modification_positions(const bamxx::bam_rec &aln) {
 }
 
 struct prob_counter {
-  std::array<std::uint64_t, 256> meth_hist{};
-  std::array<std::uint64_t, 256> hydro_hist{};
+  static constexpr auto n_prob_vals{256};
+  std::array<std::uint64_t, n_prob_vals> meth_hist{};
+  std::array<std::uint64_t, n_prob_vals> hydro_hist{};
   std::string
   json() const {
     std::ostringstream oss;
     oss << R"({"methyl_hist":[)";
-    for (auto i = 0; i < 256; ++i) {
+    for (auto i = 0; i < n_prob_vals; ++i) {
       if (i > 0)
         oss << ',';
       oss << R"(")" << meth_hist[i] << R"(")";
     }
     oss << R"(],"hydroxy_hist":[)";
-    for (auto i = 0; i < 256; ++i) {
+    for (auto i = 0; i < n_prob_vals; ++i) {
       if (i > 0)
         oss << ',';
       oss << R"(")" << hydro_hist[i] << R"(")";
@@ -322,6 +335,20 @@ struct prob_counter {
     oss << R"(]})";
     return oss.str();
   }
+};
+
+template <typename T>
+[[nodiscard]] static const auto
+next_mod_pos(T &b, const T e) -> std::int32_t {
+  const auto isdig = [](const auto x) {
+    return std::isdigit(static_cast<unsigned char>(x));
+  };
+  b = std::find_if(b, e, isdig);
+  if (b == e)
+    return -1;
+  auto r = atoi(b);
+  b = std::find_if_not(b, e, isdig);
+  return r;
 };
 
 struct mod_prob_buffer {
@@ -338,24 +365,16 @@ struct mod_prob_buffer {
 
   bool
   set_probs(const bamxx::bam_rec &aln) {
-    const auto get_next_mod_pos = [](auto &b, const auto e) -> std::int32_t {
-      const auto isdig = [](const auto x) {
-        return std::isdigit(static_cast<unsigned char>(x));
-      };
-      b = std::find_if(b, e, isdig);
-      if (b == e)
-        return -1;
-      auto r = atoi(b);
-      b = std::find_if_not(b, e, isdig);
-      return r;
-    };
-
     auto [mod_pos_beg, mod_pos_end] = get_modification_positions(aln);
-    auto [hydroxy_beg, hydroxy_end] =
+    if (mod_pos_beg == nullptr)
+      return false;
+    auto [hydroxy_beg, hydroxy_end, hydroxy_missing_status] =
       get_hydroxy_sites(mod_pos_beg, mod_pos_end);
-    auto [methyl_beg, methyl_end] = get_methyl_sites(mod_pos_beg, mod_pos_end);
-    if (mod_pos_beg == nullptr || hydroxy_beg == nullptr ||
-        methyl_beg == nullptr)
+    if (hydroxy_beg == nullptr)
+      return false;
+    auto [methyl_beg, methyl_end, methyl_missing_status] =
+      get_methyl_sites(mod_pos_beg, mod_pos_end);
+    if (methyl_beg == nullptr)
       return false;
 
     // assume that hydroxy and methyl both point to CpG sites
@@ -366,8 +385,8 @@ struct mod_prob_buffer {
     if (mod_prob == nullptr)
       return false;
 
-    // number of commas is number of hydroxy substrates = CpG sites
-    const auto n_cpgs = std::count(hydroxy_beg, hydroxy_end, ',');
+    // number of commas is number of hydroxy substrates = number of sites
+    const auto n_mod_sites = std::count(hydroxy_beg, hydroxy_end, ',');
 
     const auto qlen = get_l_qseq(aln);
     const auto seq = bam_get_seq(aln);
@@ -378,19 +397,17 @@ struct mod_prob_buffer {
     hydroxy_probs.clear();
     hydroxy_probs.resize(qlen, 0);
 
-    std::int32_t delta = get_next_mod_pos(hydroxy_beg, hydroxy_end);
+    std::int32_t delta = next_mod_pos(hydroxy_beg, hydroxy_end);
 
-    auto hydroxy_prob_idx = 0;      // start of modifications
-    auto methyl_prob_idx = n_cpgs;  // start methyl after hydroxy
+    auto hydroxy_prob_idx = 0;           // start of modifications
+    auto methyl_prob_idx = n_mod_sites;  // start methyl after hydroxy
 
     if (bam_is_rev(aln)) {
       for (auto i = 0; i < qlen; ++i) {
         const auto nuc = seq_nt16_str[bam_seqi(seq, qlen - i - 1)];
         if (nuc == 'G') {
-          if (seq_nt16_str[bam_seqi(seq, qlen - i - 2)] == 'C') {
-            // assume that when delta hits 0 we have a CpG site
-            if (delta != 0)
-              return false;
+          // when delta hits 0 we have a site with mod probs
+          if (delta == 0) {
             const std::uint8_t m_val = bam_auxB2i(mod_prob, methyl_prob_idx++);
             methyl_probs[i] = m_val;
             pc.meth_hist[m_val]++;
@@ -399,9 +416,10 @@ struct mod_prob_buffer {
             hydroxy_probs[i] = h_val;
             pc.hydro_hist[h_val]++;
           }
+          // ADS: add 'else' to use '?' and '.' properly
           --delta;
           if (delta < 0)
-            delta = get_next_mod_pos(hydroxy_beg, hydroxy_end);
+            delta = next_mod_pos(hydroxy_beg, hydroxy_end);
         }
       }
     }
@@ -409,10 +427,8 @@ struct mod_prob_buffer {
       for (auto i = 0; i + 1 < qlen; ++i) {
         const auto nuc = seq_nt16_str[bam_seqi(seq, i)];
         if (nuc == 'C') {
-          if (seq_nt16_str[bam_seqi(seq, i + 1)] == 'G') {
-            // assume that when delta hits 0 we have a CpG site
-            if (delta != 0)
-              return false;
+          // when delta hits 0 we have a site with mod probs
+          if (delta == 0) {
             const std::uint8_t m_val = bam_auxB2i(mod_prob, methyl_prob_idx++);
             methyl_probs[i] = m_val;
             pc.meth_hist[m_val]++;
@@ -421,9 +437,10 @@ struct mod_prob_buffer {
             hydroxy_probs[i] = h_val;
             pc.hydro_hist[h_val]++;
           }
+          // ADS: add 'else' to use '?' and '.' properly
           --delta;
           if (delta < 0)
-            delta = get_next_mod_pos(hydroxy_beg, hydroxy_end);
+            delta = next_mod_pos(hydroxy_beg, hydroxy_end);
         }
       }
     }
@@ -1063,8 +1080,6 @@ struct read_processor {
 
     while (hts.read(hdr, aln)) {
       const std::int32_t tid = get_tid(aln);
-      if (get_l_qseq(aln) == 0)
-        continue;
       if (tid == -1)  // ADS: skip reads that have no tid -- they are not mapped
         continue;
       if (tid != prev_tid) {  // chrom changed, output results, get next chrom
@@ -1131,9 +1146,76 @@ struct read_processor {
   }
 };
 
-int
-main_nanocount(int argc, char *argv[]) {
+[[nodiscard]] static auto
+check_cpg_mods_rev(const bamxx::bam_rec &aln) -> bool {
+  // ADS: should only have one function for both orientations
+  const auto [mod_pos_beg, mod_pos_end] = get_modification_positions(aln);
+  if (mod_pos_beg == nullptr)
+    return true;
+  auto [mod_beg, mod_end, _] = get_hydroxy_sites(mod_pos_beg, mod_pos_end);
+  if (mod_beg == nullptr)
+    return true;
+  const auto n_mods = std::count(mod_beg, mod_end, ',');
+  const auto qlen = get_l_qseq(aln);
+  const auto seq = bam_get_seq(aln);
+  std::uint32_t n_mods_at_cpg{};
+  for (int qpos{}; qpos < qlen && mod_beg != mod_end;) {
+    for (auto delta = next_mod_pos(mod_beg, mod_end); delta >= 0; --delta)
+      for (char nuc{}; qpos < qlen && nuc != 'G'; ++qpos)
+        nuc = seq_nt16_str[bam_seqi(seq, qlen - qpos - 1)];
+    const auto next =
+      qpos < qlen ? seq_nt16_str[bam_seqi(seq, qlen - qpos - 1)] : 0;
+    n_mods_at_cpg += (next == 'C');
+  }
+  return n_mods_at_cpg == n_mods;
+}
 
+[[nodiscard]] static auto
+check_cpg_mods_fwd(const bamxx::bam_rec &aln) -> bool {
+  const auto [mod_pos_beg, mod_pos_end] = get_modification_positions(aln);
+  if (mod_pos_beg == nullptr)
+    return true;
+  auto [mod_beg, mod_end, _] = get_hydroxy_sites(mod_pos_beg, mod_pos_end);
+  if (mod_beg == nullptr)
+    return true;
+  const auto n_mods = std::count(mod_beg, mod_end, ',');
+  const auto qlen = get_l_qseq(aln);
+  const auto seq = bam_get_seq(aln);
+  std::uint32_t n_mods_at_cpg{};
+  for (int qpos{}; qpos < qlen && mod_beg != mod_end;) {
+    for (auto delta = next_mod_pos(mod_beg, mod_end); delta >= 0; --delta)
+      for (char nuc{}; qpos < qlen && nuc != 'C'; ++qpos)
+        nuc = seq_nt16_str[bam_seqi(seq, qpos)];
+    const auto next = qpos < qlen ? seq_nt16_str[bam_seqi(seq, qpos)] : 0;
+    n_mods_at_cpg += (next == 'G');
+  }
+  return n_mods_at_cpg == n_mods;
+}
+
+[[nodiscard]] static auto
+check_modification_sites(const std::string &infile,
+                         const std::uint32_t n_reads_to_check) -> bool {
+  bamxx::bam_in hts(infile);
+  if (!hts)
+    throw std::runtime_error("failed to open input file");
+  // load the input file's header
+  bamxx::bam_header hdr(hts);
+  if (!hdr)
+    throw std::runtime_error("failed to read header");
+
+  std::uint32_t read_count{};
+  std::uint32_t only_cpgs_counter{};
+
+  bamxx::bam_rec aln;
+  for (; hts.read(hdr, aln) && read_count < n_reads_to_check; ++read_count)
+    only_cpgs_counter +=
+      bam_is_rev(aln) ? check_cpg_mods_rev(aln) : check_cpg_mods_fwd(aln);
+  return only_cpgs_counter == read_count;
+}
+
+int
+main_nanocount(int argc, char *argv[]) {  // NOLINT
+  static constexpr auto n_reads_to_check = 1000;
   try {
 
     read_processor rp;
@@ -1203,10 +1285,14 @@ main_nanocount(int argc, char *argv[]) {
     if (outfile.empty())
       outfile = "-";
 
+    const auto mods_at_cpgs =
+      check_modification_sites(mapped_reads_file, n_reads_to_check);
+
     if (rp.verbose)
       std::cerr << "[input BAM/SAM file: " << mapped_reads_file << "]\n"
                 << "[output file: " << outfile << "]\n"
                 << "[genome file: " << chroms_file << "]\n"
+                << "[mods only at CpGs: " << mods_at_cpgs << "]\n"
                 << rp.tostring();
 
     const auto [mc, pc] = rp(mapped_reads_file, outfile, chroms_file);

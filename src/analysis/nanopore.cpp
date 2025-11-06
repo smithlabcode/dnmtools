@@ -321,7 +321,7 @@ struct prob_counter {
   json() const {
     std::ostringstream oss;
     oss << R"({"methyl_hist":[)";
-    for (auto i = 0; i < n_prob_vals; ++i) {
+    for (auto i = 0; i < n_values; ++i) {
       if (i > 0)
         oss << ',';
       oss << R"(")" << meth_hist[i] << R"(")";
@@ -338,7 +338,7 @@ struct prob_counter {
 };
 
 template <typename T>
-[[nodiscard]] static const auto
+[[nodiscard]] static auto
 next_mod_pos(T &b, const T e) -> std::int32_t {
   const auto isdig = [](const auto x) {
     return std::isdigit(static_cast<unsigned char>(x));
@@ -389,7 +389,7 @@ struct mod_prob_buffer {
     const auto n_mod_sites = std::count(hydroxy_beg, hydroxy_end, ',');
 
     // using hydroxy sites because they are the same as methyl sites
-    std::int32_t delta = get_next_mod_pos(hydroxy_beg, hydroxy_end);
+    std::int32_t delta = next_mod_pos(hydroxy_beg, hydroxy_end);
 
     const auto qlen = get_l_qseq(aln);
     const auto seq = bam_get_seq(aln);
@@ -400,8 +400,8 @@ struct mod_prob_buffer {
     hydroxy_probs.clear();
     hydroxy_probs.resize(qlen, 0);
 
-    auto hydroxy_prob_idx = 0;      // start of modifications
-    auto methyl_prob_idx = n_cpgs;  // start methyl after hydroxy
+    auto hydroxy_prob_idx = 0;           // start of modifications
+    auto methyl_prob_idx = n_mod_sites;  // start methyl after hydroxy
 
     if (bam_is_rev(aln)) {
       for (auto i = 0; i < qlen; ++i) {

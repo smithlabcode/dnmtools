@@ -314,9 +314,9 @@ get_modification_positions(const bamxx::bam_rec &aln) {
 }
 
 struct prob_counter {
-  static constexpr auto n_prob_vals{256};
-  std::array<std::uint64_t, n_prob_vals> meth_hist{};
-  std::array<std::uint64_t, n_prob_vals> hydro_hist{};
+  static constexpr auto n_values = 256;
+  std::array<std::uint64_t, n_values> meth_hist{};
+  std::array<std::uint64_t, n_values> hydro_hist{};
   std::string
   json() const {
     std::ostringstream oss;
@@ -327,7 +327,7 @@ struct prob_counter {
       oss << R"(")" << meth_hist[i] << R"(")";
     }
     oss << R"(],"hydroxy_hist":[)";
-    for (auto i = 0; i < n_prob_vals; ++i) {
+    for (auto i = 0; i < n_values; ++i) {
       if (i > 0)
         oss << ',';
       oss << R"(")" << hydro_hist[i] << R"(")";
@@ -388,6 +388,9 @@ struct mod_prob_buffer {
     // number of commas is number of hydroxy substrates = number of sites
     const auto n_mod_sites = std::count(hydroxy_beg, hydroxy_end, ',');
 
+    // using hydroxy sites because they are the same as methyl sites
+    std::int32_t delta = get_next_mod_pos(hydroxy_beg, hydroxy_end);
+
     const auto qlen = get_l_qseq(aln);
     const auto seq = bam_get_seq(aln);
 
@@ -397,10 +400,8 @@ struct mod_prob_buffer {
     hydroxy_probs.clear();
     hydroxy_probs.resize(qlen, 0);
 
-    std::int32_t delta = next_mod_pos(hydroxy_beg, hydroxy_end);
-
-    auto hydroxy_prob_idx = 0;           // start of modifications
-    auto methyl_prob_idx = n_mod_sites;  // start methyl after hydroxy
+    auto hydroxy_prob_idx = 0;      // start of modifications
+    auto methyl_prob_idx = n_cpgs;  // start methyl after hydroxy
 
     if (bam_is_rev(aln)) {
       for (auto i = 0; i < qlen; ++i) {
@@ -1053,7 +1054,7 @@ struct read_processor {
                 << std::endl;
     if (!expected_basecall_model.empty() &&
         basecall_model != expected_basecall_model) {
-      std::cerr << "failed to match basecall model:" << "\n"
+      std::cerr << "failed to match basecall model:\n"
                 << "observed="
                 << (basecall_model.empty() ? "NA" : basecall_model) << "\n"
                 << "expected=" << expected_basecall_model_str() << std::endl;

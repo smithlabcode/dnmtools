@@ -18,7 +18,10 @@
  */
 
 #include "EpireadStats.hpp"
-#include "GenomicRegion.hpp"
+
+#include "Interval.hpp"
+#include "Interval6.hpp"
+
 #include "OptionParser.hpp"
 #include "smithlab_os.hpp"
 #include "smithlab_utils.hpp"
@@ -26,8 +29,11 @@
 #include <bamxx.hpp>
 
 #include <atomic>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <numeric>
+#include <print>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -35,13 +41,11 @@
 #include <vector>
 
 struct amr_summary {
-  amr_summary(const std::vector<GenomicRegion> &amrs) {
-    amr_count = std::size(amrs);
-    amr_total_size =
-      accumulate(std::cbegin(amrs), std::cend(amrs), 0ul,
-                 [](const std::size_t t, const GenomicRegion &p) {
-                   return t + p.get_width();
-                 });
+  amr_summary(const std::vector<Interval6> &amrs) {
+    amr_count = size(amrs);
+    amr_total_size = accumulate(
+      std::cbegin(amrs), std::cend(amrs), 0ul,
+      [](const std::size_t t, const Interval6 &p) { return t + size(p); });
     amr_mean_size = static_cast<double>(amr_total_size) /
                     std::max(amr_count, static_cast<std::size_t>(1));
   }
@@ -99,13 +103,13 @@ using epi_r = small_epiread;
 
 /* merges amrs within some pre-defined distance */
 static void
-merge_amrs(const std::size_t gap_limit, std::vector<GenomicRegion> &amrs) {
+merge_amrs(const std::size_t gap_limit, std::vector<Interval6> &amrs) {
   auto j = std::begin(amrs);
   for (const auto &a : amrs)
     // check distance between two amrs is greater than gap limit
-    if (j->same_chrom(a) && j->get_end() + gap_limit >= a.get_start()) {
-      j->set_end(a.get_end());
-      j->set_score(std::min(a.get_score(), j->get_score()));
+    if (j->chrom == a.chrom && j->stop + gap_limit >= a.start) {
+      j->stop = a.stop;
+      j->score = std::min(a.score, j->score);
     }
     else
       *(++j) = a;
@@ -113,13 +117,7 @@ merge_amrs(const std::size_t gap_limit, std::vector<GenomicRegion> &amrs) {
   amrs.erase(++j, std::cend(amrs));
 }
 
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-/////
-/////   CODE FOR RANDOMIZING THE READS TO GET EXPECTED NUMBER OF
-/////   IDENTIFIED AMRS
-/////
+// code for randomizing the reads to get expected number of identified amrs
 
 // static void
 // set_read_states(std::vector<std::vector<char> > &state_counts,
@@ -158,10 +156,10 @@ merge_amrs(const std::size_t gap_limit, std::vector<GenomicRegion> &amrs) {
 // }
 
 // Code for converting between cpg and base pair coordinates below
-static inline std::vector<std::uint32_t>
-collect_cpgs(const std::string &s) {
+[[nodiscard]] static inline auto
+collect_cpgs(const std::string &s) -> std::vector<std::uint32_t> {
   std::vector<std::uint32_t> cpgs;
-  for (std::uint32_t i = 0; i < std::size(s) - 1; ++i)
+  for (std::uint32_t i = 0; i + 1 < size(s); ++i)
     if (s[i] == 'C' && s[i + 1] == 'G')
       cpgs.push_back(i);
   return cpgs;
@@ -169,48 +167,51 @@ collect_cpgs(const std::string &s) {
 
 template <typename T>
 static inline bool
-convert_coordinates(const std::vector<T> &cpgs, GenomicRegion &region) {
-  if (std::size(cpgs) <= region.get_end())
+convert_coordinates(const std::vector<T> &cpgs, Interval6 &region) {
+  if (size(cpgs) <= region.stop)
     return false;
-  region.set_start(cpgs[region.get_start()]);
-  region.set_end(cpgs[region.get_end()]);
+  region.start = cpgs[region.start];
+  region.stop = cpgs[region.stop];
   return true;
 }
 
 static std::vector<std::pair<std::uint32_t, std::uint32_t>>
-get_chrom_partition(const std::vector<GenomicRegion> &r) {
+get_chrom_partition(const std::vector<Interval6> &r) {
   if (r.empty())
     return {};
   std::vector<std::pair<std::uint32_t, std::uint32_t>> parts;
-  std::string prev_chrom{r.front().get_chrom()};
+  std::string prev_chrom{r.front().chrom};
   std::uint32_t prev_idx = 0u;
-  for (auto i = 0u; i < std::size(r); ++i)
-    if (r[i].get_chrom() != prev_chrom) {
+  for (auto i = 0u; i < size(r); ++i)
+    if (r[i].chrom != prev_chrom) {
       parts.emplace_back(prev_idx, i);
       prev_idx = i;
-      prev_chrom = r[i].get_chrom();
+      prev_chrom = r[i].chrom;
     }
-  parts.emplace_back(prev_idx, std::size(r));
+  parts.emplace_back(prev_idx, size(r));
   return parts;
 }
 
 [[nodiscard]] static bool
 convert_coordinates(const std::size_t n_threads, const std::string &genome_file,
-                    std::vector<GenomicRegion> &amrs) {
-  std::vector<std::string> c_name, c_seq;
-  read_fasta_file_short_names(genome_file, c_name, c_seq);
-  const std::size_t n_chroms = std::size(c_seq);
-
-  for (auto &s : c_seq)
-    for (auto &c : s)
-      c = std::toupper(c);
+                    std::vector<Interval6> &amrs) {
 
   std::unordered_map<std::string, std::string> chrom_lookup;
-  for (auto i = 0u; i < n_chroms; ++i)
-    chrom_lookup.emplace(std::move(c_name[i]), std::move(c_seq[i]));
+  {
+    std::vector<std::string> c_name, c_seq;
+    read_fasta_file_short_names(genome_file, c_name, c_seq);
+    const std::size_t n_chroms = size(c_seq);
+
+    for (auto &s : c_seq)
+      for (auto &c : s)
+        c = std::toupper(c);
+
+    for (auto i = 0u; i < n_chroms; ++i)
+      chrom_lookup.emplace(c_name[i], c_seq[i]);
+  }
 
   const auto chrom_parts = get_chrom_partition(amrs);
-  const auto n_parts = std::size(chrom_parts);
+  const auto n_parts = size(chrom_parts);
   const auto parts_beg = std::cbegin(chrom_parts);
   const std::uint32_t n_per = (n_parts + n_threads - 1) / n_threads;
 
@@ -222,10 +223,10 @@ convert_coordinates(const std::size_t n_threads, const std::string &genome_file,
     const auto p_end = parts_beg + std::min((i + 1) * n_per, n_parts);
     threads.emplace_back([&, p_beg, p_end] {
       for (auto p = p_beg; p != p_end; ++p) {
-        const std::string chrom_name = amrs[p->first].get_chrom();
+        const std::string chrom_name = amrs[p->first].chrom;
         const auto c_itr = chrom_lookup.find(chrom_name);
         if (c_itr == std::cend(chrom_lookup))
-          conv_failure++;
+          ++conv_failure;
         else {
           std::vector<std::uint32_t> cpgs = collect_cpgs(c_itr->second);
           for (auto j = p->first; j < p->second; ++j)
@@ -252,7 +253,7 @@ clip_read(const std::size_t start_pos, const std::size_t end_pos, epi_r r) {
   return r;
 }
 
-static std::vector<epi_r>
+[[nodiscard]] static std::vector<epi_r>
 get_current_epireads(const std::vector<epi_r> &epireads,
                      const std::size_t max_len, const std::size_t cpg_window,
                      const std::size_t start_pos, std::size_t &read_id) {
@@ -260,14 +261,11 @@ get_current_epireads(const std::vector<epi_r> &epireads,
   //                  [](const epi_r &a, const epi_r &b) {
   //                    return a.pos < b.pos;
   //                  }));
-  const auto n_epi = std::size(epireads);
-
-  while (read_id < std::size(epireads) &&
-         epireads[read_id].pos + max_len <= start_pos)
+  const auto n_epi = size(epireads);
+  while (read_id < n_epi && epireads[read_id].pos + max_len <= start_pos)
     ++read_id;
 
   const auto end_pos = start_pos + cpg_window;
-
   std::vector<epi_r> current_epireads;
   for (auto i = read_id; i < n_epi && epireads[i].pos < end_pos; ++i)
     if (epireads[i].end() > start_pos)
@@ -287,9 +285,9 @@ total_states(const std::vector<epi_r> &epireads) {
 static inline void
 add_amr(const std::string &chrom_name, const std::size_t start_cpg,
         const std::size_t cpg_window, const std::vector<epi_r> &reads,
-        const double score, std::vector<GenomicRegion> &amrs) {
+        const double score, std::vector<Interval6> &amrs) {
   const auto end_cpg = start_cpg + cpg_window - 1;
-  const auto rds = std::to_string(std::size(reads));
+  const auto rds = std::to_string(size(reads));
   amrs.emplace_back(chrom_name, start_cpg, end_cpg, rds, score, '+');
 }
 
@@ -302,18 +300,20 @@ get_n_cpgs(const std::vector<epi_r> &reads) {
 }
 
 template <typename T>
-static inline std::vector<std::pair<T, T>>
-get_block_bounds(const T start_pos, const T end_pos, const T block_size) {
-  if (block_size == 0)
-    return {{start_pos, end_pos}};
-  std::vector<std::pair<T, T>> blocks;
-  auto block_start = start_pos;
-  while (block_start < end_pos) {
-    const auto block_end = std::min({block_start + block_size, end_pos});
-    blocks.emplace_back(block_start, block_end);
+[[nodiscard]] static inline auto
+get_block_bounds(const T n_elements, const T n_chunks)
+  -> std::vector<std::pair<T, T>> {
+  const auto q = n_elements / n_chunks;
+  const auto r = n_elements - q * n_chunks;
+  std::vector<std::pair<T, T>> chunks(n_chunks);
+  T block_start{};
+  for (std::size_t i = 0; i < n_chunks; ++i) {
+    const auto sz = (i < r) ? q + 1 : q;
+    const auto block_end = block_start + sz;
+    chunks[i] = {block_start, block_end};
     block_start = block_end;
   }
-  return blocks;
+  return chunks;
 }
 
 static std::size_t
@@ -321,39 +321,50 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
               const std::size_t min_obs_per_cpg, const std::size_t window_size,
               const EpireadStats &epistat, const std::string &chrom_name,
               const std::vector<epi_r> &epireads,
-              std::vector<GenomicRegion> &amrs) {
-  constexpr auto blocks_per_thread = 8u;
+              std::vector<Interval6> &amrs) {
+  constexpr auto blocks_per_thread = 1u;
 
   auto max_epiread_len = 0u;
   for (auto &e : epireads)
     max_epiread_len = std::max(max_epiread_len, e.length());
   const std::size_t min_obs_per_window = window_size * min_obs_per_cpg;
 
-  const std::size_t n_cpgs = get_n_cpgs(epireads);
+  const std::uint32_t n_cpgs = get_n_cpgs(epireads);
   if (verbose)
-    std::cerr << "processing " << chrom_name << " "
-              << "[reads: " << std::size(epireads) << "] "
-              << "[cpgs: " << n_cpgs << "]\n";
-
-  const auto n_blocks = n_threads * blocks_per_thread;
+    std::println(std::cerr, "processing {} [reads: {}][cpgs: {}]", chrom_name,
+                 size(epireads), n_cpgs);
 
   const std::uint32_t lim =
     n_cpgs >= window_size ? n_cpgs - window_size + 1 : 0;
-  const auto blocks = get_block_bounds(0u, lim, lim / n_blocks);
+  if (lim == 0)
+    return 0;
+
+  // ADS: need to do this by windows
+  const auto n_blocks = std::min(lim, n_threads * blocks_per_thread);
+  const auto blocks = get_block_bounds(lim, n_blocks);
+  if (!(n_blocks == size(blocks))) {
+    std::cerr << "n_blocks=" << n_blocks << '\t'
+              << "std::size(blocks)=" << size(blocks) << '\t' << "lim=" << lim
+              << '\t' << "lim/n_blocks=" << lim / n_blocks << std::endl;
+    exit(0);
+  }
   const auto blocks_beg = std::cbegin(blocks);
   const std::uint32_t n_per = (n_blocks + n_threads - 1) / n_threads;
 
-  const auto n_epireads = std::size(epireads);
+  const auto n_epireads = size(epireads);
   std::atomic_ulong windows_tested = 0;
 
-  std::vector<std::vector<GenomicRegion>> all_amrs(n_threads);
+  std::vector<std::vector<Interval6>> all_amrs(n_threads);
 
   std::vector<std::thread> threads;
-  for (auto i = 0u; i < n_threads; ++i) {
-    const auto b_beg = blocks_beg + i * n_per;
+  for (auto i = 0u; i < std::min(n_threads, n_blocks); ++i) {
+    const auto b_beg =
+      blocks_beg + std::min(i * n_per, n_blocks);  // i * n_per;
     const auto b_end = blocks_beg + std::min((i + 1) * n_per, n_blocks);
+    if (b_beg == b_end)
+      break;
     threads.emplace_back([&, i, b_beg, b_end] {
-      std::vector<GenomicRegion> curr_amrs;
+      std::vector<Interval6> curr_amrs;
       std::size_t windows_tested_thread = 0;
       for (auto b = b_beg; b != b_end; ++b) {
         std::size_t start_idx = 0;
@@ -372,7 +383,7 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
           }
         }
       }
-      all_amrs[i] = std::move(curr_amrs);
+      all_amrs[i] = curr_amrs;
       windows_tested += windows_tested_thread;
     });
   }
@@ -381,7 +392,7 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
 
   auto total_amrs = 0u;
   for (const auto &a : all_amrs)
-    total_amrs += std::size(a);
+    total_amrs += size(a);
 
   amrs.reserve(total_amrs);
   for (auto &v : all_amrs)
@@ -393,9 +404,9 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
 
 struct rename_amr {
   void
-  operator()(GenomicRegion &r) {
+  operator()(Interval6 &r) {
     static constexpr auto label = "AMR";
-    r.set_name(label + std::to_string(idx++) + ":" + r.get_name());
+    r.name = label + std::to_string(idx++) + ":" + r.name;
   }
   std::uint32_t idx{};
 };
@@ -499,7 +510,7 @@ main_amrfinder(int argc, char *argv[]) {
     if (n_threads > 1 && in.is_bgzf())
       tp.set_io(in);
 
-    std::vector<GenomicRegion> amrs;
+    std::vector<Interval6> amrs;
 
     // windows_tested is the number of sliding windows in the
     // methylome that were tested for a signal of significant
@@ -516,8 +527,8 @@ main_amrfinder(int argc, char *argv[]) {
                         epistat, prev_chrom, epireads, amrs);
         epireads.clear();
       }
-      swap(prev_chrom, er.chr);
       epireads.emplace_back(er.pos, er.seq);
+      swap(prev_chrom, er.chr);
     }
     if (!epireads.empty())
       windows_tested +=
@@ -531,19 +542,18 @@ main_amrfinder(int argc, char *argv[]) {
     std::for_each(std::begin(amrs), std::end(amrs), rename_amr());
 
     if (verbose)
-      std::cerr << "========= POST PROCESSING =========\n";
+      std::println(std::cerr, "========= POST PROCESSING =========");
 
     // windows_accepted is the number of sliding windows in the
     // methylome that were found to have a significant signal of
     // allele-specific methylation
-    const auto windows_accepted = std::size(amrs);
+    const auto windows_accepted = size(amrs);
     if (!amrs.empty()) {
       /*
-        ADS: there are several "steps" below that are done
-        independently, but for which the order matters. It is not
-        clear to me that this is the right order, after observing the
-        behavior of the program on some newer much larger data
-        sets. The steps:
+        ADS: there are several "steps" below that are done independently, but
+        for which the order matters. It is not clear to me that this is the
+        right order, after observing the behavior of the program on some newer
+        much larger data sets. The steps:
 
         (1) Get the p-values
         (2) Get the fdr cutoff
@@ -554,16 +564,15 @@ main_amrfinder(int argc, char *argv[]) {
         (7) remove the AMRs based on a score (p-value or fdr)
         (8) eliminate what remains by size using half the "gap limit"
 
-        The score in the above is taken as the extreme from step (4),
-        which interacts poorly with subsequent steps. Also, the "half
-        gap limit" for eliminating AMRs at the end is not justified
-        anywhere.
+        The score in the above is taken as the extreme from step (4), which
+        interacts poorly with subsequent steps. Also, the "half gap limit" for
+        eliminating AMRs at the end is not justified anywhere.
        */
 
       // get all the pvals... (but they might be BIC scores)
-      std::vector<double> pvals(std::size(amrs));
+      std::vector<double> pvals(size(amrs));
       transform(std::cbegin(amrs), std::cend(amrs), std::begin(pvals),
-                [](const GenomicRegion &r) { return r.get_score(); });
+                [](const Interval6 &r) { return r.score; });
 
       // if the pvalues are not BIC scores, get an FDR cutoff
       // corresponding to the given critical value
@@ -572,60 +581,58 @@ main_amrfinder(int argc, char *argv[]) {
           ? 0.0
           : smithlab::get_fdr_cutoff(windows_tested, pvals, critical_value);
 
-      // if we are not using BIC, and if corrected p-values are
-      // requested, then adjust the p-values
+      // if we are not using BIC, and if corrected p-values are requested,
+      // then adjust the p-values
       if (!use_bic && apply_correction) {
         smithlab::correct_pvals(windows_tested, pvals);
-        for (auto i = 0u; i < std::size(pvals); ++i)
-          amrs[i].set_score(pvals[i]);
+        for (auto i = 0u; i < size(pvals); ++i)
+          amrs[i].score = pvals[i];
       }
 
-      // ADS: not sure it's a good idea in this next collapse function
-      // to keep the lowest among all p-values for merged regions
+      // ADS: not sure it's a good idea in this next collapse function to keep
+      // the lowest among all p-values for merged regions
       merge_amrs(1, amrs);
 
-      // collapsed_amrs is the number of intervals of consecutive CpG
-      // sites that are found to reside in a window among those
-      // accepted as significant
-      const auto n_collapsed_amrs = std::size(amrs);
+      // collapsed_amrs is the number of intervals of consecutive CpG sites
+      // that are found to reside in a window among those accepted as
+      // significant
+      const auto n_collapsed_amrs = size(amrs);
 
       if (!convert_coordinates(n_threads, genome_file, amrs)) {
         std::cerr << "failed converting coordinates\n";
         return EXIT_FAILURE;
       }
 
-      // ADS: merge AMRs if they are sufficiently close; the distance
-      // should not be too large, and a distance of 1000 bp is likely
-      // too large.
+      // ADS: merge AMRs if they are sufficiently close; the distance should
+      // not be too large, and a distance of 1000 bp is likely too large.
       merge_amrs(gap_limit, amrs);
 
-      // merged_amrs are the number of intervals that result from
-      // merging any collapsed amrs that have a distance of less than
-      // gap_limit/2 from each other
-      const auto n_merged_amrs = std::size(amrs);
+      // merged_amrs are the number of intervals that result from merging any
+      // collapsed amrs that have a distance of less than gap_limit/2 from
+      // each other
+      const auto n_merged_amrs = size(amrs);
 
-      // if BIC was not requested, then eliminate AMRs based on either
-      // the p-value cutoff, or with the FDR-based cutoff, if it was
-      // requested.
+      // if BIC was not requested, then eliminate AMRs based on either the
+      // p-value cutoff, or with the FDR-based cutoff, if it was requested.
       if (!use_bic) {
         const auto cutoff =
           (apply_correction || !use_fdr) ? critical_value : fdr_cutoff;
         amrs.erase(std::remove_if(std::begin(amrs), std::end(amrs),
-                                  [cutoff](const GenomicRegion &r) {
-                                    return r.get_score() >= cutoff;
+                                  [cutoff](const Interval6 &r) {
+                                    return r.score >= cutoff;
                                   }),
                    std::cend(amrs));
       }
 
-      const auto amrs_passing_fdr = std::size(amrs);
+      const auto amrs_passing_fdr = size(amrs);
 
-      // ADS: eliminating AMRs based on their size makes sense, but
-      // not if that size is tied to the gap between AMRs we would
-      // merge. There is no symmetry for these.
+      // ADS: eliminating AMRs based on their size makes sense, but not if
+      // that size is tied to the gap between AMRs we would merge. There is no
+      // symmetry for these.
       const auto min_size = gap_limit / 2;
       amrs.erase(
         std::remove_if(std::begin(amrs), std::end(amrs),
-                       [&](const auto &r) { return r.get_width() < min_size; }),
+                       [&](const auto &r) { return size(r) < min_size; }),
         std::cend(amrs));
 
       if (verbose) {
@@ -641,8 +648,8 @@ main_amrfinder(int argc, char *argv[]) {
       std::ofstream out(outfile);
       if (!out)
         std::runtime_error("failed to open output file: " + outfile);
-      std::copy(std::cbegin(amrs), std::cend(amrs),
-                std::ostream_iterator<GenomicRegion>(out, "\n"));
+      for (const auto &a : amrs)
+        std::println(out, "{}", a);
     }
     if (!summary_file.empty()) {
       std::ofstream summary_out(summary_file);

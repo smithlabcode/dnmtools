@@ -33,7 +33,7 @@
 #include <iostream>
 #include <iterator>
 #include <numeric>
-#include <print>
+// #include <print>  // ADS: needs c++20
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -50,9 +50,8 @@ struct amr_summary {
                     std::max(amr_count, static_cast<std::size_t>(1));
   }
 
-  // amr_count is the number of identified AMRs, which are the merged
-  // AMRs that are found to be significant when tested as a single
-  // interval
+  // amr_count is the number of identified AMRs, which are the merged AMRs
+  // that are found to be significant when tested as a single interval
   std::size_t amr_count{};
   // total_amr_size is the sum of the sizes of the identified AMRs
   std::size_t amr_total_size{};
@@ -331,8 +330,8 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
 
   const std::uint32_t n_cpgs = get_n_cpgs(epireads);
   if (verbose)
-    std::println(std::cerr, "processing {} [reads: {}][cpgs: {}]", chrom_name,
-                 size(epireads), n_cpgs);
+    std::cerr << "processing " << chrom_name << " [reads: " << size(epireads)
+              << "][cpgs: " << n_cpgs << "]\n";
 
   const std::uint32_t lim =
     n_cpgs >= window_size ? n_cpgs - window_size + 1 : 0;
@@ -542,7 +541,7 @@ main_amrfinder(int argc, char *argv[]) {
     std::for_each(std::begin(amrs), std::end(amrs), rename_amr());
 
     if (verbose)
-      std::println(std::cerr, "========= POST PROCESSING =========");
+      std::cerr << "========= POST PROCESSING =========\n";
 
     // windows_accepted is the number of sliding windows in the
     // methylome that were found to have a significant signal of
@@ -649,7 +648,7 @@ main_amrfinder(int argc, char *argv[]) {
       if (!out)
         std::runtime_error("failed to open output file: " + outfile);
       for (const auto &a : amrs)
-        std::println(out, "{}", a);
+        out << to_string(a) << '\n';
     }
     if (!summary_file.empty()) {
       std::ofstream summary_out(summary_file);

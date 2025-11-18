@@ -19,7 +19,7 @@
 #define INTERVAL_HPP_
 
 #include <cstdint>
-#include <format>
+//  #include <format> // ADS: needs c++20
 #include <iterator>  // std::size
 #include <stdexcept>
 #include <string>
@@ -42,18 +42,34 @@ struct Interval {
   }
   auto
   initialize(const char *, const char *) -> bool;
+
   auto
-  operator<=>(const Interval &) const = default;
+  operator<(const Interval &rhs) const {
+    return (chrom < rhs.chrom ||
+            (chrom == rhs.chrom &&
+             (start < rhs.start || (start == rhs.start && stop < rhs.stop))));
+  }
+
+  // auto
+  // operator<=>(const Interval &) const = default;
 };
 
-template <> struct std::formatter<Interval> : std::formatter<std::string> {
-  auto
-  format(const Interval &i, format_context &ctx) const {
-    static constexpr auto fmt = "{}\t{}\t{}";
-    return std::formatter<std::string>::format(
-      std::format(fmt, i.chrom, i.start, i.stop), ctx);
-  }
-};
+[[nodiscard]] inline auto
+to_string(const Interval &x) -> std::string {
+  return x.chrom + "\t" + std::to_string(x.start) + "\t" +
+         std::to_string(x.stop);
+}
+
+// ADS: need to bump to c++20 for this
+//
+// template <> struct std::formatter<Interval> : std::formatter<std::string> {
+//   auto
+//   format(const Interval &i, format_context &ctx) const {
+//     static constexpr auto fmt = "{}\t{}\t{}";
+//     return std::formatter<std::string>::format(
+//       std::format(fmt, i.chrom, i.start, i.stop), ctx);
+//   }
+// };
 
 [[nodiscard]] inline auto
 size(const Interval &x) {

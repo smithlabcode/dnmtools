@@ -8,24 +8,25 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build-with-gcc-on-x86:
-    runs-on: macos-13
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    - name: Update Homebrew
-      run: brew update
-    - name: Install autotools
-      run: brew install automake
-    - name: Install dependencies
-      run: brew install htslib gsl
-    - name: Generate configure script
-      run: ./autogen.sh
-    - name: configure with g++-14
-      run: ./configure CXX="g++-14" CPPFLAGS="-I$(brew --prefix)/include" LDFLAGS="-L$(brew --prefix)/lib"
-    - name: make
-      run: make -j4
+  ## ADS: removing this because of 'brownout' on github runners
+  # build-with-gcc-on-x86:
+  #   runs-on: macos-13
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #     with:
+  #       submodules: recursive
+  #   - name: Update Homebrew
+  #     run: brew update
+  #   - name: Install autotools
+  #     run: brew install automake
+  #   - name: Install dependencies
+  #     run: brew install htslib gsl
+  #   - name: Generate configure script
+  #     run: ./autogen.sh
+  #   - name: configure with g++-14
+  #     run: ./configure CXX="g++-14" CPPFLAGS="-I$(brew --prefix)/include" LDFLAGS="-L$(brew --prefix)/lib"
+  #   - name: make
+  #     run: make -j4
   build-with-gcc-on-arm64:
     runs-on: macos-15
     steps:

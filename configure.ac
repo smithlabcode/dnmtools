@@ -30,7 +30,7 @@ AS_IF([test "x$CXXFLAGS_set" != "xset"], [
 ])
 AC_MSG_NOTICE([CXXFLAGS is $CXXFLAGS])
 
-AX_CXX_COMPILE_STDCXX_17([noext], [mandatory])
+AX_CXX_COMPILE_STDCXX(17, [noext], [mandatory])
 AC_PROG_RANLIB
 
 dnl recursively configure abismal and smithlab_cpp

@@ -171,7 +171,7 @@ is_c_at_g(const std::string &s, const std::size_t i) {
    requirement of the program into a more reasonable range, so keeping
    all the information seems reasonable. */
 struct CountSet {
-  static constexpr auto max_prob_repr = 256.0;
+  static constexpr auto max_prob_repr = 255.0;
   [[nodiscard]] std::string
   tostring() const {
     // clang-format off

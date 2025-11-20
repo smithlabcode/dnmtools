@@ -60,6 +60,7 @@ template <typename T> struct Regression {
   static double tolerance;        // 1e-3;
   static double stepsize;         // 0.001;
   static std::uint32_t max_iter;  // 250;
+  static constexpr double pseudocount = 1.0 / 256.0;
 
   Design design;
   std::string rowname;
@@ -154,6 +155,15 @@ Regression<T>::parse(const std::string &line) {
 
     mc.push_back(mc1);
   }
+
+  const auto add_pseudocount = [&](auto x) {
+    x.n_meth = x.n_reads > 0.0 ? pseudocount / 2.0 +
+                                   x.n_meth * (1.0 - pseudocount / x.n_reads)
+                               : 0.0;
+    return x;
+  };
+
+  std::transform(std::begin(mc), std::end(mc), std::begin(mc), add_pseudocount);
 
   if (failed)
     throw std::runtime_error("failed to parse counts from:\n" + line);

@@ -43,8 +43,8 @@ The value of N is the number of observations contributing.)";
 
 struct genomic_interval {
   std::string chrom;
-  std::uint32_t start_pos;
-  std::uint32_t end_pos;
+  std::uint32_t start_pos{};
+  std::uint32_t end_pos{};
 
   auto
   operator<(const genomic_interval &other) const -> bool {
@@ -348,16 +348,16 @@ newline_terminated_file(const std::string &filename) -> bool {
 }
 
 auto
-main_autocorr(int argc, char *argv[]) -> int {
+main_autocorr(int argc, char *argv[]) -> int {  // NOLINT(*-avoid-c-arrays)
   static constexpr auto default_max_dist = 4000;
   static constexpr auto default_min_reads = 10;
   static constexpr auto default_min_sites = 500;
 
   static constexpr auto header = "distance\tcorrelation\tN\tsdX\tsdY\tcovXY\n";
 
-  const auto megabytes = [](const double x) {
+  const auto megabytes = [](const auto x) {
     constexpr auto mb = 1024 * 1024;
-    return std::to_string(x / mb) + "MB";
+    return std::to_string(static_cast<double>(x) / mb) + "MB";
   };
 
   std::string input_filename;
@@ -376,7 +376,8 @@ main_autocorr(int argc, char *argv[]) -> int {
   bool include_header = false;
 
   /****************** COMMAND LINE OPTIONS ********************/
-  OptionParser opt_parse(argv[0], description, "<methylation-file>");
+  OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                         description, "<methylation-file>");
   opt_parse.set_prog_descr_raw();
   opt_parse.add_opt("input", 'i', "input file name", true, input_filename);
   opt_parse.add_opt("output", 'o', "output file name", true, outfile);

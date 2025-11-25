@@ -46,6 +46,8 @@ using std::runtime_error;
 using std::string;
 using std::vector;
 
+// NOLINTBEGIN(*-narrowing-conversions,*-avoid-magic-numbers)
+
 static void
 wilson_ci_for_binomial(const double alpha, const double n, const double p_hat,
                        double &lower, double &upper) {
@@ -210,9 +212,9 @@ expectation_maximization(const bool DEBUG, const size_t x, const size_t y,
 
   uint32_t iter = 0u;
   double delta = std::numeric_limits<double>::max();
+  // NOLINTBEGIN(*-avoid-do-while)
   do {
     vector<vector<double>> coeff;
-
     assert(p > 0 && q > 0);
 
     expectation(a, x, p, q, coeff);
@@ -225,6 +227,7 @@ expectation_maximization(const bool DEBUG, const size_t x, const size_t y,
     q = max(tolerance, min(q, 1 - tolerance - p));
     delta = max(fabs(p_old - p), fabs(q_old - q));
   } while (delta > tolerance && iter++ < max_iterations);
+  // NOLINTEND(*-avoid-do-while)
 
   if (DEBUG) {
     cerr << iter << '\t' << "p_m=" << p << '\t' << "p_h=" << q << '\t'
@@ -302,9 +305,9 @@ static void
 expectation_maximization(const bool DEBUG, const size_t x, const size_t y,
                          const size_t z, const size_t w, const double tolerance,
                          double &p, double &q) {
-  size_t iter = 0;
+  size_t iter{};
   double delta = std::numeric_limits<double>::max();
-
+  // NOLINTBEGIN(*-avoid-do-while)
   do {
     vector<double> coeff;
     expectation(y, p, q, coeff);
@@ -317,6 +320,7 @@ expectation_maximization(const bool DEBUG, const size_t x, const size_t y,
     delta = max(fabs(p_old - p), fabs(q_old - q));
     iter++;
   } while (delta > tolerance && iter <= 500);
+  // NOLINTEND(*-avoid-do-while)
 
   if (DEBUG) {
     cerr << iter << '\t' << "p=" << p << '\t' << "q=" << q << '\t'
@@ -809,3 +813,5 @@ main_mlml(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-narrowing-conversions,*-avoid-magic-numbers)

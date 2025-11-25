@@ -47,7 +47,7 @@ operator<<(std::ostream &o, const xcounts_entry &e) {
 }
 
 std::unordered_map<std::string, std::vector<xcounts_entry>>
-read_xcounts_by_chrom(const std::uint32_t n_threads,
+read_xcounts_by_chrom(const std::int32_t n_threads,
                       const std::string &xcounts_file);
 
 bool

@@ -18,24 +18,30 @@
 
 #include "MSite.hpp"
 #include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
 
 #include <bamxx.hpp>
 
 #include <algorithm>
-#include <cmath>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <memory>
-#include <numeric>
 #include <queue>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
+
+// NOLINTBEGIN(*-owning-memory,*-avoid-magic-numbers,*-narrowing-conversions,*-pointer-arithmetic)
 
 static void
 set_invalid(MSite &s) {
@@ -52,7 +58,6 @@ any_sites_unprocessed(
   const std::vector<std::string> &filenames,
   const std::vector<std::unique_ptr<bamxx::bgzf_file>> &infiles,
   std::vector<bool> &outdated, std::vector<MSite> &sites) {
-
   const std::size_t n_files = std::size(sites);
 
   bool sites_remain = false;
@@ -94,7 +99,6 @@ find_minimum_site(
   const std::vector<MSite> &sites,
   const std::unordered_map<std::string, std::size_t> &chroms_order,
   const std::vector<bool> &outdated) {
-
   const std::size_t n_files = std::size(sites);
 
   // ms_id is the id of the minimum site, the next one to print
@@ -128,7 +132,6 @@ collect_sites_to_print(
   const std::vector<MSite> &sites,
   const std::unordered_map<std::string, std::size_t> &chroms_order,
   const std::vector<bool> &outdated, std::vector<bool> &to_print) {
-
   const std::size_t n_files = std::size(sites);
 
   const std::size_t min_site_idx =
@@ -151,13 +154,14 @@ any_mutated(const std::vector<bool> &to_print,
   return (i < std::size(sites));
 }
 
+template <std::size_t buffer_size>
 static void
-write_line_for_tabular(const bool write_fractional,
+write_line_for_tabular(std::array<char, buffer_size> &buffer,
+                       const bool write_fractional,
                        const bool report_any_mutated,
                        const std::size_t min_reads, std::ostream &out,
                        const std::vector<bool> &to_print,
                        const std::vector<MSite> &sites, MSite min_site) {
-
   const std::size_t n_files = std::size(sites);
 
   min_site.set_unmutated();
@@ -165,33 +169,69 @@ write_line_for_tabular(const bool write_fractional,
     min_site.set_mutated();
 
   // ADS: is this the format we want for the row names?
-  out << min_site.chrom << ':' << min_site.pos << ':' << min_site.strand << ':'
-      << min_site.context;
+  auto cursor = buffer.data();
+  auto bytes_left = buffer_size;
+  {
+    const auto n_bytes =
+      std::snprintf(cursor, bytes_left, "%s:%zu:%c:%s", min_site.chrom.data(),
+                    min_site.pos, min_site.strand, min_site.context.data());
+    if (n_bytes < 0 || n_bytes == static_cast<std::int32_t>(bytes_left))
+      throw std::runtime_error("failed to write output line");
+    cursor += n_bytes;
+    bytes_left -= n_bytes;
+  }
+
+  // out << min_site.chrom << ':' << min_site.pos << ':' << min_site.strand <<
+  // ':'
+  //     << min_site.context;
 
   if (write_fractional) {
     for (std::size_t i = 0; i < n_files; ++i) {
       const std::size_t r = sites[i].n_reads;
-      if (to_print[i] && r >= min_reads)
-        out << '\t' << sites[i].meth;
-      else
-        out << '\t' << "NA";
+      const auto n_bytes = [&] {
+        return (to_print[i] && r >= min_reads)
+                 ? std::snprintf(cursor, bytes_left, "\t%.6g", sites[i].meth)
+                 : std::snprintf(cursor, bytes_left, "\tNA");
+      }();
+      if (n_bytes < 0 || n_bytes == static_cast<std::int32_t>(bytes_left))
+        throw std::runtime_error("failed to write output line");
+      cursor += n_bytes;
+      bytes_left -= n_bytes;
     }
   }
   else
     for (std::size_t i = 0; i < n_files; ++i) {
-      if (to_print[i])
-        out << '\t' << sites[i].n_reads << '\t' << sites[i].n_meth();
-      else
-        out << '\t' << 0 << '\t' << 0;
+      const auto n_bytes = [&] {
+        return to_print[i]
+                 ? std::snprintf(cursor, bytes_left, "\t%zu\t%.6g",
+                                 sites[i].n_reads, sites[i].n_meth_f())
+                 : std::snprintf(cursor, bytes_left, "\t0\t0");
+      }();
+      if (n_bytes < 0 || n_bytes == static_cast<std::int32_t>(bytes_left))
+        throw std::runtime_error("failed to write output line");
+      cursor += n_bytes;
+      bytes_left -= n_bytes;
+      // if (to_print[i])
+      //   out << '\t' << sites[i].n_reads << '\t' << sites[i].n_meth();
+      // else
+      //   out << '\t' << 0 << '\t' << 0;
     }
-  out << '\n';
+  if (std::distance(buffer.data(), cursor) + 1 <
+      static_cast<std::ptrdiff_t>(buffer_size))
+    *cursor++ = '\n';
+
+  if (std::distance(buffer.data(), cursor) <
+      static_cast<std::ptrdiff_t>(buffer_size)) {
+    *cursor++ = '\0';
+    out.write(buffer.data(),
+              std::distance(buffer.data(), cursor));  // "\n");  // out << '\n';
+  }
 }
 
 static void
 write_line_for_merged_counts(std::ostream &out, const bool report_any_mutated,
                              const std::vector<bool> &to_print,
                              const std::vector<MSite> &sites, MSite min_site) {
-
   const std::size_t n_files = std::size(sites);
 
   min_site.set_unmutated();
@@ -212,7 +252,7 @@ write_line_for_merged_counts(std::ostream &out, const bool report_any_mutated,
 
 [[nodiscard]] static std::string
 remove_extension(const std::string &filename) {
-  const std::size_t last_dot = filename.find_last_of(".");
+  const std::size_t last_dot = filename.find_last_of('.');
   if (last_dot == std::string::npos)
     return filename;
   else
@@ -254,7 +294,6 @@ get_orders_by_file(const std::string &filename,
 static void
 get_chroms_order(const std::vector<std::string> &filenames,
                  std::unordered_map<std::string, std::size_t> &chroms_order) {
-
   // get order of chroms in each file
   std::vector<std::vector<std::string>> orders(std::size(filenames));
   for (std::size_t i = 0; i < std::size(filenames); ++i)
@@ -326,9 +365,9 @@ get_chroms_order(const std::vector<std::string> &filenames,
   output is in counts or fractions.
  */
 int
-main_merge_methcounts(int argc, char *argv[]) {
+main_merge_methcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
+  static constexpr auto buffer_size = 65536;
   try {
-
     static const std::string description = "merge multiple methcounts files";
 
     std::string outfile;
@@ -347,10 +386,10 @@ main_merge_methcounts(int argc, char *argv[]) {
     std::size_t min_reads = 1;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description,
-                           "<methcounts-files>");
-    opt_parse.add_opt("output", 'o', "output file name (default: stdout)",
-                      false, outfile);
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description, "<methcounts-files>");
+    opt_parse.add_opt("output", 'o', "output file name (default: stdout)", true,
+                      outfile);
     opt_parse.add_opt("header", 'H', "header to print (ignored for tabular)",
                       false, header_info);
     opt_parse.add_opt("tabular", 't', "output as table", false,
@@ -438,21 +477,20 @@ main_merge_methcounts(int argc, char *argv[]) {
         throw std::runtime_error("cannot open file: " + meth_files[i]);
     }
 
-    std::ofstream of;
-    if (!outfile.empty())
-      of.open(outfile);
-    std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
+    std::ofstream out(outfile);
+    if (!out)
+      throw std::runtime_error("failed to open output file: " + outfile);
 
     // print header if user specifies or if tabular output format
     if (write_tabular_format) {
-
-      std::vector<std::string> colnames;
-      for (const auto &i : meth_files)
-        colnames.push_back(strip_path(i));
-
-      for (auto &i : colnames)
-        i = suffix_to_remove.empty() ? remove_extension(i)
-                                     : remove_suffix(suffix_to_remove, i);
+      std::vector<std::string> colnames(std::size(meth_files));
+      std::transform(std::cbegin(meth_files), std::cend(meth_files),
+                     std::begin(colnames), [&](const auto &x) {
+                       auto fn = std::filesystem::path{x}.filename().string();
+                       return suffix_to_remove.empty()
+                                ? remove_extension(fn)
+                                : remove_suffix(suffix_to_remove, fn);
+                     });
 
       if (!write_fractional && !radmeth_format) {
         std::vector<std::string> tmp;
@@ -477,6 +515,8 @@ main_merge_methcounts(int argc, char *argv[]) {
     std::vector<bool> sites_to_print;  // declared here to keep allocation
     std::vector<std::unordered_set<std::string>> chroms_seen(n_files);
 
+    std::array<char, buffer_size> buffer{};
+
     while (any_sites_unprocessed(meth_files, infiles, outdated, sites)) {
       sites_to_print.clear();
       sites_to_print.resize(n_files, false);
@@ -487,8 +527,9 @@ main_merge_methcounts(int argc, char *argv[]) {
 
       // output the appropriate sites' data
       if (write_tabular_format)
-        write_line_for_tabular(write_fractional, report_any_mutated, min_reads,
-                               out, sites_to_print, sites, sites[idx]);
+        write_line_for_tabular(buffer, write_fractional, report_any_mutated,
+                               min_reads, out, sites_to_print, sites,
+                               sites[idx]);
       else
         write_line_for_merged_counts(out, report_any_mutated, sites_to_print,
                                      sites, sites[idx]);
@@ -502,3 +543,5 @@ main_merge_methcounts(int argc, char *argv[]) {
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-owning-memory,*-avoid-magic-numbers,*-narrowing-conversions,*-pointer-arithmetic)

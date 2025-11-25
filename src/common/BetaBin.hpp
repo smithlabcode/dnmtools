@@ -18,26 +18,33 @@
 #ifndef BETABIN_HPP
 #define BETABIN_HPP
 
-#include <utility>
+#include <iterator>  // IWYU pragma: keep
 #include <string>
+#include <utility>
 #include <vector>
 
 struct betabin {
   betabin();
   betabin(const double a, const double b);
-  betabin(const std::string &str);
-  double operator()(const std::pair<double, double> &val) const;
-  double log_likelihood(const std::pair<double, double> &val) const;
-  double sign(const double x);
-  double invpsi(const double tolerance, const double x);
-  double movement(const double curr, const double prev);
-  void fit(const std::vector<double> &vals_a,
-           const std::vector<double> &vals_b,
-           const std::vector<double> &p);
-  std::string tostring() const;
-  double alpha;
-  double beta;
-  double lnbeta_helper;
+  explicit betabin(const std::string &str);
+  double
+  operator()(const std::pair<double, double> &val) const;
+  double
+  log_likelihood(const std::pair<double, double> &val) const;
+  double
+  sign(const double x);
+  double
+  invpsi(const double tolerance, const double x);
+  double
+  movement(const double curr, const double prev);
+  void
+  fit(const std::vector<double> &vals_a, const std::vector<double> &vals_b,
+      const std::vector<double> &p);
+  std::string
+  tostring() const;
+  double alpha{};
+  double beta{};
+  double lnbeta_helper{};
 
   static const double tolerance;
 };

@@ -1181,10 +1181,6 @@ main_pmd(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
                     if (!is_msite_file(x))
                       throw runtime_error("malformed counts file: " + x);
                   });
-    //              return !is_msite_file(x); }))
-    // // for (const auto &filename : cpgs_file)
-    // //   if (!is_msite_file(filename))
-    // throw runtime_error("malformed counts file: " + filename);
 
     bool insufficient_data = false;  // ADS: this is used now to detect
                                      // when the counts files have

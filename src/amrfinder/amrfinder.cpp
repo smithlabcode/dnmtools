@@ -17,9 +17,8 @@
  * more details.
  */
 
-#include "EpireadStats.hpp"
-
 #include "Epiread.hpp"
+#include "EpireadStats.hpp"
 #include "Interval.hpp"
 #include "Interval6.hpp"
 
@@ -29,28 +28,39 @@
 
 #include <bamxx.hpp>
 
+#include <algorithm>
 #include <atomic>
+#include <cassert>
+#include <cctype>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <iterator>
 #include <numeric>
-// #include <print>  // ADS: needs c++20
-#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <unordered_map>
+#include <utility>
 #include <vector>
+// #include <print>  // ADS: needs c++20
+
+// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions)
 
 struct amr_summary {
-  amr_summary(const std::vector<Interval6> &amrs) {
-    amr_count = size(amrs);
-    amr_total_size = accumulate(
+  // NOLINTBEGIN(*-prefer-member-initializer)
+  amr_summary(const std::vector<Interval6> &amrs) : amr_count{std::size(amrs)} {
+    amr_total_size = std::accumulate(
       std::cbegin(amrs), std::cend(amrs), 0ul,
       [](const std::size_t t, const Interval6 &p) { return t + size(p); });
     amr_mean_size = static_cast<double>(amr_total_size) /
                     std::max(amr_count, static_cast<std::size_t>(1));
   }
+  // NOLINTEND(*-prefer-member-initializer)
 
   // amr_count is the number of identified AMRs, which are the merged AMRs
   // that are found to be significant when tested as a single interval
@@ -194,7 +204,8 @@ get_chrom_partition(const std::vector<Interval6> &r) {
 }
 
 [[nodiscard]] static bool
-convert_coordinates(const std::size_t n_threads, const std::string &genome_file,
+convert_coordinates(const std::uint32_t n_threads,
+                    const std::string &genome_file,
                     std::vector<Interval6> &amrs) {
 
   std::unordered_map<std::string, std::string> chrom_lookup;
@@ -212,14 +223,14 @@ convert_coordinates(const std::size_t n_threads, const std::string &genome_file,
   }
 
   const auto chrom_parts = get_chrom_partition(amrs);
-  const auto n_parts = size(chrom_parts);
+  const std::uint32_t n_parts = std::size(chrom_parts);
   const auto parts_beg = std::cbegin(chrom_parts);
-  const std::uint32_t n_per = (n_parts + n_threads - 1) / n_threads;
+  const auto n_per = (n_parts + n_threads - 1) / n_threads;
 
   std::atomic_uint32_t conv_failure = 0;
 
   std::vector<std::thread> threads;
-  for (auto i = 0ul; i < std::min(n_threads, n_parts); ++i) {
+  for (auto i = 0; i < std::min(n_threads, n_parts); ++i) {
     const auto p_beg = parts_beg + std::min(i * n_per, n_parts);
     const auto p_end = parts_beg + std::min((i + 1) * n_per, n_parts);
     threads.emplace_back([&, p_beg, p_end] {
@@ -258,10 +269,9 @@ clip_read(const std::size_t start_pos, const std::size_t end_pos, epi_r r) {
 get_current_epireads(const std::vector<epi_r> &epireads,
                      const std::size_t max_len, const std::size_t cpg_window,
                      const std::size_t start_pos, std::size_t &read_id) {
-  // assert(is_sorted(std::cbegin(epireads), std::cend(epireads),
-  //                  [](const epi_r &a, const epi_r &b) {
-  //                    return a.pos < b.pos;
-  //                  }));
+  assert(std::is_sorted(
+    std::cbegin(epireads), std::cend(epireads),
+    [](const epi_r &a, const epi_r &b) { return a.pos < b.pos; }));
   const auto n_epi = size(epireads);
   while (read_id < n_epi && epireads[read_id].pos + max_len <= start_pos)
     ++read_id;
@@ -343,12 +353,6 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
   // ADS: need to do this by windows
   const auto n_blocks = std::min(lim, n_threads * blocks_per_thread);
   const auto blocks = get_block_bounds(lim, n_blocks);
-  if (!(n_blocks == size(blocks))) {
-    std::cerr << "n_blocks=" << n_blocks << '\t'
-              << "std::size(blocks)=" << size(blocks) << '\t' << "lim=" << lim
-              << '\t' << "lim/n_blocks=" << lim / n_blocks << std::endl;
-    exit(0);
-  }
   const auto blocks_beg = std::cbegin(blocks);
   const std::uint32_t n_per = (n_blocks + n_threads - 1) / n_threads;
 
@@ -359,8 +363,7 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
 
   std::vector<std::thread> threads;
   for (auto i = 0u; i < std::min(n_threads, n_blocks); ++i) {
-    const auto b_beg =
-      blocks_beg + std::min(i * n_per, n_blocks);  // i * n_per;
+    const auto b_beg = blocks_beg + std::min(i * n_per, n_blocks);
     const auto b_end = blocks_beg + std::min((i + 1) * n_per, n_blocks);
     if (b_beg == b_end)
       break;
@@ -413,7 +416,7 @@ struct rename_amr {
 };
 
 int
-main_amrfinder(int argc, char *argv[]) {
+main_amrfinder(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     const std::string description =
       "identify regions of allele-specific methylation";
@@ -445,7 +448,8 @@ main_amrfinder(int argc, char *argv[]) {
     bool correct_for_read_count = true;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description, "<epireads>");
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description, "<epireads>");
     opt_parse.add_opt("output", 'o', "output file", true, outfile);
     opt_parse.add_opt("chrom", 'c', "reference genome fasta file", true,
                       genome_file);
@@ -665,3 +669,5 @@ main_amrfinder(int argc, char *argv[]) {
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions)

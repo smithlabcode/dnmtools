@@ -16,51 +16,58 @@
  * General Public License for more details.
  */
 
-#include <string>
-#include <vector>
+#include <algorithm>
+#include <cassert>
+#include <fstream>
 #include <iostream>
 #include <iterator>
-#include <fstream>
-#include <algorithm>
 #include <numeric>
-#include <utility>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include <cmath>
 #include <sstream>
 
-#include "OptionParser.hpp"
-#include "smithlab_utils.hpp"
-#include "smithlab_os.hpp"
 #include "GenomicRegion.hpp"
 #include "MSite.hpp"
+#include "OptionParser.hpp"
+#include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
 
 #include "Epiread.hpp"
 
-using std::string;
-using std::vector;
-using std::cout;
 using std::cerr;
+using std::cout;
 using std::endl;
-using std::unordered_map;
-using std::unordered_set;
 using std::max;
 using std::min;
 using std::runtime_error;
+using std::string;
+using std::unordered_map;
+using std::unordered_set;
+using std::vector;
 
 static inline double
 log_sum_log(const double p, const double q) {
-  if (p == 0) {return q;}
-  else if (q == 0) {return p;}
+  if (p == 0) {
+    return q;
+  }
+  else if (q == 0) {
+    return p;
+  }
   return p > q ? p + log(1.0 + exp(q - p)) : q + log(1.0 + exp(p - q));
 }
 
 static inline double
 lnchoose(const unsigned int n, unsigned int m) {
-  if (m == n || m == 0) return 0;
-  if (m * 2 > n) m = n - m;
+  if (m == n || m == 0)
+    return 0;
+  if (m * 2 > n)
+    m = n - m;
   using std::lgamma;
   return lgamma(n + 1.0) - lgamma(m + 1.0) - lgamma((n - m) + 1.0);
 }
@@ -73,9 +80,9 @@ log_hyper_g(const size_t k, const size_t n1, const size_t n2, const size_t t) {
 
 static double
 fishers_exact(size_t a, size_t b, size_t c, size_t d) {
-  const size_t m = a + c; // sum of first column
-  const size_t n = b + d; // sum of second column
-  const size_t k = a + b; // sum of first row
+  const size_t m = a + c;  // sum of first column
+  const size_t n = b + d;  // sum of second column
+  const size_t k = a + b;  // sum of first row
   // ADS: want more extreme than "observed"
   const double observed = log_hyper_g(a, m, n, k);
   double p = 0.0;
@@ -92,48 +99,61 @@ state_pair_to_index(const string &s, const size_t idx) {
   assert(idx < s.length() - 1);
   const char a = s[idx];
   if (a == 'C') {
-    const char b = s[idx+1];
-    if (b == 'C') return 0;
-    if (b == 'T') return 1;
+    const char b = s[idx + 1];
+    if (b == 'C')
+      return 0;
+    if (b == 'T')
+      return 1;
     return 4;
   }
   if (a == 'T') {
-    const char b = s[idx+1];
-    if (b == 'C') return 2;
-    if (b == 'T') return 3;
+    const char b = s[idx + 1];
+    if (b == 'C')
+      return 2;
+    if (b == 'T')
+      return 3;
     return 4;
   }
   return 4;
 }
 
-template <class T>
-struct PairStateCounter {
+template <class T> struct PairStateCounter {
   T CC;
   T CT;
   T TC;
   T TT;
 
-  double score() const {
-    return (CC*TT > CT*TC) ?
-      fishers_exact(CC, CT, TC, TT) : fishers_exact(CT, CC, TT, TC);
+  double
+  score() const {
+    return (CC * TT > CT * TC) ? fishers_exact(CC, CT, TC, TT)
+                               : fishers_exact(CT, CC, TT, TC);
   }
-  double total() const {return CC + CT + TC + TT;}
+  double
+  total() const {
+    return CC + CT + TC + TT;
+  }
 
-  string tostring() const {
+  string
+  tostring() const {
     return toa(CC) + '\t' + toa(CT) + '\t' + toa(TC) + '\t' + toa(TT);
   }
 
-  void increment(const size_t state) {
-    if (state == 0) ++CC;
-    else if (state == 1) ++CT;
-    else if (state == 2) ++TC;
-    else if (state == 3) ++TT;
+  void
+  increment(const size_t state) {
+    if (state == 0)
+      ++CC;
+    else if (state == 1)
+      ++CT;
+    else if (state == 2)
+      ++TC;
+    else if (state == 3)
+      ++TT;
   }
 };
 
-
-template <typename T> void
-fit_states(const epiread &er, vector<PairStateCounter<T> > &counts) {
+template <typename T>
+void
+fit_states(const epiread &er, vector<PairStateCounter<T>> &counts) {
   for (size_t i = 0; i < er.length() - 1; ++i) {
     const size_t pos = er.pos + i;
     assert(pos < counts.size());
@@ -167,22 +187,18 @@ convert_coordinates(const string &chrom, vector<MSite> &sites) {
   }
 }
 
-
 template <typename T>
 void
 add_cytosine(const string &chrom_name, const size_t start_cpg,
-             vector<PairStateCounter<T>> &counts,
-             vector<MSite> &cytosines) {
+             vector<PairStateCounter<T>> &counts, vector<MSite> &cytosines) {
   std::ostringstream s;
-  s << counts[start_cpg].score() << "\t"
-    << counts[start_cpg].total() << "\t"
+  s << counts[start_cpg].score() << "\t" << counts[start_cpg].total() << "\t"
     << counts[start_cpg].tostring();
   const string name(s.str());
   cytosines.push_back(MSite(chrom_name, start_cpg, '+', name, 0, 0));
 }
 
-
-template<typename T>
+template <typename T>
 void
 process_chrom(const string &chrom_name, const vector<epiread> &epireads,
               vector<MSite> &cytosines, vector<PairStateCounter<T>> &counts) {
@@ -191,7 +207,6 @@ process_chrom(const string &chrom_name, const vector<epiread> &epireads,
   for (size_t i = 0; i < counts.size(); ++i)
     add_cytosine(chrom_name, i, counts, cytosines);
 }
-
 
 static void
 update_chroms_seen(const string &chrom_name,
@@ -202,7 +217,6 @@ update_chroms_seen(const string &chrom_name,
   chroms_seen.insert(chrom_name);
 }
 
-
 static void
 verify_chroms_available(const string &chrom_name,
                         unordered_map<string, size_t> &chrom_lookup) {
@@ -211,14 +225,12 @@ verify_chroms_available(const string &chrom_name,
     throw runtime_error("chrom not found: " + chrom_name);
 }
 
-
 int
 main_allelicmeth(int argc, char *argv[]) {
 
   try {
 
-    static const string description =
-      "computes probability of allele-specific \
+    static const string description = "computes probability of allele-specific \
        methylation at each tuple of CpGs";
 
     static const string fasta_suffix = "fa";
@@ -230,8 +242,8 @@ main_allelicmeth(int argc, char *argv[]) {
     OptionParser opt_parse(strip_path(argv[0]), description, "<epireads>");
     opt_parse.add_opt("output", 'o', "output file name (default: stdout)",
                       false, outfile);
-    opt_parse.add_opt("chrom", 'c', "genome sequence file/directory",
-                      true, chroms_dir);
+    opt_parse.add_opt("chrom", 'c', "genome sequence file/directory", true,
+                      chroms_dir);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
@@ -258,7 +270,7 @@ main_allelicmeth(int argc, char *argv[]) {
     vector<string> chrom_names;
     vector<string> chroms;
     read_fasta_file_short_names(chroms_dir, chrom_names, chroms);
-    for (auto &&i: chroms)
+    for (auto &&i : chroms)
       transform(begin(i), end(i), begin(i),
                 [](const char c) { return std::toupper(c); });
 
@@ -271,7 +283,7 @@ main_allelicmeth(int argc, char *argv[]) {
     for (size_t i = 0; i < chrom_names.size(); ++i) {
       size_t cpg_count = 0;
       for (size_t j = 0; j < chroms[i].size() - 1; ++j)
-        cpg_count += (chroms[i][j] == 'C' && chroms[i][j+1] == 'G');
+        cpg_count += (chroms[i][j] == 'C' && chroms[i][j + 1] == 'G');
       chrom_sizes.insert(make_pair(chrom_names[i], cpg_count));
     }
 
@@ -283,7 +295,8 @@ main_allelicmeth(int argc, char *argv[]) {
       throw runtime_error("cannot open input file: " + epi_file);
 
     std::ofstream of;
-    if (!outfile.empty()) of.open(outfile);
+    if (!outfile.empty())
+      of.open(outfile);
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
     unordered_set<string> chroms_seen;
@@ -304,10 +317,9 @@ main_allelicmeth(int argc, char *argv[]) {
           process_chrom(chrom, epireads, cytosines, counts);
           const size_t chrom_idx = chrom_lookup[chrom];
           convert_coordinates(chroms[chrom_idx], cytosines);
-          for (size_t i = 0; i < cytosines.size()-1; ++i) {
-            out << cytosines[i].chrom << "\t"
-                << cytosines[i].pos << "\t+\tCpG\t"
-                << cytosines[i].context << endl;
+          for (size_t i = 0; i < cytosines.size() - 1; ++i) {
+            out << cytosines[i].chrom << "\t" << cytosines[i].pos
+                << "\t+\tCpG\t" << cytosines[i].context << endl;
           }
         }
         epireads.clear();
@@ -322,8 +334,7 @@ main_allelicmeth(int argc, char *argv[]) {
       const size_t chrom_idx = chrom_lookup[chrom];
       convert_coordinates(chroms[chrom_idx], cytosines);
       for (size_t i = 0; i < cytosines.size() - 1; ++i) {
-        out << cytosines[i].chrom << "\t"
-            << cytosines[i].pos << "\t+\tCpG\t"
+        out << cytosines[i].chrom << "\t" << cytosines[i].pos << "\t+\tCpG\t"
             << cytosines[i].context << endl;
       }
     }

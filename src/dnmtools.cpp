@@ -16,12 +16,14 @@
 #include <config.h>
 
 #include <algorithm>
+#include <cstdlib>
+#include <exception>
 #include <functional>
 #include <iomanip>
 #include <iostream>
 #include <iterator>
-#include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef INCLUDE_FULL_LICENSE_INFO
@@ -36,7 +38,9 @@ using std::string;
 using std::to_string;
 using std::vector;
 
-static const string PROGRAM_NAME = "dnmtools";
+static constexpr auto PROGRAM_NAME = "dnmtools";
+
+// NOLINTBEGIN(*-avoid-c-arrays)
 
 struct dnmtools_command {
   string tag;
@@ -60,6 +64,7 @@ operator<<(std::ostream &out, const dnmtools_command &cmd) -> std::ostream & {
 
 // ADS: not sure of best way to acquire these below beyond simply
 // declaring them here
+
 int
 abismal(int argc, char *argv[]);
 int
@@ -146,6 +151,7 @@ int
 main_recovered(int argc, char *argv[]);
 int
 kmersites(int argc, char *argv[]);
+// NOLINTEND(*-avoid-c-arrays)
 
 void
 print_help(
@@ -156,20 +162,20 @@ print_help(
        << "License: use --license for full license info\n"
 #endif
        << "Usage: " << PROGRAM_NAME << " <command> [options]\n"
-       << "Commands:" << endl;
-  for (auto &&g : command_groups) {
-    cout << "  " << g.first << ":" << endl;
-    for (auto &&c : g.second)
-      cout << c << endl;
-    cout << endl;
+       << "Commands:\n";
+  for (const auto &g : command_groups) {
+    cout << "  " << g.first << ":\n";
+    for (const auto &c : g.second)
+      cout << c << '\n';
+    cout << '\n';
   }
 }
 
 int
-main(int argc, char *argv[]) {
+main(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
+    // clang-format off
     vector<pair<string, vector<dnmtools_command>>> command_groups = {
-      // clang-format off
 {{"mapping",
  {{{"abismal",    "map FASTQ reads to a FASTA reference genome or an index", abismal},
    {"abismalidx", "convert a FASTA reference genome to an abismal index",    abismalidx},
@@ -243,20 +249,22 @@ main(int argc, char *argv[]) {
 #endif
 
     const auto has_tag = [&](const dnmtools_command &a) {
-      return a.tag == argv[1];
+      return a.tag == argv[1];  // NOLINT(*-avoid-c-arrays,*-pointer-arithmetic)
     };
 
-    for (auto &g : command_groups) {
+    for (const auto &g : command_groups) {
       const auto the_cmd =
         std::find_if(std::cbegin(g.second), std::cend(g.second), has_tag);
       if (the_cmd != std::cend(g.second))
         return (*the_cmd)(argc, argv);
     }
 
-    std::cerr << "ERROR: invalid command " << argv[1] << std::endl;
+    std::cerr << "ERROR: invalid command "
+              << argv[1]  // NOLINT(*-avoid-c-arrays,*-pointer-arithmetic)
+              << '\n';
   }
   catch (const std::exception &e) {
-    std::cerr << "ERROR:\t" << e.what() << endl;
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

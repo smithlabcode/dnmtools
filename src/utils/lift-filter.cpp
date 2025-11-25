@@ -16,23 +16,22 @@
  * GNU General Public License for more details.
  */
 
-#include <string>
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <stdexcept>
-#include <algorithm>
-
-#include "smithlab_utils.hpp"
-#include "smithlab_os.hpp"
-#include "OptionParser.hpp"
 #include "MSite.hpp"
+#include "OptionParser.hpp"
 
-using std::string;
-using std::vector;
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <new>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
 using std::cerr;
 using std::endl;
 using std::runtime_error;
+using std::string;
+using std::vector;
 
 static bool
 same_chrom_pos_strand(const MSite &a, const MSite &b) {
@@ -40,14 +39,14 @@ same_chrom_pos_strand(const MSite &a, const MSite &b) {
 }
 
 int
-main_lift_filter(int argc, char *argv[]) {
-  try{
+main_lift_filter(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
+  try {
     string pfile;
     bool VERBOSE = false;
     bool UNIQUE = false;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]),
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            "Process duplicated sites from fast-liftover output",
                            "<methcount file>");
     opt_parse.add_opt("output", 'o', "Output processed methcount", true, pfile);
@@ -57,19 +56,19 @@ main_lift_filter(int argc, char *argv[]) {
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl;
+      cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.empty()) {
-      cerr << opt_parse.help_message() << endl;
+      cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     const string mfile(leftover_args.front());
@@ -80,9 +79,9 @@ main_lift_filter(int argc, char *argv[]) {
       throw runtime_error("cannot open input file: " + mfile);
 
     std::ofstream out(pfile);
-    //if (!of)
-    //  throw runtime_error("cannot open output file: " + pfile);
-    //std::ostream out(of.rdbuf());
+    // if (!of)
+    //   throw runtime_error("cannot open output file: " + pfile);
+    // std::ostream out(of.rdbuf());
 
     // read first site
     MSite curr_site;
@@ -98,21 +97,16 @@ main_lift_filter(int argc, char *argv[]) {
       }
       else {
         if (!UNIQUE || site_is_unique)
-          out << curr_site << endl;
+          out << curr_site << '\n';
         site_is_unique = true;
         curr_site = next_site;
       }
     }
     if (!UNIQUE || site_is_unique)
-      out << curr_site << endl;
-
+      out << curr_site << '\n';
   }
-  catch (const runtime_error &e) {
-    cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
+  catch (const std::exception &e) {
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

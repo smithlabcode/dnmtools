@@ -16,11 +16,24 @@
  * more details.
  */
 
+#include "counts_header.hpp"
+
+#include "OptionParser.hpp"
+#include "bam_record_utils.hpp"
+
+#include "bamxx.hpp"
+
+#include <htslib/sam.h>
+
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cctype>
 #include <cstdint>
-#include <filesystem>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <exception>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -31,15 +44,12 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
-#include "OptionParser.hpp"
-#include "bam_record_utils.hpp"
-#include "counts_header.hpp"
-#include "dnmt_error.hpp"
-
-/* HTSlib */
-#include <htslib/sam.h>
+// NOLINTBEGIN(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-pro-bounds-constant-array-index,*-pro-bounds-pointer-arithmetic)
 
 [[nodiscard]] inline bool
 is_cytosine(const char c) {
@@ -115,7 +125,6 @@ get_basecall_model(const bamxx::bam_header &hdr) {
   const std::vector<std::string> parts(
     (std::istream_iterator<std::string>(buffer)), {});
 
-  std::string basecall_model;
   for (const auto &key_val : parts) {
     const auto equal_pos = key_val.find('=');
     if (equal_pos == std::string::npos)
@@ -346,7 +355,7 @@ next_mod_pos(T &b, const T e) -> std::int32_t {
   b = std::find_if(b, e, isdig);
   if (b == e)
     return -1;
-  auto r = atoi(b);
+  auto r = atoi(b);  // NOLINT(cert-err34-c)
   b = std::find_if_not(b, e, isdig);
   return r;
 };
@@ -469,7 +478,7 @@ static const std::uint8_t encoding[] = {
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4   // 256
 };
 static constexpr auto n_dinucs = 16u;
-static const auto dinucs = std::vector{
+static const auto dinucs = std::vector{  // NOLINT(cert-err58-cpp)
   "AA", "AC", "AG", "AT",
   "CA", "CC", "CG", "CT",
   "GA", "GC", "GG", "GT",
@@ -790,7 +799,7 @@ struct read_processor {
   bool symmetric{};
   bool cpg_only{};
   bool force{};
-  std::uint32_t n_threads{1};
+  std::int32_t n_threads{1};
   int strand{0};
   std::string expected_basecall_model{};
 
@@ -855,7 +864,7 @@ struct read_processor {
                    const std::vector<CountSet> &counts) const {
     static constexpr auto out_fmt = "%ld\t%c\t%s\t%.6g\t%d\t%.6g\t%.6g\n";
     static constexpr auto buf_size = 1024;
-    char buffer[buf_size];
+    std::array<char, buf_size> buffer{};
 
     // Put chrom name in buffer and then skip that part for each site because
     // it doesn't change.
@@ -864,15 +873,14 @@ struct read_processor {
       throw std::runtime_error("failed to identify chrom for tid: " +
                                std::to_string(tid));
     const auto chrom_name_offset =
-      std::snprintf(buffer, buf_size, "%s\t", chrom_name);
+      std::snprintf(buffer.data(), buf_size, "%s\t", chrom_name);
     if (chrom_name_offset < 0)
       throw std::runtime_error("failed to write to output buffer");
-    auto buffer_after_chrom = buffer + chrom_name_offset;
+    auto buffer_after_chrom = buffer.data() + chrom_name_offset;
 
     for (auto chrom_posn = 0ul; chrom_posn < std::size(chrom); ++chrom_posn) {
       const char base = chrom[chrom_posn];
       if (is_cytosine(base) || is_guanine(base)) {
-
         const std::uint32_t the_tag = get_tag_from_genome(chrom, chrom_posn);
         if (cpg_only && the_tag != 0)
           continue;
@@ -902,7 +910,7 @@ struct read_processor {
 
         if (r < 0)
           throw std::runtime_error("failed to write to output buffer");
-        out.write(buffer);
+        out.write(buffer.data());
       }
     }
   }
@@ -913,7 +921,7 @@ struct read_processor {
                    const std::vector<CountSet> &counts) const {
     static constexpr auto out_fmt = "%ld\t+\tCpG\t%.6g\t%d\t%.6g\t%.6g\n";
     static constexpr auto buf_size = 1024;
-    char buffer[buf_size];
+    std::array<char, buf_size> buffer{};
 
     // Put chrom name in buffer and then skip that part for each site because
     // it doesn't change.
@@ -922,10 +930,10 @@ struct read_processor {
       throw std::runtime_error("failed to identify chrom for tid: " +
                                std::to_string(tid));
     const auto chrom_name_offset =
-      std::snprintf(buffer, buf_size, "%s\t", chrom_name);
+      std::snprintf(buffer.data(), buf_size, "%s\t", chrom_name);
     if (chrom_name_offset < 0)
       throw std::runtime_error("failed to write to output buffer");
-    auto buffer_after_chrom = buffer + chrom_name_offset;
+    auto buffer_after_chrom = buffer.data() + chrom_name_offset;
 
     bool prev_was_c{false};
     std::uint32_t n_reads_pos{};
@@ -969,7 +977,7 @@ struct read_processor {
 
           if (r < 0)
             throw std::runtime_error("failed to write to output buffer");
-          out.write(buffer);
+          out.write(buffer.data());
         }
         prev_was_c = false;
       }
@@ -997,7 +1005,7 @@ struct read_processor {
                      [](const char c) { return std::toupper(c); });
     if (verbose)
       std::cerr << "[n chroms in reference: " << std::size(chroms) << "]"
-                << std::endl;
+                << '\n';
     const auto chroms_beg = std::cbegin(chroms);
 
     std::unordered_map<std::string, std::size_t> name_to_idx;
@@ -1051,13 +1059,13 @@ struct read_processor {
     if (verbose)
       std::cerr << "[observed basecall model: "
                 << (basecall_model.empty() ? "NA" : basecall_model) << "]"
-                << std::endl;
+                << '\n';
     if (!expected_basecall_model.empty() &&
         basecall_model != expected_basecall_model) {
       std::cerr << "failed to match basecall model:\n"
                 << "observed="
                 << (basecall_model.empty() ? "NA" : basecall_model) << "\n"
-                << "expected=" << expected_basecall_model_str() << std::endl;
+                << "expected=" << expected_basecall_model_str() << '\n';
       return {{}, {}};
     }
 
@@ -1109,7 +1117,7 @@ struct read_processor {
                                    std::string(sam_hdr_tid2name(hdr, tid)));
 
         if (show_progress && current_target_present)
-          std::cerr << "processing " << sam_hdr_tid2name(hdr, tid) << std::endl;
+          std::cerr << "processing " << sam_hdr_tid2name(hdr, tid) << '\n';
 
         // reset the counts
         counts.clear();
@@ -1215,10 +1223,9 @@ check_modification_sites(const std::string &infile,
 }
 
 int
-main_nanocount(int argc, char *argv[]) {  // NOLINT
+main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   static constexpr auto n_reads_to_check = 1000;
   try {
-
     read_processor rp;
 
     std::string chroms_file;
@@ -1226,7 +1233,7 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT
     std::string stats_file;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(std::filesystem::path{argv[0]}.filename(),
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            "get methylation levels from mapped nanopore reads",
                            "-c <chroms> <mapped-reads>");
     opt_parse.add_opt("threads", 't', "threads to use (few needed)", false,
@@ -1259,12 +1266,12 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT
     opt_parse.parse(argc, argv, leftover_args);
     if (opt_parse.about_requested() || opt_parse.help_requested() ||
         leftover_args.empty()) {
-      std::cerr << opt_parse.help_message() << std::endl
-                << opt_parse.about_message() << std::endl;
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      std::cerr << opt_parse.option_missing_message() << std::endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     const std::string mapped_reads_file = leftover_args.front();
@@ -1277,7 +1284,7 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT
       rp.cpg_only = true;
 
     if (rp.n_threads <= 0)
-      throw std::runtime_error("thread count cannot be negative");
+      throw std::runtime_error("thread count cannot be zerox");
 
     std::ostringstream cmd;
     std::copy(argv, argv + argc, std::ostream_iterator<const char *>(cmd, " "));
@@ -1306,8 +1313,10 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT
     }
   }
   catch (const std::exception &e) {
-    std::cerr << e.what() << std::endl;
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-pro-bounds-constant-array-index,*-pro-bounds-pointer-arithmetic)

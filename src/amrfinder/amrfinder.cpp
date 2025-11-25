@@ -335,9 +335,6 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
   const auto max_epiread_len = std::accumulate(
     std::cbegin(epireads), std::cend(epireads), 0ul,
     [](const auto a, const auto &e) { return std::max(a, std::size(e)); });
-  // auto max_epiread_len = 0u;
-  // for (auto &e : epireads)
-  //   max_epiread_len = std::max(max_epiread_len, e.length());
   const std::size_t min_obs_per_window = window_size * min_obs_per_cpg;
 
   const std::uint32_t n_cpgs = get_n_cpgs(epireads);

@@ -178,7 +178,9 @@ clip_reads(const size_t start_pos, const size_t end_pos, vector<epi_r> &r) {
 
 // give names to regions if they do not exist
 static void
-ensure_regions_are_named(vector<GenomicRegion> &regions) {
+ensure_regions_are_named(
+  vector<GenomicRegion> &regions  // cppcheck-suppress constParameterReference
+) {
   auto region_name_idx = 0u;
   for (auto region : regions)
     if (region.get_name().empty())
@@ -189,7 +191,6 @@ int
 main_amrtester(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     static constexpr double critical_value = 0.01;
-    static const string fasta_suffix = "fa";
 
     bool verbose = false;
     bool show_progress = false;

@@ -181,10 +181,6 @@ write_line_for_tabular(std::array<char, buffer_size> &buffer,
     bytes_left -= n_bytes;
   }
 
-  // out << min_site.chrom << ':' << min_site.pos << ':' << min_site.strand <<
-  // ':'
-  //     << min_site.context;
-
   if (write_fractional) {
     for (std::size_t i = 0; i < n_files; ++i) {
       const std::size_t r = sites[i].n_reads;
@@ -211,10 +207,6 @@ write_line_for_tabular(std::array<char, buffer_size> &buffer,
         throw std::runtime_error("failed to write output line");
       cursor += n_bytes;
       bytes_left -= n_bytes;
-      // if (to_print[i])
-      //   out << '\t' << sites[i].n_reads << '\t' << sites[i].n_meth();
-      // else
-      //   out << '\t' << 0 << '\t' << 0;
     }
   if (std::distance(buffer.data(), cursor) + 1 <
       static_cast<std::ptrdiff_t>(buffer_size))
@@ -223,8 +215,7 @@ write_line_for_tabular(std::array<char, buffer_size> &buffer,
   if (std::distance(buffer.data(), cursor) <
       static_cast<std::ptrdiff_t>(buffer_size)) {
     *cursor++ = '\0';
-    out.write(buffer.data(),
-              std::distance(buffer.data(), cursor));  // "\n");  // out << '\n';
+    out.write(buffer.data(), std::distance(buffer.data(), cursor));
   }
 }
 

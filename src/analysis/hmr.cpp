@@ -14,29 +14,37 @@
  * GNU General Public License for more details.
  */
 
+#include "GenomicRegion.hpp"
 #include "MSite.hpp"
+#include "OptionParser.hpp"
 #include "TwoStateHMM.hpp"
 #include "counts_header.hpp"
 
-#include "GenomicRegion.hpp"
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
-
 #include <bamxx.hpp>
 
-#include <cmath>
-#include <cstdint>  // for [u]int[0-9]+_t
+#include <algorithm>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
 #include <fstream>
+#include <initializer_list>
 #include <iomanip>
+#include <iostream>
+#include <iterator>
+#include <limits>
 #include <numeric>
 #include <random>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <utility>
+#include <vector>
+
+// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions,*-prefer-member-initializer)
 
 struct hmr_summary {
-  hmr_summary(const std::vector<GenomicRegion> &hmrs) {
+  explicit hmr_summary(const std::vector<GenomicRegion> &hmrs) {
     hmr_count = hmrs.size();
     hmr_total_size =
       std::accumulate(std::cbegin(hmrs), std::cend(hmrs), 0ul,
@@ -96,7 +104,6 @@ get_domain_scores(const std::vector<bool> &state_ids,
                   const std::vector<std::pair<double, double>> &meth,
                   const std::vector<std::size_t> &reset_points,
                   std::vector<double> &scores) {
-
   std::size_t reset_idx = 1;
   bool in_domain = false;
   double score = 0;
@@ -129,7 +136,6 @@ build_domains(const std::vector<MSite> &cpgs,
               const std::vector<std::size_t> &reset_points,
               const std::vector<bool> &state_ids,
               std::vector<GenomicRegion> &domains) {
-
   std::size_t n_cpgs = 0, reset_idx = 1, prev_end = 0;
   bool in_domain = false;
   for (std::size_t i = 0; i < state_ids.size(); ++i) {
@@ -230,11 +236,10 @@ make_partial_meth(const std::vector<std::uint32_t> &reads,
 static void
 shuffle_cpgs(const std::size_t rng_seed, const TwoStateHMM &hmm,
              std::vector<std::pair<double, double>> meth,
-             std::vector<std::size_t> reset_points, const double p_fb,
+             const std::vector<std::size_t> &reset_points, const double p_fb,
              const double p_bf, const double fg_alpha, const double fg_beta,
              const double bg_alpha, const double bg_beta,
              std::vector<double> &domain_scores) {
-
   auto eng = std::default_random_engine(rng_seed);
   std::shuffle(std::begin(meth), std::end(meth), eng);
 
@@ -243,7 +248,7 @@ shuffle_cpgs(const std::size_t rng_seed, const TwoStateHMM &hmm,
   hmm.PosteriorDecoding(meth, reset_points, p_fb, p_bf, fg_alpha, fg_beta,
                         bg_alpha, bg_beta, state_ids, scores);
   get_domain_scores(state_ids, meth, reset_points, domain_scores);
-  sort(std::begin(domain_scores), std::end(domain_scores));
+  std::sort(std::begin(domain_scores), std::end(domain_scores));
 }
 
 static void
@@ -285,7 +290,6 @@ write_params_file(const std::string &outfile, const double fg_alpha,
                   const double fg_beta, const double bg_alpha,
                   const double bg_beta, const double p_fb, const double p_bf,
                   const double domain_score_cutoff) {
-
   std::ofstream of;
   if (!outfile.empty())
     of.open(outfile.c_str());
@@ -317,7 +321,6 @@ static void
 load_cpgs(const std::string &cpgs_file, std::vector<MSite> &cpgs,
           std::vector<std::pair<double, double>> &meth,
           std::vector<std::uint32_t> &reads) {
-
   bamxx::bgzf_file in(cpgs_file, "r");
   if (!in)
     throw std::runtime_error("failed opening file: " + cpgs_file);
@@ -348,7 +351,6 @@ get_mean(InputIterator first, InputIterator last) -> T {
 template <class T>
 static void
 check_sorted_within_chroms(T first, const T last) {
-
   // empty, or a single element
   if (first == last || first + 1 == last)
     return;
@@ -378,10 +380,8 @@ check_sorted_within_chroms(T first, const T last) {
 }
 
 int
-main_hmr(int argc, char *argv[]) {
-
+main_hmr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-
     constexpr double min_coverage = 1.0;
 
     std::string outfile;
@@ -405,17 +405,17 @@ main_hmr(int argc, char *argv[]) {
     std::string params_in_file;
     std::string params_out_file;
 
-    const std::string description =
-      "Identify HMRs in methylomes. Methylation must be provided in the \
-      methcounts format (chrom, position, strand, context,              \
-      methylation, reads). See the methcounts documentation for         \
-      details. This program assumes only data at CpG sites and that     \
-      strands are collapsed so only the positive site appears in the    \
-      file.";
+    constexpr auto description =
+      R"(Identify HMRs in methylomes. Methylation must be provided
+      in the methcounts format (chrom, position, strand, context,
+      methylation, reads). See the methcounts documentation for
+      details. This program assumes only data at CpG sites and that
+      strands are collapsed so only the positive site appears in the
+      file.)";
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description,
-                           "<methylation-file>");
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description, "<methylation-file>");
     opt_parse.add_opt("out", 'o', "output file (default: stdout)", false,
                       outfile);
     opt_parse.add_opt("desert", 'd', "max dist btwn covered cpgs in HMR", false,
@@ -568,23 +568,25 @@ main_hmr(int argc, char *argv[]) {
     if (!domain_scores.empty())
       build_domains(cpgs, reset_points, state_ids, domains);
 
-    std::ofstream of;
-    if (!outfile.empty())
-      of.open(outfile);
-    std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
+    {
+      std::ofstream of;
+      if (!outfile.empty())
+        of.open(outfile);
+      std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
-    std::size_t good_hmr_count = 0;
-    for (auto i = 0u; i < size(domains); ++i)
-      if (p_values[i] < domain_score_cutoff) {
-        domains[good_hmr_count] = domains[i];
-        domains[good_hmr_count].set_name("HYPO" +
-                                         std::to_string(good_hmr_count));
-        ++good_hmr_count;
-      }
-    domains.resize(good_hmr_count);
+      std::size_t good_hmr_count = 0;
+      for (auto i = 0u; i < size(domains); ++i)
+        if (p_values[i] < domain_score_cutoff) {
+          domains[good_hmr_count] = domains[i];
+          domains[good_hmr_count].set_name("HYPO" +
+                                           std::to_string(good_hmr_count));
+          ++good_hmr_count;
+        }
+      domains.resize(good_hmr_count);
 
-    for (const auto &d : domains)
-      out << d << '\n';
+      for (const auto &d : domains)
+        out << d << '\n';
+    }
 
     if (!hypo_post_outfile.empty()) {
       if (verbose)
@@ -622,3 +624,5 @@ main_hmr(int argc, char *argv[]) {
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions,*-prefer-member-initializer)

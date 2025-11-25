@@ -18,6 +18,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <string>
 
@@ -29,7 +30,7 @@ struct file_progress {
   std::size_t prev_offset{};
   explicit file_progress(const std::string &filename);
   void
-  operator()(std::ifstream &in);
+  operator()(std::ifstream &in);  // cppcheck-suppress constParameterReference
 };
 
 [[nodiscard]] double

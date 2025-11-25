@@ -1,18 +1,4 @@
-/* levels: a program to compute coverage statistics, mutation rates,
- * and three different formulas for methylation levels described in
- * the paper:
- *
- *    'Leveling' the playing field for analyses of single-base
- *     resolution DNA methylomes
- *     Schultz, Schmitz & Ecker (TIG 2012)
- *
- * Note: the fractional methylation level calculated in this program
- * is inspired but different from the paper. What we are doing here is
- * using binomial test to determine significantly hyper/hypomethylated
- * sites, and only use these subset of sites to calculate methylation
- * level.
- *
- * Copyright (C) 2014-2023 University of Southern California and
+/* Copyright (C) 2014-2023 University of Southern California and
  *                         Andrew D. Smith and Benjamin E Decato
  *
  * Authors: Andrew D. Smith and Benjamin E Decato
@@ -28,42 +14,51 @@
  * General Public License for more details.
  */
 
+/* levels: a program to compute coverage statistics, mutation rates,
+ * and three different formulas for methylation levels described in
+ * the paper:
+ *
+ *    'Leveling' the playing field for analyses of single-base
+ *     resolution DNA methylomes
+ *     Schultz, Schmitz & Ecker (TIG 2012)
+ *
+ * Note: the fractional methylation level calculated in this program
+ * is inspired but different from the paper. What we are doing here is
+ * using binomial test to determine significantly hyper/hypomethylated
+ * sites, and only use these subset of sites to calculate methylation
+ * level.
+ */
+
 #include "LevelsCounter.hpp"
 #include "MSite.hpp"
 #include "OptionParser.hpp"
-#include "bsutils.hpp"
 #include "counts_header.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
 
 #include <bamxx.hpp>
 
-#include <cmath>
+#include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <fstream>
 #include <iostream>
-#include <numeric>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
-using std::cerr;
-using std::endl;
-using std::ios_base;
-using std::runtime_error;
-using std::string;
-using std::vector;
-
-using bamxx::bgzf_file;
-
-enum class counts_file_format { ordinary, asym_cpg, sym_cpg };
+enum class counts_file_format : std::uint8_t {
+  ordinary,
+  asym_cpg,
+  sym_cpg,
+};
 
 static counts_file_format
-guess_counts_file_format(const string &filename) {
+guess_counts_file_format(const std::string &filename) {
   static const uint64_t n_lines_to_check = 10000;
 
   const bool has_counts_header = get_has_counts_header(filename);
-  bgzf_file in(filename, "r");
-  if (!in) throw ios_base::failure{"bad input file: " + filename};
+  bamxx::bgzf_file in(filename, "r");
+  if (!in)
+    throw std::runtime_error{"bad input file: " + filename};
   if (has_counts_header)
     skip_counts_header(in);
 
@@ -83,16 +78,18 @@ guess_counts_file_format(const string &filename) {
 }
 
 int
-main_levels(int argc, char *argv[]) {
+main_levels(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     bool verbose = false;
     bool relaxed_mode = false;
-    string outfile;
+    std::string outfile;
 
-    const string description = "compute global summary of methylation levels";
+    const std::string description =
+      "compute global summary of methylation levels";
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description, "<counts-file>");
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description, "<counts-file>");
     opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
                       outfile);
     opt_parse.add_opt("alpha", 'a',
@@ -102,46 +99,48 @@ main_levels(int argc, char *argv[]) {
                       "run on data that appears to have sites filtered", false,
                       relaxed_mode);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << endl;
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
-    const string meth_file = leftover_args.front();
+    const std::string meth_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (!is_msite_file(meth_file))
-      throw runtime_error{"malformed counts file: " + meth_file};
+      throw std::runtime_error{"malformed counts file: " + meth_file};
 
     const counts_file_format guessed_format =
       guess_counts_file_format(meth_file);
     if (guessed_format != counts_file_format::ordinary) {
       if (verbose)
-        cerr << "input might be only CpG sites ("
-             << (guessed_format == counts_file_format::asym_cpg ? "not " : "")
-             << "symmetric)" << endl;
+        std::cerr << "input might be only CpG sites ("
+                  << (guessed_format == counts_file_format::asym_cpg ? "not "
+                                                                     : "")
+                  << "symmetric)" << '\n';
       if (!relaxed_mode)
-        throw runtime_error{
+        throw std::runtime_error{
           "unexpected input format (consider using -relaxed)"};
     }
 
     const bool has_counts_header = get_has_counts_header(meth_file);
-    bgzf_file in(meth_file, "r");
-    if (!in) throw std::runtime_error("bad input file: " + meth_file);
+    bamxx::bgzf_file in(meth_file, "r");
+    if (!in)
+      throw std::runtime_error("bad input file: " + meth_file);
     if (has_counts_header)
       skip_counts_header(in);
 
@@ -156,7 +155,8 @@ main_levels(int argc, char *argv[]) {
 
     while (read_site(in, site)) {
       if (site.chrom != prev_site.chrom)
-        if (verbose) cerr << "processing " << site.chrom << endl;
+        if (verbose)
+          std::cerr << "processing " << site.chrom << '\n';
 
       cytosines.update(site);
 
@@ -174,7 +174,7 @@ main_levels(int argc, char *argv[]) {
       else if (site.is_cxg())
         cxg.update(site);
       else
-        throw runtime_error{"bad site context: " + site.context};
+        throw std::runtime_error{"bad site context: " + site.context};
 
       prev_site = site;
     }
@@ -182,7 +182,8 @@ main_levels(int argc, char *argv[]) {
     std::ofstream of;
     if (!outfile.empty()) {
       of.open(outfile);
-      if (!of) throw ios_base::failure{"bad output file: " + outfile};
+      if (!of)
+        throw std::runtime_error{"bad output file: " + outfile};
     }
     std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
@@ -194,7 +195,7 @@ main_levels(int argc, char *argv[]) {
         << cxg << '\n';
   }
   catch (const std::exception &e) {
-    cerr << e.what() << endl;
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

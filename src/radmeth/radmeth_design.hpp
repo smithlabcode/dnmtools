@@ -16,9 +16,10 @@
 #ifndef RADMETH_DESIGN_HPP
 #define RADMETH_DESIGN_HPP
 
+#include <cstddef>
 #include <cstdint>
 #include <istream>
-#include <ostream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -49,7 +50,7 @@ struct Design {
   }
 
   [[nodiscard]] Design
-  drop_factor(const std::size_t factor_idx);
+  drop_factor(const std::uint32_t factor_idx);
 
   void
   order_samples(const std::vector<std::string> &ordered_names);

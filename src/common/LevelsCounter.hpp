@@ -16,10 +16,11 @@
 #ifndef LEVELS_COUNTER_HPP
 #define LEVELS_COUNTER_HPP
 
-#include "MSite.hpp"
-
+#include <algorithm>
+#include <cstdint>
 #include <iostream>
 #include <string>
+struct MSite;
 
 struct LevelsCounter {
 

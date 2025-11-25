@@ -15,23 +15,27 @@
 
 #include "MSite.hpp"
 
+#include "bamxx.hpp"
+#include "counts_header.hpp"
+
 #include <charconv>
 #include <fstream>
-#include <iostream>
+#include <iterator>
+#include <limits>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-
-#include "counts_header.hpp"
-#include "smithlab_utils.hpp"
+#include <utility>
 
 using std::cbegin;
 using std::cend;
 using std::end;
 using std::find_if;
 using std::from_chars;
+using std::ifstream;
+using std::ios_base;
 using std::regex_match;
 using std::runtime_error;
 using std::string;
@@ -45,6 +49,7 @@ MSite::initialize(const char *c, const char *c_end) {
 
   bool failed = false;
 
+  // NOLINTBEGIN(*-pointer-arithmetic)
   auto field_s = c;
   auto field_e = find_if(field_s + 1, c_end, is_sep);
   if (field_e == c_end)
@@ -103,15 +108,19 @@ MSite::initialize(const char *c, const char *c_end) {
   // ADS: the value below would work for a flag
   // pos = std::numeric_limits<decltype(pos)>::max();
 
+  // NOLINTEND(*-pointer-arithmetic)
+
   return !failed;
 }
 
 MSite::MSite(const string &line) {
-  if (!initialize(line.data(), line.data() + size(line)))
+  // NOLINTNEXTLINE(*-pointer-arithmetic)
+  if (!initialize(line.data(), line.data() + std::size(line)))
     throw runtime_error("bad count line: " + line);
 }
 
 MSite::MSite(const char *line, const int n) {
+  // NOLINTNEXTLINE(*-pointer-arithmetic)
   if (!initialize(line, line + n))
     throw runtime_error("bad count line: " + string(line));
 }
@@ -130,12 +139,9 @@ distance(const MSite &a, const MSite &b) {
                             : std::numeric_limits<size_t>::max();
 }
 
-using std::ifstream;
-using std::ios_base;
-
 static void
 move_to_start_of_line(ifstream &in) {
-  char next;
+  char next{};
   // move backwards by: one step forward, two steps back
   while (in.good() && in.get(next) && next != '\n') {
     in.unget();
@@ -150,16 +156,15 @@ move_to_start_of_line(ifstream &in) {
 void
 find_offset_for_msite(const std::string &chr, const size_t idx,
                       std::ifstream &site_in) {
-
   site_in.seekg(0, ios_base::beg);
-  const size_t begin_pos = site_in.tellg();
+  const auto begin_pos = site_in.tellg();
   site_in.seekg(0, ios_base::end);
-  const size_t end_pos = site_in.tellg();
+  const auto end_pos = site_in.tellg();
 
   if (end_pos - begin_pos < 2)
     throw runtime_error("empty counts file");
 
-  size_t step_size = (end_pos - begin_pos) / 2;
+  std::streamoff step_size = (end_pos - begin_pos) / 2;
 
   site_in.seekg(0, ios_base::beg);
   string low_chr;
@@ -171,19 +176,18 @@ find_offset_for_msite(const std::string &chr, const size_t idx,
   site_in.seekg(-2, ios_base::end);
   move_to_start_of_line(site_in);
   string high_chr;
-  size_t high_idx;
+  size_t high_idx{};
   if (!(site_in >> high_chr >> high_idx))
     throw runtime_error("failed search in counts file");
 
-  size_t pos = step_size;
+  std::streamoff pos = step_size;
   site_in.seekg(pos, ios_base::beg);
   move_to_start_of_line(site_in);
-  size_t prev_pos = 0;  // keep track of previous position in file
+  std::streamoff prev_pos = 0;  // keep track of previous position in file
 
   // binary search inside sorted file on disk
   // iterate until step size is 0 or positions are identical
   while (step_size > 0 && prev_pos != pos) {
-
     // track (mid) position in file to make sure it keeps moving
     prev_pos = pos;
 
@@ -194,11 +198,13 @@ find_offset_for_msite(const std::string &chr, const size_t idx,
 
     // this check will never give a false indication of unsorted, but
     // might catch an unsorted file
-    if (mid_chr < low_chr || mid_chr > high_chr)
+    if (mid_chr < low_chr || mid_chr > high_chr) {
+      // NOLINTBEGIN(performance-inefficient-string-concatenation)
       throw runtime_error("chromosomes unsorted inside file: "
                           "low=" +
                           low_chr + ",mid=" + mid_chr + ",high=" + high_chr);
-
+      // NOLINTEND(performance-inefficient-string-concatenation)
+    }
     step_size /= 2;  // cut the range in half
 
     if (chr < mid_chr || (chr == mid_chr && idx <= mid_idx)) {
@@ -222,16 +228,15 @@ void
 find_offset_for_msite(
   const std::unordered_map<string, std::uint32_t> &chrom_order,
   const std::string &chr, const size_t idx, std::ifstream &site_in) {
-
   site_in.seekg(0, ios_base::beg);
-  const size_t begin_pos = site_in.tellg();
+  const auto begin_pos = site_in.tellg();
   site_in.seekg(0, ios_base::end);
-  const size_t end_pos = site_in.tellg();
+  const auto end_pos = site_in.tellg();
 
   if (end_pos - begin_pos < 2)
     throw runtime_error("empty counts file");
 
-  size_t step_size = (end_pos - begin_pos) / 2;
+  std::streamoff step_size = (end_pos - begin_pos) / 2;
 
   const auto chr_idx_itr = chrom_order.find(chr);
   if (chr_idx_itr == end(chrom_order)) {
@@ -264,15 +269,14 @@ find_offset_for_msite(
     throw runtime_error("inconsistent chromosome order info");
   auto high_chr_idx = high_chr_idx_itr->second;
 
-  size_t pos = step_size;
+  std::streamoff pos = step_size;
   site_in.seekg(pos, ios_base::beg);
   move_to_start_of_line(site_in);
-  size_t prev_pos = 0;  // keep track of previous position in file
+  std::streamoff prev_pos = 0;  // keep track of previous position in file
 
   // binary search inside sorted file on disk
   // iterate until step size is 0 or positions are identical
   while (step_size > 0 && prev_pos != pos) {
-
     // track (mid) position in file to make sure it keeps moving
     prev_pos = pos;
 
@@ -289,25 +293,28 @@ find_offset_for_msite(
     // this check will never give a false indication of unsorted, but
     // might catch an unsorted file
     using std::to_string;
-    if (mid_chr_idx < low_chr_idx || mid_chr_idx > high_chr_idx)
+    if (mid_chr_idx < low_chr_idx || mid_chr_idx > high_chr_idx) {
+      // NOLINTBEGIN(performance-inefficient-string-concatenation)
       throw runtime_error("chromosomes unsorted inside file: "
                           "low=" +
                           to_string(low_chr_idx) +
                           ",mid=" + to_string(mid_chr_idx) +
                           ",high=" + to_string(high_chr_idx));
+      // NOLINTEND(performance-inefficient-string-concatenation)
+    }
 
     step_size /= 2;  // cut the range in half
 
     if (chr_idx < mid_chr_idx || (chr_idx == mid_chr_idx && idx <= mid_idx)) {
       // move to the left
       high_chr_idx = mid_chr_idx;
-      high_idx = mid_idx;
+      // high_idx = mid_idx;
       pos -= step_size;
     }
     else {
       // move to the left
       low_chr_idx = mid_chr_idx;
-      low_idx = mid_idx;
+      // low_idx = mid_idx;
       pos += step_size;
     }
     site_in.seekg(pos, ios_base::beg);

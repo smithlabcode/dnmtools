@@ -15,90 +15,111 @@
  *    GNU General Public License for more details.
  */
 
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <iomanip>
-#include <vector>
-#include <string>
-#include <stdexcept>
-#include <cmath>
-#include <algorithm>
-#include <numeric>
-
+#include "OptionParser.hpp"
 #include "dnmtools_gaussinv.hpp"
 
-// smithlab headers
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
+#include <exception>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <numeric>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
-using std::string;
-using std::vector;
-using std::istringstream;
 using std::cerr;
 using std::cout;
 using std::endl;
-using std::istream;
-using std::ostream;
 using std::ifstream;
-using std::ofstream;
-using std::runtime_error;
+using std::istream;
+using std::istringstream;
 using std::min;
+using std::ofstream;
+using std::ostream;
+using std::runtime_error;
+using std::string;
+using std::vector;
+
+// NOLINTBEGIN(*-avoid-do-while,*-narrowing-conversions,cert-err34-c)
 
 /***************** COMBINE P-VALUES *****************/
 
 struct PvalLocus {
-  size_t pos;
-  double raw_pval;
-  double combined_pval;
-  double corrected_pval;
+  size_t pos{};
+  double raw_pval{};
+  double combined_pval{};
+  double corrected_pval{};
 };
 
 class BinForDistance {
 public:
-  BinForDistance(string spec_string);
+  explicit BinForDistance(string spec_string);
 
-  size_t which_bin(size_t value) const;
+  size_t
+  which_bin(size_t value) const;
 
-  size_t num_bins() const {return num_bins_;}
-  size_t invalid_bin() const {return invalid_bin_;}
-  size_t max_dist() const {return max_dist_;}
+  size_t
+  num_bins() const {
+    return num_bins_;
+  }
+  size_t
+  invalid_bin() const {
+    return invalid_bin_;
+  }
+  size_t
+  max_dist() const {
+    return max_dist_;
+  }
 
 private:
-  size_t min_dist_;
-  size_t max_dist_;
-  size_t bin_size_;
-  size_t num_bins_;
-  size_t invalid_bin_;
+  size_t min_dist_{};
+  size_t max_dist_{};
+  size_t bin_size_{};
+  size_t num_bins_{};
+  size_t invalid_bin_{};
 };
 
 class ProximalLoci {
 public:
-  ProximalLoci(vector<PvalLocus> &loci, size_t max_distance)
-    : loci_(loci), max_distance_(max_distance), next_pos_(loci.begin()) {};
-  bool get(vector<PvalLocus> &neighbors);
-  PvalLocus cur_region() {return *(next_pos_ - 1);}
+  ProximalLoci(const vector<PvalLocus> &loci, size_t max_distance) :
+    loci_{loci}, max_distance_{max_distance}, next_pos_{std::begin(loci)} {};
+  bool
+  get(vector<PvalLocus> &neighbors);
+  PvalLocus
+  cur_region() {
+    return *(next_pos_ - 1);
+  }
 
 private:
+  // NOLINTBEGIN(*-avoid-const-or-ref-data-members)
   const vector<PvalLocus> &loci_;
   size_t max_distance_;
   vector<PvalLocus>::const_iterator next_pos_;
+  // NOLINTEND(*-avoid-const-or-ref-data-members)
 };
 
 class DistanceCorrelation {
 public:
-  DistanceCorrelation(BinForDistance bin_for_dist)
-    : bin_for_dist_(bin_for_dist) {};
-  vector<double> correlation_table(const vector<PvalLocus> &loci);
+  explicit DistanceCorrelation(const BinForDistance &bin_for_dist) :
+    bin_for_dist_{bin_for_dist} {};
+  vector<double>
+  correlation_table(const vector<PvalLocus> &loci);
 
 private:
-  double correlation(const vector<double> &x,
-                     const vector<double> &y);
-  void bin(const vector<PvalLocus> &loci);
-  vector< vector<double> > x_pvals_for_bin_;
-  vector< vector<double> > y_pvals_for_bin_;
+  double
+  correlation(const vector<double> &x, const vector<double> &y);
+  void
+  do_bin(const vector<PvalLocus> &loci);
+  vector<vector<double>> x_pvals_for_bin_;
+  vector<vector<double>> y_pvals_for_bin_;
+  // NOLINTBEGIN(*-avoid-const-or-ref-data-members)
   const BinForDistance bin_for_dist_;
+  // NOLINTEND(*-avoid-const-or-ref-data-members)
 };
 
 static double
@@ -114,8 +135,7 @@ to_zscore(double pval) {
 }
 
 static double
-stouffer_liptak(const vector<vector<double> > &corr_mat, vector<double> &pvals) {
-
+stouffer_liptak(const vector<vector<double>> &corr_mat, vector<double> &pvals) {
   double correction = 0;
   for (size_t row_ind = 0; row_ind < corr_mat.size(); ++row_ind)
     for (size_t col_ind = row_ind + 1; col_ind < corr_mat.size(); ++col_ind)
@@ -126,19 +146,20 @@ stouffer_liptak(const vector<vector<double> > &corr_mat, vector<double> &pvals) 
 
   const double sum = std::accumulate(zscores.begin(), zscores.end(), 0.0);
   const double test_stat =
-    sum/sqrt(static_cast<double>(pvals.size()) + 2.0*correction);
+    sum / sqrt(static_cast<double>(pvals.size()) + 2.0 * correction);
 
   return 1.0 - dnmt_gsl_cdf_gaussian_P(test_stat, 1.0);
 }
 
-static bool
-is_number(const string& str) {
-  for (const char &c : str)
-    if (c != '.' && c != 'e' && c != '-' && !std::isdigit(c)) return false;
-  return true;
+[[nodiscard]] static inline bool
+is_number(const std::string &s) {
+  return std::all_of(std::cbegin(s), std::cend(s), [](const char c) {
+    return c == '.' || c == 'e' || c == '-' || std::isdigit(c);
+  });
 }
 
-template<class T> inline bool
+template <class T>
+inline bool
 isnan(const T x) {
   return !(x == x);
 }
@@ -152,11 +173,11 @@ static void
 update_pval_loci(std::istream &input_encoding,
                  const vector<PvalLocus> &pval_loci,
                  std::ostream &output_encoding) {
-
   string record, chrom, name, sign;
-  size_t position, coverage_factor, meth_factor, coverage_rest, meth_rest;
+  size_t position{}, coverage_factor{}, meth_factor{}, coverage_rest{},
+    meth_rest{};
   string pval_str;
-  double pval;
+  double pval{};
 
   vector<PvalLocus>::const_iterator cur_locus_iter = pval_loci.begin();
 
@@ -166,29 +187,34 @@ update_pval_loci(std::istream &input_encoding,
     try {
       std::istringstream iss(record);
       iss.exceptions(std::ios::failbit);
-      iss >> chrom >> position >> sign >> name >> pval_str
-          >> coverage_factor >> meth_factor >> coverage_rest >> meth_rest;
-
-      pval = (is_number(pval_str) ? atof(pval_str.c_str()) : 1.0);
+      iss >> chrom >> position >> sign >> name >> pval_str >> coverage_factor >>
+        meth_factor >> coverage_rest >> meth_rest;
+      if (is_number(pval_str)) {
+        std::istringstream pval_converter(pval_str);
+        pval_converter >> pval;
+      }
+      else {
+        pval = 1.0;
+      }
     }
-    catch (std::exception const & err) {
-      cerr << err.what() << endl << "could not parse line:\n"
-           << record << endl;
+    catch (std::exception const &err) {
+      cerr << err.what() << '\n' << "could not parse line:\n" << record << '\n';
       std::terminate();
     }
 
-    output_encoding << chrom << "\t" << position << "\t" << sign << "\t"
-                    << name << "\t" << pval << "\t";
+    output_encoding << chrom << "\t" << position << "\t" << sign << "\t" << name
+                    << "\t" << pval << "\t";
 
     if (0.0 <= pval && pval < 1.0) {
       output_encoding << fix_pval_nan(cur_locus_iter->combined_pval) << "\t"
                       << fix_pval_nan(cur_locus_iter->corrected_pval) << "\t";
       ++cur_locus_iter;
     }
-    else output_encoding << 1.0 << "\t" << 1.0 <<  "\t"; // MAGIC??
+    else
+      output_encoding << 1.0 << "\t" << 1.0 << "\t";  // MAGIC??
 
     output_encoding << coverage_factor << "\t" << meth_factor << "\t"
-                    << coverage_rest << "\t" << meth_rest << endl;
+                    << coverage_rest << "\t" << meth_rest << '\n';
   }
 }
 
@@ -198,8 +224,10 @@ BinForDistance::BinForDistance(std::string spec_string) {
   std::istringstream iss(spec_string);
   iss >> min_dist_ >> max_dist_ >> bin_size_;
 
+  // NOLINTBEGIN(*-prefer-member-initializer)
   num_bins_ = (max_dist_ - min_dist_) / bin_size_;
   invalid_bin_ = num_bins_ + 1;
+  // NOLINTEND(*-prefer-member-initializer)
 }
 
 size_t
@@ -207,9 +235,9 @@ BinForDistance::which_bin(size_t value) const {
   if (value < min_dist_)
     return invalid_bin_;
 
-  const size_t bin = (value - min_dist_)/bin_size_;
+  const size_t bin = (value - min_dist_) / bin_size_;
 
-  //Bin numbering is 0 based.
+  // Bin numbering is 0 based.
   if (bin >= num_bins_)
     return invalid_bin_;
 
@@ -218,7 +246,6 @@ BinForDistance::which_bin(size_t value) const {
 
 bool
 ProximalLoci::get(vector<PvalLocus> &neighbors) {
-
   if (next_pos_ == loci_.end())
     return false;
 
@@ -226,7 +253,7 @@ ProximalLoci::get(vector<PvalLocus> &neighbors) {
   neighbors.clear();
   neighbors.push_back(*cur_pos);
 
-  if ( cur_pos != loci_.begin() ) {
+  if (cur_pos != loci_.begin()) {
     vector<PvalLocus>::const_iterator up_pos = cur_pos;
     bool too_far = false;
 
@@ -234,15 +261,15 @@ ProximalLoci::get(vector<PvalLocus> &neighbors) {
       --up_pos;
       size_t up_dist = cur_pos->pos - (up_pos->pos + 1);
 
-      if(up_dist <= max_distance_) {
+      if (up_dist <= max_distance_) {
         neighbors.push_back(*up_pos);
-      } else
+      }
+      else
         too_far = true;
-
     } while (!too_far && up_pos != loci_.begin());
   }
 
-  std::reverse(neighbors.begin(), neighbors.end());
+  std::reverse(std::begin(neighbors), std::end(neighbors));
 
   if (cur_pos != loci_.end() - 1) {
     bool too_far = false;
@@ -255,8 +282,8 @@ ProximalLoci::get(vector<PvalLocus> &neighbors) {
       if (down_dist <= max_distance_) {
         neighbors.push_back(*down_pos);
       }
-      else too_far = true;
-
+      else
+        too_far = true;
     } while (!too_far && down_pos != loci_.end() - 1);
   }
 
@@ -265,7 +292,7 @@ ProximalLoci::get(vector<PvalLocus> &neighbors) {
 }
 
 void
-DistanceCorrelation::bin(const vector<PvalLocus> &loci) {
+DistanceCorrelation::do_bin(const vector<PvalLocus> &loci) {
   x_pvals_for_bin_.clear();
   y_pvals_for_bin_.clear();
   vector<PvalLocus>::const_iterator it = loci.begin();
@@ -278,7 +305,7 @@ DistanceCorrelation::bin(const vector<PvalLocus> &loci) {
       const size_t dist = forward_it->pos - (it->pos + 1);
       const size_t bin = bin_for_dist_.which_bin(dist);
 
-      //check if the appropriate bin exists
+      // check if the appropriate bin exists
       if (bin != bin_for_dist_.invalid_bin()) {
         x_pvals_for_bin_[bin].push_back(to_zscore(it->raw_pval));
         y_pvals_for_bin_[bin].push_back(to_zscore(forward_it->raw_pval));
@@ -298,7 +325,8 @@ double
 DistanceCorrelation::correlation(const vector<double> &x,
                                  const vector<double> &y) {
   // correlation is 0 when all bins are empty
-  if (x.size() <= 1) return 0.0;
+  if (x.size() <= 1)
+    return 0.0;
 
   using std::inner_product;
   const auto X = accumulate(begin(x), end(x), 0.0);
@@ -309,43 +337,41 @@ DistanceCorrelation::correlation(const vector<double> &x,
   const auto N = x.size();
 
   // Sum XY - N.mu(X).mu(Y) = Sum XY - Sum(X)Sum(Y)/N
-  const auto covXY = XY - (X*Y)/N;
+  const auto covXY = XY - (X * Y) / N;
   // sqrt[SSX - N.mu(X).mu(X)]
-  const auto sdX = std::sqrt(XX - (X*X)/N);
+  const auto sdX = std::sqrt(XX - (X * X) / N);
   // sqrt[SSY - N.mu(Y).mu(Y)]
-  const auto sdY = std::sqrt(YY - (Y*Y)/N);
+  const auto sdY = std::sqrt(YY - (Y * Y) / N);
 
   // Pearson correlation
-  return covXY/(sdX*sdY);
+  return covXY / (sdX * sdY);
 }
-
 
 vector<double>
 DistanceCorrelation::correlation_table(const vector<PvalLocus> &loci) {
   const size_t num_bins = bin_for_dist_.num_bins();
   x_pvals_for_bin_.resize(num_bins);
   y_pvals_for_bin_.resize(num_bins);
-  bin(loci);
-  vector<double> correlation_table;
-
+  do_bin(loci);
+  vector<double> correlation_table(num_bins);
   for (size_t bin = 0; bin < num_bins; ++bin)
-    correlation_table.push_back(
-      correlation(x_pvals_for_bin_[bin], y_pvals_for_bin_[bin]));
+    correlation_table[bin] =
+      correlation(x_pvals_for_bin_[bin], y_pvals_for_bin_[bin]);
 
   return correlation_table;
 }
 
 void
-distance_corr_matrix(BinForDistance bin_for_dist,
+distance_corr_matrix(const BinForDistance &bin_for_dist,
                      const std::vector<double> &acor_for_bin,
                      const std::vector<PvalLocus> &neighbors,
-                     std::vector< std::vector<double> > &corr_matrix) {
+                     std::vector<std::vector<double>> &corr_matrix) {
   corr_matrix.clear();
   const size_t num_neighbors = neighbors.size();
 
   corr_matrix.resize(num_neighbors);
 
-  for (std::vector<std::vector<double> >::iterator row = corr_matrix.begin();
+  for (std::vector<std::vector<double>>::iterator row = corr_matrix.begin();
        row != corr_matrix.end(); ++row)
     row->resize(num_neighbors);
 
@@ -361,7 +387,8 @@ distance_corr_matrix(BinForDistance bin_for_dist,
 
       if (bin == bin_for_dist.invalid_bin()) {
         corr_matrix[row][col] = 0;
-      } else
+      }
+      else
         corr_matrix[row][col] = corr_matrix[col][row] = acor_for_bin[bin];
     }
   }
@@ -378,7 +405,7 @@ combine_pvals(vector<PvalLocus> &loci, const BinForDistance &bin_for_distance) {
   size_t i = 0;
 
   while (proximal_loci.get(neighbors)) {
-    vector<vector<double> > correlation_matrix;
+    vector<vector<double>> correlation_matrix;
     vector<double> p_vals;
 
     for (auto it = begin(neighbors); it != end(neighbors); ++it) {
@@ -386,8 +413,8 @@ combine_pvals(vector<PvalLocus> &loci, const BinForDistance &bin_for_distance) {
       p_vals.push_back(pval);
     }
 
-    distance_corr_matrix(bin_for_distance, correlation_for_bin,
-                         neighbors, correlation_matrix);
+    distance_corr_matrix(bin_for_distance, correlation_for_bin, neighbors,
+                         correlation_matrix);
     double combined_pval = stouffer_liptak(correlation_matrix, p_vals);
     loci[i].combined_pval = combined_pval;
 
@@ -407,19 +434,16 @@ ls_locus_position(const PvalLocus &r1, const PvalLocus &r2) {
 
 void
 fdr(vector<PvalLocus> &loci) {
-
   sort(begin(loci), end(loci), lt_locus_pval);
 
   for (size_t idx = 0; idx < loci.size(); ++idx) {
     const double current_score = loci[idx].combined_pval;
-    //Assign a new one.
-    const double corrected_pval = loci.size()*current_score/(idx + 1);
+    // Assign a new one.
+    const double corrected_pval = loci.size() * current_score / (idx + 1);
     loci[idx].corrected_pval = corrected_pval;
   }
 
-  for (vector<PvalLocus>::reverse_iterator it = loci.rbegin() + 1;
-       it != loci.rend(); ++it) {
-
+  for (auto it = loci.rbegin() + 1; it != loci.rend(); ++it) {
     const PvalLocus &prev_locus = *(it - 1);
     PvalLocus &cur_locus = *(it);
 
@@ -434,41 +458,38 @@ fdr(vector<PvalLocus> &loci) {
   sort(begin(loci), end(loci), ls_locus_position);
 }
 
-
 int
-main_radmeth_adjust(int argc, char *argv[]) {
-
+main_radmeth_adjust(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-
     string outfile;
     string bin_spec = "1:200:1";
     bool VERBOSE = false;
 
     /**************** GET COMMAND LINE ARGUMENTS *************************/
-    OptionParser opt_parse(strip_path(argv[0]),
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            "compute adjusted p-values using autocorrelation",
                            "<regression-output>");
     opt_parse.set_show_defaults();
-    opt_parse.add_opt("out", 'o', "output file (default: stdout)",
-                      false, outfile);
-    opt_parse.add_opt("bins", 'b', "corrlation bin specs", false , bin_spec);
+    opt_parse.add_opt("out", 'o', "output file (default: stdout)", false,
+                      outfile);
+    opt_parse.add_opt("bins", 'b', "corrlation bin specs", false, bin_spec);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl;
+      cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << endl;
+      cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     const string bed_filename = leftover_args.front();
@@ -481,7 +502,7 @@ main_radmeth_adjust(int argc, char *argv[]) {
       throw "could not open file: " + bed_filename;
 
     if (VERBOSE)
-      cerr << "[reading input]" << endl;
+      cerr << "[reading input]\n";
 
     // Read in all p-value loci. The loci that are not correspond to valid
     // p-values (i.e. values in [0, 1]) are skipped.
@@ -491,11 +512,10 @@ main_radmeth_adjust(int argc, char *argv[]) {
     size_t chrom_offset = 0;
 
     while (getline(bed_file, input_line)) {
-
       istringstream iss(input_line);
       string chrom, sign, name;
-      size_t position;
-      double pval;
+      size_t position{};
+      double pval{};
       string pval_str;
       if (!(iss >> chrom >> position >> sign >> name >> pval_str))
         throw runtime_error("failed to parse line: " + input_line);
@@ -507,7 +527,7 @@ main_radmeth_adjust(int argc, char *argv[]) {
         if (!prev_chrom.empty() && prev_chrom != chrom)
           chrom_offset += pvals.back().pos;
 
-        PvalLocus plocus;
+        PvalLocus plocus{};
         plocus.raw_pval = pval;
         plocus.pos = chrom_offset + bin_for_dist.max_dist() + 1 + position;
 
@@ -517,26 +537,29 @@ main_radmeth_adjust(int argc, char *argv[]) {
     }
 
     if (VERBOSE)
-      cerr << "[combining p-values]" << endl;
+      cerr << "[combining p-values]\n";
     combine_pvals(pvals, bin_for_dist);
 
     if (VERBOSE)
-      cerr << "[running multiple test adjustment]" << endl;
+      cerr << "[running multiple test adjustment]\n";
     fdr(pvals);
 
     ofstream of;
-    if (!outfile.empty()) of.open(outfile);
+    if (!outfile.empty())
+      of.open(outfile);
     ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
     ifstream original_bed_file(bed_filename);
 
     update_pval_loci(original_bed_file, pvals, out);
 
-    //TODO: Check that the regions do not overlap & sorted
+    // TODO(ADS): Check that the regions do not overlap & sorted
   }
   catch (const std::exception &e) {
-    cerr << "ERROR: " << e.what() << endl;
+    cerr << "ERROR: " << e.what() << '\n';
     exit(EXIT_FAILURE);
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-do-while,*-narrowing-conversions,cert-err34-c)

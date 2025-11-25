@@ -16,43 +16,40 @@
  * GNU General Public License for more details.
  */
 
-
 /*
   Sample indexfile line:
   [T-chr] [T-start] [T-end] [S-chr]:[S-start]:[S-end]:[S-strand] [] [T-strand]
   chr21   26608683        26608684        chr1:3007015:3007016:-  0       +
 */
 
-#include <string>
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <iostream>
-#include <cstdlib>
-#include <unordered_map>
-#include <stdexcept>
-#include <algorithm>
-#include <cstdint> // for [u]int[0-9]+_t
-
-#include "smithlab_utils.hpp"
-#include "smithlab_os.hpp"
-#include "OptionParser.hpp"
-#include "GenomicRegion.hpp"
 #include "MSite.hpp"
+#include "OptionParser.hpp"
 
-using std::string;
-using std::ios_base;
-using std::vector;
-using std::cout;
+#include <cstdint>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <new>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 using std::cerr;
+using std::cout;
 using std::endl;
-using std::unordered_map;
+using std::ios_base;
 using std::runtime_error;
+using std::string;
+using std::unordered_map;
+using std::vector;
 
 struct SimpleSite {
   string chrom;
-  uint32_t pos;
-  char strand;
+  uint32_t pos{};
+  char strand{};
   SimpleSite() {}
   SimpleSite(const string &c, const uint32_t p, const char s) :
     chrom(c), pos(p), strand(s) {}
@@ -66,18 +63,16 @@ flip_strand(SimpleSite &s) {
   }
 }
 
-typedef
-unordered_map<size_t, SimpleSite> liftover_index;
+typedef unordered_map<size_t, SimpleSite> liftover_index;
 
 static void
 read_index_file(const bool plus_strand, const string &index_file,
                 unordered_map<string, liftover_index> &index) {
-
   std::ifstream in(index_file);
   if (!in)
     throw runtime_error("problem opening index file: " + index_file);
 
-  size_t from_pos, to_pos;
+  size_t from_pos{}, to_pos{};
   string from_chrom, to_chrom;
   string to_strand;
   MSite curr_site;
@@ -92,7 +87,6 @@ read_index_file(const bool plus_strand, const string &index_file,
 static bool
 lift_site(const unordered_map<string, liftover_index> &index,
           MSite &meth_site) {
-
   auto chrom_index = index.find(meth_site.chrom);
   if (chrom_index == end(index))
     return false;
@@ -108,7 +102,7 @@ lift_site(const unordered_map<string, liftover_index> &index,
 }
 
 int
-main_fast_liftover(int argc, char *argv[]) {
+main_fast_liftover(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     string indexfile;
     string tofile;
@@ -119,8 +113,8 @@ main_fast_liftover(int argc, char *argv[]) {
     bool plus_strand = false;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]),
-                           "Fast liftOver-all cytosine-by strand" );
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           "Fast liftOver-all cytosine-by strand");
     opt_parse.add_opt("indexfile", 'i', "index file", true, indexfile);
     opt_parse.add_opt("from", 'f', "Original file", true, fromfile);
     opt_parse.add_opt("to", 't', "Output file liftovered", true, tofile);
@@ -134,22 +128,22 @@ main_fast_liftover(int argc, char *argv[]) {
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl;
+      cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     /****************** END COMMAND LINE OPTIONS *****************/
 
     unordered_map<string, liftover_index> index;
     if (VERBOSE)
-      cerr << "[loading liftover index file " << indexfile << "]" << endl;
+      cerr << "[loading liftover index file " << indexfile << "]\n";
     read_index_file(plus_strand, indexfile, index);
 
     std::ifstream in(fromfile);
@@ -165,22 +159,18 @@ main_fast_liftover(int argc, char *argv[]) {
       unlifted.open(unlifted_file.c_str());
 
     if (VERBOSE)
-      cerr << "[lifting from: " << fromfile << " to: " << tofile << "]" << endl;
+      cerr << "[lifting from: " << fromfile << " to: " << tofile << "]\n";
 
     MSite lifted, meth_site;
     while (in >> meth_site) {
       if (lift_site(index, meth_site))
-        out << meth_site << endl;
+        out << meth_site << '\n';
       else if (!unlifted_file.empty())
-        unlifted << meth_site << endl;
+        unlifted << meth_site << '\n';
     }
   }
-  catch (const runtime_error &e) {
-    cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
+  catch (const std::exception &e) {
+    cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

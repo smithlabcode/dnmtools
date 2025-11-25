@@ -16,43 +16,32 @@
 
 #include "numerical_utils.hpp"
 
-#include <cmath>
-#include <vector>
 #include <algorithm>
-
-using std::vector;
+#include <cmath>
+#include <iterator>  // IWYU pragma: keep
+#include <vector>
 
 double
-log_sum_log_vec(const std::vector<double> &vals, const size_t limit) 
-{
-    const std::vector<double>::const_iterator x = 
-        std::max_element(vals.begin(), vals.begin() + limit);
-    const double max_val = *x;
-    const size_t max_idx = x - vals.begin();
-    double sum = 1.0;
-    for (size_t i = 0; i < limit; ++i) 
-    {
-        if (i != max_idx) 
-        {
-            sum += exp(vals[i] - max_val);
-        }
-    }
-    return max_val + log(sum);
+log_sum_log_vec(const std::vector<double> &vals, const size_t limit) {
+  const auto x = std::max_element(
+    std::cbegin(vals), std::cbegin(vals) + static_cast<std::ptrdiff_t>(limit));
+  const double max_val = *x;
+  const std::size_t max_idx = std::distance(std::cbegin(vals), x);
+  double sum = 1.0;
+  for (std::size_t i = 0; i < limit; ++i)
+    if (i != max_idx)
+      sum += std::exp(vals[i] - max_val);  // cppcheck-suppress useStlAlgorithm
+  return max_val + std::log(sum);
 }
 
 double
 log_sum_log(const std::vector<double>::const_iterator &begin,
-            const std::vector<double>::const_iterator &end)
-{
-    const std::vector<double>::const_iterator max_itr = 
-        std::max_element(begin, end);
-    const double max_val = *max_itr;
-
-    double sum = 1.0;
-    for (std::vector<double>::const_iterator itr = begin; itr < end; ++itr) 
-        if (itr != max_itr) sum += exp(*itr - max_val);
-    
-    return max_val + log(sum);
+            const std::vector<double>::const_iterator &end) {
+  const auto max_itr = std::max_element(begin, end);
+  const double max_val = *max_itr;
+  double sum = 1.0;
+  for (auto itr = begin; itr < end; ++itr)
+    if (itr != max_itr)
+      sum += std::exp(*itr - max_val);  // cppcheck-suppress useStlAlgorithm
+  return max_val + std::log(sum);
 }
-
-

@@ -1,33 +1,42 @@
-/* Copyright (C) 2013-2025 University of Southern California
- *                         Andrew D Smith and Jenny Qu
+/* Copyright (C) 2013-2025 Andrew D Smith
  *
- * Author: Jenny Qu and Andrew D. Smith
+ * Author: Andrew D. Smith
  *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This is free software; you can redistribute it and/or modify it under the
+ * terms of the GNU General Public License as published by the Free Software
+ * Foundation; either version 2 of the License, or (at your option) any later
+ * version.
  *
- * This is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * This is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
  */
 
+#include "OptionParser.hpp"
+#include "smithlab_utils.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <fstream>
 #include <iostream>
+#include <iterator>
+#include <limits>
+#include <numeric>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-#include "GenomicRegion.hpp"
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
+// NOLINTBEGIN(*-narrowing-conversions)
 
-[[nodiscard]] static auto
+static auto
 read_fasta(const std::string &fasta_file,
            std::unordered_map<std::string, std::uint32_t> &chrom_names,
            std::vector<std::string> &chroms) {
@@ -113,11 +122,12 @@ struct epiread {
 
 bool
 epiread::flip_states() {
+  static constexpr auto one_half = 0.5;
   const std::size_t meth_states_count = std::count(seq.begin(), seq.end(), 'C');
   const auto sz = std::size(seq);
-  if (meth_states_count < 0.5 * sz) {
+  if (meth_states_count < one_half * sz) {
     for (std::size_t i = 0; i < sz; ++i)
-      seq[i] = (seq[i] == 'T') ? 'C' : ((seq[i] == 'C') ? 'T' : seq[i]);
+      seq[i] = seq[i] == 'T' ? 'C' : (seq[i] == 'C' ? 'T' : seq[i]);
     return true;
   }
   return false;
@@ -175,12 +185,10 @@ compute_entropy_for_window(const std::vector<double> &site_probs,
                            const std::size_t start_cpg,
                            const std::size_t end_cpg,
                            std::size_t &reads_in_window) {
-
   const std::size_t n_states = 1ul << (end_cpg - start_cpg);
 
   double entropy = 0.0;
   for (std::size_t i = 0; i < n_states; ++i) {
-
     double state_prob = 0.0;
     reads_in_window = 0;
     for (std::size_t j = start_idx; j < end_idx; ++j)
@@ -197,22 +205,17 @@ compute_entropy_for_window(const std::vector<double> &site_probs,
   return entropy;
 }
 
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-///////
-/////// CODE FOR SLIDING THE WINDOW ALONG THE CHROMOSOME BELOW HERE
-///////
+// code for sliding the window along the chromosome below here
 
-/* This function just basically computes the same thing as methcounts
-   output, so that unobserved states can be imputed  */
+// This function computes the same thing as methcounts output, so that
+// unobserved states can be imputed
 static std::vector<double>
 compute_site_probs(const std::size_t n_cpgs,
                    const std::vector<epiread> &epireads) {
-
   std::vector<double> site_probs(n_cpgs);
   std::vector<std::uint32_t> totals(n_cpgs);
 
-  for (std::size_t i = 0; i < epireads.size(); ++i) {
+  for (std::size_t i = 0; i < std::size(epireads); ++i) {
     const std::size_t len = std::size(epireads[i]);
     std::size_t idx = epireads[i].pos;
     for (std::size_t j = 0; j < len; ++j, ++idx) {
@@ -220,11 +223,8 @@ compute_site_probs(const std::size_t n_cpgs,
       totals[idx] += (epireads[i].seq[j] != 'N');
     }
   }
-
   for (auto i = 0u; i < std::size(site_probs); ++i)
-    if (totals[i] > 0.0)
-      site_probs[i] /= totals[i];
-
+    site_probs[i] /= totals[i] > 0.0 ? totals[i] : 1.0;
   return site_probs;
 }
 
@@ -232,7 +232,7 @@ static void
 move_start_index(const std::size_t max_epiread_len,
                  const std::vector<epiread> &epireads,
                  const std::size_t start_cpg, std::size_t &idx) {
-  while (idx < epireads.size() &&
+  while (idx < std::size(epireads) &&
          epireads[idx].get_end() + max_epiread_len <= start_cpg)
     ++idx;
 }
@@ -246,29 +246,27 @@ move_end_index(const std::vector<epiread> &epireads,
 }
 
 static void
-process_chrom(const bool VERBOSE, const std::size_t cpg_window,
+process_chrom(const bool verbose, const std::size_t cpg_window,
               const std::vector<epiread> &epireads,
               const std::unordered_map<std::size_t, std::size_t> &cpg_lookup,
               std::ostream &out) {
-
   const std::string chrom(epireads.front().chr);
   if (!check_sorted(epireads))
     throw std::runtime_error("epireads not sorted in chrom: " + chrom);
 
   const std::size_t n_cpgs = cpg_lookup.size();
-  if (VERBOSE)
+  if (verbose)
     std::cerr << "processing " << chrom << " (cpgs = " << n_cpgs << ")\n";
 
   const auto site_probs = compute_site_probs(n_cpgs, epireads);
 
-  std::size_t max_epiread_len = 0;
-  for (const auto &er : epireads)
-    max_epiread_len = std::max(max_epiread_len, std::size(er));
+  std::size_t max_epiread_len = std::accumulate(
+    std::cbegin(epireads), std::cend(epireads), 0ul,
+    [](const auto a, const auto &er) { return std::max(a, std::size(er)); });
 
   std::size_t start_cpg = 0;
   std::size_t start_idx = 0, end_idx = 0;
   while (start_cpg + cpg_window < n_cpgs) {
-
     move_start_index(max_epiread_len, epireads, start_cpg, start_idx);
     move_end_index(epireads, start_cpg, cpg_window, end_idx);
 
@@ -286,44 +284,42 @@ process_chrom(const bool VERBOSE, const std::size_t cpg_window,
 }
 
 int
-main_methentropy(int argc, char *argv[]) {
-
+main_methentropy(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-
-    bool VERBOSE = false;
+    bool verbose = false;
     bool FLIP_MAJORITY_STATE = false;
 
-    std::size_t cpg_window = 4;
+    std::size_t cpg_window = 4;  // NOLINT(*-avoid-magic-numbers)
     std::string outfile;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]),
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            "compute methylation entropy in sliding window",
                            "<fasta-genome-file> <epireads-file>");
     opt_parse.add_opt("window", 'w', "number of CpGs in sliding window", false,
                       cpg_window);
     opt_parse.add_opt("flip", 'F', "flip read majority state to meth", false,
                       FLIP_MAJORITY_STATE);
-    opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
+    opt_parse.add_opt("output", 'o', "output file (default: stdout)", true,
                       outfile);
-    opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
+    opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
     std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      std::cerr << opt_parse.help_message() << std::endl
-                << opt_parse.about_message() << std::endl;
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      std::cerr << opt_parse.about_message() << std::endl;
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      std::cerr << opt_parse.option_missing_message() << std::endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 2) {
-      std::cerr << opt_parse.help_message() << std::endl;
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     const std::string genome_file = leftover_args.front();
@@ -338,16 +334,14 @@ main_methentropy(int argc, char *argv[]) {
     if (!in)
       throw std::runtime_error("cannot open input file: " + epi_file);
 
-    std::ofstream of;
-    if (!outfile.empty())
-      of.open(outfile);
-    std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
+    std::ofstream out(outfile);
+    if (!out)
+      throw std::runtime_error("failed to open output file: " + outfile);
 
     std::unordered_map<std::size_t, std::size_t> cpg_lookup;
 
     std::vector<epiread> epireads;
     epiread tmp_er;
-    const std::string chrom;
     while (in >> tmp_er) {
       const auto &name = tmp_er.chr;
       if (!epireads.empty() && name != epireads.back().chr) {
@@ -356,7 +350,7 @@ main_methentropy(int argc, char *argv[]) {
         if (itr == std::cend(chrom_names))
           throw std::runtime_error("chrom not found: " + chrom);
         build_coordinate_converter(chroms[itr->second], cpg_lookup);
-        process_chrom(VERBOSE, cpg_window, epireads, cpg_lookup, out);
+        process_chrom(verbose, cpg_window, epireads, cpg_lookup, out);
         epireads.clear();
       }
       if (FLIP_MAJORITY_STATE)
@@ -369,12 +363,14 @@ main_methentropy(int argc, char *argv[]) {
       if (itr == std::cend(chrom_names))
         throw std::runtime_error("chrom not found: " + chrom);
       build_coordinate_converter(chroms[itr->second], cpg_lookup);
-      process_chrom(VERBOSE, cpg_window, epireads, cpg_lookup, out);
+      process_chrom(verbose, cpg_window, epireads, cpg_lookup, out);
     }
   }
   catch (const std::exception &e) {
-    std::cerr << e.what() << "\n";
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-narrowing-conversions)

@@ -17,27 +17,32 @@
  */
 
 #include "MSite.hpp"
+#include "OptionParser.hpp"
 #include "counts_header.hpp"
 #include "dnmt_error.hpp"
 
 #include <bamxx.hpp>
 
-// from smithlab_cpp
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
+#include <htslib/bgzf.h>
+#include <htslib/sam.h>
 
 #include <charconv>
 #include <cstdint>
+#include <cstdlib>
+#include <exception>
 #include <iostream>
-#include <stdexcept>
+#include <iterator>
 #include <string>
 #include <system_error>
-#include <type_traits>  // std::underlying_type_t
+#include <type_traits>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
-enum class xcounts_err {
+// NOLINTBEGIN(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-constant-array-index,*-pointer-arithmetic)
+
+enum class xcounts_err : std::uint8_t {
   // clang-format off
   ok                            = 0,
   open_failure                  = 1,
@@ -96,7 +101,7 @@ fill_output_buffer(const std::uint32_t offset, const MSite &s, T &buf) {
 }
 
 int
-main_xcounts(int argc, char *argv[]) {
+main_xcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     // ADS: It might happen that a "chromosome" has no CpG sites (like
     // Scaffold113377 in strPur2). Therefore, we can't assume each chrom will
@@ -114,7 +119,8 @@ main_xcounts(int argc, char *argv[]) {
       "compress counts files by removing context information";
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description,
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description,
                            "<counts-file> (\"-\" for standard input)", 1);
     opt_parse.add_opt("output", 'o', "output file (default is standard out)",
                       false, outfile);
@@ -277,3 +283,5 @@ main_xcounts(int argc, char *argv[]) {
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-constant-array-index,*-pointer-arithmetic)

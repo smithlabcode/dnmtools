@@ -17,41 +17,42 @@
  */
 
 #include "xcounts_utils.hpp"
-
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <vector>
-#include <cassert>
-#include <cstdint>
-#include <sstream>
-#include <charconv>
-#include <unordered_map>
-
 #include "counts_header.hpp"
-#include "bam_record_utils.hpp"
-
-#include "bamxx.hpp"
 #include "dnmt_error.hpp"
 
-using std::vector;
+#include <bamxx.hpp>
+
+#include <htslib/sam.h>
+
+#include <cctype>
+#include <charconv>
+#include <cstdint>
+#include <stdexcept>
+#include <string>
+#include <system_error>
+#include <unordered_map>
+#include <vector>
+
+using std::runtime_error;
 using std::string;
 using std::to_string;
 using std::unordered_map;
-using std::runtime_error;
+using std::vector;
 
 using bamxx::bgzf_file;
 
-
 // careful: this could get big
 unordered_map<string, vector<xcounts_entry>>
-read_xcounts_by_chrom(const uint32_t n_threads, const string &xcounts_file) {
+read_xcounts_by_chrom(const std::int32_t n_threads,
+                      const string &xcounts_file) {
   bamxx::bam_tpool tp(n_threads);
   bamxx::bgzf_file in(xcounts_file, "r");
-  if (!in) throw runtime_error("failed to open input file");
+  if (!in)
+    throw runtime_error("failed to open input file");
 
   // set the threads for the input file decompression
-  if (n_threads > 1 && in.is_bgzf()) tp.set_io(in);
+  if (n_threads > 1 && in.is_bgzf())
+    tp.set_io(in);
 
   kstring_t line{0, 0, nullptr};
   string chrom_name;
@@ -62,9 +63,11 @@ read_xcounts_by_chrom(const uint32_t n_threads, const string &xcounts_file) {
   vector<xcounts_entry> curr_chrom;
 
   while (bamxx::getline(in, line)) {
-    if (is_counts_header_line(line.s)) continue;  // ADS: early loop exit
+    if (is_counts_header_line(line.s))
+      continue;  // ADS: early loop exit
 
-    if (!std::isdigit(line.s[0])) {  // check if we have a chrom line
+    // check if we have a chrom line
+    if (!std::isdigit(line.s[0])) {  // NOLINT(*-pointer-arithmetic)
       if (!chrom_name.empty()) {
         sites_by_chrom.insert({chrom_name, curr_chrom});
         curr_chrom.clear();
@@ -74,11 +77,15 @@ read_xcounts_by_chrom(const uint32_t n_threads, const string &xcounts_file) {
       continue;
     }
 
-    uint32_t pos_step = 0, n_meth = 0, n_unmeth = 0;
+    std::uint32_t pos_step{};
+    std::uint32_t n_meth{};
+    std::uint32_t n_unmeth{};
+    // NOLINTBEGIN(*-pointer-arithmetic)
     const auto end_line = line.s + line.l;
     auto res = std::from_chars(line.s, end_line, pos_step);
     res = std::from_chars(res.ptr + 1, end_line, n_meth);
     res = std::from_chars(res.ptr + 1, end_line, n_unmeth);
+    // NOLINTEND(*-pointer-arithmetic)
 
     const auto curr_pos = pos + pos_step;
 
@@ -87,17 +94,19 @@ read_xcounts_by_chrom(const uint32_t n_threads, const string &xcounts_file) {
     pos = curr_pos;
   }
 
-  if (!chrom_name.empty()) sites_by_chrom.insert({chrom_name, curr_chrom});
+  if (!chrom_name.empty())
+    sites_by_chrom.insert({chrom_name, curr_chrom});
 
+  ks_free(&line);
   return sites_by_chrom;
 }
-
 
 bool
 get_is_xcounts_file(const std::string &filename) {
   static constexpr auto max_lines_to_check = 1000ul;
   bamxx::bgzf_file in(filename, "r");
-  if (!in) throw dnmt_error{"failed to open input file: " + filename};
+  if (!in)
+    throw dnmt_error{"failed to open input file: " + filename};
 
   kstring_t line{0, 0, nullptr};
 
@@ -109,22 +118,40 @@ get_is_xcounts_file(const std::string &filename) {
     if (is_counts_header_line(line.s)) {
       found_header = true;
     }
-    else if (!std::isdigit(line.s[0])) {  // check if we have a chrom line
-      if (!found_header)
+    // check if we have a chrom line
+    else if (!std::isdigit(line.s[0])) {  // NOLINT(*-pointer-arithmetic)
+      if (!found_header) {
+        ks_free(&line);
         return false;
+      }
       found_chrom = true;
     }
     else {
-      if (!found_chrom) return false;
-      int64_t pos_step = 0, n_meth = 0, n_unmeth = 0;
+      if (!found_chrom) {
+        ks_free(&line);
+        return false;
+      }
+      std::int64_t pos_step = 0, n_meth = 0, n_unmeth = 0;
+      // NOLINTBEGIN(*-pointer-arithmetic)
       const auto end_line = line.s + line.l;
       auto res = std::from_chars(line.s, end_line, pos_step);
-      if (res.ec != std::errc()) return false;
+      if (res.ec != std::errc()) {
+        ks_free(&line);
+        return false;
+      }
       res = std::from_chars(res.ptr + 1, end_line, n_meth);
-      if (res.ec != std::errc()) return false;
+      if (res.ec != std::errc()) {
+        ks_free(&line);
+        return false;
+      }
       res = std::from_chars(res.ptr + 1, end_line, n_unmeth);
-      if (res.ec != std::errc()) return false;
+      if (res.ec != std::errc()) {
+        ks_free(&line);
+        return false;
+      }
+      // NOLINTEND(*-pointer-arithmetic)
     }
   }
+  ks_free(&line);
   return true;
 }

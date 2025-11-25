@@ -23,8 +23,12 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include "bamxx.hpp"
+namespace bamxx {
+struct bam_header;
+}
+namespace bamxx {
+struct bgzf_file;
+}
 
 std::unordered_map<std::string, std::uint32_t>
 write_counts_header_from_chrom_sizes(
@@ -37,7 +41,7 @@ write_counts_header_from_file(const std::string &header_file,
 
 // returns -1 on failure, 0 on success
 int
-get_chrom_sizes_for_counts_header(const uint32_t n_threads,
+get_chrom_sizes_for_counts_header(const std::int32_t n_threads,
                                   const std::string &filename,
                                   std::vector<std::string> &chrom_names,
                                   std::vector<uint64_t> &chrom_sizes);

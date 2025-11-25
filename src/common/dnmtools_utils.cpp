@@ -26,12 +26,15 @@ using std::ostringstream;
 using std::string;
 
 auto
-get_command_line(const int argc, char *argv[]) -> std::string {
+get_command_line(const int argc,
+                 char *argv[]) -> std::string {  // NOLINT(*-c-arrays)
   if (argc == 0)
     return std::string{};
   std::ostringstream cmd;
   cmd << '"';
+  // NOLINTBEGIN(*-pointer-arithmetic)
   copy(argv, argv + (argc - 1), ostream_iterator<const char *>(cmd, " "));
   cmd << argv[argc - 1] << '"';
+  // NOLINTEND(*-pointer-arithmetic)
   return cmd.str();
 }

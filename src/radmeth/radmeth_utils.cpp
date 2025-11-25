@@ -19,9 +19,13 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
+
+// NOLINTBEGIN(*-narrowing-conversions,*-avoid-magic-numbers)
 
 [[nodiscard]] std::string
 format_duration(const std::chrono::duration<double> elapsed) {
@@ -45,7 +49,8 @@ file_progress::file_progress(const std::string &filename) :
   one_thousand_over_filesize{1000.0 / std::filesystem::file_size(filename)} {}
 
 void
-file_progress::operator()(std::ifstream &in) {
+file_progress::operator()(
+  std::ifstream &in) {  // cppcheck-suppress constParameterReference
   const std::size_t curr_offset =
     in.eof() ? 1000 : in.tellg() * one_thousand_over_filesize;
   if (curr_offset <= prev_offset)
@@ -142,3 +147,5 @@ llr_test(const double null_loglik, const double full_loglik) {
 
   return p_value;
 }
+
+// NOLINTEND(*-narrowing-conversions,*-avoid-magic-numbers)

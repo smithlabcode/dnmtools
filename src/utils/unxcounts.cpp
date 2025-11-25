@@ -16,24 +16,36 @@
  * General Public License for more details.
  */
 
-#include "MSite.hpp"
+#include "OptionParser.hpp"
 #include "bsutils.hpp"
 #include "counts_header.hpp"
-
-#include <bamxx.hpp>
-
-// from smithlab_cpp
-#include "OptionParser.hpp"
 #include "smithlab_os.hpp"
 #include "smithlab_utils.hpp"
 
+#include <bamxx.hpp>
+
+#include <htslib/bgzf.h>
+#include <htslib/sam.h>
+
+#include <algorithm>
+#include <cassert>
+#include <cctype>
 #include <charconv>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
 #include <iostream>
+#include <iterator>
+#include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
+
+// NOLINTBEGIN(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-constant-array-index,*-pointer-arithmetic)
 
 static void
 read_fasta_file_short_names_uppercase(const std::string &chroms_file,
@@ -390,12 +402,12 @@ process_sites(const bool verbose, const bool add_missing_chroms,
 
   std::string chrom_name;
   std::uint32_t nm_sz{};
-  std::int32_t prev_chr_id = -1;
+  std::int32_t prev_chr_id{-1};
   std::uint64_t pos = std::numeric_limits<std::uint64_t>::max();
 
   // ADS: this is probably a poor strategy since we already would know
   // the index of the chrom sequence in the vector.
-  chrom_itr_t ch_itr;
+  chrom_itr_t ch_itr{};
 
   while (getline(in, line)) {
     if (is_counts_header_line(line.s)) {
@@ -404,7 +416,6 @@ process_sites(const bool verbose, const bool add_missing_chroms,
     }
 
     if (!std::isdigit(line.s[0])) {  // check if we have a chrom line
-
       if (!require_covered && pos != std::numeric_limits<std::uint64_t>::max())
         write_missing(nm_sz, *ch_itr, pos + 1, size(*ch_itr), buf, out);
 
@@ -516,7 +527,7 @@ process_cpg_sites(const bool verbose, const bool add_missing_chroms,
 
   // ADS: this is probably a poor strategy since we already would know
   // the index of the chrom sequence in the vector.
-  chrom_itr_t ch_itr;
+  chrom_itr_t ch_itr{};
 
   while (getline(in, line)) {
     if (is_counts_header_line(line.s)) {
@@ -525,7 +536,6 @@ process_cpg_sites(const bool verbose, const bool add_missing_chroms,
     }
 
     if (!std::isdigit(line.s[0])) {  // check if we have a chrom line
-
       if (!require_covered && pos != std::numeric_limits<std::uint64_t>::max())
         write_missing_cpg(nm_sz, *ch_itr, pos + 1, size(*ch_itr), buf, out);
 
@@ -568,7 +578,7 @@ process_cpg_sites(const bool verbose, const bool add_missing_chroms,
 }
 
 int
-main_unxcounts(int argc, char *argv[]) {
+main_unxcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     bool verbose = false;
     bool add_missing_chroms = false;
@@ -583,7 +593,8 @@ main_unxcounts(int argc, char *argv[]) {
       "convert compressed counts format back to full counts";
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description, "<xcounts-file>");
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description, "<xcounts-file>");
     opt_parse.add_opt("output", 'o', "output file (required)", true, outfile);
     opt_parse.add_opt("missing", 'm', "add missing chroms", false,
                       add_missing_chroms);
@@ -641,3 +652,5 @@ main_unxcounts(int argc, char *argv[]) {
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-constant-array-index,*-pointer-arithmetic)

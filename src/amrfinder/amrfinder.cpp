@@ -19,6 +19,7 @@
 
 #include "EpireadStats.hpp"
 
+#include "Epiread.hpp"
 #include "Interval.hpp"
 #include "Interval6.hpp"
 
@@ -34,6 +35,7 @@
 #include <iterator>
 #include <numeric>
 // #include <print>  // ADS: needs c++20
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -300,8 +302,8 @@ get_n_cpgs(const std::vector<epi_r> &reads) {
 
 template <typename T>
 [[nodiscard]] static inline auto
-get_block_bounds(const T n_elements, const T n_chunks)
-  -> std::vector<std::pair<T, T>> {
+get_block_bounds(const T n_elements,
+                 const T n_chunks) -> std::vector<std::pair<T, T>> {
   const auto q = n_elements / n_chunks;
   const auto r = n_elements - q * n_chunks;
   std::vector<std::pair<T, T>> chunks(n_chunks);

@@ -17,11 +17,16 @@
 #include "dnmtools_gaussinv.hpp"
 
 #include <GenomicRegion.hpp>
-#include <smithlab_utils.hpp>
 
+#include <algorithm>
+#include <cassert>
 #include <cmath>
+#include <cstddef>
+#include <iterator>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 void
@@ -61,7 +66,6 @@ void
 relative_sort(const std::vector<GenomicRegion> &mapped_locations,
               const std::vector<std::string> &names,
               std::vector<std::size_t> &lookup) {
-
   std::unordered_map<std::string, std::size_t> names_map;
   for (std::size_t i = 0; i < std::size(names); ++i)
     names_map[names[i]] = i;

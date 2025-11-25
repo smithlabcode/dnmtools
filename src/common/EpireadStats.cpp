@@ -56,7 +56,7 @@ get_n_cpgs(const vector<epi_r> &reads) {
     [](const std::uint32_t a, const auto &r) { return std::max(a, r.end()); });
 }
 
-static inline double
+inline double
 log_likelihood(const epi_r &r, const vector<double> &a) {
   double ll = 0.0;
   for (size_t i = 0; i < r.seq.length(); ++i)

@@ -27,38 +27,46 @@
  * A-rich and then changing that format to indicate T-rich.
  */
 
-// from dnmtools
+#include "OptionParser.hpp"
 #include "bam_record_utils.hpp"
 #include "dnmt_error.hpp"
 
-// from smithlab
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
+#include <bamxx.hpp>
 
 #include <config.h>
 
 #include <algorithm>
-#include <cstdint>  // for [u]int[0-9]+_t
+#include <cassert>
+#include <cctype>
+#include <cstdint>
+#include <cstdlib>
 #include <cstring>
-#include <fstream>
+#include <exception>
 #include <iostream>
+#include <iterator>
+#include <limits>
+#include <numeric>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
+// NOLINTBEGIN(*-avoid-magic-numbers,cert-*-cpp)
+
 static std::int32_t
-merge_ends(bamxx::bam_rec &one, bamxx::bam_rec &two, bamxx::bam_rec &merged) {
+merge_ends(const bamxx::bam_rec &one, const bamxx::bam_rec &two,
+           bamxx::bam_rec &merged) {
   if (!are_mates(one, two))
     return std::numeric_limits<std::int32_t>::min();
 
   // arithmetic easier using base 0 so subtracting 1 from pos
+  // NOLINTBEGIN(*-narrowing-conversions)
   const int one_s = get_pos(one);
   const int one_e = get_endpos(one);
   const int two_s = get_pos(two);
   const int two_e = get_endpos(two);
+  // NOLINTEND(*-narrowing-conversions)
   assert(one_s >= 0 && two_s >= 0);
 
   const int spacer = two_s - one_e;
@@ -175,6 +183,8 @@ get_max_repeat_count(const std::vector<std::string> &names,
   // allow the repeat_count to go to 2, which might not be the "max"
   // but still would indicate that this suffix length is too long and
   // would result in more that two reads identified mutually as mates.
+
+  // NOLINTBEGIN(*-narrowing-conversions)
   for (std::size_t i = 1; i < names.size() && repeat_count < 2; ++i) {
     if (names[i - 1].size() == names[i].size() &&
         std::equal(std::cbegin(names[i - 1]),
@@ -184,6 +194,7 @@ get_max_repeat_count(const std::vector<std::string> &names,
       tmp_repeat_count = 0;
     repeat_count = std::max(repeat_count, tmp_repeat_count);
   }
+  // NOLINTEND(*-narrowing-conversions)
   return repeat_count;
 }
 
@@ -194,9 +205,14 @@ check_suff_len(const std::string &inputfile, const std::size_t suff_len,
      more than two reads being mutually considered mates */
   auto names(load_read_names(inputfile, n_names_to_check));
   // get the minimum read name length
-  std::size_t min_name_len = std::numeric_limits<std::size_t>::max();
-  for (auto &&i : names)
-    min_name_len = std::min(min_name_len, i.size());
+  const std::size_t min_name_len =
+    std::accumulate(std::cbegin(names), std::cend(names),
+                    std::numeric_limits<std::size_t>::max(),
+                    [](const auto a, const auto &name) {
+                      return std::min(a, std::size(name));
+                    });
+  // for (auto &&i : names)
+  //   min_name_len = std::min(min_name_len, std::size(i));
   if (min_name_len <= suff_len)
     throw dnmt_error("given suffix length exceeds min read name length");
   std::sort(std::begin(names), std::end(names));
@@ -214,9 +230,16 @@ guess_suff_len(const std::string &inputfile, const std::size_t n_names_to_check,
   }
 
   // get the minimum read name length
-  std::size_t min_name_len = std::numeric_limits<std::size_t>::max();
-  for (auto &&i : names)
-    min_name_len = std::min(min_name_len, i.size());
+  const std::size_t min_name_len =
+    std::accumulate(std::cbegin(names), std::cend(names),
+                    std::numeric_limits<std::size_t>::max(),
+                    [](const auto a, const auto &name) {
+                      return std::min(a, std::size(name));
+                    });
+
+  // std::size_t min_name_len = std::numeric_limits<std::size_t>::max();
+  // for (auto &&i : names)
+  //   min_name_len = std::min(min_name_len, i.size());
   assert(min_name_len > 0);
 
   std::sort(std::begin(names), std::end(names));
@@ -313,12 +336,12 @@ same_name(const bamxx::bam_rec &a, const bamxx::bam_rec &b,
 }
 
 static inline void
-swap(bamxx::bam_rec &a, bamxx::bam_rec &b) {
+swap(bamxx::bam_rec &a, bamxx::bam_rec &b) noexcept {
   std::swap(a.b, b.b);
 }
 
 static void
-format(const std::string &cmd, const std::size_t n_threads,
+format(const std::string &cmd, const std::int32_t n_threads,
        const std::string &inputfile, const std::string &outfile,
        const bool bam_format, const std::string &input_format,
        const std::size_t suff_len, const std::int32_t max_frag_len) {
@@ -346,11 +369,10 @@ format(const std::string &cmd, const std::size_t n_threads,
   }
 
   bamxx::bam_rec aln, prev_aln, merged;
-  bool previous_was_merged = false;
-
   const bool empty_reads_file = !hts.read(hdr, aln);
 
   if (!empty_reads_file) {
+    bool previous_was_merged = false;
 
     // ADS: if input is strict SAM that means any read with the rev bits set
     // in the flags has been reverse complemented and is not the original
@@ -416,7 +438,7 @@ format(const std::string &cmd, const std::size_t n_threads,
 }
 
 auto
-get_command_line(const int argc, char *argv[],
+get_command_line(const int argc, char *argv[],  // NOLINT(*-avoid-c-arrays)
                  const std::string &prefix = std::string{}) -> std::string {
   if (argc == 0)
     return std::string{};
@@ -425,12 +447,12 @@ get_command_line(const int argc, char *argv[],
     cmd << prefix << " ";
   std::copy(argv, argv + (argc - 1),
             std::ostream_iterator<const char *>(cmd, " "));
-  cmd << argv[argc - 1];
+  cmd << argv[argc - 1];  // NOLINT(*-pointer-arithmetic)
   return cmd.str();
 }
 
 int
-main_format(int argc, char *argv[]) {
+main_format(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     std::size_t n_reads_to_check{1000000};
 
@@ -444,11 +466,12 @@ main_format(int argc, char *argv[]) {
     bool single_end{false};
     bool verbose{false};
     bool force{false};
-    std::size_t n_threads{1};
+    std::int32_t n_threads{1};
 
     const auto description = "convert SAM/BAM mapped bs-seq reads "
                              "to standard dnmtools format";
-    const auto prog = std::string{"dnmtools"} + " " + argv[0];
+    const auto prog =
+      std::string{"dnmtools"} + " " + argv[0];  // NOLINT(*-pointer-arithmetic)
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(prog, description, "<sam/bam-file> [out-file]", 2);
@@ -559,3 +582,5 @@ main_format(int argc, char *argv[]) {
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-magic-numbers,cert-*-cpp)

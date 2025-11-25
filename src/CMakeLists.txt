@@ -13,12 +13,61 @@
 # You should have received a copy of the GNU General Public License along with
 # this program. If not, see <https://www.gnu.org/licenses/>.
 
-add_subdirectory(bamxx)
-add_subdirectory(smithlab_cpp)
+if(NOT TARGET smithlab_cpp)
+  add_subdirectory(bamxx)
+endif()
+if(NOT TARGET smithlab_cpp)
+  add_subdirectory(smithlab_cpp)
+endif()
 add_subdirectory(common)
 add_subdirectory(radmeth)
 add_subdirectory(utils)
 add_subdirectory(analysis)
 add_subdirectory(amrfinder)
-# add_subdirectory(abismal)
-# add_subdirectory(mlml)
+add_subdirectory(abismal)
+add_subdirectory(mlml)
+
+add_executable(dnmtools dnmtools.cpp)
+# ADS: below, for config.h
+target_include_directories(dnmtools PUBLIC ${CMAKE_BINARY_DIR})
+target_link_libraries(dnmtools PUBLIC
+  dnmtools_objs
+  smithlab_cpp
+  bamxx
+  abismal_objs
+  radmeth
+  format-reads
+  uniq
+  bsrate
+  methcounts
+  nanopore
+  symmetric-cpgs
+  levels
+  hmr
+  hmr-rep
+  hypermr
+  methentropy
+  pmd
+  roimethstat
+  autocorr
+  cpgbins
+  multimethstat
+  mlml
+  methstates
+  allelicmeth
+  amrfinder
+  amrtester
+  fast-liftover
+  metagene
+  lift-filter
+  clean-hairpins
+  guessprotocol
+  merge-bsrate
+  merge-methcounts
+  covered
+  recovered
+  xcounts
+  unxcounts
+  selectsites
+  kmersites
+)

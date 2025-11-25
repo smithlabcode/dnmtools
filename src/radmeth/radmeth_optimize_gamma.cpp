@@ -18,15 +18,18 @@
 #include "radmeth_model.hpp"
 #include "radmeth_optimize_params.hpp"
 
-#include <gsl/gsl_multimin.h>
-#include <gsl/gsl_vector.h>
-
-#include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
+#include <iterator>
 #include <numeric>
-#include <stdexcept>
 #include <vector>
+
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_multimin.h>
+#include <gsl/gsl_vector_double.h>
+
+// NOLINTBEGIN(*-pointer-arithmetic,*-avoid-magic-numbers,*-constant-array-index,*-avoid-do-while)
 
 [[nodiscard]] static inline auto
 logistic(const double x) -> double {
@@ -92,7 +95,7 @@ log_likelihood(const gsl_vector *params, Regression<T> &reg) -> double {
    range 0-1 */
 // clang-format off
 static constexpr std::array<double, 23> psi1_cs {
-  -0.038057080835217922, // == -0.019028540417608961*2
+  -0.038057080835217922,  // == -0.019028540417608961*2
   +0.491415393029387130,
   -0.056815747821244730,
   +0.008357821225914313,
@@ -122,7 +125,7 @@ static constexpr std::array<double, 23> psi1_cs {
    function */
 // clang-format off
 static constexpr std::array<double, 16> psi2_cs = {
-  -0.0204749044678185, // == -0.01023745223390925*2
+  -0.0204749044678185,  // == -0.01023745223390925*2
   -0.0101801271534859,
   +0.0000559718725387,
   -0.0000012917176570,
@@ -344,3 +347,5 @@ fit_regression_model_gamma(Regression<double> &r,
                            double &dispersion_estimate) {
   fit_regression_model<double>(r, p_estimates, dispersion_estimate);
 }
+
+// NOLINTEND(*-pointer-arithmetic,*-avoid-magic-numbers,*-constant-array-index,*-avoid-do-while)

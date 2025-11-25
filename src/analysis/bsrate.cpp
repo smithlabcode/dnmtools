@@ -21,19 +21,33 @@
 #include "bam_record_utils.hpp"
 #include "bsutils.hpp"
 #include "dnmt_error.hpp"
-#include "smithlab_utils.hpp"
+#include "smithlab_os.hpp"
 
 #include <bamxx.hpp>
 
+#include <htslib/sam.h>
+
 #include <algorithm>
+#include <cassert>
+#include <cctype>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <iterator>
+#include <limits>
 #include <numeric>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
+
+// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions,*-pointer-arithmetic)
 
 struct bsrate_summary {
   // converted_count_positive is the number of nucleotides covering a
@@ -89,7 +103,8 @@ struct bsrate_summary {
   [[nodiscard]] double
   bisulfite_conversion_rate_positive() const {
     return static_cast<double>(converted_count_positive) /
-           std::max(total_count_positive, static_cast<std::uint64_t>(1));
+           static_cast<double>(
+             std::max(total_count_positive, static_cast<std::uint64_t>(1)));
   }
 
   // bisulfite_conversion_rate_negative is equal to converted_count_negative
@@ -99,7 +114,8 @@ struct bsrate_summary {
   [[nodiscard]] double
   bisulfite_conversion_rate_negative() const {
     return static_cast<double>(converted_count_negative) /
-           std::max(total_count_negative, static_cast<std::uint64_t>(1));
+           static_cast<double>(
+             std::max(total_count_negative, static_cast<std::uint64_t>(1)));
   }
 
   // bisulfite_conversion_rate is equal to converted_count divided by
@@ -109,7 +125,8 @@ struct bsrate_summary {
   [[nodiscard]] double
   bisulfite_conversion_rate() const {
     return static_cast<double>(converted_count()) /
-           std::max(total_count(), static_cast<std::uint64_t>(1));
+           static_cast<double>(
+             std::max(total_count(), static_cast<std::uint64_t>(1)));
   }
 
   // error_count is equal to the sum of error_count_positive and
@@ -132,7 +149,8 @@ struct bsrate_summary {
   [[nodiscard]] double
   error_rate() const {
     return static_cast<double>(error_count()) /
-           std::max(valid_count(), static_cast<std::uint64_t>(1));
+           static_cast<double>(
+             std::max(valid_count(), static_cast<std::uint64_t>(1)));
   }
 
   void
@@ -476,6 +494,7 @@ write_per_read_histogram(const std::vector<std::vector<T>> &tab,
                          const std::size_t n_hist_bins, std::ostream &out) {
   const auto hist = format_histogram(tab, n_hist_bins);
   out << std::fixed;
+  // NOLINTNEXTLINE(cert-flp30-c,clang-analyzer-security*)
   for (auto i = 0.0; i < hist.size(); ++i)
     out << std::setprecision(3) << i / hist.size() << '\t'
         << std::setprecision(3) << (i + 1) / hist.size() << '\t'
@@ -483,7 +502,7 @@ write_per_read_histogram(const std::vector<std::vector<T>> &tab,
 }
 
 int
-main_bsrate(int argc, char *argv[]) {
+main_bsrate(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     // assumed maximum length of a fragment
     static constexpr const std::size_t output_size = 10000;
@@ -507,7 +526,7 @@ main_bsrate(int argc, char *argv[]) {
     std::string seq_to_use;  // use only this chrom/sequence in the analysis
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]),
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            "Program to compute the "
                            "BS conversion rate from BS-seq "
                            "reads mapped to a genome",
@@ -662,3 +681,5 @@ main_bsrate(int argc, char *argv[]) {
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions,*-pointer-arithmetic)

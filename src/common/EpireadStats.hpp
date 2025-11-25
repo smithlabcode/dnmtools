@@ -38,6 +38,11 @@ struct small_epiread {
   length() const {
     return std::size(seq);
   }
+
+  std::size_t
+  size() const {
+    return std::size(seq);
+  }
 };
 
 double

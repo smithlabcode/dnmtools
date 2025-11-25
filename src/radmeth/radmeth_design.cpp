@@ -16,14 +16,14 @@
 #include "radmeth_design.hpp"
 
 #include <algorithm>
-#include <charconv>
 #include <cstdint>
 #include <fstream>
 #include <istream>
-#include <ostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 static void
@@ -101,7 +101,7 @@ operator>>(std::istream &is, Design &design) {
 }
 
 [[nodiscard]] Design
-Design::drop_factor(const std::size_t factor_idx) {
+Design::drop_factor(const std::uint32_t factor_idx) {
   // clang-format off
   Design design{
     factor_names,
@@ -255,8 +255,10 @@ Design::get_test_factor_idx(const std::string &test_factor) const {
 [[nodiscard]] bool
 Design::has_two_values(const std::size_t test_factor) const {
   const auto &tcol = tmatrix[test_factor];
-  for (const auto x : tcol)
-    if (x != tcol[0])
-      return true;
-  return false;
+  return std::any_of(std::cbegin(tcol), std::cend(tcol),
+                     [&](const auto x) { return x != tcol[0]; });
+  // for (const auto x : tcol)
+  //   if (x != tcol[0])
+  //     return true;
+  // return false;
 }

@@ -17,22 +17,22 @@
  * General Public License for more details.
  */
 
+#include "OptionParser.hpp"
+
+#include <bamxx.hpp>
+
 #include <algorithm>
-#include <cstdint>  // for [u]int[0-9]+_t
-#include <filesystem>
+#include <cctype>
+#include <cstdlib>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <numeric>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <vector>
-
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-
-#include <bamxx.hpp>
 
 static inline auto
 process_chrom_wig(const std::string &kmer, const int offset,
@@ -54,7 +54,7 @@ process_chrom_wig(const std::string &kmer, const int offset,
 
   const auto end_chrom = std::cend(chrom);
   auto chrom_itr = std::cbegin(chrom);
-  auto chrom_itr_k = chrom_itr + kmer_size;
+  auto chrom_itr_k = chrom_itr + kmer_size;  // NOLINT(*-narrowing-conversions)
 
   auto pos = 0;
   while (chrom_itr_k != end_chrom) {
@@ -67,7 +67,6 @@ process_chrom_wig(const std::string &kmer, const int offset,
 [[nodiscard]] static auto
 read_fasta_file(const std::string &filename)
   -> std::tuple<std::vector<std::string>, std::vector<std::string>> {
-
   std::ifstream in(filename);
   if (!in)
     throw std::runtime_error("cannot open input file " + filename);
@@ -96,7 +95,6 @@ process_chrom_with_named_lines(const std::string &kmer, const int offset,
                                const std::string &name,
                                const std::string &chrom,
                                bamxx::bgzf_file &out) {
-
   const auto kmer_size = size(kmer);
   const auto chrom_size = size(chrom);
   if (kmer_size > chrom_size)
@@ -109,7 +107,7 @@ process_chrom_with_named_lines(const std::string &kmer, const int offset,
 
   const auto end_chrom = std::cend(chrom);
   auto chrom_itr = std::cbegin(chrom);
-  auto chrom_itr_k = chrom_itr + kmer_size;
+  auto chrom_itr_k = chrom_itr + kmer_size;  // NOLINT(*-narrowing-conversions)
 
   auto pos = 0;
   while (chrom_itr_k != end_chrom) {
@@ -129,9 +127,8 @@ bad_dna_kmer(const std::string &kmer) -> bool {
 }
 
 auto
-kmersites(const int argc, char *argv[]) -> int {
+kmersites(const int argc, char *argv[]) -> int {  // NOLINT(*-avoid-c-arrays)
   try {
-
     bool verbose{false};
     bool show_progress{false};
     bool compress_output{false};
@@ -194,7 +191,7 @@ kmersites(const int argc, char *argv[]) -> int {
                 << "[command line: " << cmd.str() << "]\n";
 
     auto [names, chroms] = read_fasta_file(chroms_file);
-    for (auto &chrom : chroms)
+    for (auto &chrom : chroms)  // cppcheck-suppress constVariableReference
       std::transform(std::cbegin(chrom), std::cend(chrom), std::begin(chrom),
                      [](const char c) { return std::toupper(c); });
 

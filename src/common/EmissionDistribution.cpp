@@ -18,127 +18,136 @@
 
 #include "EmissionDistribution.hpp"
 
-using std::vector;
-using std::pair;
-using std::setw;
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <iomanip>
+#include <iostream>
+#include <numeric>
+#include <sstream>
+#include <utility>
+
+#include <gsl/gsl_sf_gamma.h>
+#include <gsl/gsl_sf_psi.h>
+
+using std::cerr;
 using std::max;
 using std::min;
-using std::cerr;
-using std::endl;
-using std::string;
+using std::pair;
 using std::setprecision;
+using std::setw;
+using std::string;
+using std::vector;
 
 EmissionDistribution::EmissionDistribution() :
-    alpha(1), beta(1), lnbeta_helper(gsl_sf_lnbeta(1, 1)) {}
+  alpha(1), beta(1), lnbeta_helper(gsl_sf_lnbeta(1, 1)) {}
 
 EmissionDistribution::EmissionDistribution(const double a, const double b) :
-    alpha(a), beta(b), lnbeta_helper(gsl_sf_lnbeta(a, b)) {}
+  alpha(a), beta(b), lnbeta_helper(gsl_sf_lnbeta(a, b)) {}
 
 EmissionDistribution::EmissionDistribution(const string &str) {
-    std::istringstream iss(str, std::istringstream::in);
-    string name;
-    iss >> name >> alpha >> beta;
-    if (name != "edtn" || alpha < 0 || beta < 0)
-    {
-        cerr << "EmissionDistribution::EmissionDistribution: "
-             << "bad string representation of emission distribution: "
-             << str << endl;
-        throw "bad string representation of emission distribution";
-    }
-    lnbeta_helper = gsl_sf_lnbeta(alpha, beta);
+  std::istringstream iss(str, std::istringstream::in);
+  string name;
+  iss >> name >> alpha >> beta;
+  if (name != "edtn" || alpha < 0 || beta < 0) {
+    cerr << "EmissionDistribution::EmissionDistribution: "
+         << "bad string representation of emission distribution: " << str
+         << '\n';
+    throw "bad string representation of emission distribution";
+  }
+  lnbeta_helper = gsl_sf_lnbeta(alpha, beta);
 }
 
 EmissionDistribution::~EmissionDistribution() {}
 
 string
 EmissionDistribution::tostring() const {
-    std::ostringstream os;
-    os << "Emission dtn params: " << setprecision(4) << alpha << " "
-       << setprecision(4) << beta;
-    return os.str();
+  std::ostringstream os;
+  os << "Emission dtn params: " << setprecision(4) << alpha << " "
+     << setprecision(4) << beta;
+  return os.str();
 }
-
 
 double
 EmissionDistribution::sign(const double x) {
-    return (x >= 0) ? 1.0 : -1.0;
+  return (x >= 0) ? 1.0 : -1.0;
 }
-
 
 double
 EmissionDistribution::invpsi(const double tolerance, const double x) {
-    double L = 1.0, Y = std::exp(x);
-    while (L > tolerance)
-    {
-        Y += L*sign(x - gsl_sf_psi(Y));
-        L /= 2.0;
-    }
-    return Y;
+  double L = 1.0, Y = std::exp(x);
+  while (L > tolerance) {
+    Y += L * sign(x - gsl_sf_psi(Y));
+    L /= 2.0;  // NOLINT(*-avoid-magic-numbers)
+  }
+  return Y;
 }
-
 
 double
 EmissionDistribution::movement(const double curr, const double prev) {
-    return std::abs(curr - prev)/std::max(std::fabs(curr), std::fabs(prev));
+  return std::abs(curr - prev) / std::max(std::fabs(curr), std::fabs(prev));
 }
-
 
 void
 EmissionDistribution::fit(const vector<double> &vals_a,
-                      const vector<double> &vals_b, const vector<double> &p) {
-    const double p_total = std::accumulate(p.begin(), p.end(), 0.0);
-    const double alpha_rhs = inner_product(vals_a.begin(), vals_a.end(),
-                                           p.begin(), 0.0)/p_total;
-    const double beta_rhs = inner_product(vals_b.begin(), vals_b.end(),
-                                          p.begin(), 0.0)/p_total;
+                          const vector<double> &vals_b,
+                          const vector<double> &p) {
+  static constexpr auto initial_param_vals = 0.01;
+  const double p_total = std::accumulate(p.begin(), p.end(), 0.0);
+  const double alpha_rhs =
+    inner_product(vals_a.begin(), vals_a.end(), p.begin(), 0.0) / p_total;
+  const double beta_rhs =
+    inner_product(vals_b.begin(), vals_b.end(), p.begin(), 0.0) / p_total;
 
-    double prev_alpha = 0.0, prev_beta = 0.0;
-    alpha = beta = 0.01;
-    while (movement(alpha, prev_alpha) > tolerance &&
-           movement(beta, prev_beta) > tolerance)
-    {
-        prev_alpha = alpha;
-        prev_beta = beta;
-        alpha = invpsi(tolerance, gsl_sf_psi(prev_alpha + prev_beta) + alpha_rhs);
-        beta = invpsi(tolerance, gsl_sf_psi(prev_alpha + prev_beta) + beta_rhs);
-    }
-    lnbeta_helper = gsl_sf_lnbeta(alpha, beta);
+  double prev_alpha = 0.0, prev_beta = 0.0;
+  alpha = beta = initial_param_vals;
+
+  while (movement(alpha, prev_alpha) > tolerance &&
+         movement(beta, prev_beta) > tolerance) {
+    prev_alpha = alpha;
+    prev_beta = beta;
+    alpha = invpsi(tolerance, gsl_sf_psi(prev_alpha + prev_beta) + alpha_rhs);
+    beta = invpsi(tolerance, gsl_sf_psi(prev_alpha + prev_beta) + beta_rhs);
+  }
+  lnbeta_helper = gsl_sf_lnbeta(alpha, beta);
 }
 
 Beta::Beta() : EmissionDistribution() {}
-Beta::Beta(const double a, const double b) : EmissionDistribution(a,b) {}
+Beta::Beta(const double a, const double b) : EmissionDistribution(a, b) {}
 Beta::Beta(const std::string &str) : EmissionDistribution(str) {}
 
 double
 Beta::operator()(const pair<double, double> &val) const {
-    const double p = val.first/val.second;
-    return (alpha-1.0)*log(p) + (beta-1.0)*log(1.0-p) - gsl_sf_lnbeta(alpha, beta);
+  const double p = val.first / val.second;
+  return (alpha - 1.0) * log(p) + (beta - 1.0) * log(1.0 - p) -
+         gsl_sf_lnbeta(alpha, beta);
 }
 
 double
 Beta::log_likelihood(const pair<double, double> &val) const {
-    const double p = val.first/val.second;
-    return (alpha-1.0)*log(p) + (beta-1.0)*log(1.0-p) - gsl_sf_lnbeta(alpha, beta);
+  const double p = val.first / val.second;
+  return (alpha - 1.0) * log(p) + (beta - 1.0) * log(1.0 - p) -
+         gsl_sf_lnbeta(alpha, beta);
 }
 
 BetaBinomial::BetaBinomial() : EmissionDistribution() {}
-BetaBinomial::BetaBinomial(const double a, const double b)
-                             : EmissionDistribution(a,b) {}
-BetaBinomial::BetaBinomial(const std::string &str)
-                             : EmissionDistribution(str) {}
+BetaBinomial::BetaBinomial(const double a, const double b) :
+  EmissionDistribution(a, b) {}
+BetaBinomial::BetaBinomial(const std::string &str) :
+  EmissionDistribution(str) {}
 
 double
 BetaBinomial::operator()(const pair<double, double> &val) const {
-    const size_t x = static_cast<size_t>(val.first);
-    const size_t n = static_cast<size_t>(x + val.second);
-    return gsl_sf_lnchoose(n, x) +
-        gsl_sf_lnbeta(alpha + x, beta + val.second) - lnbeta_helper;
+  const std::uint32_t x = static_cast<std::uint32_t>(val.first);
+  const std::uint32_t n = static_cast<std::uint32_t>(val.first + val.second);
+  return gsl_sf_lnchoose(n, x) + gsl_sf_lnbeta(alpha + x, beta + val.second) -
+         lnbeta_helper;
 }
 
 double
 BetaBinomial::log_likelihood(const pair<double, double> &val) const {
-    const size_t x = static_cast<size_t>(val.first);
-    const size_t n = static_cast<size_t>(x + val.second);
-    return gsl_sf_lnchoose(n, x) +
-        gsl_sf_lnbeta(alpha + x, beta + val.second) - lnbeta_helper;
+  const std::uint32_t x = static_cast<std::uint32_t>(val.first);
+  const std::uint32_t n = static_cast<std::uint32_t>(val.first + val.second);
+  return gsl_sf_lnchoose(n, x) + gsl_sf_lnbeta(alpha + x, beta + val.second) -
+         lnbeta_helper;
 }

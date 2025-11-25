@@ -17,28 +17,33 @@
  */
 
 #include "MSite.hpp"
+#include "OptionParser.hpp"
 #include "bsutils.hpp"
 #include "counts_header.hpp"
+#include "smithlab_os.hpp"
 
 #include <bamxx.hpp>
 
-// from smithlab_cpp
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
-
+#include <algorithm>
+#include <cctype>
+#include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <exception>
 #include <iostream>
+#include <iterator>
+#include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 static void
 verify_chrom_orders(
-  const bool verbose, const std::uint32_t n_threads,
-  const std::string &filename,
+  const bool verbose, const std::int32_t n_threads, const std::string &filename,
   const std::unordered_map<std::string, std::int32_t> &chroms_order) {
   bamxx::bgzf_file in(filename, "r");
   if (!in)
@@ -96,8 +101,8 @@ struct quick_buf : public std::ostringstream,
     setp(pbase(), pbase());
   }
   char const *
-  c_str() {
-    /* between c_str and insertion make sure to clear() */
+  data() {
+    /* between data and insertion make sure to clear() */
     *pptr() = '\0';
     return pbase();
   }
@@ -156,13 +161,15 @@ get_tag_from_genome_g(const std::string &s, const std::size_t pos) {
   return 3;
 }
 
-static const char *tag_values[] = {
+// NOLINTBEGIN(*-avoid-c-arrays)
+static const char *const tag_values[] = {
   "CpG",  // 0
   "CHH",  // 1
   "CXG",  // 2
   "CCG",  // 3
   "N"     // 4
 };
+// NOLINTEND(*-avoid-c-arrays)
 
 static void
 write_missing_sites(const std::string &name, const std::string &chrom,
@@ -177,9 +184,11 @@ write_missing_sites(const std::string &name, const std::string &chrom,
       const std::uint32_t the_tag = is_c ? get_tag_from_genome_c(chrom, pos)
                                          : get_tag_from_genome_g(chrom, pos);
       buf.clear();
+      // NOLINTBEGIN(*-constant-array-index)
       buf << name_tab << pos << (is_c ? "\t+\t" : "\t-\t")
           << tag_values[the_tag] << "\t0\t0\n";
-      if (!out.write(buf.c_str(), buf.tellp()))
+      // NOLINTEND(*-constant-array-index)
+      if (!out.write(buf.data(), buf.tellp()))
         throw std::runtime_error("error writing output");
     }
   }
@@ -189,7 +198,7 @@ static void
 write_current_site(const MSite &site, bamxx::bgzf_file &out) {
   quick_buf buf;  // keep underlying buffer space?
   buf << site << '\n';
-  if (!out.write(buf.c_str(), buf.tellp()))
+  if (!out.write(buf.data(), buf.tellp()))
     throw std::runtime_error("error writing site: " + site.tostring());
 }
 
@@ -215,10 +224,9 @@ get_chrom_idx(const std::unordered_map<std::string, std::int32_t> &name_to_idx,
 
 static void
 process_sites(const bool verbose, const bool add_missing_chroms,
-              const bool compress_output, const std::size_t n_threads,
+              const bool compress_output, const std::int32_t n_threads,
               const std::string &infile, const std::string &outfile,
               const std::string &chroms_file) {
-
   // first get the chromosome names and sequences from the FASTA file
   std::vector<std::string> chroms, names;
   read_fasta_file_short_names(chroms_file, names, chroms);
@@ -231,10 +239,10 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   std::unordered_map<std::string, chrom_itr_t> chrom_lookup;
   std::unordered_map<std::string, std::int32_t> name_to_idx;
   std::vector<std::uint64_t> chrom_sizes(size(chroms), 0);
-  for (std::size_t i = 0; i < size(chroms); ++i) {
-    chrom_lookup[names[i]] = cbegin(chroms) + i;
-    name_to_idx[names[i]] = i;
-    chrom_sizes[i] = size(chroms[i]);
+  for (auto i = 0u; i < std::size(chroms); ++i) {
+    chrom_lookup[names[i]] = cbegin(chroms) + static_cast<std::ptrdiff_t>(i);
+    name_to_idx[names[i]] = static_cast<std::int32_t>(i);
+    chrom_sizes[i] = std::size(chroms[i]);
   }
 
   if (add_missing_chroms)
@@ -264,7 +272,7 @@ process_sites(const bool verbose, const bool add_missing_chroms,
 
   // ADS: this is probably a poor strategy since we already would know
   // the index of the chrom sequence in the vector.
-  chrom_itr_t chrom_itr;
+  chrom_itr_t chrom_itr{};
   std::string line;
 
   while (getline(in, line)) {
@@ -272,9 +280,10 @@ process_sites(const bool verbose, const bool add_missing_chroms,
       write_counts_header_line(line, out);
       continue;
     }
-    site.initialize(line.data(), line.data() + size(line));
+    // NOLINTNEXTLINE(*-pointer-arithmetic)
+    if (!site.initialize(line.data(), line.data() + std::size(line)))
+      throw std::runtime_error("failed to parse line:\n" + line);
     if (site.chrom != chrom_name) {
-
       if (pos != std::numeric_limits<std::uint64_t>::max())
         write_missing_sites(chrom_name, *chrom_itr, pos, size(*chrom_itr), out);
 
@@ -302,7 +311,7 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   write_missing_sites(chrom_name, *chrom_itr, pos, size(*chrom_itr), out);
 
   if (add_missing_chroms) {
-    const std::int32_t chrom_idx = size(chroms);
+    const std::int32_t chrom_idx = static_cast<std::int32_t>(std::size(chroms));
     for (auto i = prev_chrom_idx + 1; i < chrom_idx; ++i) {
       if (verbose)
         std::cerr << "processing: " << names[i] << " (missing)\n";
@@ -312,13 +321,12 @@ process_sites(const bool verbose, const bool add_missing_chroms,
 }
 
 int
-main_recovered(int argc, char *argv[]) {
+main_recovered(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-
     bool verbose = false;
     bool add_missing_chroms = false;
     bool compress_output = false;
-    std::size_t n_threads = 1;
+    std::int32_t n_threads = 1;
 
     std::string outfile;
     std::string chroms_file;
@@ -326,8 +334,8 @@ main_recovered(int argc, char *argv[]) {
       "add sites that are missing as non-covered sites";
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description,
-                           "<methcounts-file>");
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description, "<methcounts-file>");
     opt_parse.add_opt("output", 'o', "output file (required)", true, outfile);
     opt_parse.add_opt("missing", 'm', "add missing chroms", false,
                       add_missing_chroms);
@@ -362,7 +370,7 @@ main_recovered(int argc, char *argv[]) {
                   filename, outfile, chroms_file);
   }
   catch (const std::exception &e) {
-    std::cerr << e.what() << "\n";
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

@@ -19,6 +19,7 @@
 #include <string>
 
 auto
-get_command_line(const int argc, char *argv[]) -> std::string;
+get_command_line(const int argc,
+                 char *argv[]) -> std::string;  // NOLINT(*-c-arrays)
 
 #endif

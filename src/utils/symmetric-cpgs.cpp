@@ -16,23 +16,26 @@
  * General Public License for more details.
  */
 
+#include "MSite.hpp"
+#include "OptionParser.hpp"
+#include "counts_header.hpp"
+
 #include <bamxx.hpp>
 
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <unordered_set>
+#include <utility>
 #include <vector>
-
-// from smithlab_cpp
-#include "MSite.hpp"
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
-
-#include "counts_header.hpp"
 
 using std::cerr;
 using std::cout;
@@ -40,8 +43,6 @@ using std::endl;
 using std::runtime_error;
 using std::string;
 using std::unordered_set;
-
-using bamxx::bgzf_file;
 
 static inline bool
 found_symmetric(const MSite &prev, const MSite &curr) {
@@ -67,7 +68,9 @@ get_first_site(T &in, T &out) {
       write_counts_header_line(line, out);
     }
     else {
-      prev_site.initialize(line.data(), line.data() + size(line));
+      // NOLINTNEXTLINE(*-pointer-arithmetic)
+      if (!prev_site.initialize(line.data(), line.data() + std::size(line)))
+        throw std::runtime_error("failed to parse line:\n" + line);
       if (prev_site.is_cpg())
         prev_is_cpg = true;
       within_header = false;
@@ -79,7 +82,6 @@ get_first_site(T &in, T &out) {
 template <class T>
 static bool
 process_sites(const bool verbose, T &in, T &out) {
-
   // get the first site while dealing with the header
   auto [prev_site, prev_is_cpg] = get_first_site(in, out);
 
@@ -105,7 +107,7 @@ process_sites(const bool verbose, T &in, T &out) {
     }
     else {
       if (verbose)
-        cerr << "processing: " << curr_site.chrom << endl;
+        cerr << "processing: " << curr_site.chrom << '\n';
       if (chroms_seen.find(curr_site.chrom) != cend(chroms_seen))
         return false;
       chroms_seen.insert(curr_site.chrom);
@@ -127,7 +129,7 @@ process_sites(const bool verbose, T &in, T &out) {
 }
 
 int
-main_symmetric_cpgs(int argc, char *argv[]) {
+main_symmetric_cpgs(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     // file types from HTSlib use "-" for the filename to go to stdout
     string outfile{"-"};
@@ -140,8 +142,8 @@ main_symmetric_cpgs(int argc, char *argv[]) {
       "Get CpG sites and make methylation levels symmetric.";
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description,
-                           "<methcounts-file>");
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description, "<methcounts-file>");
     opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
                       outfile);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
@@ -152,20 +154,20 @@ main_symmetric_cpgs(int argc, char *argv[]) {
     std::vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      cerr << opt_parse.help_message() << '\n'
+           << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << endl;
+      cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     const string filename(leftover_args.front());
@@ -178,7 +180,7 @@ main_symmetric_cpgs(int argc, char *argv[]) {
     bamxx::bam_tpool tp(n_threads);
 
     // const bool show_progress = VERBOSE && isatty(fileno(stderr));
-    bgzf_file in(filename, "r");
+    bamxx::bgzf_file in(filename, "r");
     if (!in)
       throw runtime_error("could not open file: " + filename);
 
@@ -197,16 +199,15 @@ main_symmetric_cpgs(int argc, char *argv[]) {
     const bool sites_are_sorted = process_sites(verbose, in, out);
 
     if (!sites_are_sorted) {
-      cerr << "sites are not sorted in: " << filename << endl;
-      namespace fs = std::filesystem;
-      const fs::path outpath{outfile};
-      if (fs::exists(outpath))
-        fs::remove(outpath);
+      cerr << "sites are not sorted in: " << filename << '\n';
+      const std::filesystem::path outpath{outfile};
+      if (std::filesystem::exists(outpath) && !std::filesystem::remove(outpath))
+        throw std::runtime_error("failed to remove file: " + outpath.string());
       return EXIT_FAILURE;
     }
   }
-  catch (const runtime_error &e) {
-    cerr << e.what() << endl;
+  catch (const std::exception &e) {
+    cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

@@ -14,6 +14,7 @@
  */
 
 #include "LevelsCounter.hpp"
+#include "MSite.hpp"
 #include "bsutils.hpp"
 
 #include <sstream>
@@ -22,6 +23,7 @@
 
 void
 LevelsCounter::update(const MSite &s) {
+  static constexpr auto half = 0.5;
   if (s.is_mutated()) {
     ++mutations;
   }
@@ -31,10 +33,12 @@ LevelsCounter::update(const MSite &s) {
     total_c += s.n_meth();
     total_t += s.n_reads - s.n_meth();
     total_meth += s.meth;
-    double lower = 0.0, upper = 0.0;
-    wilson_ci_for_binomial(alpha, s.n_reads, s.meth, lower, upper);
-    called_meth += (lower > 0.5);
-    called_unmeth += (upper < 0.5);
+    double lower{};
+    double upper{};
+    wilson_ci_for_binomial(alpha, static_cast<double>(s.n_reads), s.meth, lower,
+                           upper);
+    called_meth += (lower > half);
+    called_unmeth += (upper < half);
   }
   ++total_sites;
 }
@@ -87,9 +91,9 @@ LevelsCounter::format_row() const {
       << total_meth << '\t';
   // derived values
   oss << coverage() << '\t'
-      << static_cast<double>(sites_covered)/total_sites << '\t'
-      << static_cast<double>(coverage())/total_sites << '\t'
-      << static_cast<double>(coverage())/sites_covered << '\t'
+      << static_cast<double>(sites_covered)/static_cast<std::uint32_t>(total_sites) << '\t'
+      << static_cast<double>(coverage())/static_cast<std::uint32_t>(total_sites) << '\t'
+      << static_cast<double>(coverage())/static_cast<std::uint32_t>(sites_covered) << '\t'
       << (good ? mean_meth() : 0.0)  << '\t'
       << (good ? mean_meth_weighted() : 0.0) << '\t'
       << (good ? fractional_meth() : 0.0);
@@ -121,7 +125,7 @@ LevelsCounter::format_header() {
   return oss.str();
 }
 
-double LevelsCounter::alpha = 0.05;
+double LevelsCounter::alpha = 0.05;  // NOLINT(*-avoid-magic-numbers)
 
 std::ostream &
 operator<<(std::ostream &out, const LevelsCounter &cs) {
@@ -129,7 +133,7 @@ operator<<(std::ostream &out, const LevelsCounter &cs) {
 }
 
 static void
-check_label(const std::string &observed, const std::string expected) {
+check_label(const std::string &observed, const std::string &expected) {
   if (observed != expected)
     throw std::runtime_error("bad levels format [" + observed + "," + expected +
                              "]");
@@ -138,7 +142,7 @@ check_label(const std::string &observed, const std::string expected) {
 std::istream &
 operator>>(std::istream &in, LevelsCounter &cs) {
   in >> cs.context;  // get the context
-  cs.context = cs.context.substr(0, cs.context.find_first_of(":"));
+  cs.context = cs.context.substr(0, cs.context.find_first_of(':'));
 
   std::string label;
   in >> label >> cs.total_sites;  // the total sites

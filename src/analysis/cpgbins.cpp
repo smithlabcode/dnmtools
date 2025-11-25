@@ -17,29 +17,26 @@
 
 #include "GenomicRegion.hpp"
 #include "LevelsCounter.hpp"
-#include "MSite.hpp"
 #include "OptionParser.hpp"
 #include "bsutils.hpp"
-#include "smithlab_utils.hpp"
 #include "xcounts_utils.hpp"
 
-#include <bamxx.hpp>
-
 #include <algorithm>
-#include <charconv>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <sstream>
 #include <stdexcept>
+#include <stdlib.h>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-using bamxx::bgzf_file;
-
-namespace fs = std::filesystem;
+// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions)
 
 static std::string
 format_levels_counter(const LevelsCounter &lc) {
@@ -68,6 +65,7 @@ format_levels_counter(const LevelsCounter &lc) {
 
 static std::unordered_map<std::string, std::uint64_t>
 get_chrom_sizes(const std::string &chrom_sizes_file) {
+  // NOLINTBEGIN(performance-inefficient-string-concatenation)
   std::unordered_map<std::string, std::uint64_t> chrom_sizes;
 
   std::ifstream in(chrom_sizes_file);
@@ -93,10 +91,12 @@ get_chrom_sizes(const std::string &chrom_sizes_file) {
     chrom_sizes[chrom_name] = chrom_size;
   }
   return chrom_sizes;
+  // NOLINTEND(performance-inefficient-string-concatenation)
 }
 
 static std::vector<std::string>
 get_chrom_names(const std::string &chrom_sizes_file) {
+  // NOLINTBEGIN(performance-inefficient-string-concatenation)
   std::ifstream in(chrom_sizes_file);
   if (!in)
     throw std::runtime_error("failed to open file: " + chrom_sizes_file);
@@ -114,6 +114,7 @@ get_chrom_names(const std::string &chrom_sizes_file) {
     chrom_names.push_back(chrom_name);
   }
   return chrom_names;
+  // NOLINTEND(performance-inefficient-string-concatenation)
 }
 
 static void
@@ -196,7 +197,7 @@ process_chrom(const bool report_more_info, const std::string &chrom_name,
 }
 
 int
-main_cpgbins(int argc, char *argv[]) {
+main_cpgbins(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     static const std::string description = R"""(
 Compute average site methylation levels in each non-overlapping
@@ -213,8 +214,6 @@ Columns (beyond the first 6) in the BED format output:
 (13) total number of observations from reads in the region
 )""";
 
-    static const std::string default_name_prefix = "X";
-
     bool verbose = false;
     bool report_more_info = false;
     std::uint32_t n_threads = 1;
@@ -224,8 +223,8 @@ Columns (beyond the first 6) in the BED format output:
     std::string outfile;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description,
-                           "<chrom-sizes> <xsym-file>");
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description, "<chrom-sizes> <xsym-file>");
     opt_parse.set_show_defaults();
     opt_parse.add_opt("output", 'o', "name of output file (default: stdout)",
                       true, outfile);
@@ -262,11 +261,11 @@ Columns (beyond the first 6) in the BED format output:
     const std::string xcounts_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (!fs::is_regular_file(chrom_sizes_file))
+    if (!std::filesystem::is_regular_file(chrom_sizes_file))
       throw std::runtime_error("chromosome sizes file not a regular file: " +
                                chrom_sizes_file);
 
-    if (!fs::is_regular_file(xcounts_file))
+    if (!std::filesystem::is_regular_file(xcounts_file))
       throw std::runtime_error("xsym file not a regular file: " + xcounts_file);
 
     const auto sites_by_chrom = read_xcounts_by_chrom(n_threads, xcounts_file);
@@ -296,3 +295,5 @@ Columns (beyond the first 6) in the BED format output:
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions)

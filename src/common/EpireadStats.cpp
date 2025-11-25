@@ -16,34 +16,36 @@
 
 #include "EpireadStats.hpp"
 
-#include <vector>
-#include <string>
-#include <cmath>
+#include <algorithm>
 #include <cassert>
-#include <numeric>
+#include <cmath>
+#include <functional>
 #include <limits>
-#include <iostream>
-#include <unordered_map>
+#include <numeric>
+#include <string>
+#include <utility>
+#include <vector>
 
-#include <gsl/gsl_sf.h>
 #include <gsl/gsl_cdf.h>
 
+using std::isfinite;
+using std::max;
+using std::min;
 using std::string;
 using std::vector;
-using std::isfinite;
-using std::min;
-using std::max;
 
-template<typename T> using num_lim = std::numeric_limits<T>;
+template <typename T> using num_lim = std::numeric_limits<T>;
 using epi_r = small_epiread;
 
 static const double PSEUDOCOUNT = 1e-10;
 
 static inline uint32_t
 adjust_read_offsets(vector<epi_r> &reads) {
-  auto first_read_offset = num_lim<uint32_t>::max();
-  for (auto &r : reads)
-    first_read_offset = min(r.pos, first_read_offset);
+  auto first_read_offset = std::accumulate(
+    std::cbegin(reads), std::cend(reads), num_lim<std::uint32_t>::max(),
+    [](const std::uint32_t a, const auto &r) { return std::min(a, r.pos); });
+  // for (const auto &r : reads)
+  //   first_read_offset = min(r.pos, first_read_offset);
   for (auto &r : reads)
     r.pos -= first_read_offset;
   return first_read_offset;
@@ -51,10 +53,13 @@ adjust_read_offsets(vector<epi_r> &reads) {
 
 static inline uint32_t
 get_n_cpgs(const vector<epi_r> &reads) {
-  auto n_cpgs = 0u;
-  for (auto &r : reads)
-    n_cpgs = std::max(n_cpgs, r.end());
-  return n_cpgs;
+  return std::accumulate(
+    std::cbegin(reads), std::cend(reads), 0u,
+    [](const std::uint32_t a, const auto &r) { return std::max(a, r.end()); });
+  // auto n_cpgs = 0u;
+  // for (const auto &r : reads)
+  //   n_cpgs = std::max(n_cpgs, r.end());
+  // return n_cpgs;
 }
 
 // static inline bool
@@ -69,8 +74,8 @@ log_likelihood(const epi_r &r, const vector<double> &a) {
   for (size_t i = 0; i < r.seq.length(); ++i)
     // if (is_meth(r.seq[i]) || un_meth(r.seq[i])) {
     if (r.seq[i] == 'C' || r.seq[i] == 'T') {
-      // const double val = (is_meth(r, i) ? a[r.pos + i] : (1.0 - a[r.pos + i]));
-      // assert(isfinite(log(val)));
+      // const double val = (is_meth(r, i) ? a[r.pos + i] : (1.0 - a[r.pos +
+      // i])); assert(isfinite(log(val)));
       ll += log(r.seq[i] == 'C' ? a[r.pos + i] : (1.0 - a[r.pos + i]));
     }
   return ll;
@@ -89,7 +94,8 @@ log_likelihood(const epi_r &r, const vector<double> &a) {
 // }
 
 static inline std::pair<double, double>
-log_likelihood_pair(const epi_r &r, const vector<double> &a1, const vector<double> &a2) {
+log_likelihood_pair(const epi_r &r, const vector<double> &a1,
+                    const vector<double> &a2) {
   double ll1 = 0.0, ll2 = 0.0;
   // auto a1_itr = cbegin(a1) + r.pos;
   // auto a2_itr = cbegin(a2) + r.pos;
@@ -110,8 +116,9 @@ log_likelihood_pair(const epi_r &r, const vector<double> &a1, const vector<doubl
 }
 
 inline double
-log_likelihood(const epi_r &r, const double log_mixing1, const double log_mixing2,
-               const vector<double> &a1, const vector<double> &a2) {
+log_likelihood(const epi_r &r, const double log_mixing1,
+               const double log_mixing2, const vector<double> &a1,
+               const vector<double> &a2) {
   auto [ll1, ll2] = log_likelihood_pair(r, a1, a2);
   return log(exp(log_mixing1 + ll1) + exp(log_mixing2 + ll2));
 }
@@ -136,7 +143,8 @@ expectation_step(const vector<epi_r> &reads, const double mixing,
 
   double score = 0.0;
   auto ind_itr = begin(indicators);
-  for (auto &r : reads) { /// for (uint32_t i = 0; i < reads.size(); ++i) {
+  for (const auto &r : reads) {
+    // for (uint32_t i = 0; i < reads.size(); ++i) {
     const double ll1 = log_mixing1 + log_likelihood(r, a1);
     const double ll2 = log_mixing2 + log_likelihood(r, a2);
     // assert(isfinite(ll1) && isfinite(ll2));
@@ -165,15 +173,15 @@ expectation_step(const vector<epi_r> &reads, const double mixing,
 //   for (uint32_t i = 0; i < n_cpgs; ++i) a[i] /= total[i];
 // }
 
-
-template<const bool inverse> void
+template <const bool inverse>
+void
 fit_epiallele(const double pseudo, const vector<epi_r> &reads,
               vector<double>::const_iterator indic_itr, vector<double> &a) {
   vector<double> total(size(a), 2 * pseudo);
   auto t_beg = begin(total);
   auto a_beg = begin(a);
-  fill_n(a_beg, size(a), pseudo);
-  for (auto &r : reads) {
+  std::fill_n(a_beg, std::size(a), pseudo);
+  for (const auto &r : reads) {
     const double weight = inverse ? 1.0 - *indic_itr++ : *indic_itr++;
     auto m_itr = a_beg + r.pos;
     auto t_itr = t_beg + r.pos;
@@ -187,17 +195,18 @@ fit_epiallele(const double pseudo, const vector<epi_r> &reads,
 }
 
 void
-fit_epiallele(const double pseudo, const vector<epi_r> &reads, vector<double> &a) {
+fit_epiallele(const double pseudo, const vector<epi_r> &reads,
+              vector<double> &a) {
   const uint32_t n_cpgs = a.size();
   vector<double> total(n_cpgs, 2 * pseudo);
   auto t_beg = begin(total);
   auto a_beg = begin(a);
-  fill_n(a_beg, n_cpgs, pseudo);
-  for (auto &r : reads) {
+  std::fill_n(a_beg, n_cpgs, pseudo);
+  for (const auto &r : reads) {
     const uint32_t start = r.pos;
     auto m_itr = a_beg + start;
     auto t_itr = t_beg + start;
-    for (auto s : r.seq) {
+    for (const auto s : r.seq) {
       *m_itr++ += (s == 'C');
       *t_itr++ += (s != 'N');
     }
@@ -207,16 +216,24 @@ fit_epiallele(const double pseudo, const vector<epi_r> &reads, vector<double> &a
 }
 
 static inline void
-rescale_indicators(const double mixing, vector<double> &indic) {
-  const double ratio = reduce(cbegin(indic), cend(indic), 0.0)/indic.size();
+rescale_indicators(
+  const double mixing,
+  vector<double> &indic) {  // cppcheck-suppress constParameterReference
+  const double ratio = std::reduce(std::cbegin(indic), std::cend(indic), 0.0) /
+                       static_cast<double>(std::size(indic));
   if (mixing < ratio) {
-    const double adjustment = mixing/ratio;
-    for (auto &i : indic) i *= adjustment;
+    const double adjustment = mixing / ratio;
+    std::transform(std::cbegin(indic), std::cend(indic), std::begin(indic),
+                   [&](const auto x) { return x * adjustment; });
+    // for (auto &i : indic)
+    //   i *= adjustment;
   }
   else {
-    const double adjustment = mixing/(1.0 - ratio);
-    for (auto &i : indic)
-      i = 1.0 - (1.0 - i)*adjustment;
+    const double adjustment = mixing / (1.0 - ratio);
+    std::transform(std::cbegin(indic), std::cend(indic), std::begin(indic),
+                   [&](const auto x) { return 1.0 - (1.0 - x) * adjustment; });
+    // for (auto &i : indic)
+    //   i = 1.0 - (1.0 - i) * adjustment;
   }
 }
 
@@ -224,33 +241,32 @@ static double
 expectation_maximization(const size_t max_itr, const vector<epi_r> &reads,
                          const double &mixing, vector<double> &indicators,
                          vector<double> &a1, vector<double> &a2) {
-
   static constexpr double EPIREAD_STATS_TOLERANCE = 1e-10;
 
   double prev_score = -num_lim<double>::max();
   for (auto i = 0u; i < max_itr; ++i) {
-
     const double score = expectation_step(reads, mixing, a1, a2, indicators);
     rescale_indicators(mixing, indicators);
 
-    if ((prev_score - score)/prev_score < EPIREAD_STATS_TOLERANCE)
+    if ((prev_score - score) / prev_score < EPIREAD_STATS_TOLERANCE)
       break;
 
     // maximization_step(reads, indicators, a1, a2);
-    fit_epiallele<false>(0.5*PSEUDOCOUNT, reads, cbegin(indicators), a1);
-    fit_epiallele<true>(0.5*PSEUDOCOUNT, reads, cbegin(indicators), a2);
+
+    // NOLINTBEGIN(*-avoid-magic-numbers)
+    fit_epiallele<false>(0.5 * PSEUDOCOUNT, reads, cbegin(indicators), a1);
+    fit_epiallele<true>(0.5 * PSEUDOCOUNT, reads, cbegin(indicators), a2);
+    // NOLINTEND(*-avoid-magic-numbers)
 
     prev_score = score;
   }
   return prev_score;
 }
 
-
 double
 resolve_epialleles(const size_t max_itr, const vector<epi_r> &reads,
                    const double &mixing, vector<double> &indicators,
                    vector<double> &a1, vector<double> &a2) {
-
   indicators.clear();
   indicators.resize(reads.size(), 0.0);
   for (size_t i = 0; i < reads.size(); ++i) {
@@ -268,8 +284,8 @@ fit_single_epiallele(const vector<epi_r> &reads, vector<double> &a) {
   fit_epiallele(PSEUDOCOUNT, reads, a);
 
   double score = 0.0;
-  for (auto r : reads) {
-    score += log_likelihood(r, a);
+  for (const auto &r : reads) {
+    score += log_likelihood(r, a);  // cppcheck-suppress useStlAlgorithm
     // assert(isfinite(score));
   }
   return score;
@@ -278,13 +294,12 @@ fit_single_epiallele(const vector<epi_r> &reads, vector<double> &a) {
 void
 compute_model_likelihoods(double &single_score, double &pair_score,
                           const size_t &max_itr, const double &low_prob,
-                          const double &high_prob, const size_t &n_cpgs,
+                          const double &high_prob, const size_t n_cpgs,
                           const vector<epi_r> &reads) {
-
   static constexpr double mixing = 0.5;
 
   // try a single epi-allele and compute its log likelihood
-  vector<double> a0(n_cpgs, 0.5);
+  vector<double> a0(n_cpgs, 0.5);  // NOLINT(*-magic-numbers)
   single_score = fit_single_epiallele(reads, a0);
 
   // initialize the pair epi-alleles and indicators, and do the actual
@@ -296,15 +311,16 @@ compute_model_likelihoods(double &single_score, double &pair_score,
   const double log_mixing2 = log(1.0 - mixing);
 
   pair_score = transform_reduce(
-    cbegin(reads), cend(reads), 0.0, std::plus<>(),
-    [&](const epi_r &r) { return log_likelihood(r, log_mixing1, log_mixing2, a1, a2); });
+    cbegin(reads), cend(reads), 0.0, std::plus<>(), [&](const epi_r &r) {
+      return log_likelihood(r, log_mixing1, log_mixing2, a1, a2);
+    });
 }
-
 
 double
 test_asm_lrt(const size_t max_itr, const bool correct_for_read_count,
-             const double low_prob,
-             const double high_prob, vector<epi_r> &reads) {
+             const double low_prob, const double high_prob,
+             vector<epi_r> &reads) {
+  // NOLINTBEGIN(*-avoid-magic-numbers)
   double single_score = num_lim<double>::min();
   double pair_score = num_lim<double>::min();
   const auto first_read_offset = adjust_read_offsets(reads);
@@ -322,20 +338,21 @@ test_asm_lrt(const size_t max_itr, const bool correct_for_read_count,
 
   // correction for numbers of reads
   if (correct_for_read_count)
-    pair_score += size(reads)*log(0.5);
+    pair_score += static_cast<double>(std::size(reads)) * std::log(0.5);
 
-  const double llr_stat = -2*(single_score - pair_score);
-  const double p_value = 1.0 - gsl_cdf_chisq_P(llr_stat, df);
+  const double llr_stat = -2.0 * (single_score - pair_score);
+  const double p_value =
+    1.0 - gsl_cdf_chisq_P(llr_stat, static_cast<double>(df));
+  // NOLINTEND(*-avoid-magic-numbers)
 
   return p_value;
 }
 
-
 double
 test_asm_bic(const size_t max_itr, const bool correct_for_read_count,
-             const double low_prob,
-             const double high_prob, vector<epi_r> &reads) {
-
+             const double low_prob, const double high_prob,
+             vector<epi_r> &reads) {
+  // NOLINTBEGIN(*-avoid-magic-numbers)
   double single_score = num_lim<double>::min();
   double pair_score = num_lim<double>::min();
   const auto first_read_offset = adjust_read_offsets(reads);
@@ -346,13 +363,17 @@ test_asm_bic(const size_t max_itr, const bool correct_for_read_count,
 
   // correction for numbers of reads
   if (correct_for_read_count)
-    pair_score += size(reads)*log(0.5);
+    pair_score += static_cast<double>(std::size(reads)) * log(0.5);
 
   for (auto &read : reads)
     read.pos += first_read_offset;
 
+  const double n_reads = static_cast<double>(std::size(reads));
+  const auto n_cpgs_log_n_reads = n_cpgs * std::log(n_reads);
+
   // compute bic scores and compare
-  const double bic_single = n_cpgs*log(reads.size()) - 2*single_score;
-  const double bic_pair = 2*n_cpgs*log(reads.size()) - 2*pair_score;
+  const double bic_single = n_cpgs_log_n_reads - 2 * single_score;
+  const double bic_pair = 2 * n_cpgs_log_n_reads - 2 * pair_score;
   return bic_pair - bic_single;
+  // NOLINTEND(*-avoid-magic-numbers)
 }

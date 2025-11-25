@@ -20,25 +20,32 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <cassert>
-#include <iostream>
-#include <stdexcept>
-#include <string>
-#include <vector>
+#include "Epiread.hpp"
+#include "EpireadStats.hpp"
 
 #include <GenomicRegion.hpp>
 #include <OptionParser.hpp>
 #include <smithlab_os.hpp>
 #include <smithlab_utils.hpp>
 
-#include "Epiread.hpp"
-#include "EpireadStats.hpp"
+#include <algorithm>
+#include <cassert>
+#include <cctype>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <new>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 using std::begin;
 using std::cerr;
 using std::cout;
 using std::end;
-using std::endl;
 using std::runtime_error;
 using std::streampos;
 using std::string;
@@ -46,6 +53,8 @@ using std::unordered_map;
 using std::vector;
 
 using epi_r = small_epiread;
+
+// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions)
 
 static void
 backup_to_start_of_current_record(std::ifstream &in) {
@@ -64,17 +73,17 @@ find_first_epiread_ending_after_position(const string &query_chrom,
                                          const size_t query_pos,
                                          std::ifstream &in) {
   in.seekg(0, std::ios_base::end);
-  size_t high_pos = in.tellg();
+  auto high_pos = in.tellg();
   size_t eof = in.tellg();
   in.seekg(0, std::ios_base::beg);
-  size_t low_pos = 0;
+  std::streamoff low_pos = 0;
 
   string chrom, seq;
   size_t start = 0ul;
 
   // This is just binary search on disk
   while (high_pos > low_pos + 1) {
-    const size_t mid_pos = (low_pos + high_pos) / 2;
+    const std::streamoff mid_pos = (low_pos + high_pos) / 2;
 
     in.seekg(mid_pos);
     backup_to_start_of_current_record(in);
@@ -98,7 +107,6 @@ find_first_epiread_ending_after_position(const string &query_chrom,
 static void
 load_reads(const string &reads_file_name, const GenomicRegion &region,
            vector<epi_r> &the_reads) {
-
   // open and check the file
   std::ifstream in(reads_file_name.c_str());
   if (!in)
@@ -178,10 +186,8 @@ ensure_regions_are_named(vector<GenomicRegion> &regions) {
 }
 
 int
-main_amrtester(int argc, char *argv[]) {
-
+main_amrtester(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-
     static constexpr double critical_value = 0.01;
     static const string fasta_suffix = "fa";
 
@@ -197,7 +203,8 @@ main_amrtester(int argc, char *argv[]) {
     double high_prob = 0.75, low_prob = 0.25;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), "resolve epi-alleles",
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           "resolve epi-alleles",
                            "<bed-regions> <mapped-reads>");
     opt_parse.add_opt("output", 'o', "output file", false, outfile);
     opt_parse.add_opt("chrom", 'c', "reference genome fasta file", true,
@@ -212,21 +219,21 @@ main_amrtester(int argc, char *argv[]) {
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      cerr << opt_parse.help_message() << '\n'
+           << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 2) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      cerr << opt_parse.help_message() << '\n'
+           << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     const string regions_file(leftover_args.front());
@@ -261,7 +268,7 @@ main_amrtester(int argc, char *argv[]) {
 
     auto n_regions = size(regions);
     if (verbose)
-      cerr << "number of regions: " << n_regions << endl;
+      cerr << "number of regions: " << n_regions << '\n';
 
     string chrom_name;
     vector<size_t> cpg_positions;
@@ -277,7 +284,6 @@ main_amrtester(int argc, char *argv[]) {
     auto progress_idx = 0u;
 
     for (auto &region : regions) {
-
       if (show_progress && progress.time_to_report(progress_idx))
         progress.report(cerr, progress_idx);
       ++progress_idx;
@@ -303,20 +309,18 @@ main_amrtester(int argc, char *argv[]) {
 
       const auto score =
         reads.empty() ? 1.0 : epistat.test_asm(reads, is_significant);
-      region.set_score(score);
+      region.set_score(static_cast<float>(score));
       region.set_name(region.get_name() + ":" + toa(reads.size()));
       out << region << '\n';
     }
     if (show_progress)
-      cerr << "\r100%" << endl;
+      cerr << "\r100%\n";
   }
-  catch (const runtime_error &e) {
-    cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
+  catch (const std::exception &e) {
+    cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions)

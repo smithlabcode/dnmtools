@@ -20,29 +20,30 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <string>
-#include <vector>
+#include <cassert>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
-#include <OptionParser.hpp>
-#include <smithlab_utils.hpp>
-#include <smithlab_os.hpp>
 #include <GenomicRegion.hpp>
+#include <OptionParser.hpp>
+#include <smithlab_os.hpp>
+#include <smithlab_utils.hpp>
 
 #include "Epiread.hpp"
 #include "EpireadStats.hpp"
 
+using std::begin;
+using std::cerr;
+using std::cout;
+using std::end;
+using std::endl;
+using std::runtime_error;
 using std::streampos;
 using std::string;
-using std::vector;
-using std::cout;
-using std::cerr;
-using std::endl;
 using std::unordered_map;
-using std::runtime_error;
-using std::begin;
-using std::end;
+using std::vector;
 
 using epi_r = small_epiread;
 
@@ -57,7 +58,6 @@ backup_to_start_of_current_record(std::ifstream &in) {
     throw runtime_error("file contains a line longer than " +
                         std::to_string(assumed_max_valid_line_width));
 }
-
 
 static streampos
 find_first_epiread_ending_after_position(const string &query_chrom,
@@ -74,13 +74,13 @@ find_first_epiread_ending_after_position(const string &query_chrom,
 
   // This is just binary search on disk
   while (high_pos > low_pos + 1) {
-    const size_t mid_pos = (low_pos + high_pos)/2;
+    const size_t mid_pos = (low_pos + high_pos) / 2;
 
     in.seekg(mid_pos);
     backup_to_start_of_current_record(in);
 
     // we've hit the end of file without finding an epiread
-    if(low_pos == eof-2)
+    if (low_pos == eof - 2)
       return -1;
 
     if (!(in >> chrom >> start >> seq)) {
@@ -95,10 +95,8 @@ find_first_epiread_ending_after_position(const string &query_chrom,
   return low_pos;
 }
 
-
 static void
-load_reads(const string &reads_file_name,
-           const GenomicRegion &region,
+load_reads(const string &reads_file_name, const GenomicRegion &region,
            vector<epi_r> &the_reads) {
 
   // open and check the file
@@ -117,33 +115,31 @@ load_reads(const string &reads_file_name,
 
   string chrom, seq;
   size_t start = 0ul;
-  while ((in >> chrom >> start >> seq) &&
-         chrom == query_chrom && start < query_end)
+  while ((in >> chrom >> start >> seq) && chrom == query_chrom &&
+         start < query_end)
     the_reads.emplace_back(start, seq);
 }
-
 
 static void
 convert_coordinates(const vector<size_t> &cpg_positions,
                     GenomicRegion &region) {
   const size_t start_pos =
     lower_bound(cbegin(cpg_positions), cend(cpg_positions),
-                region.get_start()) - cbegin(cpg_positions);
+                region.get_start()) -
+    cbegin(cpg_positions);
 
   const size_t end_pos =
-    lower_bound(cbegin(cpg_positions), cend(cpg_positions),
-                region.get_end()) - cbegin(cpg_positions);
+    lower_bound(cbegin(cpg_positions), cend(cpg_positions), region.get_end()) -
+    cbegin(cpg_positions);
 
   region.set_start(start_pos);
   region.set_end(end_pos);
 }
 
-
 inline static bool
 is_cpg(const string &s, const size_t idx) {
   return toupper(s[idx]) == 'C' && toupper(s[idx + 1]) == 'G';
 }
-
 
 static void
 collect_cpgs(const string &s, vector<size_t> &cpgs) {
@@ -153,14 +149,11 @@ collect_cpgs(const string &s, vector<size_t> &cpgs) {
       cpgs.push_back(i);
 }
 
-
 static void
-clip_reads(const size_t start_pos, const size_t end_pos,
-           vector<epi_r> &r) {
+clip_reads(const size_t start_pos, const size_t end_pos, vector<epi_r> &r) {
   size_t j = 0;
   for (size_t i = 0; i < r.size(); ++i) {
-    if (start_pos < r[i].pos + r[i].seq.length() &&
-        r[i].pos < end_pos) {
+    if (start_pos < r[i].pos + r[i].seq.length() && r[i].pos < end_pos) {
       if (r[i].pos < start_pos) {
         assert(start_pos - r[i].pos < r[i].seq.length());
         r[i].seq = r[i].seq.substr(start_pos - r[i].pos);
@@ -175,16 +168,14 @@ clip_reads(const size_t start_pos, const size_t end_pos,
   r.erase(begin(r) + j, end(r));
 }
 
-
 // give names to regions if they do not exist
 static void
 ensure_regions_are_named(vector<GenomicRegion> &regions) {
   auto region_name_idx = 0u;
-  for (auto region: regions)
+  for (auto region : regions)
     if (region.get_name().empty())
       region.set_name("region" + std::to_string(++region_name_idx));
 }
-
 
 int
 main_amrtester(int argc, char *argv[]) {
@@ -209,11 +200,11 @@ main_amrtester(int argc, char *argv[]) {
     OptionParser opt_parse(strip_path(argv[0]), "resolve epi-alleles",
                            "<bed-regions> <mapped-reads>");
     opt_parse.add_opt("output", 'o', "output file", false, outfile);
-    opt_parse.add_opt("chrom", 'c', "reference genome fasta file",
-                      true, chrom_file);
+    opt_parse.add_opt("chrom", 'c', "reference genome fasta file", true,
+                      chrom_file);
     opt_parse.add_opt("itr", 'i', "max iterations", false, max_itr);
-    opt_parse.add_opt("nordc", 'r', "turn off read count correction",
-                      false, correct_for_read_count);
+    opt_parse.add_opt("nordc", 'r', "turn off read count correction", false,
+                      correct_for_read_count);
     opt_parse.add_opt("bic", 'b', "use BIC to compare models", false, use_bic);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
     opt_parse.add_opt("progress", 'P', "show progress", false, show_progress);
@@ -243,7 +234,7 @@ main_amrtester(int argc, char *argv[]) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     const EpireadStats epistat{low_prob, high_prob, critical_value,
-                               max_itr, use_bic, correct_for_read_count};
+                               max_itr,  use_bic,   correct_for_read_count};
 
     if (!validate_epiread_file(reads_file_name))
       throw runtime_error("invalid states file: " + reads_file_name);
@@ -276,7 +267,8 @@ main_amrtester(int argc, char *argv[]) {
     vector<size_t> cpg_positions;
 
     std::ofstream of;
-    if (!outfile.empty()) of.open(outfile);
+    if (!outfile.empty())
+      of.open(outfile);
     std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
     bool is_significant = false;
@@ -309,12 +301,14 @@ main_amrtester(int argc, char *argv[]) {
 
       clip_reads(conv_region.get_start(), conv_region.get_end(), reads);
 
-      const auto score = reads.empty() ? 1.0 : epistat.test_asm(reads, is_significant);
+      const auto score =
+        reads.empty() ? 1.0 : epistat.test_asm(reads, is_significant);
       region.set_score(score);
       region.set_name(region.get_name() + ":" + toa(reads.size()));
       out << region << '\n';
     }
-    if (show_progress) cerr << "\r100%" << endl;
+    if (show_progress)
+      cerr << "\r100%" << endl;
   }
   catch (const runtime_error &e) {
     cerr << e.what() << endl;

@@ -20,22 +20,21 @@
 #include "radmeth_optimize_series.hpp"
 #include "radmeth_utils.hpp"
 
-// smithlab headers
-#include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
 
-#include <algorithm>
 #include <chrono>
-#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <exception>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
-#include <limits>
-#include <sstream>
+#include <iterator>
+#include <stdexcept>
 #include <string>
 #include <thread>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 template <typename RegressionType>
@@ -137,109 +136,112 @@ that the design matrix and the proportion table are correctly formatted.
 
     std::vector<std::thread> threads;
     for (auto thread_id = 0u; thread_id < n_threads; ++thread_id) {
-      threads.emplace_back([&, thread_id] {
-        std::vector<double> p_estim_alt;
-        std::vector<double> p_estim_null;
-        double phi_estim_alt{};
-        double phi_estim_null{};
+      threads.emplace_back(  // NOLINT(performance-inefficient-vector-operation)
+        [&, thread_id] {
+          std::vector<double> p_estim_alt;
+          std::vector<double> p_estim_null;
+          double phi_estim_alt{};
+          double phi_estim_null{};
 
-        auto &t_alt_model = alt_models[thread_id];
-        auto &t_null_model = null_models[thread_id];
-        for (auto b = 0u; b < n_lines; ++b) {
-          // ADS: rows done by different threads are interleaved because the
-          // difficult (e.g., high-coverage) rows can be consecutive and this
-          // balances work better.
-          if (b % n_threads != thread_id)
-            continue;
-          t_alt_model.parse(lines[b]);
-          if (t_alt_model.props_size() != n_samples)
-            throw std::runtime_error("found row with wrong number of columns");
+          auto &t_alt_model = alt_models[thread_id];
+          auto &t_null_model = null_models[thread_id];
+          for (auto b = 0u; b < n_lines; ++b) {
+            // ADS: rows done by different threads are interleaved because the
+            // difficult (e.g., high-coverage) rows can be consecutive and this
+            // balances work better.
+            if (b % n_threads != thread_id)
+              continue;
+            t_alt_model.parse(lines[b]);
+            if (t_alt_model.props_size() != n_samples)
+              throw std::runtime_error(
+                "found row with wrong number of columns");
 
-          const auto p_val_status = [&]() -> std::tuple<double, row_status> {
-            // Skip the test if (1) no coverage in all cases or in all
-            // controls, or (2) the site is completely methylated or
-            // completely unmethylated across all samples.
-            if (has_low_coverage(t_alt_model, test_factor_idx))
-              return std::tuple{1.0, row_status::na_low_cov};
+            const auto p_val_status = [&]() -> std::tuple<double, row_status> {
+              // Skip the test if (1) no coverage in all cases or in all
+              // controls, or (2) the site is completely methylated or
+              // completely unmethylated across all samples.
+              if (has_low_coverage(t_alt_model, test_factor_idx))
+                return std::tuple{1.0, row_status::na_low_cov};
 
-            if (has_extreme_counts(t_alt_model))
-              return std::tuple{1.0, row_status::na_extreme_cnt};
+              if (has_extreme_counts(t_alt_model))
+                return std::tuple{1.0, row_status::na_extreme_cnt};
 
-            fit_regression_model(t_alt_model, p_estim_alt, phi_estim_alt);
+              fit_regression_model(t_alt_model, p_estim_alt, phi_estim_alt);
 
-            t_null_model.mc = t_alt_model.mc;
-            t_null_model.rowname = t_alt_model.rowname;
+              t_null_model.mc = t_alt_model.mc;
+              t_null_model.rowname = t_alt_model.rowname;
 
-            fit_regression_model(t_null_model, p_estim_null, phi_estim_null);
+              fit_regression_model(t_null_model, p_estim_null, phi_estim_null);
 
-            const double p_value =
-              llr_test(t_null_model.max_loglik, t_alt_model.max_loglik);
+              const double p_value =
+                llr_test(t_null_model.max_loglik, t_alt_model.max_loglik);
 
-            return (p_value != p_value) ? std::tuple{1.0, row_status::na}
-                                        : std::tuple{p_value, row_status::ok};
-          }();
-          // ADS: avoid capture structured binding in C++17
-          const auto p_val = std::get<0>(p_val_status);
-          const auto status = std::get<1>(p_val_status);
+              return (p_value != p_value) ? std::tuple{1.0, row_status::na}
+                                          : std::tuple{p_value, row_status::ok};
+            }();
+            // ADS: avoid capture structured binding in C++17
+            const auto p_val = std::get<0>(p_val_status);
+            const auto status = std::get<1>(p_val_status);
 
-          n_bytes[b] = [&] {
-            auto bufsize = std::size(bufs[b]);
-            // clang-format off
+            n_bytes[b] = [&] {
+              auto bufsize = std::size(bufs[b]);
+              // clang-format off
             const int n_prefix_bytes =
               std::snprintf(bufs[b].data(), bufsize,
                            "%s\t", t_alt_model.rowname.data());
-            // clang-format on
-            if (n_prefix_bytes < 0)
-              return n_prefix_bytes;
+              // clang-format on
+              if (n_prefix_bytes < 0)
+                return n_prefix_bytes;
 
-            bufsize -= n_prefix_bytes;
-            auto cursor = bufs[b].data() + n_prefix_bytes;
+              bufsize -= n_prefix_bytes;
+              // NOLINTNEXTLINE(*-pointer-arithmetic)
+              auto cursor = bufs[b].data() + n_prefix_bytes;
 
-            const int n_pval_bytes = [&] {
-              if (status == row_status::ok)
-                return std::snprintf(cursor, bufsize, "%.6g", p_val);
-              if (!more_na_info || status == row_status::na)
-                return std::snprintf(cursor, bufsize, "NA");
-              if (status == row_status::na_extreme_cnt)
-                return std::snprintf(cursor, bufsize, "NA_EXTREME_CNT");
-              // if (status == row_status::na_low_cov)
-              return std::snprintf(cursor, bufsize, "NA_LOW_COV");
-            }();
+              const int n_pval_bytes = [&] {
+                if (status == row_status::ok)
+                  return std::snprintf(cursor, bufsize, "%.6g", p_val);
+                if (!more_na_info || status == row_status::na)
+                  return std::snprintf(cursor, bufsize, "NA");
+                if (status == row_status::na_extreme_cnt)
+                  return std::snprintf(cursor, bufsize, "NA_EXTREME_CNT");
+                // if (status == row_status::na_low_cov)
+                return std::snprintf(cursor, bufsize, "NA_LOW_COV");
+              }();
 
-            if (n_pval_bytes < 0)
-              return n_pval_bytes;
+              if (n_pval_bytes < 0)
+                return n_pval_bytes;
 
-            bufsize -= n_pval_bytes;
-            cursor += n_pval_bytes;
+              bufsize -= n_pval_bytes;
+              cursor += n_pval_bytes;  // NOLINT(*-pointer-arithmetic)
 
-            const int n_param_bytes = [&] {
-              std::int32_t n_param_bytes = 0;
-              if (p_estim_alt.empty())
-                p_estim_alt.resize(n_groups, 0.0);
-              for (auto g_idx = 0u; g_idx < n_groups; ++g_idx) {
-                const int n =
-                  std::snprintf(cursor, bufsize, "\t%f", p_estim_alt[g_idx]);
-                bufsize -= n;
-                cursor += n;
+              const int n_param_bytes = [&] {
+                std::int32_t n_param_bytes = 0;
+                if (p_estim_alt.empty())
+                  p_estim_alt.resize(n_groups, 0.0);
+                for (auto g_idx = 0u; g_idx < n_groups; ++g_idx) {
+                  const int n =
+                    std::snprintf(cursor, bufsize, "\t%f", p_estim_alt[g_idx]);
+                  bufsize -= n;
+                  cursor += n;  // NOLINT(*-pointer-arithmetic)
+                  if (n < 0)
+                    return n;
+                  n_param_bytes += n;
+                }
+                const auto od = overdispersion_factor(n_samples, phi_estim_alt);
+                const int n = std::snprintf(cursor, bufsize, "\t%f\n", od);
                 if (n < 0)
                   return n;
                 n_param_bytes += n;
-              }
-              const auto od = overdispersion_factor(n_samples, phi_estim_alt);
-              const int n = std::snprintf(cursor, bufsize, "\t%f\n", od);
-              if (n < 0)
-                return n;
-              n_param_bytes += n;
-              return n_param_bytes;
+                return n_param_bytes;
+              }();
+
+              if (n_param_bytes < 0)
+                return n_param_bytes;
+
+              return n_prefix_bytes + n_pval_bytes + n_param_bytes;
             }();
-
-            if (n_param_bytes < 0)
-              return n_param_bytes;
-
-            return n_prefix_bytes + n_pval_bytes + n_param_bytes;
-          }();
-        }
-      });
+          }
+        });
     }
 
     for (auto &thread : threads)
@@ -263,7 +265,7 @@ that the design matrix and the proportion table are correctly formatted.
 }
 
 int
-main_radmeth(int argc, char *argv[]) {
+main_radmeth(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     static const std::string description =
       "calculate differential methylation scores";
@@ -276,8 +278,8 @@ main_radmeth(int argc, char *argv[]) {
     std::uint32_t n_threads{1};
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description,
-                           "<design-matrix> <data-matrix>");
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description, "<design-matrix> <data-matrix>");
     opt_parse.set_show_defaults();
     opt_parse.add_opt("out", 'o', "output file", true, outfile);
     opt_parse.add_opt("threads", 't', "number of threads to use", false,

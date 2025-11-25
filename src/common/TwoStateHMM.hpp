@@ -16,35 +16,34 @@
 #ifndef TWO_STATE_HMM_HPP
 #define TWO_STATE_HMM_HPP
 
-#include <memory>
+#include <cstddef>
+#include <iterator>  // IWYU pragma: keep
+#include <utility>
 #include <vector>
-
 struct TwoStateBetaBin;
 
 class TwoStateHMM {
 public:
-
   TwoStateHMM(const double tol, const size_t max_itr, const bool v) :
     tolerance(tol), max_iterations(max_itr), VERBOSE(v) {}
 
   double
-  ViterbiDecoding(const std::vector<std::pair<double, double> > &values,
+  ViterbiDecoding(const std::vector<std::pair<double, double>> &values,
                   const std::vector<size_t> &reset_points,
                   const double f_to_b_trans, const double b_to_f_trans,
                   const double fg_alpha, const double fg_beta,
                   const double bg_alpha, const double bg_beta,
                   std::vector<bool> &ml_classes) const;
 
-
   double
-  BaumWelchTraining(const std::vector<std::pair<double, double> > &values,
+  BaumWelchTraining(const std::vector<std::pair<double, double>> &values,
                     const std::vector<size_t> &reset_points,
                     double &f_to_b_trans, double &b_to_f_trans,
-                    double &fg_alpha, double &fg_beta,
-                    double &bg_alpha, double &bg_beta) const;
+                    double &fg_alpha, double &fg_beta, double &bg_alpha,
+                    double &bg_beta) const;
 
   double
-  PosteriorDecoding(const std::vector<std::pair<double, double> > &values,
+  PosteriorDecoding(const std::vector<std::pair<double, double>> &values,
                     const std::vector<size_t> &reset_points,
                     const double f_to_b_trans, const double b_to_f_trans,
                     const double fg_alpha, const double fg_beta,
@@ -53,16 +52,15 @@ public:
                     std::vector<double> &llr_scores) const;
 
   void
-  PosteriorScores(const std::vector<std::pair<double, double> > &values,
+  PosteriorScores(const std::vector<std::pair<double, double>> &values,
                   const std::vector<size_t> &reset_points,
                   const double f_to_b_trans, const double b_to_f_trans,
                   const double fg_alpha, const double fg_beta,
                   const double bg_alpha, const double bg_beta,
-                  const bool class_id,
-                  std::vector<double> &llr_scores) const;
+                  const bool class_id, std::vector<double> &llr_scores) const;
 
   void
-  TransitionPosteriors(const std::vector<std::pair<double, double> > &values,
+  TransitionPosteriors(const std::vector<std::pair<double, double>> &values,
                        const std::vector<size_t> &reset_points,
                        const double f_to_b_trans, const double b_to_f_trans,
                        const double fg_alpha, const double fg_beta,
@@ -72,104 +70,93 @@ public:
 
   // FOR MULTIPLE REPLICATES
   double
-  BaumWelchTraining(const std::vector<std::vector<std::pair<double, double> > > &values,
-                    const std::vector<size_t> &reset_points,
-                    double &f_to_b_trans, double &b_to_f_trans,
-                    std::vector<double> &fg_alpha,
-                    std::vector<double> &fg_beta,
-                    std::vector<double> &bg_alpha,
-                    std::vector<double> &bg_beta) const;
+  BaumWelchTraining(
+    const std::vector<std::vector<std::pair<double, double>>> &values,
+    const std::vector<size_t> &reset_points, double &f_to_b_trans,
+    double &b_to_f_trans, std::vector<double> &fg_alpha,
+    std::vector<double> &fg_beta, std::vector<double> &bg_alpha,
+    std::vector<double> &bg_beta) const;
 
   double
-  PosteriorDecoding(const std::vector<std::vector<std::pair<double, double> > > &values,
-                    const std::vector<size_t> &reset_points,
-                    const double f_to_b_trans, const double b_to_f_trans,
-                    const std::vector<double> &fg_alpha,
-                    const std::vector<double> &fg_beta,
-                    const std::vector<double> &bg_alpha,
-                    const std::vector<double> &bg_beta,
-                    std::vector<bool> &classes,
-                    std::vector<double> &llr_scores) const;
+  PosteriorDecoding(
+    const std::vector<std::vector<std::pair<double, double>>> &values,
+    const std::vector<size_t> &reset_points, const double f_to_b_trans,
+    const double b_to_f_trans, const std::vector<double> &fg_alpha,
+    const std::vector<double> &fg_beta, const std::vector<double> &bg_alpha,
+    const std::vector<double> &bg_beta, std::vector<bool> &classes,
+    std::vector<double> &llr_scores) const;
 
   void
-  PosteriorScores(const std::vector<std::vector<std::pair<double, double> > > &values,
-                  const std::vector<size_t> &reset_points,
-                  const double f_to_b_trans, const double b_to_f_trans,
-                  const std::vector<double> &fg_alpha,
-                  const std::vector<double> &fg_beta,
-                  const std::vector<double> &bg_alpha,
-                  const std::vector<double> &bg_beta,
-                  const bool &fg_class,
-                  std::vector<double> &llr_scores) const;
-
+  PosteriorScores(
+    const std::vector<std::vector<std::pair<double, double>>> &values,
+    const std::vector<size_t> &reset_points, const double f_to_b_trans,
+    const double b_to_f_trans, const std::vector<double> &fg_alpha,
+    const std::vector<double> &fg_beta, const std::vector<double> &bg_alpha,
+    const std::vector<double> &bg_beta, const bool &fg_class,
+    std::vector<double> &llr_scores) const;
 
 private:
-
   double
-  ViterbiDecoding(const std::vector<std::pair<double, double> > &values,
-                  const std::vector<size_t> &reset_points,
-                  const double p_fb, const double p_bf,
-                  const TwoStateBetaBin &fg_distro, const TwoStateBetaBin &bg_distro,
+  ViterbiDecoding(const std::vector<std::pair<double, double>> &values,
+                  const std::vector<size_t> &reset_points, const double p_fb,
+                  const double p_bf, const TwoStateBetaBin &fg_distro,
+                  const TwoStateBetaBin &bg_distro,
                   std::vector<bool> &ml_classes) const;
 
   double
-  BaumWelchTraining(const std::vector<std::pair<double, double> > &values,
-                    const std::vector<size_t> &reset_points,
-                    double &p_fb, double &p_bf,
-                    TwoStateBetaBin &fg_distro, TwoStateBetaBin &bg_distro) const;
+  BaumWelchTraining(const std::vector<std::pair<double, double>> &values,
+                    const std::vector<size_t> &reset_points, double &p_fb,
+                    double &p_bf, TwoStateBetaBin &fg_distro,
+                    TwoStateBetaBin &bg_distro) const;
 
   double
-  PosteriorDecoding(const std::vector<std::pair<double, double> > &values,
-                    const std::vector<size_t> &reset_points,
-                    const double p_fb, const double p_bf,
-                    const TwoStateBetaBin &fg_distro,
+  PosteriorDecoding(const std::vector<std::pair<double, double>> &values,
+                    const std::vector<size_t> &reset_points, const double p_fb,
+                    const double p_bf, const TwoStateBetaBin &fg_distro,
                     const TwoStateBetaBin &bg_distro,
                     std::vector<bool> &classes,
                     std::vector<double> &llr_scores) const;
 
   void
-  PosteriorScores(const std::vector<std::pair<double, double> > &values,
-                  const std::vector<size_t> &reset_points,
-                  const double p_fb, const double p_bf,
-                  const TwoStateBetaBin &fg_distro, const TwoStateBetaBin &bg_distro,
-                  const bool class_id,
+  PosteriorScores(const std::vector<std::pair<double, double>> &values,
+                  const std::vector<size_t> &reset_points, const double p_fb,
+                  const double p_bf, const TwoStateBetaBin &fg_distro,
+                  const TwoStateBetaBin &bg_distro, const bool class_id,
                   std::vector<double> &llr_scores) const;
 
   void
-  TransitionPosteriors(const std::vector<std::pair<double, double> > &values,
+  TransitionPosteriors(const std::vector<std::pair<double, double>> &values,
                        const std::vector<size_t> &reset_points,
                        const double p_fb, const double p_bf,
-                       const TwoStateBetaBin &fg_distro, const TwoStateBetaBin &bg_distro,
+                       const TwoStateBetaBin &fg_distro,
+                       const TwoStateBetaBin &bg_distro,
                        const size_t transition,
                        std::vector<double> &scores) const;
 
   // FOR MULTIPLE REPLICATES
 
   double
-  BaumWelchTraining(const std::vector<std::vector<std::pair<double, double> > > &values,
-                    const std::vector<size_t> &reset_points,
-                    double &p_fb, double &p_bf,
-                    std::vector<TwoStateBetaBin> &fg_distro,
-                    std::vector<TwoStateBetaBin> &bg_distro) const;
+  BaumWelchTraining(
+    const std::vector<std::vector<std::pair<double, double>>> &values,
+    const std::vector<size_t> &reset_points, double &p_fb, double &p_bf,
+    std::vector<TwoStateBetaBin> &fg_distro,
+    std::vector<TwoStateBetaBin> &bg_distro) const;
 
   void
-  PosteriorScores(const std::vector<std::vector<std::pair<double, double> > > &values,
-                  const std::vector<size_t> &reset_points,
-                  const double p_fb, const double p_bf,
-                  const std::vector<TwoStateBetaBin> &fg_distro,
-                  const std::vector<TwoStateBetaBin> &bg_distro,
-                  const bool fg_class,
-                  std::vector<double> &llr_scores) const;
+  PosteriorScores(
+    const std::vector<std::vector<std::pair<double, double>>> &values,
+    const std::vector<size_t> &reset_points, const double p_fb,
+    const double p_bf, const std::vector<TwoStateBetaBin> &fg_distro,
+    const std::vector<TwoStateBetaBin> &bg_distro, const bool fg_class,
+    std::vector<double> &llr_scores) const;
 
   double
-  PosteriorDecoding(const std::vector<std::vector<std::pair<double, double> > > &values,
-                    const std::vector<size_t> &reset_points,
-                    const double p_fb, const double p_bf,
-                    const std::vector<TwoStateBetaBin> &fg_distro,
-                    const std::vector<TwoStateBetaBin> &bg_distro,
-                    std::vector<bool> &classes,
-                    std::vector<double> &llr_scores) const;
-
+  PosteriorDecoding(
+    const std::vector<std::vector<std::pair<double, double>>> &values,
+    const std::vector<size_t> &reset_points, const double p_fb,
+    const double p_bf, const std::vector<TwoStateBetaBin> &fg_distro,
+    const std::vector<TwoStateBetaBin> &bg_distro, std::vector<bool> &classes,
+    std::vector<double> &llr_scores) const;
 
   double tolerance;
   size_t max_iterations;

@@ -15,27 +15,31 @@
  * more details.
  */
 
+#include "GenomicRegion.hpp"
+#include "LevelsCounter.hpp"
+#include "MSite.hpp"
+#include "OptionParser.hpp"
+#include "bsutils.hpp"
+#include "xcounts_utils.hpp"
+
 #include <bamxx.hpp>
 
 #include <algorithm>
-#include <charconv>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "GenomicRegion.hpp"
-#include "LevelsCounter.hpp"
-#include "MSite.hpp"
-#include "OptionParser.hpp"
-#include "bsutils.hpp"
-#include "smithlab_utils.hpp"
-#include "xcounts_utils.hpp"
+// NOLINTBEGIN(*-avoid-c-arrays,*-avoid-magic-numbers,*-narrowing-conversions,*-pointer-arithmetic)
 
 [[nodiscard]] static std::string
 format_levels_counter(const LevelsCounter &lc) {
@@ -88,7 +92,6 @@ static void
 process_chrom(const bool report_more_info, const char level_code,
               const std::vector<GenomicRegion> &intervals,
               const std::vector<xcounts_entry> &sites, std::ostream &out) {
-
   std::uint64_t j = 0;
   for (auto i = 0ul; i < std::size(intervals); ++i) {
     while (j < std::size(sites) && sites[j].pos < intervals[i].get_start())
@@ -130,20 +133,19 @@ process_chrom(const bool report_more_info,
 static void
 process_from_xcounts(const std::uint32_t n_threads, const bool report_more_info,
                      const char level_code, const std::string &xsym_file,
-                     const std::vector<GenomicRegion> &intervals,
+                     const std::vector<GenomicRegion> &intervals_in,
                      std::ostream &out) {
-
   const auto sites_by_chrom = read_xcounts_by_chrom(n_threads, xsym_file);
   // const auto intervals = get_GenomicRegions(intervals_file);
 
   std::vector<std::vector<GenomicRegion>> intervals_by_chrom;
   std::string prev_chrom;
-  for (auto i = 0u; i < std::size(intervals); ++i) {
-    if (intervals[i].get_chrom() != prev_chrom) {
+  for (auto i = 0u; i < std::size(intervals_in); ++i) {
+    if (intervals_in[i].get_chrom() != prev_chrom) {
       intervals_by_chrom.push_back(std::vector<GenomicRegion>());
-      prev_chrom = intervals[i].get_chrom();
+      prev_chrom = intervals_in[i].get_chrom();
     }
-    intervals_by_chrom.back().push_back(intervals[i]);
+    intervals_by_chrom.back().push_back(intervals_in[i]);
   }
 
   for (const auto &intervals : intervals_by_chrom) {
@@ -184,8 +186,8 @@ get_chrom_order(const T &order, const GenomicRegion &r) {
 }
 
 struct cmp_chrom_order {
-  cmp_chrom_order(const std::unordered_map<std::string, std::uint32_t> &m) :
-    order{m} {}
+  explicit cmp_chrom_order(
+    const std::unordered_map<std::string, std::uint32_t> &m) : order{m} {}
 
   template <class T>
   [[nodiscard]] bool
@@ -200,7 +202,7 @@ struct cmp_chrom_order {
     return c < 0 || (c == 0 && cmp_within_chrom(a, b));
   }
 
-  const std::unordered_map<std::string, std::uint32_t> &order;
+  const std::unordered_map<std::string, std::uint32_t> &order;  // NOLINT
 };
 
 [[nodiscard]] static std::vector<std::string>
@@ -229,7 +231,7 @@ get_chroms(const std::string &filename) {
       if (x != std::cend(chroms_seen))
         throw std::runtime_error("chroms not sorted");
       chroms_seen.push_back(chrom);
-      prev_chrom = std::move(chrom);
+      prev_chrom = chrom;
     }
   }
   return chroms_seen;
@@ -294,7 +296,6 @@ process_preloaded(
   const std::string &sites_file,
   const std::unordered_map<std::string, std::uint32_t> &chrom_order,
   const std::vector<GenomicRegion> &regions, std::ostream &out) {
-
   const auto sites = read_sites(sites_file);
   if (sites.empty())
     throw std::runtime_error("failed to read sites: " + sites_file);
@@ -305,7 +306,7 @@ process_preloaded(
   if (VERBOSE)
     std::cerr << "[n_sites=" << std::size(sites) << "]\n";
 
-  for (auto &r : regions) {
+  for (const auto &r : regions) {
     LevelsCounter lc;
     const auto b =
       region_bounds(chrom_order, std::cbegin(sites), std::cend(sites), r);
@@ -379,7 +380,7 @@ process_on_disk(
   if (!in)
     throw std::runtime_error("failed to open file: " + sites_file);
 
-  for (auto &region : regions) {
+  for (const auto &region : regions) {
     const auto lc = calc_site_stats(in, region, chrom_order);
     const double score =
       level_code == 'w'
@@ -445,7 +446,7 @@ Columns (beyond the first 6) in the BED format output:
     std::string outfile;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description,
+    OptionParser opt_parse(argv[0], description,
                            "<intervals-bed> <methylation-file>");
     opt_parse.set_show_defaults();
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
@@ -505,7 +506,7 @@ Columns (beyond the first 6) in the BED format output:
     // ensure regions are sorted in the same way
     std::unordered_map<std::string, std::uint32_t> chrom_order;
     if (!is_xcounts)
-      for (auto &i : get_chroms(sites_file))
+      for (const auto &i : get_chroms(sites_file))
         chrom_order.emplace(i, std::size(chrom_order));
 
     if (VERBOSE)
@@ -571,3 +572,5 @@ Columns (beyond the first 6) in the BED format output:
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-c-arrays,*-avoid-magic-numbers,*-narrowing-conversions,*-pointer-arithmetic)

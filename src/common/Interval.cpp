@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <fstream>
 #include <string>
+#include <system_error>
 #include <vector>
 
 auto
@@ -60,6 +61,7 @@ Interval::initialize(const char *c, const char *c_end) -> bool {
     const auto [ptr, ec] = std::from_chars(field_s, field_e, stop);
     failed = failed || ec != std::errc{};
   }
+  // NOLINTEND(*-pointer-arithmetic)
 
   return !failed;
 }

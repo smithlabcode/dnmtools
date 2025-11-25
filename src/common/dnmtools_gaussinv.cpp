@@ -74,40 +74,61 @@
  *
  */
 
+#include "dnmtools_gaussinv.hpp"
+
 #include <cmath>
+#include <cstddef>
 #include <limits>
 
-using std::sqrt;
+// ADS: they are all magic...
 
-static double
+// NOLINTBEGIN(*-avoid-magic-numbers,*-avoid-c-arrays,*-pointer-arithmetic,*-array-to-pointer-decay,*-constant-array-index)
+
+[[nodiscard]] static inline double
 rat_eval(const double a[], const size_t na, const double b[], const size_t nb,
          const double x) {
   double u = a[na - 1];
 
-  for (size_t i = na - 1; i > 0; i--) { u = x * u + a[i - 1]; }
+  for (size_t i = na - 1; i > 0; i--) {
+    u = x * u + a[i - 1];
+  }
 
   double v = b[nb - 1];
 
-  for (size_t j = nb - 1; j > 0; j--) { v = x * v + b[j - 1]; }
+  for (size_t j = nb - 1; j > 0; j--) {
+    v = x * v + b[j - 1];
+  }
 
   return u / v;
 }
 
 static double
 small(double q) {
-  const double a[8] = {3.387132872796366608,  133.14166789178437745,
-                       1971.5909503065514427, 13731.693765509461125,
-                       45921.953931549871457, 67265.770927008700853,
-                       33430.575583588128105, 2509.0809287301226727};
+  // clang-format off
+  const double a[8] = {
+    3.387132872796366608,
+    133.14166789178437745,
+    1971.5909503065514427,
+    13731.693765509461125,
+    45921.953931549871457,
+    67265.770927008700853,
+    33430.575583588128105,
+    2509.0809287301226727,
+  };
+  // clang-format on
 
-  const double b[8] = {1.0,
-                       42.313330701600911252,
-                       687.1870074920579083,
-                       5394.1960214247511077,
-                       21213.794301586595867,
-                       39307.89580009271061,
-                       28729.085735721942674,
-                       5226.495278852854561};
+  // clang-format off
+  const double b[8] = {
+    1.0,
+    42.313330701600911252,
+    687.1870074920579083,
+    5394.1960214247511077,
+    21213.794301586595867,
+    39307.89580009271061,
+    28729.085735721942674,
+    5226.495278852854561,
+  };
+  // clang-format on
 
   const double r = 0.180625 - q * q;
 
@@ -116,38 +137,62 @@ small(double q) {
 
 static double
 intermediate(double r) {
-  const double a[] = {1.42343711074968357734,   4.6303378461565452959,
-                      5.7694972214606914055,    3.64784832476320460504,
-                      1.27045825245236838258,   0.24178072517745061177,
-                      0.0227238449892691845833, 7.7454501427834140764e-4};
+  // clang-format off
+  const double a[] = {
+    1.42343711074968357734,
+    4.6303378461565452959,
+    5.7694972214606914055,
+    3.64784832476320460504,
+    1.27045825245236838258,
+    0.24178072517745061177,
+    0.0227238449892691845833,
+    7.7454501427834140764e-4,
+  };
+  // clang-format on
 
-  const double b[] = {1.0,
-                      2.05319162663775882187,
-                      1.6763848301838038494,
-                      0.68976733498510000455,
-                      0.14810397642748007459,
-                      0.0151986665636164571966,
-                      5.475938084995344946e-4,
-                      1.05075007164441684324e-9};
+  // clang-format off
+  const double b[] = {
+    1.0,
+    2.05319162663775882187,
+    1.6763848301838038494,
+    0.68976733498510000455,
+    0.14810397642748007459,
+    0.0151986665636164571966,
+    5.475938084995344946e-4,
+    1.05075007164441684324e-9,
+  };
+  // clang-format on
 
   return rat_eval(a, 8, b, 8, (r - 1.6));
 }
 
 static double
 tail(double r) {
-  const double a[] = {6.6579046435011037772,     5.4637849111641143699,
-                      1.7848265399172913358,     0.29656057182850489123,
-                      0.026532189526576123093,   0.0012426609473880784386,
-                      2.71155556874348757815e-5, 2.01033439929228813265e-7};
+  // clang-format off
+  const double a[] = {
+    6.6579046435011037772,
+    5.4637849111641143699,
+    1.7848265399172913358,
+    0.29656057182850489123,
+    0.026532189526576123093,
+    0.0012426609473880784386,
+    2.71155556874348757815e-5,
+    2.01033439929228813265e-7,
+  };
+  // clang-format on
 
-  const double b[] = {1.0,
-                      0.59983220655588793769,
-                      0.13692988092273580531,
-                      0.0148753612908506148525,
-                      7.868691311456132591e-4,
-                      1.8463183175100546818e-5,
-                      1.4215117583164458887e-7,
-                      2.04426310338993978564e-15};
+  // clang-format off
+  const double b[] = {
+    1.0,
+    0.59983220655588793769,
+    0.13692988092273580531,
+    0.0148753612908506148525,
+    7.868691311456132591e-4,
+    1.8463183175100546818e-5,
+    1.4215117583164458887e-7,
+    2.04426310338993978564e-15,
+  };
+  // clang-format on
 
   return rat_eval(a, 8, b, 8, (r - 5.0));
 }
@@ -161,11 +206,12 @@ dnmt_gsl_cdf_ugaussian_Pinv(const double P) {
   else if (P == 0.0)
     return -std::numeric_limits<double>::infinity();
 
-  if (fabs(dP) <= 0.425) return small(dP);
+  if (fabs(dP) <= 0.425)
+    return small(dP);
 
   const double pp = (P < 0.5) ? P : 1.0 - P;
 
-  const double r = sqrt(-log(pp));
+  const double r = std::sqrt(-log(pp));
 
   const double x = (r <= 5.0) ? intermediate(r) : tail(r);
 
@@ -176,14 +222,19 @@ double
 dnmt_gsl_cdf_ugaussian_Qinv(const double Q) {
   const double dQ = Q - 0.5;
 
-  if (Q == 1.0) { return -std::numeric_limits<double>::infinity(); }
-  else if (Q == 0.0) { return std::numeric_limits<double>::infinity(); }
+  if (Q == 1.0) {
+    return -std::numeric_limits<double>::infinity();
+  }
+  else if (Q == 0.0) {
+    return std::numeric_limits<double>::infinity();
+  }
 
-  if (fabs(dQ) <= 0.425) return -small(dQ);
+  if (fabs(dQ) <= 0.425)
+    return -small(dQ);
 
   const double pp = (Q < 0.5) ? Q : 1.0 - Q;
 
-  const double r = sqrt(-log(pp));
+  const double r = std::sqrt(-log(pp));
 
   const double x = (r <= 5.0) ? intermediate(r) : tail(r);
 
@@ -239,9 +290,9 @@ get_del(double x, double rational) {
  */
 static double
 gauss_small(const double x) {
-  double xsq;
-  double xnum;
-  double xden;
+  double xsq{};
+  double xnum{};
+  double xden{};
 
   const double a[5] = {2.2352520354606839287, 161.02823106855587881,
                        1067.6894854603709582, 18154.981253343561249,
@@ -333,7 +384,9 @@ dnmt_gsl_cdf_ugaussian_P(const double x) {
   else if (absx < dnmt_SQRT32) {
     result = gauss_medium(x);
 
-    if (x > 0.0) { result = 1.0 - result; }
+    if (x > 0.0) {
+      result = 1.0 - result;
+    }
 
     return result;
   }
@@ -346,7 +399,9 @@ dnmt_gsl_cdf_ugaussian_P(const double x) {
   else {
     result = gauss_large(x);
 
-    if (x > 0.0) { result = 1.0 - result; }
+    if (x > 0.0) {
+      result = 1.0 - result;
+    }
   }
 
   return result;
@@ -363,15 +418,21 @@ dnmt_gsl_cdf_ugaussian_Q(const double x) {
   else if (absx < 0.66291) {
     result = gauss_small(x);
 
-    if (x < 0.0) { result = fabs(result) + 0.5; }
-    else { result = 0.5 - result; }
+    if (x < 0.0) {
+      result = fabs(result) + 0.5;
+    }
+    else {
+      result = 0.5 - result;
+    }
 
     return result;
   }
   else if (absx < dnmt_SQRT32) {
     result = gauss_medium(x);
 
-    if (x < 0.0) { result = 1.0 - result; }
+    if (x < 0.0) {
+      result = 1.0 - result;
+    }
 
     return result;
   }
@@ -384,7 +445,9 @@ dnmt_gsl_cdf_ugaussian_Q(const double x) {
   else {
     result = gauss_large(x);
 
-    if (x < 0.0) { result = 1.0 - result; }
+    if (x < 0.0) {
+      result = 1.0 - result;
+    }
   }
   return result;
 }
@@ -398,3 +461,5 @@ double
 dnmt_gsl_cdf_gaussian_Q(const double x, const double sigma) {
   return dnmt_gsl_cdf_ugaussian_Q(x / sigma);
 }
+
+// NOLINTEND(*-avoid-magic-numbers,*-avoid-c-arrays,*-pointer-arithmetic,*-array-to-pointer-decay,*-constant-array-index)

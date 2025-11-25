@@ -16,12 +16,25 @@
  * General Public License for more details.
  */
 
+#include "Epiread.hpp"
+#include "MSite.hpp"
+
+#include "GenomicRegion.hpp"
+#include "OptionParser.hpp"
+#include "smithlab_os.hpp"
+#include "smithlab_utils.hpp"
+
 #include <algorithm>
 #include <cassert>
+#include <cctype>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <numeric>
+#include <new>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -29,20 +42,8 @@
 #include <utility>
 #include <vector>
 
-#include <cmath>
-#include <sstream>
-
-#include "GenomicRegion.hpp"
-#include "MSite.hpp"
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
-
-#include "Epiread.hpp"
-
 using std::cerr;
 using std::cout;
-using std::endl;
 using std::max;
 using std::min;
 using std::runtime_error;
@@ -50,6 +51,8 @@ using std::string;
 using std::unordered_map;
 using std::unordered_set;
 using std::vector;
+
+// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions,*-prefer-member-initializer)
 
 static inline double
 log_sum_log(const double p, const double q) {
@@ -59,7 +62,7 @@ log_sum_log(const double p, const double q) {
   else if (q == 0) {
     return p;
   }
-  return p > q ? p + log(1.0 + exp(q - p)) : q + log(1.0 + exp(p - q));
+  return p > q ? p + log1p(exp(q - p)) : q + log1p(exp(p - q));
 }
 
 static inline double
@@ -226,20 +229,18 @@ verify_chroms_available(const string &chrom_name,
 }
 
 int
-main_allelicmeth(int argc, char *argv[]) {
-
+main_allelicmeth(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-
-    static const string description = "computes probability of allele-specific \
-       methylation at each tuple of CpGs";
-
-    static const string fasta_suffix = "fa";
+    static const auto description = R"(
+computes probability of allele-specific methylation at each tuple of CpGs
+)";
     bool VERBOSE = false;
 
     string outfile;
     string chroms_dir;
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description, "<epireads>");
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description, "<epireads>");
     opt_parse.add_opt("output", 'o', "output file name (default: stdout)",
                       false, outfile);
     opt_parse.add_opt("chrom", 'c', "genome sequence file/directory", true,
@@ -248,20 +249,20 @@ main_allelicmeth(int argc, char *argv[]) {
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      cerr << opt_parse.help_message() << '\n'
+           << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << endl;
+      cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     const string epi_file(leftover_args.front());
@@ -288,7 +289,7 @@ main_allelicmeth(int argc, char *argv[]) {
     }
 
     if (VERBOSE)
-      cerr << "number of chromosomes: " << chrom_sizes.size() << endl;
+      cerr << "number of chromosomes: " << chrom_sizes.size() << '\n';
 
     std::ifstream in(epi_file);
     if (!in)
@@ -309,7 +310,7 @@ main_allelicmeth(int argc, char *argv[]) {
         verify_chroms_available(er.chr, chrom_lookup);
 
         if (VERBOSE)
-          cerr << "[processing " << er.chr << "]" << endl;
+          cerr << "[processing " << er.chr << "]" << '\n';
 
         if (!chrom.empty()) {
           vector<PairStateCounter<uint32_t>> counts(chrom_sizes[chrom] - 1);
@@ -319,7 +320,7 @@ main_allelicmeth(int argc, char *argv[]) {
           convert_coordinates(chroms[chrom_idx], cytosines);
           for (size_t i = 0; i < cytosines.size() - 1; ++i) {
             out << cytosines[i].chrom << "\t" << cytosines[i].pos
-                << "\t+\tCpG\t" << cytosines[i].context << endl;
+                << "\t+\tCpG\t" << cytosines[i].context << '\n';
           }
         }
         epireads.clear();
@@ -335,17 +336,15 @@ main_allelicmeth(int argc, char *argv[]) {
       convert_coordinates(chroms[chrom_idx], cytosines);
       for (size_t i = 0; i < cytosines.size() - 1; ++i) {
         out << cytosines[i].chrom << "\t" << cytosines[i].pos << "\t+\tCpG\t"
-            << cytosines[i].context << endl;
+            << cytosines[i].context << '\n';
       }
     }
   }
-  catch (const runtime_error &e) {
-    cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
+  catch (const std::exception &e) {
+    cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions,*-prefer-member-initializer)

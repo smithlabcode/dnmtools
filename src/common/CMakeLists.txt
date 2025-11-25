@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU General Public License along with
 # this program. If not, see <https://www.gnu.org/licenses/>.
 
+find_package(GSL REQUIRED)
+
 file(GLOB cpp_files "*.cpp")
 
 set(LIBRARY_OBJECTS "")
@@ -22,6 +24,7 @@ foreach(cpp_file ${cpp_files})
   target_link_libraries(${BASE_NAME} PRIVATE
     bamxx
     smithlab_cpp
+    GSL::gsl
   )
   target_include_directories(${BASE_NAME} PUBLIC
     ${CMAKE_BINARY_DIR}

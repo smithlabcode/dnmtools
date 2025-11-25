@@ -15,56 +15,55 @@
  * General Public License for more details.
  */
 
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <iomanip>
-#include <vector>
-#include <string>
-#include <stdexcept>
-#include <cmath>
-#include <algorithm>
-
-// smithlab headers
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
 #include "GenomicRegion.hpp"
+#include "OptionParser.hpp"
 
-using std::string;
-using std::vector;
+#include <cstdlib>
+#include <exception>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
 using std::cerr;
 using std::cout;
 using std::endl;
-using std::istringstream;
-using std::istream;
-using std::ostream;
 using std::ifstream;
+using std::istream;
+using std::istringstream;
 using std::ofstream;
+using std::ostream;
 using std::runtime_error;
+using std::string;
+using std::vector;
+
+// NOLINTBEGIN(*-narrowing-conversions)
 
 // Attemps to find the next significant CpG site. Returns true if one was found
 // and flase otherwise.
 static bool
 read_next_significant_cpg(istream &cpg_stream, GenomicRegion &cpg,
                           double cutoff, bool &skipped_any, bool &n_sig_sites,
-                          size_t &test_cov, size_t &test_meth,
-                          size_t &rest_cov, size_t &rest_meth) {
+                          size_t &test_cov, size_t &test_meth, size_t &rest_cov,
+                          size_t &rest_meth) {
   GenomicRegion region;
   skipped_any = false;
   n_sig_sites = false;
   string cpg_encoding;
 
   while (getline(cpg_stream, cpg_encoding)) {
-    string record, chrom, name, sign;
-    size_t position;
-    double raw_pval, adjusted_pval, corrected_pval;
+    string chrom, name, sign;
+    size_t position{};
+    double raw_pval{};
+    double adjusted_pval{};
+    double corrected_pval{};
 
     istringstream iss(cpg_encoding);
     iss.exceptions(std::ios::failbit);
-    iss >> chrom >> position >> sign >> name >> raw_pval
-        >> adjusted_pval >> corrected_pval
-        >> test_cov >> test_meth >> rest_cov >> rest_meth;
+    iss >> chrom >> position >> sign >> name >> raw_pval >> adjusted_pval >>
+      corrected_pval >> test_cov >> test_meth >> rest_cov >> rest_meth;
 
     if (corrected_pval >= 0.0 && corrected_pval < cutoff) {
       cpg.set_chrom(chrom);
@@ -81,7 +80,6 @@ read_next_significant_cpg(istream &cpg_stream, GenomicRegion &cpg,
 
 static void
 merge(istream &cpg_stream, ostream &dmr_stream, double cutoff) {
-
   GenomicRegion dmr;
   dmr.set_name("dmr");
 
@@ -96,10 +94,11 @@ merge(istream &cpg_stream, ostream &dmr_stream, double cutoff) {
   size_t rest_meth = 0;
 
   // Find the first significant CpG, or terminate the function if none exist.
-  bool skipped_last_cpg, n_sig_sites;
+  bool skipped_last_cpg{};
+  bool n_sig_sites{};
   if (!read_next_significant_cpg(cpg_stream, dmr, cutoff, skipped_last_cpg,
-                                 n_sig_sites, test_cov, test_meth,
-                                 rest_cov, rest_meth))
+                                 n_sig_sites, test_cov, test_meth, rest_cov,
+                                 rest_meth))
     return;
 
   dmr.set_score(n_sig_sites);
@@ -112,18 +111,16 @@ merge(istream &cpg_stream, ostream &dmr_stream, double cutoff) {
   cpg.set_name("dmr");
 
   while (read_next_significant_cpg(cpg_stream, cpg, cutoff, skipped_last_cpg,
-                                   n_sig_sites, test_cov, test_meth,
-                                   rest_cov, rest_meth)) {
-
+                                   n_sig_sites, test_cov, test_meth, rest_cov,
+                                   rest_meth)) {
     if (skipped_last_cpg || cpg.get_chrom() != dmr.get_chrom()) {
       if (dmr.get_score() != 0)
-        dmr_stream << dmr.get_chrom() << '\t'
-                   << dmr.get_start() << '\t'
-                   << dmr.get_end()   << '\t'
-                   << dmr.get_name()  << '\t'
+        dmr_stream << dmr.get_chrom() << '\t' << dmr.get_start() << '\t'
+                   << dmr.get_end() << '\t' << dmr.get_name() << '\t'
                    << dmr.get_score() << '\t'
-                   << double(dmr_test_meth)/dmr_test_cov -
-          double(dmr_rest_meth)/dmr_rest_cov << endl;
+                   << static_cast<double>(dmr_test_meth) / dmr_test_cov -
+                        static_cast<double>(dmr_rest_meth) / dmr_rest_cov
+                   << '\n';
       dmr = cpg;
       dmr.set_score(n_sig_sites);
       dmr_test_cov = test_cov;
@@ -141,59 +138,53 @@ merge(istream &cpg_stream, ostream &dmr_stream, double cutoff) {
     }
   }
   if (dmr.get_score() != 0) {
-    const double diff =
-      static_cast<double>(dmr_test_meth)/dmr_test_cov -
-      static_cast<double>(dmr_rest_meth)/dmr_rest_cov;
-    dmr_stream << dmr.get_chrom() << '\t'
-               << dmr.get_start() << '\t'
-               << dmr.get_end()   << '\t'
-               << dmr.get_name()  << '\t'
-               << dmr.get_score() << '\t'
-               << diff << endl;
+    const double diff = static_cast<double>(dmr_test_meth) / dmr_test_cov -
+                        static_cast<double>(dmr_rest_meth) / dmr_rest_cov;
+    dmr_stream << dmr.get_chrom() << '\t' << dmr.get_start() << '\t'
+               << dmr.get_end() << '\t' << dmr.get_name() << '\t'
+               << dmr.get_score() << '\t' << diff << '\n';
   }
 }
 
 int
-main_radmeth_merge(int argc, char *argv[]) {
-
+main_radmeth_merge(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-
-    /* FILES */
     string outfile;
-    double cutoff = 0.01;
+    double cutoff = 0.01;  // NOLINT(*-avoid-magic-numbers)
 
     /**************** GET COMMAND LINE ARGUMENTS *************************/
-    OptionParser opt_parse(strip_path(argv[0]),
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            "merge significantly differentially"
                            " methylated CpGs into DMRs",
                            "<bed-file-in-radmeth-format>");
     opt_parse.set_show_defaults();
-    opt_parse.add_opt("output", 'o',
-                      "output file (default: stdout)", false, outfile);
-    opt_parse.add_opt("cutoff", 'p', "p-value cutoff", false , cutoff);
+    opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
+                      outfile);
+    opt_parse.add_opt("cutoff", 'p', "p-value cutoff", false, cutoff);
     vector<string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl;
+      cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << endl;
+      cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     const string bed_filename = leftover_args.front();
     /************************************************************************/
 
     ofstream of;
-    if (!outfile.empty()) of.open(outfile);
+    if (!outfile.empty())
+      of.open(outfile);
     ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
 
     ifstream in(bed_filename);
@@ -201,11 +192,12 @@ main_radmeth_merge(int argc, char *argv[]) {
       throw runtime_error("could not open file: " + bed_filename);
 
     merge(in, out, cutoff);
-
   }
   catch (const std::exception &e) {
-    cerr << "ERROR: " << e.what() << endl;
+    cerr << "ERROR: " << e.what() << '\n';
     exit(EXIT_FAILURE);
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-narrowing-conversions)

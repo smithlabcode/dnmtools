@@ -19,15 +19,9 @@
 #ifndef EM_DTN
 #define EM_DTN
 
-#include <cmath>
-#include <iomanip>
-#include <numeric>
-#include <iostream>
-#include <sstream>
-#include <gsl/gsl_sf_psi.h>
-#include <gsl/gsl_sf_gamma.h>
-#include <utility>
+#include <iterator>  // IWYU pragma: keep
 #include <string>
+#include <utility>
 #include <vector>
 
 /** Emission distributions for methylation should be modeled either as
@@ -35,51 +29,64 @@
  * helpful to have an abstraction so that we can put them in the same
  * container.
  */
-class EmissionDistribution
-{
-  public:
-    EmissionDistribution();
-    virtual ~EmissionDistribution();
-    EmissionDistribution(const double a, const double b);
-    EmissionDistribution(const std::string &str);
-    virtual double operator()(const std::pair<double, double> &val) const = 0;
-    virtual double log_likelihood(const std::pair<double, double> &val) const = 0;
-    std::string tostring() const;
-    double getalpha() { return alpha; };
-    double getbeta() { return beta; };
-    void fit(const std::vector<double> &vals_a,
-             const std::vector<double> &vals_b,
-             const std::vector<double> &p);
+class EmissionDistribution {
+public:
+  EmissionDistribution();
+  virtual ~EmissionDistribution();
+  EmissionDistribution(const double a, const double b);
+  EmissionDistribution(const std::string &str);
+  virtual double
+  operator()(const std::pair<double, double> &val) const = 0;
+  virtual double
+  log_likelihood(const std::pair<double, double> &val) const = 0;
+  std::string
+  tostring() const;
+  double
+  getalpha() {
+    return alpha;
+  };
+  double
+  getbeta() {
+    return beta;
+  };
+  void
+  fit(const std::vector<double> &vals_a, const std::vector<double> &vals_b,
+      const std::vector<double> &p);
 
-  protected:
-    double sign(const double x);
-    double invpsi(const double tolerance, const double x);
-    double movement(const double curr, const double prev);
-    double alpha;
-    double beta;
-    double lnbeta_helper;
+protected:
+  double
+  sign(const double x);
+  double
+  invpsi(const double tolerance, const double x);
+  double
+  movement(const double curr, const double prev);
+  double alpha{};
+  double beta{};
+  double lnbeta_helper{};
 
-    const double tolerance = 1e-10;
+  static constexpr double tolerance = 1e-10;
 };
 
-class Beta : public EmissionDistribution
-{
-  public:
-    Beta();
-    Beta(const double a, const double b);
-    Beta(const std::string &str);
-    double operator()(const std::pair<double, double> &val) const;
-    double log_likelihood(const std::pair<double, double> &val) const;
+class Beta : public EmissionDistribution {
+public:
+  Beta();
+  Beta(const double a, const double b);
+  explicit Beta(const std::string &str);
+  double
+  operator()(const std::pair<double, double> &val) const override;
+  double
+  log_likelihood(const std::pair<double, double> &val) const override;
 };
 
-class BetaBinomial : public EmissionDistribution
-{
-  public:
-    BetaBinomial();
-    BetaBinomial(const double a, const double b);
-    BetaBinomial(const std::string &str);
-    double operator()(const std::pair<double, double> &val) const;
-    double log_likelihood(const std::pair<double, double> &val) const;
+class BetaBinomial : public EmissionDistribution {
+public:
+  BetaBinomial();
+  BetaBinomial(const double a, const double b);
+  explicit BetaBinomial(const std::string &str);
+  double
+  operator()(const std::pair<double, double> &val) const override;
+  double
+  log_likelihood(const std::pair<double, double> &val) const override;
 };
 
 #endif

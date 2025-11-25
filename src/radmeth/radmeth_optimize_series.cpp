@@ -14,18 +14,22 @@
  */
 
 #include "radmeth_optimize_series.hpp"
-
+#include "radmeth_design.hpp"
 #include "radmeth_model.hpp"
 #include "radmeth_optimize_params.hpp"
 
-#include <gsl/gsl_multimin.h>
-#include <gsl/gsl_vector.h>
-
 #include <algorithm>
+#include <cmath>
 #include <cstring>
+#include <iterator>
 #include <numeric>
-#include <stdexcept>
 #include <vector>
+
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_multimin.h>
+#include <gsl/gsl_vector_double.h>
+
+// NOLINTBEGIN(*-pointer-arithmetic,*-narrowing-conversions,*-constant-array-index,*-avoid-do-while,cert-flp30-c)
 
 [[nodiscard]] static inline auto
 logistic(const double x) -> double {
@@ -65,7 +69,8 @@ get_cached_log1p_factors(Regression<std::uint32_t> &reg, const double phi) {
 static inline auto
 get_cached_dispersion_effect(Regression<std::uint32_t> &reg, const double phi) {
   const std::size_t max_k = reg.max_r_count;
-  auto &cache_dispersion_effect = reg.cache_dispersion_effect;
+  auto &cache_dispersion_effect =  // cppcheck-suppress constVariableReference
+    reg.cache_dispersion_effect;
   double j = -1.0;
   const auto lim = std::cbegin(cache_dispersion_effect) + max_k;
   for (auto it = std::begin(cache_dispersion_effect); it != lim; ++it, ++j)
@@ -306,3 +311,5 @@ fit_regression_model(Regression<std::uint32_t> &r,
   gsl_multimin_fdfminimizer_free(s);
   gsl_vector_free(params);
 }
+
+// NOLINTEND(*-pointer-arithmetic,*-narrowing-conversions,*-constant-array-index,*-avoid-do-while,cert-flp30-c)

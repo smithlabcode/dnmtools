@@ -1,0 +1,12 @@
+BasedOnStyle: LLVM
+ColumnLimit: 80
+IndentWidth: 2
+AlwaysBreakAfterReturnType: All
+ContinuationIndentWidth: 2
+ConstructorInitializerIndentWidth: 2
+BraceWrapping:
+  BeforeElse: true
+  BeforeCatch: true
+BreakBeforeBraces: Custom
+BreakConstructorInitializers: AfterColon
+SpacesBeforeTrailingComments: 2

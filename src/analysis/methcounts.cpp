@@ -16,23 +16,34 @@
  * more details.
  */
 
+#include "OptionParser.hpp"
 #include "bam_record_utils.hpp"
 #include "bsutils.hpp"
 #include "counts_header.hpp"
+#include "smithlab_os.hpp"
 
-#include "OptionParser.hpp"
+#include <bamxx.hpp>
 
-/* HTSlib */
 #include <htslib/sam.h>
 
-#include <cstdint>  // for [u]int[0-9]+_t
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <cctype>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <exception>
 #include <iostream>
-#include <numeric>
+#include <iterator>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <unordered_set>
+#include <unordered_map>
+#include <utility>
 #include <vector>
+
+// NOLINTBEGIN(*-narrowing-conversions,*-constant-array-index,*-pointer-arithmetic)
 
 // ADS: we should never have to worry about coverage over > 32767 in
 // any downstream analysis, so using "int16_t" here would allow to
@@ -186,7 +197,8 @@ has_mutated(const char base, const CountSet &cs) {
            : (cs.pG < mutation_defining_frac * (cs.pos_total()));
 }
 
-static const char *tag_values[] = {
+// NOLINTBEGIN(*-avoid-c-arrays)
+static const char *const tag_values[] = {
   "CpG",   // 0
   "CHH",   // 1
   "CXG",   // 2
@@ -198,6 +210,7 @@ static const char *tag_values[] = {
   "CCGx",  // 8
   "Nx"     // 9
 };
+// NOLINTEND(*-avoid-c-arrays)
 static const std::uint32_t MUT_OFFSET = 5;
 
 [[nodiscard]] static inline std::uint32_t
@@ -210,14 +223,13 @@ static void
 write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
              const int32_t tid, const std::string &chrom,
              const std::vector<CountSet> &counts, bool CPG_ONLY) {
-  constexpr auto buf_size = 1024;  // max width of a line for counts output
+  static constexpr auto buf_size = 1024;  // max width of output  line
   constexpr const char *fmt = "%s\t%ld\t%c\t%s\t%.6g\t%d\n";
-  char buf[buf_size];
+  std::array<char, buf_size> buf{};
 
   for (size_t i = 0; i < size(counts); ++i) {
     const char base = chrom[i];
     if (is_cytosine(base) || is_guanine(base)) {
-
       const std::uint32_t the_tag = get_tag_from_genome(chrom, i);
       if (CPG_ONLY && the_tag != 0)
         continue;
@@ -234,7 +246,7 @@ write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
 
       const bool mut = has_mutated(base, counts[i]);
       // clang-format off
-      const int n = std::snprintf(buf, buf_size, fmt,
+      const int n = std::snprintf(buf.data(), buf_size, fmt,
                                   sam_hdr_tid2name_ptr(hdr, tid),
                                   i,
                                   (is_c ? '+' : '-'),
@@ -242,7 +254,7 @@ write_output(const bamxx::bam_header &hdr, bamxx::bgzf_file &out,
                                   (n_reads > 0 ? unconverted / n_reads : 0.0),
                                   n_reads);
       // clang-format on
-      if (n < 0 || !out.write(buf, n))
+      if (n < 0 || !out.write(buf.data(), n))
         throw std::runtime_error("error formatting output");
     }
   }
@@ -314,7 +326,7 @@ count_states_neg(const bamxx::bam_rec &aln, std::vector<CountSet> &counts) {
 
 [[nodiscard]] static std::unordered_map<int32_t, size_t>
 get_tid_to_idx(const bamxx::bam_header &hdr,
-               const std::unordered_map<std::string, size_t> name_to_idx) {
+               const std::unordered_map<std::string, size_t> &name_to_idx) {
   std::unordered_map<int32_t, size_t> tid_to_idx;
   for (int32_t i = 0; i < hdr.h->n_targets; ++i) {
     // "curr_name" gives a "tid_to_name" mapping allowing to jump
@@ -337,7 +349,6 @@ output_skipped_chromosome(
   const std::vector<std::string>::const_iterator chroms_beg,
   const std::vector<size_t> &chrom_sizes, std::vector<CS> &counts,
   bamxx::bgzf_file &out) {
-
   // get the index of the next chrom sequence
   const auto chrom_idx = tid_to_idx.find(tid);
   if (chrom_idx == std::cend(tid_to_idx))
@@ -378,7 +389,7 @@ template <const bool require_covered = false>
 static void
 process_reads(const bool VERBOSE, const bool show_progress,
               const bool compress_output, const bool include_header,
-              const size_t n_threads, const std::string &infile,
+              const std::int32_t n_threads, const std::string &infile,
               const std::string &outfile, const std::string &chroms_file,
               const bool CPG_ONLY) {
   // first get the chromosome names and sequences from the FASTA file
@@ -438,7 +449,7 @@ process_reads(const bool VERBOSE, const bool show_progress,
   // this is where all the counts are accumulated
   std::vector<CountSet> counts;
 
-  std::vector<std::string>::const_iterator chrom_itr;
+  std::vector<std::string>::const_iterator chrom_itr{};
 
   while (hts.read(hdr, aln)) {
     const int32_t tid = get_tid(aln);
@@ -499,10 +510,8 @@ process_reads(const bool VERBOSE, const bool show_progress,
 }
 
 int
-main_counts(int argc, char *argv[]) {
-
+main_counts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-
     bool VERBOSE = false;
     bool show_progress = false;
     bool CPG_ONLY = false;
@@ -512,10 +521,10 @@ main_counts(int argc, char *argv[]) {
 
     std::string chroms_file;
     std::string outfile;
-    int n_threads = 1;
+    std::int32_t n_threads = 1;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]),
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            "get methylation levels from "
                            "mapped bisulfite sequencing reads",
                            "-c <chroms> <mapped-reads>");
@@ -584,3 +593,5 @@ main_counts(int argc, char *argv[]) {
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-narrowing-conversions,*-constant-array-index,*-pointer-arithmetic)

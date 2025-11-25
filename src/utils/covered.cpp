@@ -15,90 +15,93 @@
  * General Public License for more details.
  */
 
+#include "OptionParser.hpp"
+
 #include <bamxx.hpp>
 
+#include <htslib/bgzf.h>
+#include <htslib/sam.h>
+
+#include <algorithm>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-// from smithlab_cpp
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
-
-using std::cerr;
-using std::cout;
-using std::endl;
-using std::runtime_error;
 using std::string;
-
-using bamxx::bgzf_file;
-
 
 static inline bool
 get_is_mutated(const kstring_t &line) {
-  const auto end_itr = line.s + line.l;
+  const auto end_itr = line.s + line.l;  // NOLINT(*-pointer-arithmetic)
   return std::find(line.s, end_itr, 'x') != end_itr;
 }
 
 static inline uint32_t
 get_n_reads(const kstring_t &line) {
-  const auto end_itr = std::make_reverse_iterator(line.s + line.l);
-  const auto beg_itr = std::make_reverse_iterator(line.s);
+  const auto end_itr = std::make_reverse_iterator(
+    line.s + line.l);  // NOLINT(*-pointer-arithmetic)
+  const auto beg_itr =
+    std::make_reverse_iterator(line.s);  // NOLINT(*-pointer-arithmetic)
   auto n_reads_pos = std::find_if(
     end_itr, beg_itr, [](const char c) { return c == ' ' || c == '\t'; });
   ++n_reads_pos;
-  return atoi(n_reads_pos.base());
+  return atoi(n_reads_pos.base());  // NOLINT(cert-err34-c)
 }
 
 int
-main_covered(int argc, char *argv[]) {
+main_covered(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-    size_t n_threads = 1;
+    std::int32_t n_threads = 1;
 
-    string outfile{"-"};
-    const string description =
+    std::string outfile{"-"};
+    const std::string description =
       "filter counts files so they only have covered sites";
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description,
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description,
                            "<counts-file> (\"-\" for standard input)", 1);
     opt_parse.add_opt("output", 'o', "output file (default is standard out)",
                       false, outfile);
     opt_parse.add_opt("threads", 't', "threads for compression (use few)",
                       false, n_threads);
-    std::vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << endl;
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
-    const string filename(leftover_args.front());
+    const std::string filename(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
     bamxx::bam_tpool tpool(n_threads);
 
-    bgzf_file in(filename, "r");
-    if (!in) throw runtime_error("could not open file: " + filename);
+    bamxx::bgzf_file in(filename, "r");
+    if (!in)
+      throw std::runtime_error("could not open file: " + filename);
 
     const auto outfile_mode = in.is_compressed() ? "w" : "wu";
 
-    bgzf_file out(outfile, outfile_mode);
-    if (!out) throw runtime_error("error opening output file: " + outfile);
+    bamxx::bgzf_file out(outfile, outfile_mode);
+    if (!out)
+      throw std::runtime_error("error opening output file: " + outfile);
 
     if (n_threads > 1) {
       // ADS: something breaks when we use the thread for the input
@@ -110,25 +113,29 @@ main_covered(int argc, char *argv[]) {
     // use the kstring_t type to more directly use the BGZF file
     kstring_t line{0, 0, nullptr};
     const int ret = ks_resize(&line, 1024);
-    if (ret) throw runtime_error("failed to acquire buffer");
+    if (ret)
+      throw std::runtime_error("failed to acquire buffer");
 
     bool write_ok = true;
     while (bamxx::getline(in, line) && write_ok) {
       const bool is_mutated = get_is_mutated(line);
       const uint32_t n_reads = get_n_reads(line);
       if (n_reads > 0u || is_mutated) {
+        // NOLINTBEGIN(*-pointer-arithmetic)
         line.s[line.l++] = '\n';
         write_ok =
           (bgzf_write(out.f, line.s, line.l) == static_cast<int64_t>(line.l));
+        // NOLINTEND(*-pointer-arithmetic)
       }
     }
     if (!write_ok) {
-      cerr << "failed writing to: " << outfile << '\n';
+      std::cerr << "failed writing to: " << outfile << '\n';
       return EXIT_FAILURE;
     }
+    ks_free(&line);
   }
-  catch (const std::runtime_error &e) {
-    cerr << e.what() << endl;
+  catch (const std::exception &e) {
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

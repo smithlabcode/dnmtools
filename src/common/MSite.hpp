@@ -1,18 +1,17 @@
 /*
-  Copyright (C) 2015-2022 University of Southern California
-                          Andrew D Smith
+  Copyright (C) 2015-2025 Andrew D Smith
 
   Authors: Andrew D. Smith
 
-  This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; either version 2 of the License, or
-  (at your option) any later version.
+  This program is free software; you can redistribute it and/or modify it
+  under the terms of the GNU General Public License as published by the Free
+  Software Foundation; either version 2 of the License, or (at your option)
+  any later version.
 
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  This program is distributed in the hope that it will be useful, but WITHOUT
+  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+  more details.
 */
 
 #ifndef MSITE_HPP
@@ -20,14 +19,16 @@
 
 #include <bamxx.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <iterator>  // IWYU pragma: keep
 #include <sstream>
 #include <string>
 #include <unordered_map>
 
 struct MSite {
-
   // This defaults to true, and when true MSite lines cannot be parsed if they
   // have additional columns in the file.
   static bool no_extra_fields;
@@ -47,28 +48,37 @@ struct MSite {
   explicit MSite(const std::string &line);
   explicit MSite(const char *line, const int n);
 
-  bool
+  [[nodiscard]] bool
   initialize(const char *c, const char *c_end);
 
-  bool
+  [[nodiscard]] bool
   operator<(const MSite &other) const {
-    int r = chrom.compare(other.chrom);
+    const int r = chrom.compare(other.chrom);
     return (r < 0 || (r == 0 && (pos < other.pos ||
                                  (pos == other.pos && strand < other.strand))));
   }
 
-  size_t
+  [[nodiscard]] size_t
   n_meth() const {
     return std::round(meth * n_reads);
   }
-  size_t
+
+  [[nodiscard]] size_t
   n_unmeth() const {
     return n_reads - n_meth();
   }
 
-  //////////////////////////////////////////////////////////////
-  /// FUNCTIONS BELOW ARE FOR MANIPULATING SYMMETRIC CPG SITES
-  //////////////////////////////////////////////////////////////
+  [[nodiscard]] double
+  n_meth_f() const {
+    return meth * n_reads;
+  }
+
+  [[nodiscard]] double
+  n_unmeth_f() const {
+    return n_reads - n_meth_f();
+  }
+
+  // functions below are for manipulating symmetric CpG sites
   void
   add(const MSite &other) {
     // ADS: possible that this function has specific behavior that
@@ -85,41 +95,43 @@ struct MSite {
 
   // ADS: function below has redundant check for is_cpg, which is
   // expensive and might be ok to remove
-  bool
+  [[nodiscard]] bool
   is_mate_of(const MSite &first) {
     return (first.pos + 1 == pos && first.is_cpg() && is_cpg() &&
             first.strand == '+' && strand == '-');
   }
 
-  ////////////////////////////////////////////////////////////////////////
-  /////  Functions below test the type of site. These are CpG, CHH, and
-  /////  CHG divided into two kinds: CCG and CXG, the former including a
-  /////  CpG within. Also included is a function that tests if a site
-  /////  has a mutation.
-  ////////////////////////////////////////////////////////////////////////
-  bool
+  // Functions below test the type of site. These are CpG, CHH, and CHG
+  // divided into two kinds: CCG and CXG, the former including a CpG
+  // within. Also included is a function that tests if a site has a mutation.
+
+  [[nodiscard]] bool
   is_cpg() const {
-    return context.length() >= 3 &&
+    return std::size(context) >= 3 &&
            (context[0] == 'C' && context[1] == 'p' && context[2] == 'G');
   }
-  bool
+
+  [[nodiscard]] bool
   is_chh() const {
-    return context.length() >= 3 &&
+    return std::size(context) >= 3 &&
            (context[0] == 'C' && context[1] == 'H' && context[2] == 'H');
   }
-  bool
+
+  [[nodiscard]] bool
   is_ccg() const {
-    return context.length() >= 3 &&
+    return std::size(context) >= 3 &&
            (context[0] == 'C' && context[1] == 'C' && context[2] == 'G');
   }
-  bool
+
+  [[nodiscard]] bool
   is_cxg() const {
-    return context.length() >= 3 &&
+    return std::size(context) >= 3 &&
            (context[0] == 'C' && context[1] == 'X' && context[2] == 'G');
   }
-  bool
+
+  [[nodiscard]] bool
   is_mutated() const {
-    return context.length() == 4 && context[3] == 'x';
+    return std::size(context) == 4 && context[3] == 'x';
   }
 
   void
@@ -127,13 +139,14 @@ struct MSite {
     if (!is_mutated())
       context += 'x';
   }
+
   void
   set_unmutated() {
     if (is_mutated())
-      context.resize(context.length() - 1);
+      context.resize(std::size(context) - 1);
   }
 
-  std::string
+  [[nodiscard]] std::string
   tostring() const;
 };
 
@@ -153,7 +166,7 @@ operator<<(T &out, const MSite &s) {
   return out;
 }
 
-size_t
+[[nodiscard]] size_t
 distance(const MSite &a, const MSite &b);
 
 // find the byte offset within the given file of the first site in the
@@ -176,10 +189,8 @@ find_offset_for_msite(
 
 inline bamxx::bgzf_file &
 write_site(bamxx::bgzf_file &f, const MSite &s) {
-  // ADS: to slow??
-  std::ostringstream oss;
-  oss << s.tostring() << '\n';
-  f.write(oss.str());
+  // ADS: too slow??
+  f.write(s.tostring() + "\n");
   return f;
 }
 
@@ -196,7 +207,7 @@ read_site(bamxx::bgzf_file &f, MSite &s) {
   return f;
 }
 
-bool
+[[nodiscard]] bool
 is_msite_file(const std::string &file);
 
 #endif

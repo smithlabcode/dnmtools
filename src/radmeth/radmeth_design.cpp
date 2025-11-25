@@ -257,8 +257,4 @@ Design::has_two_values(const std::size_t test_factor) const {
   const auto &tcol = tmatrix[test_factor];
   return std::any_of(std::cbegin(tcol), std::cend(tcol),
                      [&](const auto x) { return x != tcol[0]; });
-  // for (const auto x : tcol)
-  //   if (x != tcol[0])
-  //     return true;
-  // return false;
 }

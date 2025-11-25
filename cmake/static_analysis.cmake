@@ -59,7 +59,7 @@ if ("iwyu" IN_LIST STATIC_ANALYSIS_CHECKS)
     set(CMAKE_CXX_INCLUDE_WHAT_YOU_USE
       include-what-you-use
       -Xiwyu
-      --comment_style=long
+      --comment_style=none
       -Xiwyu
       --quoted_includes_first
       -Xiwyu

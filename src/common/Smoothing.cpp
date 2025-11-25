@@ -21,31 +21,32 @@
 
 #include "Smoothing.hpp"
 
-#include <vector>
+#include <gsl/gsl_fit.h>
+
 #include <algorithm>
+#include <cassert>
+#include <cstddef>
 #include <functional>
 #include <numeric>
-#include <iostream>
 #include <stdexcept>
+#include <vector>
 
-#include "smithlab_utils.hpp"
+// NOLINTBEGIN
 
-using std::vector;
-using std::transform;
 using std::divides;
 using std::runtime_error;
+using std::transform;
+using std::vector;
 
 static double
 Epanechnikov_kernel(double i, double j, double bandwidth) {
-  const double u = (j - i)/bandwidth;
-  return 0.75*(1.0 - u*u);
+  const double u = (j - i) / bandwidth;
+  return 0.75 * (1.0 - u * u);  // NOLINT(*-avoid-magic-numbers)
 }
 
 void
-KernelSmoothing(const double bandwidth,
-                const vector<double> &x_vals,
-                const vector<double> &y_vals,
-                const vector<double> &x_target,
+KernelSmoothing(const double bandwidth, const vector<double> &x_vals,
+                const vector<double> &y_vals, const vector<double> &x_target,
                 vector<double> &y_target) {
   assert(x_vals.size() == y_vals.size());
 
@@ -58,7 +59,6 @@ KernelSmoothing(const double bandwidth,
 
   // iterate over the x target vals
   for (size_t i = 0; i < x_target.size(); ++i) {
-
     // calculate the x starting point
     while (x_start < x_vals.size() && x_vals[x_start] < x_target[i] - bandwidth)
       ++x_start;
@@ -76,24 +76,22 @@ KernelSmoothing(const double bandwidth,
     // calculate the weights
     vector<double> weights(lim);
     for (size_t j = 0; j < lim; ++j)
-      weights[j] = Epanechnikov_kernel(x_target[i], x_vals[x_start+j], bandwidth);
+      weights[j] =
+        Epanechnikov_kernel(x_target[i], x_vals[x_start + j], bandwidth);
     const double weight_sum = accumulate(weights.begin(), weights.end(), 0.0);
     transform(weights.begin(), weights.end(), weights.begin(),
-              [weight_sum] (const double w) {return w / weight_sum;});
+              [weight_sum](const double w) { return w / weight_sum; });
 
     // apply the weights
     y_target[i] = 0;
     for (size_t j = 0; j < lim; ++j)
-      y_target[i] += y_vals[x_start + j]*weights[j];
+      y_target[i] += y_vals[x_start + j] * weights[j];
   }
 }
-
-
 
 void
 KernelSmoothing(const double bandwidth, const vector<double> &y_vals,
                 vector<double> &y_target) {
-
   // allocate the space for the new y vals
   y_target.resize(y_vals.size(), 0);
 
@@ -103,9 +101,8 @@ KernelSmoothing(const double bandwidth, const vector<double> &y_vals,
 
   // iterate over the x target vals
   for (size_t i = 0; i < y_vals.size(); ++i) {
-
     // calculate the x starting point
-    while (x_start < y_vals.size() && x_start < i - bandwidth)
+    while (x_start < y_vals.size() && x_start + bandwidth < i)
       ++x_start;
 
     // calculate the x ending point
@@ -125,24 +122,20 @@ KernelSmoothing(const double bandwidth, const vector<double> &y_vals,
 
     const double weight_sum = accumulate(weights.begin(), weights.end(), 0.0);
     transform(weights.begin(), weights.end(), weights.begin(),
-              [weight_sum] (const double w) {return w / weight_sum;});
+              [weight_sum](const double w) { return w / weight_sum; });
 
     // apply the weights
     y_target[i] = 0;
     for (size_t j = 0; j < lim; ++j)
-      y_target[i] += y_vals[x_start + j]*weights[j];
+      y_target[i] += y_vals[x_start + j] * weights[j];
   }
 }
 
-#include <gsl/gsl_fit.h>
-
 void
-LocalLinearRegression(const double bandwidth,
-                      const vector<double> &x_vals,
+LocalLinearRegression(const double bandwidth, const vector<double> &x_vals,
                       const vector<double> &y_vals,
                       const vector<double> &x_target,
                       vector<double> &y_target) {
-
   // Make sure the x and y vectors are of the same length
   assert(x_vals.size() == y_vals.size());
 
@@ -154,7 +147,6 @@ LocalLinearRegression(const double bandwidth,
 
   // iterate over the x target vals
   for (size_t i = 0; i < x_target.size(); ++i) {
-
     // calculate the x starting point
     while (x_start < x_vals.size() && x_vals[x_start] < x_target[i] - bandwidth)
       ++x_start;
@@ -172,16 +164,19 @@ LocalLinearRegression(const double bandwidth,
     // calculate the weights
     vector<double> weights(lim);
     for (size_t j = 0; j < lim; ++j)
-      weights[j] = Epanechnikov_kernel(x_target[i], x_vals[x_start+j], bandwidth);
+      weights[j] =
+        Epanechnikov_kernel(x_target[i], x_vals[x_start + j], bandwidth);
     const double weight_sum = accumulate(weights.begin(), weights.end(), 0.0);
     transform(weights.begin(), weights.end(), weights.begin(),
-              [weight_sum] (const double w) {return w / weight_sum;});
+              [weight_sum](const double w) { return w / weight_sum; });
 
     double intercept = 0, slope = 0;
     double c00 = 0, c10 = 0, c11 = 0;
     double ssq = 0;
-    gsl_fit_wlinear(&x_vals[x_start], 1, &weights[0], 1, &y_vals[x_start], 1, lim,
-                    &intercept, &slope, &c00, &c10, &c11, &ssq);
-    y_target[i] = intercept + slope*x_target[i];
+    gsl_fit_wlinear(&x_vals[x_start], 1, &weights[0], 1, &y_vals[x_start], 1,
+                    lim, &intercept, &slope, &c00, &c10, &c11, &ssq);
+    y_target[i] = intercept + slope * x_target[i];
   }
 }
+
+// NOLINTEND

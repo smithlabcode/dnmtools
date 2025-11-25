@@ -38,13 +38,3 @@ target_link_libraries(radmeth PUBLIC
   smithlab_cpp
   HTSLIB::HTSLIB
 )
-# target_include_directories(radmeth PUBLIC ${CMAKE_BINARY_DIR})
-
-# add_executable(abismal abismal_main.cpp)
-# # ADS: below, for config.h
-# target_include_directories(abismal PUBLIC ${CMAKE_BINARY_DIR})
-# target_link_libraries(abismal PUBLIC
-#   abismal_objs
-#   smithlab_cpp
-#   HTSLIB::HTSLIB
-# )

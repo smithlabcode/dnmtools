@@ -18,83 +18,79 @@
  *    GNU General Public License for more details.
  */
 
+#include "OptionParser.hpp"
+
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <new>
+#include <numeric>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
-#include <iostream>
-#include <iterator>
-#include <fstream>
-#include <algorithm>
-#include <numeric>
-#include <iterator>
-#include <string>
-#include <iomanip>
-#include <stdexcept>
 
-#include "OptionParser.hpp"
-#include "smithlab_utils.hpp"
-#include "smithlab_os.hpp"
-#include "GenomicRegion.hpp"
-
-#include "bsutils.hpp"
-
-using std::string;
-using std::vector;
-using std::cout;
 using std::cerr;
+using std::cout;
 using std::endl;
-using std::setw;
-using std::stringstream;
 using std::runtime_error;
+using std::setw;
+using std::string;
+using std::stringstream;
+using std::vector;
 
-bool readline(std::vector<std::ifstream*>& infiles,
-              std::vector<string>& cur_line) {
-  for ( size_t i = 0; i < infiles.size(); ++i) {
-    if (infiles[i]->eof() )
+// NOLINTBEGIN(*-owning-memory,*-avoid-magic-numbers,*-narrowing-conversions)
+
+bool
+readline(std::vector<std::ifstream *> &infiles, std::vector<string> &cur_line) {
+  for (size_t i = 0; i < infiles.size(); ++i) {
+    if (infiles[i]->eof())
       return false;
     else
-      getline(*infiles[i],cur_line[i]);
-    if(!cur_line[i].compare(""))
+      getline(*infiles[i], cur_line[i]);
+    if (!cur_line[i].compare(""))
       return false;
   }
   return true;
 }
 
 int
-main_merge_bsrate(int argc, char *argv[]) {
-
+main_merge_bsrate(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     bool VERBOSE = false;
     string outfile;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), "Program to merge the "
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           "Program to merge the "
                            "BS conversion rate from two sets of BS-seq "
                            "reads mapped to a genome",
                            "<bsrate file>, ..., <bsrate file>");
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
                       false, outfile);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
-    vector<string> leftover_args; // list of mapped-read files to merge
+    vector<string> leftover_args;  // list of mapped-read files to merge
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      cerr << opt_parse.help_message() << '\n'
+           << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.empty()) {
-      cerr << opt_parse.help_message() << endl;
+      cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     /****************** END COMMAND LINE OPTIONS *****************/
-    vector<std::ifstream*> infiles(leftover_args.size());
+    vector<std::ifstream *> infiles(leftover_args.size());
     for (size_t i = 0; i < leftover_args.size(); ++i) {
       infiles[i] = new std::ifstream(leftover_args[i].c_str());
       if (!infiles[i])
@@ -102,7 +98,8 @@ main_merge_bsrate(int argc, char *argv[]) {
     }
 
     std::ofstream of;
-    if (!outfile.empty()) of.open(outfile.c_str());
+    if (!outfile.empty())
+      of.open(outfile.c_str());
     std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
     static const size_t precision_val = 5;
     out.precision(precision_val);
@@ -120,18 +117,17 @@ main_merge_bsrate(int argc, char *argv[]) {
     size_t sum_pos = 0ul;
     size_t sum_neg = 0ul;
     size_t base = 1;
-    for (size_t i = 0; i < infiles.size(); ++i)
-      {
-        getline(*infiles[i],overall_line[i]);
-        getline(*infiles[i],pos_line[i]);
-        getline(*infiles[i],neg_line[i]);
-        getline(*infiles[i],title_line[i]);
-      }
+    for (size_t i = 0; i < infiles.size(); ++i) {
+      getline(*infiles[i], overall_line[i]);
+      getline(*infiles[i], pos_line[i]);
+      getline(*infiles[i], neg_line[i]);
+      getline(*infiles[i], title_line[i]);
+    }
 
     vector<string> ostrings;
     ostrings.clear();
 
-    while(readline(infiles, cur_line)) {
+    while (readline(infiles, cur_line)) {
       // declare all values
       vector<double> p_total(cur_line.size());
       vector<double> n_total(cur_line.size());
@@ -149,12 +145,12 @@ main_merge_bsrate(int argc, char *argv[]) {
       vector<double> all(cur_line.size());
       vector<double> err_rate(cur_line.size());
 
-      for (size_t j=0; j< cur_line.size(); ++j) {
-        //parse the line
+      for (size_t j = 0; j < cur_line.size(); ++j) {
+        // parse the line
         stringstream ss(cur_line[j]);
         string item;
         vector<string> elems;
-        while(getline(ss,item,'\t')){
+        while (getline(ss, item, '\t')) {
           elems.push_back(item);
         }
         p_total[j] = strtod(elems[1].c_str(), NULL);
@@ -178,11 +174,11 @@ main_merge_bsrate(int argc, char *argv[]) {
       size_t err_out = 0, all_out = 0;
       double prate_out = 0, nrate_out = 0, bthrate_out = 0, errrate_out = 0;
 
-      for (size_t k=0; k<p_total.size(); ++k) {
-        prate_out += p_rate[k]*(p_total[k]);
-        nrate_out += n_rate[k]*(n_total[k]);
-        bthrate_out += bth_rate[k]*(bth_total[k]);
-        errrate_out += err_rate[k]*(all[k]);
+      for (size_t k = 0; k < p_total.size(); ++k) {
+        prate_out += p_rate[k] * (p_total[k]);
+        nrate_out += n_rate[k] * (n_total[k]);
+        bthrate_out += bth_rate[k] * (bth_total[k]);
+        errrate_out += err_rate[k] * (all[k]);
       }
       ptot_out = accumulate(p_total.begin(), p_total.end(), 0.0);
       ntot_out = accumulate(n_total.begin(), n_total.end(), 0.0);
@@ -207,12 +203,12 @@ main_merge_bsrate(int argc, char *argv[]) {
       x << bthtot_out << "\t" << bthconv_out << "\t";
       x << std::setw(precision_val) << bthrate_out << "\t";
       x << all_out << "\t" << err_out << "\t";
-      x << setw(precision_val) << errrate_out << endl;
+      x << setw(precision_val) << errrate_out << '\n';
       ostrings.push_back(x.str());
 
-      overall_conversion_rate += bthrate_out*bthtot_out;
-      pos_conv_rate += prate_out*ptot_out;
-      neg_conv_rate += nrate_out*ntot_out;
+      overall_conversion_rate += bthrate_out * bthtot_out;
+      pos_conv_rate += prate_out * ptot_out;
+      neg_conv_rate += nrate_out * ntot_out;
       sum_bth += bthtot_out;
       sum_pos += ptot_out;
       sum_neg += ntot_out;
@@ -220,28 +216,19 @@ main_merge_bsrate(int argc, char *argv[]) {
     }
 
     out << "OVERALL CONVERSION RATE = ";
-    out << setw(precision_val) << overall_conversion_rate/sum_bth << endl;
+    out << setw(precision_val) << overall_conversion_rate / sum_bth << '\n';
     out << "POS CONVERSION RATE = ";
-    out << setw(precision_val) << pos_conv_rate/sum_pos << "\t";
-    out << sum_pos << endl << "NEG CONVERSION RATE = ";
-    out << setw(precision_val) << neg_conv_rate/sum_neg << "\t";
-    out << sum_neg << endl;
+    out << setw(precision_val) << pos_conv_rate / sum_pos << "\t";
+    out << sum_pos << '\n' << "NEG CONVERSION RATE = ";
+    out << setw(precision_val) << neg_conv_rate / sum_neg << "\t";
+    out << sum_neg << '\n';
 
-    out << "BASE" << '\t'
-        << "PTOT" << '\t'
-        << "PCONV" << '\t'
-        << "PRATE" << '\t'
-        << "NTOT" << '\t'
-        << "NCONV" << '\t'
-        << "NRATE" << '\t'
-        << "BTHTOT" << '\t'
-        << "BTHCONV" << '\t'
-        << "BTHRATE" << '\t'
-        << "ERR" << '\t'
-        << "ALL" << '\t'
-        << "ERRRATE"  << endl;
+    out << "BASE" << '\t' << "PTOT" << '\t' << "PCONV" << '\t' << "PRATE"
+        << '\t' << "NTOT" << '\t' << "NCONV" << '\t' << "NRATE" << '\t'
+        << "BTHTOT" << '\t' << "BTHCONV" << '\t' << "BTHRATE" << '\t' << "ERR"
+        << '\t' << "ALL" << '\t' << "ERRRATE\n";
 
-    for(size_t i = 0; i < ostrings.size(); ++i) {
+    for (size_t i = 0; i < ostrings.size(); ++i) {
       out << ostrings[i];
     }
 
@@ -250,13 +237,11 @@ main_merge_bsrate(int argc, char *argv[]) {
       delete infiles[i];
     }
   }
-  catch (const runtime_error &e) {
-    cerr << e.what() << endl;
-    return EXIT_FAILURE;
-  }
-  catch (std::bad_alloc &ba) {
-    cerr << "ERROR: could not allocate memory" << endl;
+  catch (const std::exception &e) {
+    cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
+
+// NOLINTEND(*-owning-memory,*-avoid-magic-numbers,*-narrowing-conversions)

@@ -14,19 +14,20 @@
  *    GNU General Public License for more details.
  */
 
-#include <limits>
-#include <string>
-#include <stdexcept>
-#include <fstream>
-#include <charconv>
-
 #include "Epiread.hpp"
 
-using std::vector;
-using std::string;
+#include <algorithm>
+#include <charconv>
+#include <cstdint>
+#include <fstream>
+#include <iterator>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 
 size_t
-adjust_read_offsets(vector<epiread> &reads) {
+adjust_read_offsets(std::vector<epiread> &reads) {
   size_t first_read_offset = std::numeric_limits<size_t>::max();
   for (size_t i = 0; i < reads.size(); ++i)
     first_read_offset = std::min(reads[i].pos, first_read_offset);
@@ -36,16 +37,16 @@ adjust_read_offsets(vector<epiread> &reads) {
 }
 
 size_t
-get_n_cpgs(const vector<epiread> &reads) {
+get_n_cpgs(const std::vector<epiread> &reads) {
   size_t n_cpgs = 0;
   for (size_t i = 0; i < reads.size(); ++i)
     n_cpgs = std::max(n_cpgs, reads[i].end());
   return n_cpgs;
 }
 
-std::istream&
+std::istream &
 operator>>(std::istream &in, epiread &er) {
-  string buffer;
+  std::string buffer;
   if (getline(in, buffer)) {
     std::istringstream is(buffer);
     if (!(is >> er.chr >> er.pos >> er.seq))
@@ -54,48 +55,52 @@ operator>>(std::istream &in, epiread &er) {
   return in;
 }
 
-std::ostream&
+std::ostream &
 operator<<(std::ostream &out, const epiread &er) {
   return out << er.chr << '\t' << er.pos << '\t' << er.seq;
 }
 
 bool
-validate_epiread_file(const string &filename) {
+validate_epiread_file(const std::string &filename) {
   const size_t max_lines_to_validate = 10000;
   std::ifstream in(filename);
   if (!in)
     throw std::runtime_error("failed to open file: " + filename);
 
-  string c, s, other;
+  std::string c, s, other;
   size_t p = 0;
 
   size_t n_lines = 0;
-  string line;
+  std::string line;
   while (getline(in, line) && n_lines++ < max_lines_to_validate) {
     std::istringstream iss(line);
-    if (!(iss >> c >> p >> s) || iss >> other) return false;
+    if (!(iss >> c >> p >> s) || iss >> other)
+      return false;
   }
   return true;
 }
 
-epiread::epiread(const string &line) {
+epiread::epiread(const std::string &line) {
   constexpr auto is_sep = [](const char x) { return x == ' ' || x == '\t'; };
   constexpr auto not_sep = [](const char x) { return x != ' ' && x != '\t'; };
 
+  using std::distance;
   using std::find_if;
   using std::from_chars;
-  using std::distance;
 
   bool failed = false;
+
+  // NOLINTBEGIN(*-pointer-arithmetic)
 
   const auto c = line.data();
   const auto c_end = c + line.size();
 
   auto field_s = c;
   auto field_e = find_if(field_s + 1, c_end, is_sep);
-  if (field_e == c_end) failed = true;
+  if (field_e == c_end)
+    failed = true;
 
-  chr = string{field_s, static_cast<uint32_t>(distance(field_s, field_e))};
+  chr = std::string{field_s, static_cast<uint32_t>(distance(field_s, field_e))};
 
   field_s = find_if(field_e + 1, c_end, not_sep);
   field_e = find_if(field_s + 1, c_end, is_sep);
@@ -108,11 +113,13 @@ epiread::epiread(const string &line) {
   field_e = find_if(field_s + 1, c_end, is_sep);
   failed = failed || (field_e != c_end);
 
-  seq = string{field_s, static_cast<uint32_t>(distance(field_s, field_e))};
+  seq = std::string{field_s, static_cast<uint32_t>(distance(field_s, field_e))};
 
   if (failed) {
     throw std::runtime_error("bad epiread line: " + line);
     // ADS: the value below would work for a flag
     // pos = std::numeric_limits<decltype(pos)>::max();
   }
+
+  // NOLINTEND(*-pointer-arithmetic)
 }

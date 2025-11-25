@@ -17,21 +17,29 @@
  * General Public License for more details.
  */
 
-#include <bamxx.hpp>
-#include <cmath>
-#include <fstream>
-#include <stdexcept>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
+#include "MSite.hpp"
 
 #include "OptionParser.hpp"
 #include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
 
-#include "MSite.hpp"
+#include <bamxx.hpp>
 
-using bamxx::bgzf_file;
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdio>
+#include <exception>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <sstream>
+#include <stdexcept>
+#include <stdlib.h>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 static inline double
 log_sum_log(const double p, const double q) {
@@ -102,10 +110,12 @@ write_methdiff_site(T &out, const MSite &a, const MSite &b,
     "\n";
   // clang-format on
   static constexpr auto buf_size = 1024;
-  static char buffer[buf_size];
+  static std::array<char, buf_size> buffer;
 
   // clang-format off
-  const int r = std::snprintf(buffer, buf_size, out_fmt,
+  const int r = std::snprintf(buffer.data(),  // NOLINT(*-pro-type-vararg)
+                              buf_size,
+                              out_fmt,
                               a.chrom.data(),
                               a.pos,
                               a.strand,
@@ -118,7 +128,7 @@ write_methdiff_site(T &out, const MSite &a, const MSite &b,
   // clang-format on
   if (r < 0)
     throw std::runtime_error("failed to write to output buffer");
-  out.write(buffer, r);
+  out.write(buffer.data(), r);
   return out;
 }
 
@@ -146,8 +156,8 @@ get_chrom_id(std::unordered_map<std::string, std::size_t> &chrom_order,
 
 static std::string
 bad_order(const std::unordered_map<std::string, std::size_t> &chrom_order,
-          const std::string prev_chrom, const std::size_t prev_pos,
-          const std::string chrom, const std::size_t pos) {
+          const std::string &prev_chrom, const std::size_t prev_pos,
+          const std::string &chrom, const std::size_t pos) {
   std::ostringstream oss;
   const std::size_t chrom_id = chrom_order.find(chrom)->second;
   const std::size_t prev_chrom_id = chrom_order.find(prev_chrom)->second;
@@ -164,8 +174,9 @@ bad_order(const std::unordered_map<std::string, std::size_t> &chrom_order,
 
 template <class T>
 static void
-process_sites(const bool show_progress, bgzf_file &in_a, bgzf_file &in_b,
-              const bool allow_uncovered, const double pseudocount, T &out) {
+process_sites(const bool show_progress, bamxx::bgzf_file &in_a,
+              bamxx::bgzf_file &in_b, const bool allow_uncovered,
+              const double pseudocount, T &out) {
   // chromosome order in the files
   std::unordered_map<std::string, std::size_t> chrom_order;
   std::unordered_set<std::string> chroms_seen_a, chroms_seen_b;
@@ -182,13 +193,12 @@ process_sites(const bool show_progress, bgzf_file &in_a, bgzf_file &in_b,
   bool advance_b = true;
 
   while (true) {
-
     while (advance_a && read_site(in_a, a)) {
       if (prev_chrom_a.compare(a.chrom) != 0) {
         prev_chrom_id_a = chrom_id_a;
         chrom_id_a = get_chrom_id(chrom_order, chroms_seen_a, a);
         if (show_progress)
-          std::cerr << "processing " << a.chrom << std::endl;
+          std::cerr << "processing " << a.chrom << '\n';
         prev_chrom_a = a.chrom;
       }
       if (site_precedes(chrom_id_a, a.pos, prev_chrom_id_a, prev_pos_a))
@@ -216,10 +226,12 @@ process_sites(const bool show_progress, bgzf_file &in_a, bgzf_file &in_b,
 
     if (chrom_id_a == chrom_id_b && a.pos == b.pos) {
       if (allow_uncovered || std::min(a.n_reads, b.n_reads) > 0) {
+        // NOLINTBEGIN(*-narrowing-conversions)
         const std::size_t meth_a = a.n_meth() + pseudocount;
         const std::size_t unmeth_a = a.n_unmeth() + pseudocount;
         const std::size_t meth_b = b.n_meth() + pseudocount;
         const std::size_t unmeth_b = b.n_unmeth() + pseudocount;
+        // NOLINTEND(*-narrowing-conversions)
 
         const double diffscore =
           test_greater_population(meth_b, unmeth_b, meth_a, unmeth_a);
@@ -237,7 +249,7 @@ process_sites(const bool show_progress, bgzf_file &in_a, bgzf_file &in_b,
 }
 
 int
-main_methdiff(int argc, char *argv[]) {
+main_methdiff(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     std::string outfile;
     double pseudocount = 1.0;
@@ -247,7 +259,7 @@ main_methdiff(int argc, char *argv[]) {
     bool verbose = false;
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]),
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            "compute probability that site "
                            "has higher methylation in file A than B",
                            "<counts-a> <counts-b>");
@@ -261,20 +273,20 @@ main_methdiff(int argc, char *argv[]) {
     std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      std::cerr << opt_parse.help_message() << std::endl
-                << opt_parse.about_message() << std::endl;
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      std::cerr << opt_parse.about_message() << std::endl;
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      std::cerr << opt_parse.option_missing_message() << std::endl;
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 2) {
-      std::cerr << opt_parse.help_message() << std::endl;
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     const std::string cpgs_file_a = leftover_args[0];
@@ -282,14 +294,14 @@ main_methdiff(int argc, char *argv[]) {
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (verbose)
-      std::cerr << "[opening counts file: " << cpgs_file_a << "]" << std::endl;
-    bgzf_file in_a(cpgs_file_a, "r");
+      std::cerr << "[opening counts file: " << cpgs_file_a << "]\n";
+    bamxx::bgzf_file in_a(cpgs_file_a, "r");
     if (!in_a)
       throw std::runtime_error("cannot open file: " + cpgs_file_a);
 
     if (verbose)
-      std::cerr << "[opening counts file: " << cpgs_file_b << "]" << std::endl;
-    bgzf_file in_b(cpgs_file_b, "r");
+      std::cerr << "[opening counts file: " << cpgs_file_b << "]\n";
+    bamxx::bgzf_file in_b(cpgs_file_b, "r");
     if (!in_b)
       throw std::runtime_error("cannot open file: " + cpgs_file_b);
 
@@ -298,12 +310,12 @@ main_methdiff(int argc, char *argv[]) {
       process_sites(verbose, in_a, in_b, allow_uncovered, pseudocount, out);
     }
     else {
-      bgzf_file out(outfile, "w");
+      bamxx::bgzf_file out(outfile, "w");
       process_sites(verbose, in_a, in_b, allow_uncovered, pseudocount, out);
     }
   }
   catch (const std::exception &e) {
-    std::cerr << e.what() << std::endl;
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

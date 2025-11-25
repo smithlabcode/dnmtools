@@ -14,16 +14,21 @@
  */
 
 #include "bam_record_utils.hpp"
+#include "dnmt_error.hpp"
+
+#include <bamxx.hpp>
 
 #include <htslib/sam.h>
 
 #include <algorithm>
+#include <cassert>
+#include <cerrno>
+#include <cstdlib>
+#include <iterator>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-
-#include "dnmt_error.hpp"
-#include "smithlab_utils.hpp"
+#include <vector>
 
 using std::runtime_error;
 using std::string;
@@ -33,6 +38,8 @@ using std::vector;
 
 using bamxx::bam_header;
 using bamxx::bam_rec;
+
+// NOLINTBEGIN(*-pointer-arithmetic,*-avoid-magic-numbers,*-type-reinterpret-cast,*-owning-memory,*-no-malloc,*-narrowing-conversions,*-avoid-c-arrays,*-constant-array-index)
 
 /// functions in place of undefd macro
 static inline bool
@@ -838,7 +845,7 @@ keep_better_end(const bam_rec &a, const bam_rec &b, bam_rec &c) {
 // ADS: will move to using this function once it is written
 static inline void
 standardize_format(const string &input_format, bam1_t *aln) {
-  int err_code;  //  = 0;
+  int err_code{};
 
   if (input_format == "abismal" || input_format == "walt")
     return;
@@ -926,7 +933,8 @@ standardize_format(const string &input_format, bam1_t *aln) {
 }
 
 void
-standardize_format(const string &input_format, bam_rec &aln) {
+standardize_format(const string &input_format,
+                   bam_rec &aln) {  // cppcheck-suppress constParameterReference
   standardize_format(input_format, aln.b);
 }
 
@@ -988,7 +996,8 @@ to_string(const bam_header &hdr, const bam_rec &aln) {
     throw runtime_error("Can't format record: " + to_string(hdr, aln));
   }
   const std::string s = string(ks.s);
-  if (ks.s != nullptr)
-    free(ks.s);
+  ks_free(&ks);
   return s;
 }
+
+// NOLINTEND(*-pointer-arithmetic,*-avoid-magic-numbers,*-type-reinterpret-cast,*-owning-memory,*-no-malloc,*-narrowing-conversions,*-avoid-c-arrays,*-constant-array-index)

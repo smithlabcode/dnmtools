@@ -16,27 +16,36 @@
  * GNU General Public License for more details.
  */
 
-#include <algorithm>
+#include "GenomicRegion.hpp"
+#include "MSite.hpp"
+#include "OptionParser.hpp"
+
 #include <bamxx.hpp>
+
+#include <htslib/sam.h>
+
+#include <unistd.h>
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <numeric>
+#include <sstream>
+#include <stdexcept>
 #include <string>
-#include <unistd.h>
+#include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
-
-#include "GenomicRegion.hpp"
-#include "MSite.hpp"
-#include "OptionParser.hpp"
-#include "smithlab_os.hpp"
-#include "smithlab_utils.hpp"
 
 using std::cerr;
 using std::cout;
-using std::endl;
 using std::ios_base;
 using std::runtime_error;
 using std::string;
@@ -69,7 +78,6 @@ struct quick_buf : public std::ostringstream,
 };
 
 struct selectsites_summary {
-
   // command_line is the command used to produce this summary file and
   // the corresponding results
   std::string command_line{};
@@ -132,13 +140,13 @@ write_stats_output(const selectsites_summary &summary,
     std::ofstream out_summary(summary_file);
     if (!out_summary)
       throw runtime_error("bad summary output file");
-    out_summary << summary.tostring() << endl;
+    out_summary << summary.tostring() << '\n';
   }
 }
 
 static void
 collapsebed(std::vector<GenomicRegion> &regions) {
-  std::size_t j = 0;
+  std::ptrdiff_t j = 0;
   for (std::size_t i = 1; i < std::size(regions); ++i) {
     if (regions[j].same_chrom(regions[i]) &&
         regions[i].get_start() <= regions[j].get_end()) {
@@ -148,7 +156,7 @@ collapsebed(std::vector<GenomicRegion> &regions) {
       regions[++j] = regions[i];
     }
   }
-  regions.erase(begin(regions) + j + 1, end(regions));
+  regions.erase(std::begin(regions) + j + 1, std::end(regions));
 }
 
 static inline bool
@@ -182,7 +190,7 @@ process_all_sites(
     ++n_sites_total;
     if (the_site.chrom != prev_site.chrom) {
       if (VERBOSE)
-        cerr << "processing " << the_site.chrom << endl;
+        cerr << "processing " << the_site.chrom << '\n';
       const auto r = regions.find(the_site.chrom);
       chrom_is_relevant = (r != cend(regions));
       if (chrom_is_relevant) {
@@ -234,7 +242,7 @@ get_sites_in_region(std::ifstream &site_in, const GenomicRegion &region,
 
 static auto
 process_with_sites_on_disk(const std::string &sites_file,
-                           std::vector<GenomicRegion> &regions,
+                           const std::vector<GenomicRegion> &regions,
                            bgzf_file &out) -> std::uint64_t {
   std::ifstream in(sites_file);
   if (!in)
@@ -276,21 +284,21 @@ is_compressed_file(const std::string &filename) {
 }
 
 static auto
-get_command_line(const int argc, const char *const argv[]) -> std::string {
+get_command_line(const int argc,
+                 const char *const argv[]  // NOLINT(*-avoid-c-arrays)
+                 ) -> std::string {
   if (argc == 0)
     return std::string();
   std::ostringstream cmd;
   cmd << '"';
   copy(argv, argv + (argc - 1), std::ostream_iterator<const char *>(cmd, " "));
-  cmd << argv[argc - 1] << '"';
+  cmd << argv[argc - 1] << '"';  // NOLINT(*-pointer-arithmetic)
   return cmd.str();
 }
 
 int
-main_selectsites(int argc, char *argv[]) {
-
+main_selectsites(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-
     bool VERBOSE = false;
     bool keep_file_on_disk = false;
     bool compress_output = false;
@@ -305,8 +313,8 @@ main_selectsites(int argc, char *argv[]) {
       "Intervals must be specified in bed format.";
 
     /****************** COMMAND LINE OPTIONS ********************/
-    OptionParser opt_parse(strip_path(argv[0]), description,
-                           "<intervals-bed> <sites-file>", 2);
+    OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
+                           description, "<intervals-bed> <sites-file>", 2);
     opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
                       outfile);
     opt_parse.add_opt("disk", 'd',
@@ -323,20 +331,20 @@ main_selectsites(int argc, char *argv[]) {
     std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << endl
-           << opt_parse.about_message() << endl;
+      cerr << opt_parse.help_message() << '\n'
+           << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << endl;
+      cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << endl;
+      cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (std::size(leftover_args) != 2) {
-      cerr << opt_parse.help_message() << endl;
+      cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     const std::string regions_file = leftover_args.front();
@@ -354,7 +362,7 @@ main_selectsites(int argc, char *argv[]) {
     if (is_compressed_file(sites_file)) {
       keep_file_on_disk = false;
       if (VERBOSE)
-        cerr << "input file is so must be loaded" << endl;
+        cerr << "input file is so must be loaded\n";
     }
 
     std::vector<GenomicRegion> regions;
@@ -368,7 +376,7 @@ main_selectsites(int argc, char *argv[]) {
     collapsebed(regions);
     if (VERBOSE && n_orig_regions != std::size(regions))
       cerr << "[number of regions merged due to overlap: "
-           << n_orig_regions - std::size(regions) << "]" << endl;
+           << n_orig_regions - std::size(regions) << "]\n";
 
     std::tie(summary.n_target_regions_collapsed,
              summary.target_region_collapsed_size) =
@@ -394,7 +402,7 @@ main_selectsites(int argc, char *argv[]) {
     write_stats_output(summary, summary_file);
   }
   catch (const std::exception &e) {
-    cerr << e.what() << endl;
+    cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

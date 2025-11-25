@@ -53,7 +53,8 @@
 
 struct amr_summary {
   // NOLINTBEGIN(*-prefer-member-initializer)
-  amr_summary(const std::vector<Interval6> &amrs) : amr_count{std::size(amrs)} {
+  explicit amr_summary(const std::vector<Interval6> &amrs) :
+    amr_count{std::size(amrs)} {
     amr_total_size = std::accumulate(
       std::cbegin(amrs), std::cend(amrs), 0ul,
       [](const std::size_t t, const Interval6 &p) { return t + size(p); });
@@ -207,7 +208,6 @@ get_chrom_partition(const std::vector<Interval6> &r) {
 convert_coordinates(const std::uint32_t n_threads,
                     const std::string &genome_file,
                     std::vector<Interval6> &amrs) {
-
   std::unordered_map<std::string, std::string> chrom_lookup;
   {
     std::vector<std::string> c_name, c_seq;
@@ -215,8 +215,8 @@ convert_coordinates(const std::uint32_t n_threads,
     const std::size_t n_chroms = size(c_seq);
 
     for (auto &s : c_seq)
-      for (auto &c : s)
-        c = std::toupper(c);
+      std::transform(std::cbegin(s), std::cend(s), std::begin(s),
+                     [](const auto x) { return std::toupper(x); });
 
     for (auto i = 0u; i < n_chroms; ++i)
       chrom_lookup.emplace(c_name[i], c_seq[i]);
@@ -230,7 +230,7 @@ convert_coordinates(const std::uint32_t n_threads,
   std::atomic_uint32_t conv_failure = 0;
 
   std::vector<std::thread> threads;
-  for (auto i = 0; i < std::min(n_threads, n_parts); ++i) {
+  for (auto i = 0u; i < std::min(n_threads, n_parts); ++i) {
     const auto p_beg = parts_beg + std::min(i * n_per, n_parts);
     const auto p_end = parts_beg + std::min((i + 1) * n_per, n_parts);
     threads.emplace_back([&, p_beg, p_end] {
@@ -287,10 +287,9 @@ get_current_epireads(const std::vector<epi_r> &epireads,
 
 static inline std::size_t
 total_states(const std::vector<epi_r> &epireads) {
-  std::size_t tot = 0;
-  for (auto &e : epireads)
-    tot += e.length();
-  return tot;
+  return std::accumulate(
+    std::cbegin(epireads), std::cend(epireads), 0ul,
+    [](const auto a, const auto &e) { return a + std::size(e); });
 }
 
 static inline void
@@ -304,10 +303,10 @@ add_amr(const std::string &chrom_name, const std::size_t start_cpg,
 
 static inline std::size_t
 get_n_cpgs(const std::vector<epi_r> &reads) {
-  std::size_t n_cpgs = 0;
-  for (auto &r : reads)
-    n_cpgs = std::max(n_cpgs, static_cast<std::size_t>(r.end()));
-  return n_cpgs;
+  return std::accumulate(
+    std::cbegin(reads), std::cend(reads), 0ul, [](const auto a, const auto &r) {
+      return std::max(a, static_cast<std::size_t>(r.end()));
+    });
 }
 
 template <typename T>
@@ -333,11 +332,12 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
               const EpireadStats &epistat, const std::string &chrom_name,
               const std::vector<epi_r> &epireads,
               std::vector<Interval6> &amrs) {
-  constexpr auto blocks_per_thread = 1u;
-
-  auto max_epiread_len = 0u;
-  for (auto &e : epireads)
-    max_epiread_len = std::max(max_epiread_len, e.length());
+  const auto max_epiread_len = std::accumulate(
+    std::cbegin(epireads), std::cend(epireads), 0ul,
+    [](const auto a, const auto &e) { return std::max(a, std::size(e)); });
+  // auto max_epiread_len = 0u;
+  // for (auto &e : epireads)
+  //   max_epiread_len = std::max(max_epiread_len, e.length());
   const std::size_t min_obs_per_window = window_size * min_obs_per_cpg;
 
   const std::uint32_t n_cpgs = get_n_cpgs(epireads);
@@ -351,7 +351,7 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
     return 0;
 
   // ADS: need to do this by windows
-  const auto n_blocks = std::min(lim, n_threads * blocks_per_thread);
+  const auto n_blocks = std::min(lim, n_threads);
   const auto blocks = get_block_bounds(lim, n_blocks);
   const auto blocks_beg = std::cbegin(blocks);
   const std::uint32_t n_per = (n_blocks + n_threads - 1) / n_threads;
@@ -394,13 +394,16 @@ process_chrom(const bool verbose, const std::uint32_t n_threads,
   for (auto &thread : threads)
     thread.join();
 
-  auto total_amrs = 0u;
-  for (const auto &a : all_amrs)
-    total_amrs += size(a);
+  const auto total_amrs = std::accumulate(
+    std::cbegin(all_amrs), std::cend(all_amrs), 0ul,
+    [](const auto a, const auto &amr) { return a + std::size(amr); });
+  // for (const auto &a : all_amrs)
+  //   total_amrs += size(a);
 
   amrs.reserve(total_amrs);
   for (auto &v : all_amrs)
     for (auto &a : v)
+      // cppcheck-suppress useStlAlgorithm
       amrs.push_back(std::move(a));
 
   return windows_tested;
@@ -523,7 +526,7 @@ main_amrfinder(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     std::size_t windows_tested = 0;
     epiread er;
     std::vector<epi_r> epireads;
-    std::string prev_chrom, curr_chrom, tmp_states;
+    std::string prev_chrom;
 
     while (read_epiread(in, er)) {
       if (!epireads.empty() && er.chr != prev_chrom) {

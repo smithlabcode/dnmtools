@@ -341,10 +341,10 @@ swap(bamxx::bam_rec &a, bamxx::bam_rec &b) noexcept {
 }
 
 static void
-format(const std::string &cmd, const std::int32_t n_threads,
-       const std::string &inputfile, const std::string &outfile,
-       const bool bam_format, const std::string &input_format,
-       const std::size_t suff_len, const std::int32_t max_frag_len) {
+format_reads(const std::string &cmd, const std::int32_t n_threads,
+             const std::string &inputfile, const std::string &outfile,
+             const bool bam_format, const std::string &input_format,
+             const std::size_t suff_len, const std::int32_t max_frag_len) {
   static const dnmt_error bam_write_err{"error writing bam"};
 
   bamxx::bam_tpool tp(n_threads);
@@ -573,8 +573,8 @@ main_format(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     if (verbose && !single_end)
       std::cerr << "[readname suffix length: " << suff_len << "]" << '\n';
 
-    format(command, n_threads, infile, outfile, bam_format, input_format,
-           suff_len, max_frag_len);
+    format_reads(command, n_threads, infile, outfile, bam_format, input_format,
+                 suff_len, max_frag_len);
   }
   catch (const std::exception &e) {
     std::cerr << e.what() << '\n';

@@ -49,7 +49,37 @@
 #include <utility>
 #include <vector>
 
-// NOLINTBEGIN(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-pro-bounds-constant-array-index,*-pro-bounds-pointer-arithmetic)
+// NOLINTBEGIN(*-narrowing-conversions,*-pointer-arithmetic)
+
+// clang-format off
+// NOLINTBEGIN(*-avoid-c-arrays)
+static constexpr std::uint8_t encoding[] = {
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 16
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 32
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 48
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 64
+  4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,  // 80
+  4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 96
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 112
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 128
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 144
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 160
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 176
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 192
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 208
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 224
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 240
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4   // 256
+};
+// NOLINTEND(*-avoid-c-arrays)
+static constexpr auto n_dinucs = 16u;
+static const auto dinucs = std::vector{  // NOLINT(cert-err58-cpp)
+  "AA", "AC", "AG", "AT",
+  "CA", "CC", "CG", "CT",
+  "GA", "GC", "GG", "GT",
+  "TA", "TC", "TG", "TT",
+};
+// clang-format on
 
 [[nodiscard]] inline bool
 is_cytosine(const char c) {
@@ -263,13 +293,15 @@ enum class missing_code : std::uint8_t {
   unknown = 1,
 };
 
-static const char *tag_values[] = {
+// NOLINTBEGIN(*-avoid-c-arrays)
+static const char *const tag_values[] = {
   "CpG",  // 0
   "CHH",  // 1
   "CXG",  // 2
   "CCG",  // 3
   "N",    // 4
 };
+// NOLINTEND(*-avoid-c-arrays)
 
 template <typename T>
 [[nodiscard]] static std::tuple<T, T, missing_code>
@@ -326,20 +358,25 @@ struct prob_counter {
   static constexpr auto n_values = 256;
   std::array<std::uint64_t, n_values> meth_hist{};
   std::array<std::uint64_t, n_values> hydro_hist{};
-  std::string
+
+  [[nodiscard]] std::string
   json() const {
     std::ostringstream oss;
     oss << R"({"methyl_hist":[)";
-    for (auto i = 0; i < n_values; ++i) {
-      if (i > 0)
+    bool first_iter = true;
+    for (const auto i : meth_hist) {
+      if (!first_iter)
         oss << ',';
-      oss << R"(")" << meth_hist[i] << R"(")";
+      oss << R"(")" << i << R"(")";
+      first_iter = false;
     }
     oss << R"(],"hydroxy_hist":[)";
-    for (auto i = 0; i < n_values; ++i) {
-      if (i > 0)
+    first_iter = true;
+    for (const auto i : hydro_hist) {
+      if (!first_iter)
         oss << ',';
-      oss << R"(")" << hydro_hist[i] << R"(")";
+      oss << R"(")" << i << R"(")";
+      first_iter = false;
     }
     oss << R"(]})";
     return oss.str();
@@ -420,11 +457,11 @@ struct mod_prob_buffer {
           if (delta == 0) {
             const std::uint8_t m_val = bam_auxB2i(mod_prob, methyl_prob_idx++);
             methyl_probs[i] = m_val;
-            pc.meth_hist[m_val]++;
+            pc.meth_hist[m_val]++;  // NOLINT(*-constant-array-index)
 
             const std::uint8_t h_val = bam_auxB2i(mod_prob, hydroxy_prob_idx++);
             hydroxy_probs[i] = h_val;
-            pc.hydro_hist[h_val]++;
+            pc.hydro_hist[h_val]++;  // NOLINT(*-constant-array-index)
           }
           // ADS: add 'else' to use '?' and '.' properly
           --delta;
@@ -441,11 +478,11 @@ struct mod_prob_buffer {
           if (delta == 0) {
             const std::uint8_t m_val = bam_auxB2i(mod_prob, methyl_prob_idx++);
             methyl_probs[i] = m_val;
-            pc.meth_hist[m_val]++;
+            pc.meth_hist[m_val]++;  // NOLINT(*-constant-array-index)
 
             const std::uint8_t h_val = bam_auxB2i(mod_prob, hydroxy_prob_idx++);
             hydroxy_probs[i] = h_val;
-            pc.hydro_hist[h_val]++;
+            pc.hydro_hist[h_val]++;  // NOLINT(*-constant-array-index)
           }
           // ADS: add 'else' to use '?' and '.' properly
           --delta;
@@ -458,34 +495,6 @@ struct mod_prob_buffer {
   }
 };
 
-// clang-format off
-static const std::uint8_t encoding[] = {
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 16
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 32
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 48
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 64
-  4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,  // 80
-  4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 96
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 112
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 128
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 144
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 160
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 176
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 192
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 208
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 224
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 240
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4   // 256
-};
-static constexpr auto n_dinucs = 16u;
-static const auto dinucs = std::vector{  // NOLINT(cert-err58-cpp)
-  "AA", "AC", "AG", "AT",
-  "CA", "CC", "CG", "CT",
-  "GA", "GC", "GG", "GT",
-  "TA", "TC", "TG", "TT",
-};
-// clang-format on
-
 struct match_counter {
   static constexpr auto dinuc_combos = 256;
   typedef std::array<std::uint64_t, dinuc_combos> container;
@@ -495,25 +504,39 @@ struct match_counter {
   void
   add_fwd(const std::uint8_t r1, const std::uint8_t r2, const std::uint8_t q1,
           const std::uint8_t q2) {
+    constexpr auto get_idx = [](const auto a, const auto b, const auto c,
+                                const auto d) {
+      return (a << 6) | (b << 4) | (c << 2) | d;  // NOLINT(*-magic-numbers)
+    };
+    // NOLINTBEGIN(*-constant-array-index)
     const auto r1e = encoding[r1];
     const auto r2e = encoding[r2];
     const auto q1e = encoding[q1];
     const auto q2e = encoding[q2];
     if ((r1e | r2e | q1e | q2e) & 4u)
       return;
-    pos[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
+    pos[get_idx(r1e, r2e, q1e, q2e)]++;
+    // NOLINTEND(*-constant-array-index)
+    // pos[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
   }
 
   void
   add_rev(const std::uint8_t r1, const std::uint8_t r2, const std::uint8_t q1,
           const std::uint8_t q2) {
+    constexpr auto get_idx = [](const auto a, const auto b, const auto c,
+                                const auto d) {
+      return (a << 6) | (b << 4) | (c << 2) | d;  // NOLINT(*-magic-numbers)
+    };
+    // NOLINTBEGIN(*-constant-array-index)
     const auto r1e = encoding[r1];
     const auto r2e = encoding[r2];
     const auto q1e = encoding[q1];
     const auto q2e = encoding[q2];
     if ((r1e | r2e | q1e | q2e) & 4u)
       return;
-    neg[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
+    neg[get_idx(r1e, r2e, q1e, q2e)]++;
+    // neg[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
+    // NOLINTEND(*-constant-array-index)
   }
 
   [[nodiscard]] std::string
@@ -901,7 +924,7 @@ struct read_processor {
                                     out_fmt,
                                     chrom_posn,
                                     is_c ? '+' : '-',
-                                    tag_values[the_tag],
+                                    tag_values[the_tag],  // NOLINT
                                     mods,
                                     n_reads,
                                     hydroxy,
@@ -1319,4 +1342,4 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   return EXIT_SUCCESS;
 }
 
-// NOLINTEND(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-pro-bounds-constant-array-index,*-pro-bounds-pointer-arithmetic)
+// NOLINTEND(*-narrowing-conversions,*-pointer-arithmetic)

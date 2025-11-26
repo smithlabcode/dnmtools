@@ -121,6 +121,9 @@ main_levels(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     const std::string meth_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    if (relaxed_mode)
+      MSite::no_extra_fields = false;
+
     if (!is_msite_file(meth_file))
       throw std::runtime_error{"malformed counts file: " + meth_file};
 

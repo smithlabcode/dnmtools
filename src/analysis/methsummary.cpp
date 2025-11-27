@@ -924,7 +924,7 @@ consistent_targets(const bamxx::bam_header &hdr,
                    const std::vector<std::string> &names,
                    const std::vector<std::size_t> &sizes) {
   const std::int32_t n_targets = hdr.h->n_targets;
-  if (n_targets != std::size(names))
+  if (n_targets != static_cast<std::int32_t>(std::size(names)))
     return false;
 
   for (std::int32_t tid = 0; tid < n_targets; ++tid) {

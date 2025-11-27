@@ -89,7 +89,7 @@ find_first_epiread_ending_after_position(const string &query_chrom,
     backup_to_start_of_current_record(in);
 
     // we've hit the end of file without finding an epiread
-    if (low_pos == eof - 2)
+    if (low_pos + 2 == static_cast<std::streamoff>(eof))
       return -1;
 
     if (!(in >> chrom >> start >> seq)) {

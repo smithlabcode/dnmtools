@@ -19,7 +19,7 @@
 cmake_minimum_required(VERSION 3.28)
 project(
   dnmtools
-  VERSION 1.4.4
+  VERSION 1.5.1
   DESCRIPTION
   "Tools for analyzing DNA methylation data"
   HOMEPAGE_URL https://github.com/smithlabcode/dnmtools

@@ -222,6 +222,7 @@ dnmtools_SOURCES += src/analysis/levels.cpp
 dnmtools_SOURCES += src/analysis/hypermr.cpp
 dnmtools_SOURCES += src/analysis/metagene.cpp
 dnmtools_SOURCES += src/analysis/autocorr.cpp
+dnmtools_SOURCES += src/analysis/methsummary.cpp
 
 dnmtools_SOURCES += src/utils/clean-hairpins.cpp
 dnmtools_SOURCES += src/utils/guessprotocol.cpp

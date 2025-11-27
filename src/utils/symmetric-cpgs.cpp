@@ -37,19 +37,6 @@
 #include <utility>
 #include <vector>
 
-using std::cerr;
-using std::cout;
-using std::endl;
-using std::runtime_error;
-using std::string;
-using std::unordered_set;
-
-static inline bool
-found_symmetric(const MSite &prev, const MSite &curr) {
-  // assumes check for CpG already done
-  return (prev.pos + 1 == curr.pos && prev.strand == '+' && curr.strand == '-');
-}
-
 static inline void
 ensure_positive_cpg(MSite &s) {
   s.pos -= (s.strand == '-');
@@ -61,7 +48,7 @@ static std::tuple<MSite, bool>
 get_first_site(T &in, T &out) {
   bool prev_is_cpg = false;
   MSite prev_site;
-  string line;
+  std::string line;
   bool within_header = true;
   while (within_header && getline(in, line)) {
     if (is_counts_header_line(line)) {
@@ -86,7 +73,7 @@ process_sites(const bool verbose, T &in, T &out) {
   auto [prev_site, prev_is_cpg] = get_first_site(in, out);
 
   // setup to verfiy that chromosomes are together
-  unordered_set<string> chroms_seen;
+  std::unordered_set<std::string> chroms_seen;
   chroms_seen.insert(prev_site.chrom);
   bool sites_are_sorted = true;
 
@@ -107,7 +94,7 @@ process_sites(const bool verbose, T &in, T &out) {
     }
     else {
       if (verbose)
-        cerr << "processing: " << curr_site.chrom << '\n';
+        std::cerr << "processing: " << curr_site.chrom << '\n';
       if (chroms_seen.find(curr_site.chrom) != cend(chroms_seen))
         return false;
       chroms_seen.insert(curr_site.chrom);
@@ -132,13 +119,13 @@ int
 main_symmetric_cpgs(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     // file types from HTSlib use "-" for the filename to go to stdout
-    string outfile{"-"};
+    std::string outfile{"-"};
     bool verbose = false;
     bool compress_output = false;
     bool allow_extra_fields = false;
     int32_t n_threads = 1;
 
-    const string description =
+    const std::string description =
       "Get CpG sites and make methylation levels symmetric.";
 
     /****************** COMMAND LINE OPTIONS ********************/
@@ -151,44 +138,44 @@ main_symmetric_cpgs(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     opt_parse.add_opt("relaxed", '\0', "allow extra fields in input", false,
                       allow_extra_fields);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
-    std::vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << '\n'
-           << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << '\n';
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << '\n';
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
-    const string filename(leftover_args.front());
+    const std::string filename(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
     MSite::no_extra_fields = (allow_extra_fields == false);
 
     if (n_threads <= 0)
-      throw runtime_error("threads must be positive");
+      throw std::runtime_error("threads must be positive");
     bamxx::bam_tpool tp(n_threads);
 
     // const bool show_progress = VERBOSE && isatty(fileno(stderr));
     bamxx::bgzf_file in(filename, "r");
     if (!in)
-      throw runtime_error("could not open file: " + filename);
+      throw std::runtime_error("could not open file: " + filename);
 
     // open the output file
-    const string output_mode = compress_output ? "w" : "wu";
+    const std::string output_mode = compress_output ? "w" : "wu";
     bamxx::bgzf_file out(outfile, output_mode);
     if (!out)
-      throw runtime_error("error opening output file: " + outfile);
+      throw std::runtime_error("error opening output file: " + outfile);
 
     if (n_threads > 1) {
       if (in.is_bgzf())
@@ -199,7 +186,7 @@ main_symmetric_cpgs(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     const bool sites_are_sorted = process_sites(verbose, in, out);
 
     if (!sites_are_sorted) {
-      cerr << "sites are not sorted in: " << filename << '\n';
+      std::cerr << "sites are not sorted in: " << filename << '\n';
       const std::filesystem::path outpath{outfile};
       if (std::filesystem::exists(outpath) && !std::filesystem::remove(outpath))
         throw std::runtime_error("failed to remove file: " + outpath.string());
@@ -207,7 +194,7 @@ main_symmetric_cpgs(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     }
   }
   catch (const std::exception &e) {
-    cerr << e.what() << '\n';
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

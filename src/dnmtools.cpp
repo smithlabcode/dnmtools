@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-2024 Andrew D. Smith and Guilherme Sena
+/* Copyright (C) 2022-2025 Andrew D. Smith and Guilherme Sena
  *
  * Authors: Andrew D. Smith and Guilherme Sena
  *
@@ -151,6 +151,8 @@ int
 main_recovered(int argc, char *argv[]);
 int
 kmersites(int argc, char *argv[]);
+int
+main_summary(int argc, char *argv[]);
 // NOLINTEND(*-avoid-c-arrays)
 
 void
@@ -176,62 +178,64 @@ main(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     // clang-format off
     vector<pair<string, vector<dnmtools_command>>> command_groups = {
-{{"mapping",
- {{{"abismal",    "map FASTQ reads to a FASTA reference genome or an index", abismal},
-   {"abismalidx", "convert a FASTA reference genome to an abismal index",    abismalidx},
-   {"simreads",   "simulate reads in a FASTA reference genome",              simreads}}}},
+      {{"mapping",
+        {{{"abismal",    "map FASTQ reads to a FASTA reference genome or an index", abismal},
+          {"abismalidx", "convert a FASTA reference genome to an abismal index",    abismalidx},
+          {"simreads",   "simulate reads in a FASTA reference genome",              simreads}}}},
 
-{"methylome construction",
- {{{"format",    "convert SAM/BAM mapped bs-seq reads to standard dnmtools format", main_format},
-   {"uniq",      "remove duplicate reads from sorted mapped reads",           main_uniq},
-   {"bsrate",    "compute the BS conversion rate from BS-seq reads mapped to a genome",  main_bsrate},
-   {"counts",    "get methylation levels from mapped WGBS reads",             main_counts},
-   {"counts-nano", "get methylation levels from mapped nanopore reads",       main_nanocount},
-   {"sym",       "get CpG sites and make methylation levels symmetric",       main_symmetric_cpgs},
-   {"levels",    "compute methylation summary statistics from a counts file", main_levels}}}},
+       {"methylome construction",
+        {{{"format",    "convert SAM/BAM mapped bs-seq reads to standard dnmtools format", main_format},
+          {"uniq",      "remove duplicate reads from sorted mapped reads",           main_uniq},
+          {"bsrate",    "compute the BS conversion rate from BS-seq reads mapped to a genome",  main_bsrate},
+          {"counts",    "get methylation levels from mapped WGBS reads",             main_counts},
+          {"counts-nano", "get methylation levels from mapped nanopore reads",       main_nanocount},
+          {"sym",       "get CpG sites and make methylation levels symmetric",       main_symmetric_cpgs},
+          {"levels",    "compute methylation summary statistics from a counts file", main_levels}}}},
 
-{"methylome analysis",
- {{{"hmr",       "identify hypomethylated regions", main_hmr},
-   {"hmr-rep",   "identify hypomethylated regions in a set of replicate methylomes", main_hmr_rep},
-   {"hypermr",   "identify hypermethylated regions in plant methylomes", main_hypermr},
-   {"entropy",   "compute methylation entropy in sliding window", main_methentropy},
-   {"pmd",       "identify partially methylated domains", main_pmd},
-   {"roi",       "get average CpG methylation in each of a set of genomic interval", main_roimethstat},
-   {"autocorr",  "computes statistics on the autocorrelation of methylation levels", main_autocorr},
-   {"cpgbins",   "get average CpG methylation in genomic bins", main_cpgbins},
-   {"multistat", "same as roi except for multiple samples/input files", main_multimethstat},
-   {"mlml",      "program to estimate hydroxymethylation levels", main_mlml}}}},
+       {"methylome analysis",
+        {{{"hmr",       "identify hypomethylated regions", main_hmr},
+          {"hmr-rep",   "identify hypomethylated regions in a set of replicate methylomes", main_hmr_rep},
+          {"hypermr",   "identify hypermethylated regions in plant methylomes", main_hypermr},
+          {"entropy",   "compute methylation entropy in sliding window", main_methentropy},
+          {"pmd",       "identify partially methylated domains", main_pmd},
+          {"roi",       "get average CpG methylation in each of a set of genomic interval", main_roimethstat},
+          {"autocorr",  "computes statistics on the autocorrelation of methylation levels", main_autocorr},
+          {"cpgbins",   "get average CpG methylation in genomic bins", main_cpgbins},
+          {"multistat", "same as roi except for multiple samples/input files", main_multimethstat},
+          {"mlml",      "program to estimate hydroxymethylation levels", main_mlml}}}},
 
-{"allele-specific methylation (ASM)",
- {{{"states",    "convert reads in SAM format into methylation states at CpGs", main_methstates},
-   {"allelic",   "get probability of ASM for each pair of neighboring CpGs", main_allelicmeth},
-   {"amrfinder", "identify regions of ASM in the genome", main_amrfinder},
-   {"amrtester", "test a set of genomic intervals for ASM", main_amrtester}}}},
+       {"allele-specific methylation (ASM)",
+        {{{"states",    "convert reads in SAM format into methylation states at CpGs", main_methstates},
+          {"allelic",   "get probability of ASM for each pair of neighboring CpGs", main_allelicmeth},
+          {"amrfinder", "identify regions of ASM in the genome", main_amrfinder},
+          {"amrtester", "test a set of genomic intervals for ASM", main_amrtester}}}},
 
-{"differential methylation (DM)",
- {{{"dmr",       "identify DMRs from genomic intervals and single-CpG DM probabilities",  main_dmr},
-   {"diff",      "compute single-CpG DM probability between two methylomes", main_methdiff},
-   {"radmeth",   "compute DM probabilities for each CpG using multiple methylomes", main_radmeth},
-   {"radmeth-nano", "radmeth designed for nanopore data", main_radmeth_nano},
-   {"radadjust", "adjust p-values from radmeth output", main_radmeth_adjust},
-   {"radmerge",  "merge significant CpGs in radmeth output", main_radmeth_merge}}}},
+       {"differential methylation (DM)",
+        {{{"dmr",       "identify DMRs from genomic intervals and single-CpG DM probabilities",  main_dmr},
+          {"diff",      "compute single-CpG DM probability between two methylomes", main_methdiff},
+          {"radmeth",   "compute DM probabilities for each CpG using multiple methylomes", main_radmeth},
+          {"radmeth-nano", "radmeth designed for nanopore data", main_radmeth_nano},
+          {"radadjust", "adjust p-values from radmeth output", main_radmeth_adjust},
+          {"radmerge",  "merge significant CpGs in radmeth output", main_radmeth_merge}}}},
 
-{"methylation visualization",
- {{{"fastlift",   "liftover methylation levels between species", main_fast_liftover},
-   {"metagene",   "summarize methylation around genomic features", metagene},
-   {"liftfilter", "filter CpGs that are not CpGs in the target genome", main_lift_filter}}}},
+       {"methylation visualization",
+        {{{"fastlift",   "liftover methylation levels between species", main_fast_liftover},
+          {"metagene",   "summarize methylation around genomic features", metagene},
+          {"liftfilter", "filter CpGs that are not CpGs in the target genome", main_lift_filter}}}},
 
-{"utilities",
- {{{"cleanhp",       "fix and stat invdup/hairpin reads", main_clean_hairpins},
-   {"guessprotocol", "guess whether protocol is ordinary, pbat or random", main_guessprotocol},
-   {"merge-bsrate",  "merge bisulfite conversion rates files from bsrate", main_merge_bsrate},
-   {"merge",         "merge multiple counts files into a counts file or a table", main_merge_methcounts},
-   {"covered",       "filter a counts file for only covered sites", main_covered},
-   {"recovered",     "replace missing sites in a counts file", main_recovered},
-   {"xcounts",       "compress counts files by removing information", main_xcounts},
-   {"unxcounts",     "reverse the xcounts process yielding a counts file", main_unxcounts},
-   {"selectsites",   "sites inside a set of genomic intervals", main_selectsites},
-   {"kmersites",     "make track file for sites matching kmer", kmersites}}}}}};
+       {"utilities",
+        {{{"cleanhp",       "fix and stat invdup/hairpin reads", main_clean_hairpins},
+          {"guessprotocol", "guess whether protocol is ordinary, pbat or random", main_guessprotocol},
+          {"merge-bsrate",  "merge bisulfite conversion rates files from bsrate", main_merge_bsrate},
+          {"merge",         "merge multiple counts files into a counts file or a table", main_merge_methcounts},
+          {"covered",       "filter a counts file for only covered sites", main_covered},
+          {"recovered",     "replace missing sites in a counts file", main_recovered},
+          {"xcounts",       "compress counts files by removing information", main_xcounts},
+          {"unxcounts",     "reverse the xcounts process yielding a counts file", main_unxcounts},
+          {"selectsites",   "sites inside a set of genomic intervals", main_selectsites},
+          {"kmersites",     "make track file for sites matching kmer", kmersites},
+          {"many",      "bsrate, levels, sym, xsym, xcounts and states at once", main_summary}}}}},
+    };
     // clang-format on
 
     if (argc < 2) {

@@ -64,6 +64,32 @@ AS_IF([test "x$with_libdeflate" = "xyes"],
                    [AC_MSG_ERROR([--with-libdeflate specified but libdeflate not found])])
   ])
 AC_SEARCH_LIBS([hts_version], [hts], [], [AC_MSG_FAILURE([$hts_fail_msg])])
+AC_CHECK_HEADERS([htslib/hts.h], [], [AC_MSG_ERROR([hts.h not found])])
+# Require HTS_VERSION >= 102000
+AC_COMPILE_IFELSE(
+  [AC_LANG_PROGRAM([[
+     #include <htslib/hts.h>
+     #if !defined(HTS_VERSION)
+     # error HTS_VERSION not defined
+     #endif
+     #if HTS_VERSION < 102000
+     # error htslib library too old
+     #endif
+  ]], [[]])],
+  [have_hts=yes],
+  [have_hts=no]
+)
+
+AC_COMPUTE_INT(
+  [hts_version_macro],
+  [HTS_VERSION],
+  [#include <htslib/hts.h>],
+  [AC_MSG_ERROR([Could not compute HTS_VERSION])]
+)
+AC_MSG_NOTICE([Detected htslib version: $hts_version_macro])
+AS_IF([test "x$have_hts" != "xyes"],
+      [AC_MSG_ERROR([Required htslib version must be at least 102000 (v1.20)])])
+
 AC_SEARCH_LIBS([cblas_dgemm], [gslcblas], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 AC_SEARCH_LIBS([gsl_blas_dgemm], [gsl], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 

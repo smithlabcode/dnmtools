@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU General Public License along with
 # this program. If not, see <https://www.gnu.org/licenses/>.
 
+find_package(HTSLIB 1.20 REQUIRED)
+
 if(NOT TARGET bamxx)
   add_subdirectory(bamxx)
 endif()
@@ -32,8 +34,6 @@ add_executable(dnmtools dnmtools.cpp)
 target_include_directories(dnmtools PUBLIC ${CMAKE_BINARY_DIR})
 target_link_libraries(dnmtools PUBLIC
   dnmtools_objs
-  smithlab_cpp
-  bamxx
   abismal_objs
   dnmtools_analysis_objs
   dnmtools_utils_objs

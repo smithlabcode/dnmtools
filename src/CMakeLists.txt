@@ -14,6 +14,7 @@
 # this program. If not, see <https://www.gnu.org/licenses/>.
 
 find_package(HTSLIB 1.20 REQUIRED)
+find_package(Threads REQUIRED)
 
 if(NOT TARGET bamxx)
   add_subdirectory(bamxx)

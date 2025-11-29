@@ -117,6 +117,17 @@ if(HTSLIB_INCLUDE_DIR AND EXISTS "${HTSLIB_INCLUDE_DIR}/htslib/hts.h")
     set(HTSLIB_VERSION_MINOR "")
     set(HTSLIB_VERSION_PATCH "")
   endif()
+
+  # Make sure the version numbers don't have leading zeros
+  # The minor version is encoded in such a way that it often will
+  foreach(part HTSLIB_VERSION_MAJOR HTSLIB_VERSION_MINOR HTSLIB_VERSION_PATCH)
+    if(${${part}} MATCHES "^[0]+$")
+      set(${part} "0")
+    else()
+      string(REGEX REPLACE "^0+" "" ${part} "${${part}}")
+    endif()
+  endforeach()
+
   # Set canonical variables
   set(HTSLIB_MAJOR_VERSION "${HTSLIB_VERSION_MAJOR}")
   set(HTSLIB_MINOR_VERSION "${HTSLIB_VERSION_MINOR}")

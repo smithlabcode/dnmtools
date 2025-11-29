@@ -35,7 +35,6 @@ endforeach()
 # Create static library linking the individual objects
 add_library(dnmtools_objs STATIC)
 target_include_directories(dnmtools_objs PUBLIC
-  ${CMAKE_BINARY_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_link_libraries(dnmtools_objs PUBLIC

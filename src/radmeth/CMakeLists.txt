@@ -15,26 +15,36 @@
 
 find_package(HTSLIB REQUIRED)
 
-add_library(radmeth OBJECT
-  dmr.cpp
-  methdiff.cpp
-  radmeth-adjust.cpp
-  radmeth-merge.cpp
-  radmeth.cpp
-  radmeth_design.cpp
-  radmeth_nano.cpp
-  radmeth_optimize_gamma.cpp
-  radmeth_optimize_series.cpp
-  radmeth_utils.cpp
-)
+file(GLOB cpp_files "*.cpp")
 
-target_include_directories(radmeth PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}
+# Gather all the object files that will be put in the static library
+# and prepare to compile them.
+set(LIBRARY_OBJECTS "")
+foreach(cpp_file ${cpp_files})
+  get_filename_component(BASE_NAME ${cpp_file} NAME_WE)
+  add_library(${BASE_NAME} OBJECT ${cpp_file})
+  target_link_libraries(${BASE_NAME} PUBLIC
+    dnmtools_objs
+    bamxx
+    smithlab_cpp
+    HTSLIB::HTSLIB
+  )
+  ## Below is to make sure 'config.h' is visible for includes and any
+  ## of the headers for configured libraries
+  target_include_directories(${BASE_NAME} PUBLIC
+    ${PROJECT_BINARY_DIR}
+  )
+  list(APPEND LIBRARY_OBJECTS ${BASE_NAME})
+endforeach()
+
+# Create static library linking the individual objects
+add_library(dnmtools_radmeth_objs STATIC)
+target_include_directories(dnmtools_radmeth_objs PUBLIC
   ${CMAKE_BINARY_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}
 )
-target_link_libraries(radmeth PUBLIC
-  dnmtools_objs
-  bamxx
+target_link_libraries(dnmtools_radmeth_objs PUBLIC
+  ${LIBRARY_OBJECTS}
   smithlab_cpp
-  HTSLIB::HTSLIB
+  bamxx
 )

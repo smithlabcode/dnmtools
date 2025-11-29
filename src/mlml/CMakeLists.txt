@@ -25,7 +25,6 @@ foreach(cpp_file ${cpp_files})
   add_library(${BASE_NAME} OBJECT ${cpp_file})
   target_link_libraries(${BASE_NAME} PUBLIC
     dnmtools_objs
-    bamxx
     smithlab_cpp
     HTSLIB::HTSLIB
   )
@@ -34,4 +33,16 @@ foreach(cpp_file ${cpp_files})
   target_include_directories(${BASE_NAME} PUBLIC
     ${PROJECT_BINARY_DIR}
   )
+  list(APPEND LIBRARY_OBJECTS ${BASE_NAME})
 endforeach()
+
+# Create static library linking the individual objects
+add_library(dnmtools_mlml_objs STATIC)
+target_include_directories(dnmtools_mlml_objs PUBLIC
+  ${CMAKE_BINARY_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(dnmtools_mlml_objs PUBLIC
+  ${LIBRARY_OBJECTS}
+  smithlab_cpp
+)

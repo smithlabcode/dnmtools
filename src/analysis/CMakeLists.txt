@@ -13,8 +13,6 @@
 # You should have received a copy of the GNU General Public License along with
 # this program. If not, see <https://www.gnu.org/licenses/>.
 
-find_package(HTSLIB REQUIRED)
-
 file(GLOB cpp_files "*.cpp")
 
 # Gather all the object files that will be put in the static library

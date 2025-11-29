@@ -23,6 +23,8 @@
 
 #include "bamxx.hpp"
 
+#include "nlohmann/json.hpp"
+
 #include <htslib/sam.h>
 
 #include <algorithm>
@@ -32,14 +34,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <exception>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <iterator>
 #include <map>
-#include <numeric>
+#include <memory>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -72,7 +72,7 @@ static constexpr std::uint8_t encoding[] = {
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4   // 256
 };
 // NOLINTEND(*-avoid-c-arrays)
-static constexpr auto n_dinucs = 16u;
+static constexpr auto n_nucs = 4u;
 static const auto dinucs = std::vector{  // NOLINT(cert-err58-cpp)
   "AA", "AC", "AG", "AT",
   "CA", "CC", "CG", "CT",
@@ -89,16 +89,6 @@ is_cytosine(const char c) {
 [[nodiscard]] inline bool
 is_guanine(const char c) {
   return c == 'g' || c == 'G';
-}
-
-[[nodiscard]] inline bool
-is_thymine(const char c) {
-  return c == 't' || c == 'T';
-}
-
-[[nodiscard]] inline bool
-is_adenine(const char c) {
-  return c == 'a' || c == 'A';
 }
 
 [[nodiscard]] inline bool
@@ -152,8 +142,8 @@ get_basecall_model(const bamxx::bam_header &hdr) {
   std::istringstream buffer(ks.s);
   ks_free(&ks);
 
-  const std::vector<std::string> parts(
-    (std::istream_iterator<std::string>(buffer)), {});
+  const auto parts =
+    std::vector<std::string>(std::istream_iterator<std::string>(buffer), {});
 
   for (const auto &key_val : parts) {
     const auto equal_pos = key_val.find('=');
@@ -162,7 +152,6 @@ get_basecall_model(const bamxx::bam_header &hdr) {
     if (key_val.substr(0, equal_pos) == "basecall_model")
       return key_val.substr(equal_pos + 1);
   }
-
   return {};
 }
 
@@ -221,16 +210,17 @@ struct CountSet {
     // clang-format on
     return oss.str();
   }
+  // ADS: accepting int16_t because of using -1 for unknown prob vs. 0 prob.
   void
-  add_count_fwd(const std::uint8_t h, const std::uint8_t m) {
-    hydroxy_fwd += h;
-    methyl_fwd += m;
+  add_count_fwd(const std::int16_t h, const std::int16_t m) {
+    hydroxy_fwd += static_cast<std::uint8_t>(h);
+    methyl_fwd += static_cast<std::uint8_t>(m);
     ++n_reads_fwd;
   }
   void
-  add_count_rev(const std::uint8_t h, const std::uint8_t m) {
-    hydroxy_rev += h;
-    methyl_rev += m;
+  add_count_rev(const std::int16_t h, const std::int16_t m) {
+    hydroxy_rev += static_cast<std::uint8_t>(h);
+    methyl_rev += static_cast<std::uint8_t>(m);
     ++n_reads_rev;
   }
   [[nodiscard]] double
@@ -304,86 +294,6 @@ static const char *const tag_values[] = {
 // NOLINTEND(*-avoid-c-arrays)
 
 template <typename T>
-[[nodiscard]] static std::tuple<T, T, missing_code>
-get_hydroxy_sites(const T mod_pos_beg, const T mod_pos_end) {
-  static constexpr auto hydroxy_tag = "C+h";
-  static constexpr auto hydroxy_tag_size = 3;
-  if (mod_pos_beg == mod_pos_end)
-    return {};
-  auto hydroxy_beg = strstr(mod_pos_beg, hydroxy_tag);
-  if (hydroxy_beg == mod_pos_end)
-    return std::tuple<T, T, missing_code>{};
-  auto hydroxy_end = std::find(hydroxy_beg, mod_pos_end, ';');
-  if (hydroxy_end == mod_pos_end)
-    return std::tuple<T, T, missing_code>{};
-  hydroxy_beg += hydroxy_tag_size;
-  const auto missing_status =
-    *hydroxy_beg == '?' ? missing_code::unknown : missing_code::unmodified;
-  hydroxy_beg += (*hydroxy_beg == '.' || *hydroxy_beg == '?');
-  return std::tuple<T, T, missing_code>(hydroxy_beg, hydroxy_end,
-                                        missing_status);
-}
-
-template <typename T>
-[[nodiscard]] static std::tuple<T, T, missing_code>
-get_methyl_sites(const T mod_pos_beg, const T mod_pos_end) {
-  static constexpr auto methyl_tag = "C+m";
-  static constexpr auto methyl_tag_size = 3;
-  if (mod_pos_beg == mod_pos_end)
-    return {};
-  auto methyl_beg = strstr(mod_pos_beg, methyl_tag);
-  if (methyl_beg == mod_pos_end)
-    return std::tuple<T, T, missing_code>{};
-  auto methyl_end = std::find(methyl_beg, mod_pos_end, ';');
-  if (methyl_end == mod_pos_end)
-    return std::tuple<T, T, missing_code>{};
-  methyl_beg += methyl_tag_size;
-  const auto missing_status =
-    *methyl_beg == '?' ? missing_code::unknown : missing_code::unmodified;
-  methyl_beg += (*methyl_beg == '.' || *methyl_beg == '?');
-  return std::tuple<T, T, missing_code>(methyl_beg, methyl_end, missing_status);
-}
-
-[[nodiscard]] static std::tuple<char *, char *>
-get_modification_positions(const bamxx::bam_rec &aln) {
-  const auto mm_aux = bam_aux_get(aln.b, "MM");
-  if (mm_aux == nullptr)
-    return {};
-  auto mod_pos_beg = bam_aux2Z(mm_aux);
-  auto mod_pos_end = mod_pos_beg + std::strlen(mod_pos_beg);
-  return {mod_pos_beg, mod_pos_end};
-}
-
-struct prob_counter {
-  static constexpr auto n_values = 256;
-  std::array<std::uint64_t, n_values> meth_hist{};
-  std::array<std::uint64_t, n_values> hydro_hist{};
-
-  [[nodiscard]] std::string
-  json() const {
-    std::ostringstream oss;
-    oss << R"({"methyl_hist":[)";
-    bool first_iter = true;
-    for (const auto i : meth_hist) {
-      if (!first_iter)
-        oss << ',';
-      oss << R"(")" << i << R"(")";
-      first_iter = false;
-    }
-    oss << R"(],"hydroxy_hist":[)";
-    first_iter = true;
-    for (const auto i : hydro_hist) {
-      if (!first_iter)
-        oss << ',';
-      oss << R"(")" << i << R"(")";
-      first_iter = false;
-    }
-    oss << R"(]})";
-    return oss.str();
-  }
-};
-
-template <typename T>
 [[nodiscard]] static auto
 next_mod_pos(T &b, const T e) -> std::int32_t {
   const auto isdig = [](const auto x) {
@@ -394,250 +304,68 @@ next_mod_pos(T &b, const T e) -> std::int32_t {
     return -1;
   auto r = atoi(b);  // NOLINT(cert-err34-c)
   b = std::find_if_not(b, e, isdig);
+  // const T c = std::find_if_not(b, e, isdig);
+  // std::int32_t r{};
+  // std::from_chars(b, c, r);
+  // b = c;
   return r;
 };
 
 struct mod_prob_buffer {
   static constexpr auto init_capacity{128 * 1024};
+  static constexpr auto max_mods = 10;
+  // scratch
+  std::array<hts_base_mod, max_mods> mods{};
+  std::unique_ptr<hts_base_mod_state, void (*)(hts_base_mod_state *)> m;
 
-  std::vector<std::uint8_t> hydroxy_probs;
-  std::vector<std::uint8_t> methyl_probs;
-  prob_counter pc;
+  std::vector<std::int16_t> hydroxy_probs;
+  std::vector<std::int16_t> methyl_probs;
 
-  mod_prob_buffer() {
+  mod_prob_buffer() : m{hts_base_mod_state_alloc(), &hts_base_mod_state_free} {
     methyl_probs.reserve(init_capacity);
     hydroxy_probs.reserve(init_capacity);
   }
 
-  bool
+  [[nodiscard]] bool
   set_probs(const bamxx::bam_rec &aln) {
-    auto [mod_pos_beg, mod_pos_end] = get_modification_positions(aln);
-    if (mod_pos_beg == nullptr)
-      return false;
-    auto [hydroxy_beg, hydroxy_end, hydroxy_missing_status] =
-      get_hydroxy_sites(mod_pos_beg, mod_pos_end);
-    if (hydroxy_beg == nullptr)
-      return false;
-    auto [methyl_beg, methyl_end, methyl_missing_status] =
-      get_methyl_sites(mod_pos_beg, mod_pos_end);
-    if (methyl_beg == nullptr)
-      return false;
-
-    // assume that hydroxy and methyl both point to CpG sites
-    if (!std::equal(hydroxy_beg, hydroxy_end, methyl_beg, methyl_end))
-      return false;
-
-    const auto mod_prob = bam_aux_get(aln.b, "ML");
-    if (mod_prob == nullptr)
-      return false;
-
-    // number of commas is number of hydroxy substrates = number of sites
-    const auto n_mod_sites = std::count(hydroxy_beg, hydroxy_end, ',');
-
-    // using hydroxy sites because they are the same as methyl sites
-    std::int32_t delta = next_mod_pos(hydroxy_beg, hydroxy_end);
-
+    static constexpr auto h_idx = 0;
+    static constexpr auto m_idx = 1;
     const auto qlen = get_l_qseq(aln);
-    const auto seq = bam_get_seq(aln);
+    const auto d = mods.data();
+    const auto is_rev = bam_is_rev(aln);
+
+    if (!bam_aux_get(aln.b, "MM") && !bam_aux_get(aln.b, "Mm"))
+      return false;
 
     methyl_probs.clear();
-    methyl_probs.resize(qlen, 0);
+    methyl_probs.resize(qlen, -1);
 
     hydroxy_probs.clear();
-    hydroxy_probs.resize(qlen, 0);
+    hydroxy_probs.resize(qlen, -1);
 
-    auto hydroxy_prob_idx = 0;           // start of modifications
-    auto methyl_prob_idx = n_mod_sites;  // start methyl after hydroxy
+    // ADS: or use this bam_parse_basemod2(aln.b, m, HTS_MOD_REPORT_UNCHECKED)
 
-    if (bam_is_rev(aln)) {
-      for (auto i = 0; i < qlen; ++i) {
-        const auto nuc = seq_nt16_str[bam_seqi(seq, qlen - i - 1)];
-        if (nuc == 'G') {
-          // when delta hits 0 we have a site with mod probs
-          if (delta == 0) {
-            const std::uint8_t m_val = bam_auxB2i(mod_prob, methyl_prob_idx++);
-            methyl_probs[i] = m_val;
-            pc.meth_hist[m_val]++;  // NOLINT(*-constant-array-index)
-
-            const std::uint8_t h_val = bam_auxB2i(mod_prob, hydroxy_prob_idx++);
-            hydroxy_probs[i] = h_val;
-            pc.hydro_hist[h_val]++;  // NOLINT(*-constant-array-index)
-          }
-          // ADS: add 'else' to use '?' and '.' properly
-          --delta;
-          if (delta < 0)
-            delta = next_mod_pos(hydroxy_beg, hydroxy_end);
-        }
-      }
-    }
-    else {
-      for (auto i = 0; i + 1 < qlen; ++i) {
-        const auto nuc = seq_nt16_str[bam_seqi(seq, i)];
-        if (nuc == 'C') {
-          // when delta hits 0 we have a site with mod probs
-          if (delta == 0) {
-            const std::uint8_t m_val = bam_auxB2i(mod_prob, methyl_prob_idx++);
-            methyl_probs[i] = m_val;
-            pc.meth_hist[m_val]++;  // NOLINT(*-constant-array-index)
-
-            const std::uint8_t h_val = bam_auxB2i(mod_prob, hydroxy_prob_idx++);
-            hydroxy_probs[i] = h_val;
-            pc.hydro_hist[h_val]++;  // NOLINT(*-constant-array-index)
-          }
-          // ADS: add 'else' to use '?' and '.' properly
-          --delta;
-          if (delta < 0)
-            delta = next_mod_pos(hydroxy_beg, hydroxy_end);
-        }
-      }
+    bam_parse_basemod(aln.b, m.get());
+    int pos{};
+    int n{};
+    while ((n = bam_next_basemod(aln.b, m.get(), d, max_mods, &pos)) > 0) {
+      if (n < m_idx)
+        continue;
+      pos = is_rev ? qlen - 1 - pos : pos;
+      methyl_probs[pos] = mods[m_idx].qual;
+      hydroxy_probs[pos] = mods[h_idx].qual;
     }
     return true;
   }
 };
 
-struct match_counter {
-  static constexpr auto dinuc_combos = 256;
-  typedef std::array<std::uint64_t, dinuc_combos> container;
-  container pos{};
-  container neg{};
-
-  void
-  add_fwd(const std::uint8_t r1, const std::uint8_t r2, const std::uint8_t q1,
-          const std::uint8_t q2) {
-    constexpr auto get_idx = [](const auto a, const auto b, const auto c,
-                                const auto d) {
-      return (a << 6) | (b << 4) | (c << 2) | d;  // NOLINT(*-magic-numbers)
-    };
-    // NOLINTBEGIN(*-constant-array-index)
-    const auto r1e = encoding[r1];
-    const auto r2e = encoding[r2];
-    const auto q1e = encoding[q1];
-    const auto q2e = encoding[q2];
-    if ((r1e | r2e | q1e | q2e) & 4u)
-      return;
-    pos[get_idx(r1e, r2e, q1e, q2e)]++;
-    // NOLINTEND(*-constant-array-index)
-    // pos[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
-  }
-
-  void
-  add_rev(const std::uint8_t r1, const std::uint8_t r2, const std::uint8_t q1,
-          const std::uint8_t q2) {
-    constexpr auto get_idx = [](const auto a, const auto b, const auto c,
-                                const auto d) {
-      return (a << 6) | (b << 4) | (c << 2) | d;  // NOLINT(*-magic-numbers)
-    };
-    // NOLINTBEGIN(*-constant-array-index)
-    const auto r1e = encoding[r1];
-    const auto r2e = encoding[r2];
-    const auto q1e = encoding[q1];
-    const auto q2e = encoding[q2];
-    if ((r1e | r2e | q1e | q2e) & 4u)
-      return;
-    neg[get_idx(r1e, r2e, q1e, q2e)]++;
-    // neg[(r1e * 64) + (r2e * 16) + (q1e * 4) + (q2e * 1)]++;
-    // NOLINTEND(*-constant-array-index)
-  }
-
-  [[nodiscard]] std::string
-  tostring() const {
-    std::ostringstream oss;
-    oss << "target_query_fwd" << '\n';
-    for (auto i = 0u; i < n_dinucs; ++i) {
-      const auto beg = std::cbegin(pos) + (i * n_dinucs);
-      oss << dinucs[i];
-      for (auto itr = beg; itr != beg + n_dinucs; ++itr)
-        oss << '\t' << *itr;
-      oss << '\n';
-    }
-    oss << "target_query_rev" << '\n';
-    for (auto i = 0u; i < n_dinucs; ++i) {
-      const auto beg = std::cbegin(neg) + (i * n_dinucs);
-      oss << dinucs[i];
-      for (auto itr = beg; itr != beg + n_dinucs; ++itr)
-        oss << '\t' << *itr;
-      oss << '\n';
-    }
-    return oss.str();
-  }
-
-  [[nodiscard]] std::string
-  json_row(const container::const_iterator beg) const {
-    std::ostringstream oss;
-    oss << "{";
-    auto j = 0;
-    for (auto itr = beg; itr != beg + n_dinucs; ++itr) {
-      if (j > 0)
-        oss << ",";
-      oss << R"(")" << dinucs[j++] << R"(":")" << *itr << R"(")";
-    }
-    oss << "}";
-    return oss.str();
-  }
-
-  [[nodiscard]] std::string
-  json_table(const container &a) const {
-    std::ostringstream oss;
-    const auto beg = std::cbegin(a);
-    oss << "{";
-    for (auto i = 0u; i < n_dinucs; ++i) {
-      if (i > 0)
-        oss << ",";
-      oss << R"(")" << dinucs[i] << R"(":)" << json_row(beg + (i * n_dinucs));
-    }
-    oss << "}";
-    return oss.str();
-  }
-
-  [[nodiscard]] std::string
-  json() const {
-    // clang-format off
-    return (std::ostringstream() << "{"
-            << R"("map_fwd":)" << json_table(pos) << ","
-            << R"("map_rev":)" << json_table(neg)
-            << "}").str();
-    // clang-format on
-  }
-
-  [[nodiscard]] std::string
-  tostring_frac() const {
-    static constexpr auto width = 8;
-    static constexpr auto prec = 3;
-    std::ostringstream oss;
-    oss.precision(prec);
-    oss.setf(std::ios::fixed, std::ios::floatfield);
-    oss << "map_fwd\n";
-    for (auto i = 0u; i < n_dinucs; ++i) {
-      oss << dinucs[i];
-      const auto beg = std::cbegin(pos) + (i * n_dinucs);
-      const auto tot = std::max(std::accumulate(beg, beg + n_dinucs, 0.0), 1.0);
-      for (auto itr = beg; itr != beg + n_dinucs; ++itr)
-        oss << std::setw(width) << *itr / tot;
-      oss << '\n';
-    }
-    oss << "map_ref\n";
-    for (auto i = 0u; i < n_dinucs; ++i) {
-      oss << dinucs[i];
-      const auto beg = std::cbegin(neg) + (i * n_dinucs);
-      const auto tot = std::max(std::accumulate(beg, beg + n_dinucs, 0.0), 1.0);
-      for (auto itr = beg; itr != beg + n_dinucs; ++itr)
-        oss << std::setw(width) << *itr / tot;
-      oss << '\n';
-    }
-    return oss.str();
-  }
-};
-
 static void
 count_states_fwd(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
-                 mod_prob_buffer &mod_buf, const std::string &chrom,
-                 match_counter &mc) {
+                 mod_prob_buffer &mod_buf, const std::string &chrom) {
   /* Move through cigar, reference and read positions without
      inflating cigar or read sequence */
-  const auto seq = bam_get_seq(aln);
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + get_n_cigar(aln);
-  const auto end_ref = std::cend(chrom);
 
   auto rpos = get_pos(aln);
   auto ref_itr = std::cbegin(chrom) + rpos;
@@ -645,8 +373,8 @@ count_states_fwd(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
   if (!mod_buf.set_probs(aln))
     return;
 
-  auto qpos = 0;                     // to match type with b->core.l_qseq
-  auto q_lim = get_l_qseq(aln) - 1;  // if here, this is >= 0
+  // position in the query sequence
+  auto qpos = 0;
 
   auto hydroxy_prob_itr = std::cbegin(mod_buf.hydroxy_probs);
   auto methyl_prob_itr = std::cbegin(mod_buf.methyl_probs);
@@ -657,14 +385,8 @@ count_states_fwd(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
     if (eats_ref(op) && eats_query(op)) {
       const decltype(qpos) end_qpos = qpos + n;
       for (; qpos < end_qpos; ++qpos) {
-        const auto r_nuc = *ref_itr++;
-        if (qpos + 1 < end_qpos) {
-          mc.add_fwd(r_nuc, ref_itr == end_ref ? 'N' : *ref_itr,
-                     seq_nt16_str[bam_seqi(seq, qpos)],
-                     qpos == q_lim ? 'N'
-                                   : seq_nt16_str[bam_seqi(seq, qpos + 1)]);
-        }
-        counts[rpos++].add_count_fwd(*hydroxy_prob_itr, *methyl_prob_itr);
+        if (*hydroxy_prob_itr >= 0 && *methyl_prob_itr >= 0)
+          counts[rpos++].add_count_fwd(*hydroxy_prob_itr, *methyl_prob_itr);
         ++methyl_prob_itr;
         ++hydroxy_prob_itr;
       }
@@ -688,51 +410,40 @@ count_states_fwd(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
 
 static void
 count_states_rev(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
-                 mod_prob_buffer &mod_buf, const std::string &chrom,
-                 match_counter &mc) {
+                 mod_prob_buffer &mod_buf, const std::string &chrom) {
   /* Move through cigar, reference and (*backward*) through read
      positions without inflating cigar or read sequence */
-  const auto seq = bam_get_seq(aln);
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig = beg_cig + get_n_cigar(aln);
-  const auto end_ref = std::cend(chrom);
+
   auto rpos = get_pos(aln);
   auto ref_itr = std::cbegin(chrom) + rpos;
 
-  std::size_t qpos = get_l_qseq(aln);  // to match type with b->core.l_qseq
-  std::size_t q_idx = 0;
-  std::size_t l_qseq = get_l_qseq(aln);
-
   if (!mod_buf.set_probs(aln))
+    return;
+
+  // position in the query sequence
+  auto qpos = get_l_qseq(aln);
+  if (qpos == 0)
     return;
 
   auto hydroxy_prob_itr = std::cend(mod_buf.hydroxy_probs);
   auto methyl_prob_itr = std::cend(mod_buf.methyl_probs);
 
-  if (qpos == 0)
-    return;
   for (auto c_itr = beg_cig; c_itr != end_cig; ++c_itr) {
     const char op = bam_cigar_op(*c_itr);
     const std::uint32_t n = bam_cigar_oplen(*c_itr);
     if (eats_ref(op) && eats_query(op)) {
-      assert(qpos >= n);
-      const std::size_t end_qpos = qpos - n;  // to match type with qpos
+      const decltype(qpos) end_qpos = qpos - n;
       for (; qpos > end_qpos; --qpos) {
-        const auto r_nuc = *ref_itr++;
-        const auto q_nuc = seq_nt16_str[bam_seqi(seq, q_idx)];
-        ++q_idx;
-        if (end_qpos + 1 < qpos)
-          mc.add_rev(r_nuc, ref_itr == end_ref ? 'N' : *ref_itr, q_nuc,
-                     q_idx == l_qseq ? 'N'
-                                     : seq_nt16_str[bam_seqi(seq, q_idx)]);
         --methyl_prob_itr;
         --hydroxy_prob_itr;
-        counts[rpos++].add_count_rev(*hydroxy_prob_itr, *methyl_prob_itr);
+        if (*hydroxy_prob_itr >= 0 && *methyl_prob_itr >= 0)
+          counts[rpos++].add_count_rev(*hydroxy_prob_itr, *methyl_prob_itr);
       }
     }
     else if (eats_query(op)) {
       qpos -= n;
-      q_idx += n;
       methyl_prob_itr -= n;
       hydroxy_prob_itr -= n;
     }
@@ -809,6 +520,60 @@ consistent_existing_targets(
   }
   return true;
 }
+
+struct mod_prob_stats {
+  static constexpr auto max_mods = 10;
+  static constexpr auto n_values = 256;
+  // scratch
+  std::array<hts_base_mod, max_mods> mods{};
+  std::unique_ptr<hts_base_mod_state, void (*)(hts_base_mod_state *)> m;
+
+  std::array<std::array<std::uint64_t, n_values>, n_nucs> methyl_fwd{};
+  std::array<std::array<std::uint64_t, n_values>, n_nucs> methyl_rev{};
+  std::array<std::array<std::uint64_t, n_values>, n_nucs> hydroxy_fwd{};
+  std::array<std::array<std::uint64_t, n_values>, n_nucs> hydroxy_rev{};
+
+  mod_prob_stats() : m{hts_base_mod_state_alloc(), &hts_base_mod_state_free} {};
+
+  [[nodiscard]] auto
+  operator()(const bamxx::bam_rec &aln) {
+    static constexpr auto h_idx = 0;
+    static constexpr auto m_idx = 1;
+    const auto qlen = get_l_qseq(aln);
+    const auto seq = bam_get_seq(aln);
+    const auto d = mods.data();
+    const auto is_rev = bam_is_rev(aln);
+
+    bam_parse_basemod2(aln.b, m.get(), 0);  // HTS_MOD_REPORT_UNCHECKED);
+    // bam_parse_basemod(aln.b, m.get());
+
+    int pos{};
+    int n{};
+    while ((n = bam_next_basemod(aln.b, m.get(), d, max_mods, &pos)) > 0) {
+      if (n < m_idx)
+        continue;
+      const auto other_nuc =
+        is_rev ? (pos > 0 ? seq_nt16_str[bam_seqi(seq, pos - 1)] : '\0')
+               : (pos + 1 < qlen ? seq_nt16_str[bam_seqi(seq, pos + 1)] : '\0');
+      // NOLINTBEGIN(*-constant-array-index)
+      const auto other_enc = encoding[static_cast<std::uint8_t>(other_nuc)];
+      if (other_enc == n_nucs)
+        continue;
+      if (is_rev) {
+        hydroxy_rev[other_enc][mods[h_idx].qual]++;
+        methyl_rev[other_enc][mods[m_idx].qual]++;
+      }
+      else {
+        hydroxy_fwd[other_enc][mods[h_idx].qual]++;
+        methyl_fwd[other_enc][mods[m_idx].qual]++;
+      }
+      // NOLINTEND(*-constant-array-index)
+    }
+  }
+
+  NLOHMANN_DEFINE_TYPE_INTRUSIVE(mod_prob_stats, methyl_fwd, methyl_rev,
+                                 hydroxy_fwd, hydroxy_rev)
+};
 
 struct read_processor {
   static constexpr auto default_expected_basecall_model =
@@ -1017,7 +782,7 @@ struct read_processor {
       write_output_all(hdr, out, tid, chrom, counts);
   }
 
-  [[nodiscard]] std::tuple<match_counter, prob_counter>
+  [[nodiscard]] mod_prob_stats
   operator()(const std::string &infile, const std::string &outfile,
              const std::string &chroms_file) const {
     // first get the chromosome names and sequences from the FASTA file
@@ -1089,7 +854,7 @@ struct read_processor {
                 << "observed="
                 << (basecall_model.empty() ? "NA" : basecall_model) << "\n"
                 << "expected=" << expected_basecall_model_str() << '\n';
-      return {{}, {}};
+      return {};
     }
 
     if (include_header)
@@ -1105,7 +870,7 @@ struct read_processor {
 
     std::vector<std::string>::const_iterator chrom_itr{};
 
-    match_counter mc;
+    mod_prob_stats mps;
     mod_prob_buffer mod_buf;
 
     bool current_target_present = false;
@@ -1114,6 +879,9 @@ struct read_processor {
       const std::int32_t tid = get_tid(aln);
       if (tid == -1)  // ADS: skip reads that have no tid -- they are not mapped
         continue;
+
+      mps(aln);
+
       if (tid != prev_tid) {  // chrom changed, output results, get next chrom
         // write output if any; counts is empty on first and missing chroms
         if (!counts.empty())
@@ -1151,18 +919,18 @@ struct read_processor {
 
           const bool is_rev = bam_is_rev(aln);
           if (is_rev && strand != 1)
-            count_states_rev(aln, counts, mod_buf, *chrom_itr, mc);
+            count_states_rev(aln, counts, mod_buf, *chrom_itr);
           if (!is_rev && strand != 2)
-            count_states_fwd(aln, counts, mod_buf, *chrom_itr, mc);
+            count_states_fwd(aln, counts, mod_buf, *chrom_itr);
         }
         prev_tid = tid;
       }
       if (current_target_present) {
         const bool is_rev = bam_is_rev(aln);
         if (is_rev && strand != 1)
-          count_states_rev(aln, counts, mod_buf, *chrom_itr, mc);
+          count_states_rev(aln, counts, mod_buf, *chrom_itr);
         if (!is_rev && strand != 2)
-          count_states_fwd(aln, counts, mod_buf, *chrom_itr, mc);
+          count_states_fwd(aln, counts, mod_buf, *chrom_itr);
       }
     }
     if (!counts.empty())
@@ -1174,59 +942,20 @@ struct read_processor {
       for (auto i = prev_tid + 1; i < hdr.h->n_targets; ++i)
         output_skipped_chromosome(i, tid_to_idx, hdr, chroms_beg, chrom_sizes,
                                   counts, out);
-    return std::tuple<match_counter, prob_counter>{mc, mod_buf.pc};
+    return mps;
   }
 };
 
 [[nodiscard]] static auto
-check_cpg_mods_rev(const bamxx::bam_rec &aln) -> bool {
-  // ADS: should only have one function for both orientations
-  const auto [mod_pos_beg, mod_pos_end] = get_modification_positions(aln);
-  if (mod_pos_beg == nullptr)
-    return true;
-  auto [mod_beg, mod_end, _] = get_hydroxy_sites(mod_pos_beg, mod_pos_end);
-  if (mod_beg == nullptr)
-    return true;
-  const auto n_mods = std::count(mod_beg, mod_end, ',');
-  const auto qlen = get_l_qseq(aln);
-  const auto seq = bam_get_seq(aln);
-  std::uint32_t n_mods_at_cpg{};
-  for (int qpos{}; qpos < qlen && mod_beg != mod_end;) {
-    for (auto delta = next_mod_pos(mod_beg, mod_end); delta >= 0; --delta)
-      for (char nuc{}; qpos < qlen && nuc != 'G'; ++qpos)
-        nuc = seq_nt16_str[bam_seqi(seq, qlen - qpos - 1)];
-    const auto next =
-      qpos < qlen ? seq_nt16_str[bam_seqi(seq, qlen - qpos - 1)] : 0;
-    n_mods_at_cpg += (next == 'C');
-  }
-  return n_mods_at_cpg == n_mods;
-}
-
-[[nodiscard]] static auto
-check_cpg_mods_fwd(const bamxx::bam_rec &aln) -> bool {
-  const auto [mod_pos_beg, mod_pos_end] = get_modification_positions(aln);
-  if (mod_pos_beg == nullptr)
-    return true;
-  auto [mod_beg, mod_end, _] = get_hydroxy_sites(mod_pos_beg, mod_pos_end);
-  if (mod_beg == nullptr)
-    return true;
-  const auto n_mods = std::count(mod_beg, mod_end, ',');
-  const auto qlen = get_l_qseq(aln);
-  const auto seq = bam_get_seq(aln);
-  std::uint32_t n_mods_at_cpg{};
-  for (int qpos{}; qpos < qlen && mod_beg != mod_end;) {
-    for (auto delta = next_mod_pos(mod_beg, mod_end); delta >= 0; --delta)
-      for (char nuc{}; qpos < qlen && nuc != 'C'; ++qpos)
-        nuc = seq_nt16_str[bam_seqi(seq, qpos)];
-    const auto next = qpos < qlen ? seq_nt16_str[bam_seqi(seq, qpos)] : 0;
-    n_mods_at_cpg += (next == 'G');
-  }
-  return n_mods_at_cpg == n_mods;
-}
-
-[[nodiscard]] static auto
 check_modification_sites(const std::string &infile,
                          const std::uint32_t n_reads_to_check) -> bool {
+  static constexpr auto max_mods = 10;
+  std::array<hts_base_mod, max_mods> mods{};
+
+  using mstate = hts_base_mod_state;
+  std::unique_ptr<mstate, void (*)(mstate *)> m(hts_base_mod_state_alloc(),
+                                                &hts_base_mod_state_free);
+
   bamxx::bam_in hts(infile);
   if (!hts)
     throw std::runtime_error("failed to open input file");
@@ -1237,11 +966,33 @@ check_modification_sites(const std::string &infile,
 
   std::uint32_t read_count{};
   std::uint32_t only_cpgs_counter{};
+  const auto d = mods.data();
 
   bamxx::bam_rec aln;
-  for (; hts.read(hdr, aln) && read_count < n_reads_to_check; ++read_count)
-    only_cpgs_counter +=
-      bam_is_rev(aln) ? check_cpg_mods_rev(aln) : check_cpg_mods_fwd(aln);
+  for (; hts.read(hdr, aln) && read_count < n_reads_to_check; ++read_count) {
+    if (!bam_aux_get(aln.b, "MM") && !bam_aux_get(aln.b, "Mm"))
+      continue;
+
+    const auto qlen = get_l_qseq(aln);
+    const auto seq = bam_get_seq(aln);
+    const auto is_rev = bam_is_rev(aln);
+
+    bam_parse_basemod(aln.b, m.get());
+
+    bool only_cpgs{true};
+    int pos{};
+    while (bam_next_basemod(aln.b, m.get(), d, max_mods, &pos) > 0) {
+      const auto nuc = seq_nt16_str[bam_seqi(seq, pos)];
+      const auto other_nuc =
+        is_rev ? (pos > 0 ? seq_nt16_str[bam_seqi(seq, pos - 1)] : '\0')
+               : (pos + 1 < qlen ? seq_nt16_str[bam_seqi(seq, pos + 1)] : '\0');
+      if (!other_nuc)
+        continue;
+      only_cpgs = is_rev ? other_nuc == 'C' && nuc == 'G'
+                         : nuc == 'C' && other_nuc == 'G';
+    }
+    only_cpgs_counter += only_cpgs;
+  }
   return only_cpgs_counter == read_count;
 }
 
@@ -1261,8 +1012,7 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
                            "-c <chroms> <mapped-reads>");
     opt_parse.add_opt("threads", 't', "threads to use (few needed)", false,
                       rp.n_threads);
-    opt_parse.add_opt("output", 'o', "output file name (default: stdout)",
-                      false, outfile);
+    opt_parse.add_opt("output", 'o', "output file name", true, outfile);
     opt_parse.add_opt("chrom", 'c', "reference genome file (FASTA format)",
                       true, chroms_file);
     opt_parse.add_opt("cpg-only", 'n', "print only CpG context cytosines",
@@ -1312,10 +1062,6 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     std::ostringstream cmd;
     std::copy(argv, argv + argc, std::ostream_iterator<const char *>(cmd, " "));
 
-    // file types from HTSlib use "-" for the filename to go to stdout
-    if (outfile.empty())
-      outfile = "-";
-
     const auto mods_at_cpgs =
       check_modification_sites(mapped_reads_file, n_reads_to_check);
 
@@ -1326,13 +1072,13 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
                 << "[mods only at CpGs: " << mods_at_cpgs << "]\n"
                 << rp.tostring();
 
-    const auto [mc, pc] = rp(mapped_reads_file, outfile, chroms_file);
+    // const auto [mc, mps] = rp(mapped_reads_file, outfile, chroms_file);
+    const auto mps = rp(mapped_reads_file, outfile, chroms_file);
     if (!stats_file.empty()) {
       std::ofstream stats_out(stats_file);
       if (!stats_out)
         throw std::runtime_error("Error opening stats file: " + stats_file);
-      stats_out << R"({"matches":)" << mc.json() << ","
-                << R"("probabilities":)" << pc.json() << "}\n";
+      stats_out << nlohmann::json(mps).dump(4) << "\n";
     }
   }
   catch (const std::exception &e) {

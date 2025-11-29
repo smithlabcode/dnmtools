@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License along with
 # this program. If not, see <https://www.gnu.org/licenses/>.
 
-if(NOT TARGET smithlab_cpp)
+if(NOT TARGET bamxx)
   add_subdirectory(bamxx)
 endif()
 if(NOT TARGET smithlab_cpp)
@@ -35,40 +35,9 @@ target_link_libraries(dnmtools PUBLIC
   smithlab_cpp
   bamxx
   abismal_objs
-  radmeth
-  format-reads
-  uniq
-  bsrate
-  methcounts
-  nanopore
-  symmetric-cpgs
-  levels
-  methsummary
-  hmr
-  hmr-rep
-  hypermr
-  methentropy
-  pmd
-  roimethstat
-  autocorr
-  cpgbins
-  multimethstat
-  mlml
-  methstates
-  allelicmeth
-  amrfinder
-  amrtester
-  fast-liftover
-  metagene
-  lift-filter
-  clean-hairpins
-  guessprotocol
-  merge-bsrate
-  merge-methcounts
-  covered
-  recovered
-  xcounts
-  unxcounts
-  selectsites
-  kmersites
+  dnmtools_analysis_objs
+  dnmtools_utils_objs
+  dnmtools_radmeth_objs
+  dnmtools_mlml_objs
+  dnmtools_amrfinder_objs
 )

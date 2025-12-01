@@ -66,10 +66,10 @@ bam_get_qname(const bamxx::bam_rec &b) {
 #undef bam_get_cigar
 #endif
 
-inline uint32_t *
+inline std::uint32_t *
 bam_get_cigar(const bamxx::bam_rec &b) {
   // start of data + bytes for query/read name
-  return reinterpret_cast<uint32_t *>(b.b->data + b.b->core.l_qname);
+  return reinterpret_cast<std::uint32_t *>(b.b->data + b.b->core.l_qname);
 }
 
 #ifdef bam_get_seq
@@ -118,8 +118,8 @@ bam_get_l_aux(const bamxx::bam_rec &b) {
 #undef bam_cigar_op
 #endif
 
-inline uint32_t
-bam_cigar_op(const uint32_t c) {
+inline std::uint32_t
+bam_cigar_op(const std::uint32_t c) {
   return c & BAM_CIGAR_MASK;
 }
 
@@ -127,8 +127,8 @@ bam_cigar_op(const uint32_t c) {
 #undef bam_cigar_oplen
 #endif
 
-inline uint32_t
-bam_cigar_oplen(const uint32_t c) {
+inline std::uint32_t
+bam_cigar_oplen(const std::uint32_t c) {
   return c >> BAM_CIGAR_SHIFT;
 }
 
@@ -138,22 +138,22 @@ bam_same_orientation(const bamxx::bam_rec &a, const bamxx::bam_rec &b) {
 }
 
 int
-truncate_overlap(const bamxx::bam_rec &a, const uint32_t overlap,
+truncate_overlap(const bamxx::bam_rec &a, const std::uint32_t overlap,
                  bamxx::bam_rec &c);
 
 int
 merge_overlap(const bamxx::bam_rec &a, const bamxx::bam_rec &b,
-              const uint32_t head, bamxx::bam_rec &c);
+              const std::uint32_t head, bamxx::bam_rec &c);
 
 int
 merge_non_overlap(const bamxx::bam_rec &a, const bamxx::bam_rec &b,
-                  const uint32_t spacer, bamxx::bam_rec &c);
+                  const std::uint32_t spacer, bamxx::bam_rec &c);
 
 int
 keep_better_end(const bamxx::bam_rec &a, const bamxx::bam_rec &b,
                 bamxx::bam_rec &c);
 
-size_t
+std::size_t
 correct_cigar(bamxx::bam_rec &b);
 
 void
@@ -184,12 +184,12 @@ are_mates(const bamxx::bam_rec &one, const bamxx::bam_rec &two) {
      two->core.mpos == one->core.pos; */
 }
 
-inline int32_t
+inline std::int32_t
 get_l_qseq(const bamxx::bam_rec &b) {
   return b.b->core.l_qseq;
 }
 
-inline size_t
+inline std::int32_t
 get_n_targets(const bamxx::bam_header &bh) {
   return bh.h->n_targets;
 }
@@ -199,7 +199,7 @@ get_qname(const bamxx::bam_rec &b) {
   return bam_get_qname(b);
 }
 
-inline int32_t
+inline std::int32_t
 get_tid(const bamxx::bam_rec &b) {
   return b.b->core.tid;
 }
@@ -209,7 +209,7 @@ get_pos(const bamxx::bam_rec &b) {
   return b.b->core.pos;
 }
 
-inline int32_t
+inline std::int32_t
 get_mtid(const bamxx::bam_rec &b) {
   return b.b->core.mtid;
 }
@@ -219,7 +219,7 @@ get_mpos(const bamxx::bam_rec &b) {
   return b.b->core.mpos;
 }
 
-inline uint32_t
+inline std::uint32_t
 get_n_cigar(const bamxx::bam_rec &b) {
   return b.b->core.n_cigar;
 }
@@ -230,17 +230,17 @@ get_endpos(const bamxx::bam_rec &b) {
 }
 
 inline bool
-cigar_eats_ref(const uint32_t c) {
+cigar_eats_ref(const std::uint32_t c) {
   return bam_cigar_type(bam_cigar_op(c)) & 2;
 }
 
 inline bool
-cigar_eats_query(const uint32_t c) {
+cigar_eats_query(const std::uint32_t c) {
   return bam_cigar_type(bam_cigar_op(c)) & 1;
 }
 
 inline bool
-cigar_eats_frag(const uint32_t c) {
+cigar_eats_frag(const std::uint32_t c) {
   return bam_cigar_op(c) == BAM_CREF_SKIP;
 }
 
@@ -275,17 +275,17 @@ bam_aux_update_int(bamxx::bam_rec &b, const char tag[2], T val) {
 }
 
 inline std::string
-sam_hdr_tid2name(const bamxx::bam_header &hdr, const int32_t tid) {
+sam_hdr_tid2name(const bamxx::bam_header &hdr, const std::int32_t tid) {
   return std::string(sam_hdr_tid2name(hdr.h, tid));
 }
 
 inline const char *
-sam_hdr_tid2name_ptr(const bamxx::bam_header &hdr, const int32_t tid) {
+sam_hdr_tid2name_ptr(const bamxx::bam_header &hdr, const std::int32_t tid) {
   return sam_hdr_tid2name(hdr.h, tid);
 }
 
-inline uint32_t
-sam_hdr_tid2len(const bamxx::bam_header &hdr, const int32_t tid) {
+inline std::uint32_t
+sam_hdr_tid2len(const bamxx::bam_header &hdr, const std::int32_t tid) {
   return sam_hdr_tid2len(hdr.h, tid);
 }
 
@@ -297,7 +297,7 @@ sam_hdr_tid2name(const bamxx::bam_header &hdr, const bamxx::bam_rec &aln) {
 std::string
 to_string(const bamxx::bam_header &hdr, const bamxx::bam_rec &aln);
 
-inline size_t
+inline std::size_t
 rlen_from_cigar(const bamxx::bam_rec &aln) {
   return bam_cigar2rlen(get_n_cigar(aln), bam_get_cigar(aln));
 }

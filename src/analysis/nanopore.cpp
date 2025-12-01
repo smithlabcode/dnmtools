@@ -52,8 +52,7 @@
 // NOLINTBEGIN(*-narrowing-conversions,*-pointer-arithmetic)
 
 // clang-format off
-// NOLINTBEGIN(*-avoid-c-arrays)
-static constexpr std::uint8_t encoding[] = {
+static constexpr std::array<std::uint8_t, 256> encoding = {
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 16
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 32
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 48
@@ -71,15 +70,9 @@ static constexpr std::uint8_t encoding[] = {
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 240
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4   // 256
 };
-// NOLINTEND(*-avoid-c-arrays)
-static constexpr auto n_nucs = 4u;
-static const auto dinucs = std::vector{  // NOLINT(cert-err58-cpp)
-  "AA", "AC", "AG", "AT",
-  "CA", "CC", "CG", "CT",
-  "GA", "GC", "GG", "GT",
-  "TA", "TC", "TG", "TT",
-};
 // clang-format on
+
+static constexpr auto n_nucs = 4u;
 
 [[nodiscard]] inline bool
 is_cytosine(const char c) {
@@ -200,16 +193,6 @@ is_c_at_g(const std::string &s, const std::size_t i) {
    all the information seems reasonable. */
 struct CountSet {
   static constexpr auto max_prob_repr = 255.0;
-  [[nodiscard]] std::string
-  tostring() const {
-    // clang-format off
-    std::ostringstream oss;
-    oss << hydroxy_fwd << '\t' << hydroxy_rev << '\t'
-        << methyl_fwd << '\t' << methyl_rev << '\t'
-        << n_reads_fwd << '\t' << n_reads_rev << '\n';
-    // clang-format on
-    return oss.str();
-  }
   // ADS: accepting int16_t because of using -1 for unknown prob vs. 0 prob.
   void
   add_count_fwd(const std::int16_t h, const std::int16_t m) {
@@ -325,9 +308,9 @@ struct mod_prob_buffer {
     hydroxy_probs.clear();
     hydroxy_probs.resize(qlen, -1);
 
-    // ADS: or use this bam_parse_basemod2(aln.b, m, HTS_MOD_REPORT_UNCHECKED)
-
     bam_parse_basemod(aln.b, m.get());
+    // ADS: or bam_parse_basemod2(aln.b, m, HTS_MOD_REPORT_UNCHECKED)
+
     int pos{};
     int n{};
     while ((n = bam_next_basemod(aln.b, m.get(), d, max_mods, &pos)) > 0) {
@@ -526,8 +509,8 @@ struct mod_prob_stats {
     const auto d = mods.data();
     const auto is_rev = bam_is_rev(aln);
 
-    bam_parse_basemod2(aln.b, m.get(), 0);  // HTS_MOD_REPORT_UNCHECKED);
-    // bam_parse_basemod(aln.b, m.get());
+    bam_parse_basemod(aln.b, m.get());
+    // ADS: or bam_parse_basemod2(aln.b, m, HTS_MOD_REPORT_UNCHECKED)
 
     int pos{};
     int n{};
@@ -570,14 +553,14 @@ struct read_processor {
   bool cpg_only{};
   bool force{};
   std::int32_t n_threads{1};
-  int strand{0};
+  int strand{};
   std::string expected_basecall_model{};
 
   [[nodiscard]] std::string
   tostring() const {
+    const auto strand_str = strand == 0 ? "both" : strand == 1 ? "fwd" : "rev";
     std::ostringstream oss;
-    oss << std::boolalpha;
-    oss << "[verbose: " << verbose << "]\n"
+    oss << std::boolalpha << "[verbose: " << verbose << "]\n"
         << "[show_progress: " << show_progress << "]\n"
         << "[compress_output: " << compress_output << "]\n"
         << "[include_header: " << include_header << "]\n"
@@ -586,7 +569,7 @@ struct read_processor {
         << "[cpg_only: " << cpg_only << "]\n"
         << "[force: " << force << "]\n"
         << "[n_threads: " << n_threads << "]\n"
-        << "[strand: " << strand << "]\n"
+        << "[strand: " << strand_str << "]\n"
         << "[expected_basecall_model: " << expected_basecall_model_str()
         << "]\n";
     return oss.str();
@@ -791,7 +774,6 @@ struct read_processor {
     bamxx::bam_in hts(infile);
     if (!hts)
       throw std::runtime_error("failed to open input file");
-    // load the input file's header
     bamxx::bam_header hdr(hts);
     if (!hdr)
       throw std::runtime_error("failed to read header");
@@ -828,8 +810,7 @@ struct read_processor {
     const auto basecall_model = get_basecall_model(hdr);
     if (verbose)
       std::cerr << "[observed basecall model: "
-                << (basecall_model.empty() ? "NA" : basecall_model) << "]"
-                << '\n';
+                << (basecall_model.empty() ? "NA" : basecall_model) << "]\n";
     if (!expected_basecall_model.empty() &&
         basecall_model != expected_basecall_model) {
       std::cerr << "failed to match basecall model:\n"
@@ -898,12 +879,11 @@ struct read_processor {
           // set size of counts if current target is present
           chrom_itr = chroms_beg + chrom_idx->second;
           counts.resize(chrom_sizes[chrom_idx->second]);
-
-          const bool is_rev = bam_is_rev(aln);
-          if (is_rev && strand != 1)
-            count_states_rev(aln, counts, mod_buf, *chrom_itr);
-          if (!is_rev && strand != 2)
-            count_states_fwd(aln, counts, mod_buf, *chrom_itr);
+          // const bool is_rev = bam_is_rev(aln);
+          // if (is_rev && strand != 1)
+          //   count_states_rev(aln, counts, mod_buf, *chrom_itr);
+          // if (!is_rev && strand != 2)
+          //   count_states_fwd(aln, counts, mod_buf, *chrom_itr);
         }
         prev_tid = tid;
       }
@@ -929,6 +909,35 @@ struct read_processor {
 };
 
 [[nodiscard]] static auto
+valid_modification_types(const std::string &infile,
+                         const std::uint32_t n_reads_to_check) -> bool {
+  using mstate = hts_base_mod_state;
+  std::unique_ptr<mstate, void (*)(mstate *)> m(hts_base_mod_state_alloc(),
+                                                &hts_base_mod_state_free);
+  bamxx::bam_in hts(infile);
+  if (!hts)
+    throw std::runtime_error("failed to open input file");
+  bamxx::bam_header hdr(hts);
+  if (!hdr)
+    throw std::runtime_error("failed to read header");
+
+  std::uint32_t read_count{};
+  bool valid_types{true};
+  bamxx::bam_rec aln;
+  for (; valid_types && hts.read(hdr, aln) && read_count < n_reads_to_check;
+       ++read_count) {
+    if (!bam_aux_get(aln.b, "MM") && !bam_aux_get(aln.b, "Mm"))
+      continue;
+    bam_parse_basemod(aln.b, m.get());
+    // ADS: or bam_parse_basemod2(aln.b, m, HTS_MOD_REPORT_UNCHECKED)
+    int n_types{};
+    const auto types = bam_mods_recorded(m.get(), &n_types);
+    valid_types = n_types >= 2 && types[0] == 'h' && types[1] == 'm';
+  }
+  return valid_types;
+}
+
+[[nodiscard]] static auto
 check_modification_sites(const std::string &infile,
                          const std::uint32_t n_reads_to_check) -> bool {
   static constexpr auto max_mods = 10;
@@ -941,7 +950,6 @@ check_modification_sites(const std::string &infile,
   bamxx::bam_in hts(infile);
   if (!hts)
     throw std::runtime_error("failed to open input file");
-  // load the input file's header
   bamxx::bam_header hdr(hts);
   if (!hdr)
     throw std::runtime_error("failed to read header");
@@ -1046,11 +1054,18 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     std::ostringstream cmd;
     std::copy(argv, argv + argc, std::ostream_iterator<const char *>(cmd, " "));
 
+    if (!valid_modification_types(mapped_reads_file, n_reads_to_check)) {
+      std::cerr << "modification types are not valid\n"
+                << "expected h=0 and m=1\n";
+      return EXIT_FAILURE;
+    }
+
     const auto mods_at_cpgs =
       check_modification_sites(mapped_reads_file, n_reads_to_check);
 
     if (rp.verbose)
-      std::cerr << "[input BAM/SAM file: " << mapped_reads_file << "]\n"
+      std::cerr << std::boolalpha
+                << "[input BAM/SAM file: " << mapped_reads_file << "]\n"
                 << "[output file: " << outfile << "]\n"
                 << "[genome file: " << chroms_file << "]\n"
                 << "[mods only at CpGs: " << mods_at_cpgs << "]\n"

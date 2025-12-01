@@ -366,9 +366,9 @@ count_states_fwd(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
     const std::uint32_t n = bam_cigar_oplen(*c_itr);
     if (eats_ref(op) && eats_query(op)) {
       const decltype(qpos) end_qpos = qpos + n;
-      for (; qpos < end_qpos; ++qpos) {
+      for (; qpos < end_qpos; ++qpos, ++rpos) {
         if (*hydroxy_prob_itr >= 0 && *methyl_prob_itr >= 0)
-          counts[rpos++].add_count_fwd(*hydroxy_prob_itr, *methyl_prob_itr);
+          counts[rpos].add_count_fwd(*hydroxy_prob_itr, *methyl_prob_itr);
         ++methyl_prob_itr;
         ++hydroxy_prob_itr;
       }
@@ -417,11 +417,11 @@ count_states_rev(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
     const std::uint32_t n = bam_cigar_oplen(*c_itr);
     if (eats_ref(op) && eats_query(op)) {
       const decltype(qpos) end_qpos = qpos - n;
-      for (; qpos > end_qpos; --qpos) {
+      for (; qpos > end_qpos; --qpos, ++rpos) {
         --methyl_prob_itr;
         --hydroxy_prob_itr;
         if (*hydroxy_prob_itr >= 0 && *methyl_prob_itr >= 0)
-          counts[rpos++].add_count_rev(*hydroxy_prob_itr, *methyl_prob_itr);
+          counts[rpos].add_count_rev(*hydroxy_prob_itr, *methyl_prob_itr);
       }
     }
     else if (eats_query(op)) {

@@ -993,6 +993,8 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     std::string outfile;
     std::string stats_file;
 
+    // ADS: add a message to indicate that we assume either all modifications
+    // are either called or no modifications are called, for each site.
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            "get methylation levels from mapped nanopore reads",
@@ -1044,7 +1046,7 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
       rp.cpg_only = true;
 
     if (rp.n_threads <= 0)
-      throw std::runtime_error("thread count cannot be zerox");
+      throw std::runtime_error("thread count cannot be zero");
 
     std::ostringstream cmd;
     std::copy(argv, argv + argc, std::ostream_iterator<const char *>(cmd, " "));

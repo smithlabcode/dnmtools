@@ -430,7 +430,7 @@ get_tid_to_idx(
   const std::unordered_map<std::string, std::size_t> &name_to_idx) {
   std::set<std::int32_t> missing_tids;
   std::map<std::int32_t, std::size_t> tid_to_idx;
-  for (std::int32_t i = 0; i < hdr.h->n_targets; ++i) {
+  for (std::int32_t i = 0; i < get_n_targets(hdr); ++i) {
     // "curr_name" gives a "tid_to_name" mapping allowing to jump
     // through "name_to_idx" and get "tid_to_idx"
     const std::string curr_name(hdr.h->target_name[i]);
@@ -449,7 +449,7 @@ consistent_targets(const bamxx::bam_header &hdr,
                    const std::map<std::int32_t, std::size_t> &tid_to_idx,
                    const std::vector<std::string> &names,
                    const std::vector<std::size_t> &sizes) {
-  const std::size_t n_targets = hdr.h->n_targets;
+  const std::size_t n_targets = get_n_targets(hdr);
   if (n_targets != std::size(names))
     return false;
 
@@ -472,7 +472,7 @@ consistent_existing_targets(
   const std::map<std::int32_t, std::size_t> &tid_to_idx,
   const std::vector<std::string> &names,
   const std::vector<std::size_t> &sizes) {
-  const std::size_t n_targets = hdr.h->n_targets;
+  const std::size_t n_targets = get_n_targets(hdr);
   for (std::size_t tid = 0; tid < n_targets; ++tid) {
     const auto idx_itr = tid_to_idx.find(tid);
     if (idx_itr == std::cend(tid_to_idx))
@@ -896,7 +896,7 @@ struct read_processor {
     // ADS: if some chroms might not be covered by reads, we have to iterate
     // over what remains
     if (!require_covered)
-      for (auto i = prev_tid + 1; i < hdr.h->n_targets; ++i)
+      for (auto i = prev_tid + 1; i < get_n_targets(hdr); ++i)
         output_skipped_chromosome(i, tid_to_idx, hdr, chroms_beg, chrom_sizes,
                                   counts, out);
     return mps;

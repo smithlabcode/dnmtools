@@ -293,24 +293,6 @@ static const char *const tag_values[] = {
 };
 // NOLINTEND(*-avoid-c-arrays)
 
-template <typename T>
-[[nodiscard]] static auto
-next_mod_pos(T &b, const T e) -> std::int32_t {
-  const auto isdig = [](const auto x) {
-    return std::isdigit(static_cast<unsigned char>(x));
-  };
-  b = std::find_if(b, e, isdig);
-  if (b == e)
-    return -1;
-  auto r = atoi(b);  // NOLINT(cert-err34-c)
-  b = std::find_if_not(b, e, isdig);
-  // const T c = std::find_if_not(b, e, isdig);
-  // std::int32_t r{};
-  // std::from_chars(b, c, r);
-  // b = c;
-  return r;
-};
-
 struct mod_prob_buffer {
   static constexpr auto init_capacity{128 * 1024};
   static constexpr auto max_mods = 10;

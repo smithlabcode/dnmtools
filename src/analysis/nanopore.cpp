@@ -879,11 +879,6 @@ struct read_processor {
           // set size of counts if current target is present
           chrom_itr = chroms_beg + chrom_idx->second;
           counts.resize(chrom_sizes[chrom_idx->second]);
-          // const bool is_rev = bam_is_rev(aln);
-          // if (is_rev && strand != 1)
-          //   count_states_rev(aln, counts, mod_buf, *chrom_itr);
-          // if (!is_rev && strand != 2)
-          //   count_states_fwd(aln, counts, mod_buf, *chrom_itr);
         }
         prev_tid = tid;
       }

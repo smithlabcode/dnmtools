@@ -965,6 +965,7 @@ check_modification_sites(const std::string &infile,
     throw std::runtime_error("failed to read header");
 
   std::uint32_t read_count{};
+  std::uint32_t reads_processed{};
   std::uint32_t only_cpgs_counter{};
   const auto d = mods.data();
 
@@ -991,9 +992,10 @@ check_modification_sites(const std::string &infile,
       only_cpgs = is_rev ? other_nuc == 'C' && nuc == 'G'
                          : nuc == 'C' && other_nuc == 'G';
     }
+    ++reads_processed;
     only_cpgs_counter += only_cpgs;
   }
-  return only_cpgs_counter == read_count;
+  return only_cpgs_counter == reads_processed;
 }
 
 int

@@ -14,7 +14,8 @@
  */
 
 #include "radmeth_optimize_gamma.hpp"
-#include "radmeth_lgamma.hpp"
+
+#include "dnmtools_lgamma.hpp"
 #include "radmeth_model.hpp"
 #include "radmeth_optimize_params.hpp"
 
@@ -53,9 +54,9 @@ get_cache_lgamma(const std::vector<std::uint8_t> &group,
   cache.p = p;
   cache.a = a;
   cache.b = b;
-  cache.lgamma_a = radmeth_lgamma::noneg_lgamma(a);
-  cache.lgamma_b = radmeth_lgamma::noneg_lgamma(b);
-  cache.lgamma_a_b = radmeth_lgamma::noneg_lgamma(a + b);
+  cache.lgamma_a = dnmtools_lgamma::noneg_lgamma(a);
+  cache.lgamma_b = dnmtools_lgamma::noneg_lgamma(b);
+  cache.lgamma_a_b = dnmtools_lgamma::noneg_lgamma(a + b);
 }
 
 template <typename T>
@@ -82,9 +83,9 @@ log_likelihood(const gsl_vector *params, Regression<T> &reg) -> double {
     const auto b = c.b;
 
     // clang-format off
-    ll += ((radmeth_lgamma::noneg_lgamma(y + a) - c.lgamma_a) +
-           (radmeth_lgamma::noneg_lgamma(n - y + b) - c.lgamma_b) +
-           (c.lgamma_a_b - radmeth_lgamma::noneg_lgamma(n + a + b)));
+    ll += ((dnmtools_lgamma::noneg_lgamma(y + a) - c.lgamma_a) +
+           (dnmtools_lgamma::noneg_lgamma(n - y + b) - c.lgamma_b) +
+           (c.lgamma_a_b - dnmtools_lgamma::noneg_lgamma(n + a + b)));
     // clang-format on
   }
 

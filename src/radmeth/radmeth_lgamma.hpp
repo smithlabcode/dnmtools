@@ -13,8 +13,8 @@
  * more details.
  */
 
-#ifndef RADMETH_LGAMMA_HPP
-#define RADMETH_LGAMMA_HPP
+#ifndef DNMTOOLS_LGAMMA_HPP
+#define DNMTOOLS_LGAMMA_HPP
 
 /* ADS: the constants below, and some of the code, was taken from e_lgamma_r.c
    in Google's bionic source and lgamma_r.c in the MUSL source. One or both
@@ -34,7 +34,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace radmeth_lgamma {
+namespace dnmtools_lgamma {
 
 // ADS: 'tc' is the unique minimum of the gamma function on R+
 static constexpr std::double_t tc = +1.46163214496836224576e+00;
@@ -268,6 +268,6 @@ noneg_lgamma(double x) -> double {
     z * (W[1] + y * (W[2] + y * (W[3] + y * (W[4] + y * (W[5] + y * W[6])))));
   return (x - 0.5) * (t - 1.0) + w;
 }
-};  // namespace radmeth_lgamma
+};  // namespace dnmtools_lgamma
 
-#endif  // RADMETH_LGAMMA_HPP
+#endif  // DNMTOOLS_LGAMMA_HPP

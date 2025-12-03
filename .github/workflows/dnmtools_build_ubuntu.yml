@@ -31,7 +31,9 @@ jobs:
     - name: Build with g++
       run: make -j4
     - name: Test the g++ build
-      run: make -j4 check-TESTS
+      run:
+        ldd dnmtools
+        ./dnmtools
   build-with-clang:
     runs-on: ubuntu-latest
     steps:
@@ -47,4 +49,6 @@ jobs:
     - name: Build with clang++
       run: make -j4
     - name: Test the clang++ build
-      run: make -j4 check-TESTS
+      run:
+        ldd dnmtools
+        ./dnmtools

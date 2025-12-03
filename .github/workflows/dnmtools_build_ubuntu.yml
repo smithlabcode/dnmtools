@@ -31,7 +31,7 @@ jobs:
     - name: Build with g++
       run: make -j4
     - name: Test the g++ build
-      run:
+      run: |
         ldd dnmtools
         ./dnmtools
         sudo find / -name libhts.so\*
@@ -51,6 +51,6 @@ jobs:
     - name: Build with clang++
       run: make -j4
     - name: Test the clang++ build
-      run:
+      run: |
         ldd dnmtools
         ./dnmtools

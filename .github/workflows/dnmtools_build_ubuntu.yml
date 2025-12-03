@@ -34,6 +34,8 @@ jobs:
       run:
         ldd dnmtools
         ./dnmtools
+        sudo find / -name libhts.so\*
+        sudo find / -name libhts.a
   build-with-clang:
     runs-on: ubuntu-latest
     steps:

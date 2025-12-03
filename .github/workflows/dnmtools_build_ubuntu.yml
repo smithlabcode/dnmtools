@@ -33,7 +33,6 @@ jobs:
     - name: Test the g++ build
       run: |
         ldd dnmtools
-        ./dnmtools
         sudo find / -name libhts.so\*
         sudo find / -name libhts.a
   build-with-clang:

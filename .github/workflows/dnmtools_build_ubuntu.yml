@@ -15,7 +15,15 @@ jobs:
       with:
         submodules: recursive
     - name: Install dependencies
-      run: sudo apt-get install -y libhts-dev libgsl-dev
+      run: sudo apt-get install -y libgsl-dev
+    - name: Install HTSLib dependencies
+      run: sudo apt-get install -y libcurl4-gnutls-dev libdeflate-dev liblzma-dev zlib1g-dev libbz2-dev
+    - name: Build htslib
+      run: |
+        git clone --recursive https://github.com/samtools/htslib.git && \
+        cd htslib && \
+        make -j4 && \
+        sudo make install
     - name: Generate configure script
       run: ./autogen.sh
     - name: Configure for GCC

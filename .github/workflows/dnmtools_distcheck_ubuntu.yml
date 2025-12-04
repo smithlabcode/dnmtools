@@ -14,26 +14,27 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    - name: Get version number
-      id: vn
-      run: |
-        awk '/AC_INIT/ {print "vn="$2}' configure.ac | sed "s/\[//; s/\]//; s/,//" >> "$GITHUB_OUTPUT"
-      env:
-        GH_TOKEN: ${{ github.token }}
-    - name: Update packages
-      run: sudo apt-get update
     - name: Install dependencies
-      run: sudo apt-get install -y libhts-dev libgsl-dev samtools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+        libgsl-dev \
+        libcurl4-gnutls-dev \
+        libdeflate-dev \
+        liblzma-dev \
+        zlib1g-dev \
+        libbz2-dev
+    - name: Build and install htslib (for recent version)
+      run: |
+        git clone --recursive https://github.com/samtools/htslib.git
+        cd htslib
+        make -j4
+        sudo make install prefix=/usr
     - name: Generate configure script
       run: ./autogen.sh
     - name: configure
       run: ./configure
     - name: Generate the source archive
       run: make dist
-    - name: Upload the archive
-      uses: actions/upload-artifact@v4
-      with:
-        name: dnmtools-${{ steps.vn.outputs.vn }}.tar.gz
-        path: dnmtools-${{ steps.vn.outputs.vn }}.tar.gz
     - name: make distcheck
       run: make -j4 distcheck

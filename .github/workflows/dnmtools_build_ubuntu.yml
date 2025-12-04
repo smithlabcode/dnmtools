@@ -15,16 +15,16 @@ jobs:
       with:
         submodules: recursive
     - name: Install dependencies
-      run: sudo apt-get install -y libgsl-dev
-    - name: Install HTSLib dependencies
       run: |
+        sudo apt-get update
         sudo apt-get install -y \
+        libgsl-dev \
         libcurl4-gnutls-dev \
         libdeflate-dev \
         liblzma-dev \
         zlib1g-dev \
         libbz2-dev
-    - name: Build htslib
+    - name: Build and install htslib (for recent version)
       run: |
         git clone --recursive https://github.com/samtools/htslib.git
         cd htslib
@@ -45,16 +45,16 @@ jobs:
       with:
         submodules: recursive
     - name: Install dependencies
-      run: sudo apt-get install -y libgsl-dev
-    - name: Install HTSLib dependencies
       run: |
+        sudo apt-get update
         sudo apt-get install -y \
+        libgsl-dev \
         libcurl4-gnutls-dev \
         libdeflate-dev \
         liblzma-dev \
         zlib1g-dev \
         libbz2-dev
-    - name: Build htslib
+    - name: Build and install htslib (for recent version)
       run: |
         git clone --recursive https://github.com/samtools/htslib.git
         cd htslib

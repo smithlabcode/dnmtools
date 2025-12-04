@@ -168,9 +168,9 @@ libdnmtools_a_SOURCES = \
 	src/common/dnmtools_utils.cpp
 
 libdnmtools_a_SOURCES += \
+        src/common/dnmtools_lgamma.hpp \
         src/common/Interval.hpp \
         src/common/Interval6.hpp \
-	src/bamxx/bamxx.hpp \
         src/common/dnmtools_gaussinv.hpp \
 	src/common/bam_record_utils.hpp \
 	src/common/counts_header.hpp \
@@ -190,6 +190,9 @@ libdnmtools_a_SOURCES += \
         src/common/dnmtools_utils.hpp \
         src/common/dnmt_error.hpp
 
+libdnmtools_a_SOURCES += \
+	src/bamxx/bamxx.hpp
+
 # ADS: additional radmeth sources to help isolate the parts using GSL for
 # optimization
 libdnmtools_a_SOURCES += \
@@ -197,7 +200,6 @@ libdnmtools_a_SOURCES += \
         src/radmeth/radmeth_optimize_gamma.hpp \
         src/radmeth/radmeth_optimize_params.hpp \
         src/radmeth/radmeth_model.hpp \
-        src/radmeth/radmeth_lgamma.hpp \
         src/radmeth/radmeth_utils.hpp \
         src/radmeth/radmeth_design.hpp
 

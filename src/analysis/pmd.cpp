@@ -24,8 +24,6 @@
 
 #include <bamxx.hpp>
 
-#include <gsl/gsl_sf_gamma.h>
-
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -47,7 +45,7 @@
 #include <utility>
 #include <vector>
 
-// NOLINTBEGIN(*-avoid-c-arrays,*-avoid-magic-numbers,*-init-variables,*-narrowing-conversions,*-owning-memory,*-pointer-arithmetic)
+// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions)
 
 using std::cerr;
 using std::cout;
@@ -71,18 +69,19 @@ struct pmd_summary {
   explicit pmd_summary(const vector<GenomicRegion> &pmds) :
     pmd_count{std::size(pmds)} {
     // NOLINTBEGIN(*-prefer-member-initializer)
-    pmd_total_size = accumulate(cbegin(pmds), cend(pmds), 0ul,
-                                [](const uint64_t t, const GenomicRegion &p) {
-                                  return t + p.get_width();
-                                });
+    pmd_total_size =
+      accumulate(cbegin(pmds), cend(pmds), 0ul,
+                 [](const std::uint64_t t, const GenomicRegion &p) {
+                   return t + p.get_width();
+                 });
     pmd_mean_size = static_cast<double>(pmd_total_size) /
-                    std::max(pmd_count, static_cast<uint64_t>(1));
+                    std::max(pmd_count, static_cast<std::uint64_t>(1));
     // NOLINTEND(*-prefer-member-initializer)
   }
   // pmd_count is the number of identified PMDs.
-  uint64_t pmd_count{};
+  std::uint64_t pmd_count{};
   // total_pmd_size is the sum of the sizes of the identified PMDs
-  uint64_t pmd_total_size{};
+  std::uint64_t pmd_total_size{};
   // mean_pmd_size is the mean size of the identified PMDs
   double pmd_mean_size{};
 
@@ -134,13 +133,23 @@ merge_nearby_pmd(const size_t max_merge_dist, vector<GenomicRegion> &pmds) {
   pmds.resize(j);
 }
 
-inline double
+[[nodiscard]] static inline double
+lnbeta(const double a, const double b) {
+  return std::lgamma(a) + std::lgamma(b) - std::lgamma(a + b);
+}
+
+[[nodiscard]] static inline double
+beta_log_likelihood(const double alpha, const double beta, const double p) {
+  return (alpha - 1.0) * std::log(p) + (beta - 1.0) * std::log(1.0 - p) -
+         lnbeta(alpha, beta);
+}
+
+[[nodiscard]] static inline double
 beta_max_likelihood(const double fg_alpha, const double fg_beta,
                     const double bg_alpha, const double bg_beta,
                     const double p_low, const double p_hi) {
-  return (fg_alpha - 1.0) * log(p_low) + (fg_beta - 1.0) * log(1.0 - p_low) -
-         gsl_sf_lnbeta(fg_alpha, fg_beta) + (bg_alpha - 1.0) * log(p_hi) +
-         (bg_beta - 1.0) * log(1.0 - p_hi) - gsl_sf_lnbeta(bg_alpha, bg_beta);
+  return beta_log_likelihood(fg_alpha, fg_beta, p_low) +
+         beta_log_likelihood(bg_alpha, bg_beta, p_hi);
 }
 
 static size_t
@@ -172,7 +181,10 @@ find_best_bound(const bool IS_RIGHT_BOUNDARY,
   double best_score = -num_lim<double>::max();
   if (meth_tot.size() > 0)
     for (size_t i = 1; i < meth_tot.size() - 1; ++i) {
-      size_t N_low, k_low, N_hi, k_hi;
+      size_t N_low{};
+      size_t k_low{};
+      size_t N_hi{};
+      size_t k_hi{};
       if (!IS_RIGHT_BOUNDARY) {
         N_low = cumu_right_tot[i] + meth_tot[i].second;
         k_low = cumu_right_meth[i] + meth_tot[i].first;
@@ -235,11 +247,11 @@ get_optimized_boundary_likelihoods(
   // CONTRIBUTION TO BOUNDARY OBSERVATIONS
   static const double array_coverage_constant = 10;
 
-  vector<bgzf_file *> in(cpgs_file.size());
+  vector<bgzf_file> in;
   for (size_t i = 0; i < cpgs_file.size(); ++i) {
-    in[i] = new bgzf_file(cpgs_file[i], "r");
+    in.emplace_back(cpgs_file[i], "r");
     if (get_has_counts_header(cpgs_file[i]))
-      skip_counts_header(*in[i]);  // cppcheck-suppress shadowVariable
+      skip_counts_header(in.back());
   }
 
   std::map<size_t, std::pair<size_t, size_t>> pos_meth_tot;
@@ -251,7 +263,7 @@ get_optimized_boundary_likelihoods(
       // get totals for all CpGs overlapping that boundary
 
       MSite site;
-      while (read_site(*in[i], site) &&
+      while (read_site(in[i], site) &&
              !succeeds(site.chrom, site.pos, bounds[bound_idx])) {
         if (array_status[i])
           site.n_reads = array_coverage_constant;
@@ -319,9 +331,6 @@ get_optimized_boundary_likelihoods(
     boundary_scores.push_back(exp(score));
     pos_meth_tot.clear();
   }
-
-  for (auto &&fp : in)
-    delete fp;
 }
 
 static void
@@ -334,11 +343,11 @@ find_exact_boundaries(
   // CONTRIBUTION TO BOUNDARY OBSERVATIONS
   static const double array_coverage_constant = 10;
 
-  vector<bgzf_file *> in(cpgs_file.size());
-  for (size_t i = 0; i < cpgs_file.size(); ++i) {
-    in[i] = new bgzf_file(cpgs_file[i], "r");
+  vector<bgzf_file> in;
+  for (size_t i = 0; i < std::size(cpgs_file); ++i) {
+    in.emplace_back(cpgs_file[i], "r");
     if (get_has_counts_header(cpgs_file[i]))
-      skip_counts_header(*in[i]);  // cppcheck-suppress shadowVariable
+      skip_counts_header(in[i]);
   }
 
   std::map<size_t, std::pair<size_t, size_t>> pos_meth_tot;
@@ -350,7 +359,7 @@ find_exact_boundaries(
       // get totals for all CpGs overlapping that boundary
 
       MSite site;
-      while (read_site(*in[i], site) &&
+      while (read_site(in[i], site) &&
              !succeeds(site.chrom, site.pos, bounds[bound_idx])) {
         if (array_status[i])
           site.pos = array_coverage_constant;
@@ -386,9 +395,6 @@ find_exact_boundaries(
                                          fg_beta, bg_alpha, bg_beta));
     pos_meth_tot.clear();
   }
-
-  for (size_t i = 0; i < std::size(in); ++i)
-    delete in[i];
 }
 
 static void
@@ -1426,4 +1432,4 @@ main_pmd(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   return EXIT_SUCCESS;
 }
 
-// NOLINTEND(*-avoid-c-arrays,*-avoid-magic-numbers,*-init-variables,*-narrowing-conversions,*-owning-memory,*-pointer-arithmetic)
+// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions)

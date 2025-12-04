@@ -191,7 +191,8 @@ libdnmtools_a_SOURCES += \
         src/common/dnmt_error.hpp
 
 libdnmtools_a_SOURCES += \
-	src/bamxx/bamxx.hpp
+	src/bamxx/bamxx.hpp \
+	src/common/nlohmann/json.hpp
 
 # ADS: additional radmeth sources to help isolate the parts using GSL for
 # optimization

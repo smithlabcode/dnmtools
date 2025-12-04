@@ -17,12 +17,18 @@ jobs:
     - name: Install dependencies
       run: sudo apt-get install -y libgsl-dev
     - name: Install HTSLib dependencies
-      run: sudo apt-get install -y libcurl4-gnutls-dev libdeflate-dev liblzma-dev zlib1g-dev libbz2-dev
+      run: |
+        sudo apt-get install -y \
+        libcurl4-gnutls-dev \
+        libdeflate-dev \
+        liblzma-dev \
+        zlib1g-dev \
+        libbz2-dev
     - name: Build htslib
       run: |
-        git clone --recursive https://github.com/samtools/htslib.git && \
-        cd htslib && \
-        make -j4 && \
+        git clone --recursive https://github.com/samtools/htslib.git
+        cd htslib
+        make -j4
         sudo make install prefix=/usr
     - name: Generate configure script
       run: ./autogen.sh
@@ -31,11 +37,7 @@ jobs:
     - name: Build with g++
       run: make -j4
     - name: Test the g++ build
-      run: |
-        ldd dnmtools
-        sudo find / -name libhts.so\*
-        sudo find / -name libhts.a
-        ./dnmtools
+      run: make -j4 check
   build-with-clang:
     runs-on: ubuntu-latest
     steps:
@@ -43,7 +45,21 @@ jobs:
       with:
         submodules: recursive
     - name: Install dependencies
-      run: sudo apt-get install -y libhts-dev libgsl-dev
+      run: sudo apt-get install -y libgsl-dev
+    - name: Install HTSLib dependencies
+      run: |
+        sudo apt-get install -y \
+        libcurl4-gnutls-dev \
+        libdeflate-dev \
+        liblzma-dev \
+        zlib1g-dev \
+        libbz2-dev
+    - name: Build htslib
+      run: |
+        git clone --recursive https://github.com/samtools/htslib.git
+        cd htslib
+        make -j4
+        sudo make install prefix=/usr
     - name: Generate configure script
       run: ./autogen.sh
     - name: Configure for Clang
@@ -51,6 +67,4 @@ jobs:
     - name: Build with clang++
       run: make -j4
     - name: Test the clang++ build
-      run: |
-        ldd dnmtools
-        ./dnmtools
+      run: make -j4 check

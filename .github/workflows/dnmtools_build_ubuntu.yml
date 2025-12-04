@@ -23,7 +23,7 @@ jobs:
         git clone --recursive https://github.com/samtools/htslib.git && \
         cd htslib && \
         make -j4 && \
-        sudo make install
+        sudo make install prefix=/usr
     - name: Generate configure script
       run: ./autogen.sh
     - name: Configure for GCC
@@ -35,6 +35,7 @@ jobs:
         ldd dnmtools
         sudo find / -name libhts.so\*
         sudo find / -name libhts.a
+        ./dnmtools
   build-with-clang:
     runs-on: ubuntu-latest
     steps:

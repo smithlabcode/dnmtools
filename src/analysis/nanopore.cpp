@@ -168,19 +168,19 @@ eats_query(const std::uint32_t c) {
    then one needs this. Also, Qiang should be consulted on this
    because he spent much time thinking about it in the context of
    plants. */
-[[nodiscard]] static bool
+[[nodiscard]] static inline bool
 is_chh(const std::string &s, const std::size_t i) {
   return i + 2 < std::size(s) && is_cytosine(s[i]) && !is_guanine(s[i + 1]) &&
          !is_guanine(s[i + 2]);
 }
 
-[[nodiscard]] static bool
+[[nodiscard]] static inline bool
 is_ddg(const std::string &s, const std::size_t i) {
   return i + 2 < std::size(s) && !is_cytosine(s[i]) && !is_cytosine(s[i + 1]) &&
          is_guanine(s[i + 2]);
 }
 
-[[nodiscard]] static bool
+[[nodiscard]] static inline bool
 is_c_at_g(const std::string &s, const std::size_t i) {
   return i + 2 < std::size(s) && is_cytosine(s[i]) && !is_cytosine(s[i + 1]) &&
          !is_guanine(s[i + 1]) && is_guanine(s[i + 2]);

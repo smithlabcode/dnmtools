@@ -1,4 +1,4 @@
-/* Copyright (C) 2025 Andrew D.
+/* Copyright (C) 2025 Andrew D. Smith
  *
  * Author: Andrew D. Smith
  *

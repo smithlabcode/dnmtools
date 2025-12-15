@@ -74,8 +74,6 @@ simreads(int argc, char *argv[]);
 int
 main_counts(int argc, char *argv[]);
 int
-main_nanocount(int argc, char *argv[]);
-int
 main_allelicmeth(int argc, char *argv[]);
 int
 main_amrfinder(int argc, char *argv[]);
@@ -153,6 +151,10 @@ int
 kmersites(int argc, char *argv[]);
 int
 main_summary(int argc, char *argv[]);
+#ifdef BUILD_NANOPORE
+int
+main_nanocount(int argc, char *argv[]);
+#endif
 // NOLINTEND(*-avoid-c-arrays)
 
 void
@@ -188,7 +190,9 @@ main(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
           {"uniq",      "remove duplicate reads from sorted mapped reads",           main_uniq},
           {"bsrate",    "compute the BS conversion rate from BS-seq reads mapped to a genome",  main_bsrate},
           {"counts",    "get methylation levels from mapped WGBS reads",             main_counts},
+#ifdef BUILD_NANOPORE
           {"counts-nano", "get methylation levels from mapped nanopore reads",       main_nanocount},
+#endif
           {"sym",       "get CpG sites and make methylation levels symmetric",       main_symmetric_cpgs},
           {"levels",    "compute methylation summary statistics from a counts file", main_levels}}}},
 

@@ -16,6 +16,8 @@
  * more details.
  */
 
+#ifdef BUILD_NANOPORE
+
 #include "counts_header.hpp"
 
 #include "OptionParser.hpp"
@@ -1085,3 +1087,5 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
 }
 
 // NOLINTEND(*-narrowing-conversions,*-pointer-arithmetic)
+
+#endif

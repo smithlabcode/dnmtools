@@ -13,7 +13,12 @@
 # You should have received a copy of the GNU General Public License along with
 # this program. If not, see <https://www.gnu.org/licenses/>.
 
-find_package(HTSLIB 1.20 REQUIRED)
+if(BUILD_NANOPORE)
+  find_package(HTSLIB 1.20 REQUIRED)
+  add_compile_definitions(BUILD_NANOPORE)
+else()
+  find_package(HTSLIB REQUIRED)
+endif()
 find_package(Threads REQUIRED)
 
 if(NOT TARGET bamxx)

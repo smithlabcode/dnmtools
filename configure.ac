@@ -55,6 +55,11 @@ AC_ARG_WITH([libdeflate],
   [AS_HELP_STRING([--with-libdeflate], [use libdeflate for BAM output])],
   [with_libdeflate=yes], [with_libdeflate=no])
 
+dnl arg for building with mods support in 'counts'
+AC_ARG_WITH([htsmods],
+  [AS_HELP_STRING([--with-htsmods], [use HTSLib 'mods' to support Nanopore])],
+  [with_htsmods=yes], [with_htsmods=no])
+
 dnl check for required libraries
 AC_SEARCH_LIBS([pthread_create], [pthread], [], [AC_MSG_FAILURE(["pthread library not found"])])
 AC_SEARCH_LIBS([gzopen], [z], [], [AC_MSG_FAILURE(["Zlib library not found"])])
@@ -66,18 +71,22 @@ AS_IF([test "x$with_libdeflate" = "xyes"],
 AC_SEARCH_LIBS([hts_version], [hts], [], [AC_MSG_FAILURE([$hts_fail_msg])])
 AC_CHECK_HEADERS([htslib/hts.h], [], [AC_MSG_ERROR([hts.h not found])])
 # Require HTS_VERSION >= 102000
-AC_COMPILE_IFELSE(
-  [AC_LANG_PROGRAM([[
-     #include <htslib/hts.h>
-     #if !defined(HTS_VERSION)
-     # error HTS_VERSION not defined
-     #endif
-     #if HTS_VERSION < 102000
-     # error htslib library too old
-     #endif
-  ]], [[]])],
-  [have_hts=yes],
-  [have_hts=no]
+AS_IF([test "x$with_htsmods" = "xyes"],
+  [
+    AC_COMPILE_IFELSE(
+      [
+        AC_LANG_PROGRAM([[
+          #include <htslib/hts.h>
+          #if !defined(HTS_VERSION)
+          # error HTS_VERSION not defined
+          #endif
+          #if HTS_VERSION < 102000
+          # error htslib library too old
+          #endif
+        ]], [[]])
+      ], [have_htsmods_version=yes], [have_htsmods_version=no])
+  ],
+  [have_htsmods_version=yes]
 )
 
 AC_COMPUTE_INT(
@@ -87,8 +96,13 @@ AC_COMPUTE_INT(
   [AC_MSG_ERROR([Could not compute HTS_VERSION])]
 )
 AC_MSG_NOTICE([Detected htslib version: $hts_version_macro])
-AS_IF([test "x$have_hts" != "xyes"],
-      [AC_MSG_ERROR([Required htslib version must be at least 102000 (v1.20)])])
+
+AS_IF([test "x$have_htsmods_version" != "xyes"], [
+  AC_MSG_ERROR([
+    HTSLib version must be at least 102000 (v1.20) for mods support
+  ])
+])
+AM_CONDITIONAL([BUILD_NANOPORE], [test "x$with_htsmods" = "xyes"])
 
 AC_SEARCH_LIBS([cblas_dgemm], [gslcblas], [], [AC_MSG_FAILURE([$gsl_fail_msg])])
 AC_SEARCH_LIBS([gsl_blas_dgemm], [gsl], [], [AC_MSG_FAILURE([$gsl_fail_msg])])

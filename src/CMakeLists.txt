@@ -52,4 +52,13 @@ target_link_libraries(dnmtools PUBLIC
   dnmtools_radmeth_objs
   dnmtools_mlml_objs
   dnmtools_amrfinder_objs
+  bamxx
+  HTSLIB::HTSLIB
+  ZLIB::ZLIB
+  Threads::Threads
 )
+if(USE_LIBDEFLATE)
+  target_link_libraries(dnmtools PUBLIC
+    LIBDEFLATE::LIBDEFLATE
+  )
+endif()

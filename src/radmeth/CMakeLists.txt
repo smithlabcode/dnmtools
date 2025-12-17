@@ -45,4 +45,5 @@ target_link_libraries(dnmtools_radmeth_objs PUBLIC
   ${LIBRARY_OBJECTS}
   smithlab_cpp
   bamxx
+  Threads::Threads
 )

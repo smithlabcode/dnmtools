@@ -208,15 +208,13 @@ write_line_for_tabular(std::array<char, buffer_size> &buffer,
       cursor += n_bytes;
       bytes_left -= n_bytes;
     }
-  if (std::distance(buffer.data(), cursor) + 1 <
-      static_cast<std::ptrdiff_t>(buffer_size))
-    *cursor++ = '\n';
 
-  if (std::distance(buffer.data(), cursor) <
-      static_cast<std::ptrdiff_t>(buffer_size)) {
-    *cursor++ = '\0';
-    out.write(buffer.data(), std::distance(buffer.data(), cursor));
-  }
+  if (static_cast<std::ptrdiff_t>(buffer_size) <=
+      std::distance(buffer.data(), cursor))
+    throw std::runtime_error("failed to write output line");
+
+  *cursor++ = '\n';
+  out.write(buffer.data(), std::distance(buffer.data(), cursor));
 }
 
 static void

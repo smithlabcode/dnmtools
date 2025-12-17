@@ -13,6 +13,10 @@
 # You should have received a copy of the GNU General Public License along with
 # this program. If not, see <https://www.gnu.org/licenses/>.
 
+# Packages
+if(USE_LIBDEFLATE)
+  find_package(LIBDEFLATE REQUIRED)
+endif()
 if(BUILD_NANOPORE)
   find_package(HTSLIB 1.20 REQUIRED)
   add_compile_definitions(BUILD_NANOPORE)
@@ -20,12 +24,14 @@ else()
   find_package(HTSLIB REQUIRED)
 endif()
 find_package(Threads REQUIRED)
+find_package(ZLIB REQUIRED)
 
-if(NOT TARGET bamxx)
-  add_subdirectory(bamxx)
-endif()
+# Subdirs
 if(NOT TARGET smithlab_cpp)
   add_subdirectory(smithlab_cpp)
+endif()
+if(NOT TARGET bamxx)
+  add_subdirectory(bamxx)
 endif()
 add_subdirectory(common)
 add_subdirectory(radmeth)

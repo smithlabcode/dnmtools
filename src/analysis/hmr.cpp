@@ -41,16 +41,16 @@
 #include <utility>
 #include <vector>
 
-// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions,*-prefer-member-initializer)
+// NOLINTBEGIN(*-narrowing-conversions)
 
 struct hmr_summary {
-  explicit hmr_summary(const std::vector<GenomicRegion> &hmrs) {
-    hmr_count = hmrs.size();
-    hmr_total_size =
+  explicit hmr_summary(const std::vector<GenomicRegion> &hmrs) :
+    hmr_count{std::size(hmrs)},
+    hmr_total_size{
       std::accumulate(std::cbegin(hmrs), std::cend(hmrs), 0ul,
                       [](const std::uint64_t t, const GenomicRegion &p) {
                         return t + p.get_width();
-                      });
+                      })} {
     hmr_mean_size = static_cast<double>(hmr_total_size) /
                     std::max(hmr_count, static_cast<std::uint64_t>(1));
   }
@@ -91,7 +91,7 @@ get_stepup_cutoff(std::vector<double> scores, const double cutoff) {
   else if (cutoff > 1)
     return std::numeric_limits<double>::min();
 
-  const std::size_t n = scores.size();
+  const std::size_t n = std::size(scores);
   std::sort(begin(scores), std::end(scores));
   std::size_t i = 1;
   while (i < n && scores[i - 1] < (cutoff * i) / n)
@@ -99,19 +99,20 @@ get_stepup_cutoff(std::vector<double> scores, const double cutoff) {
   return scores[i - 1];
 }
 
-static void
+static auto
 get_domain_scores(const std::vector<bool> &state_ids,
                   const std::vector<std::pair<double, double>> &meth,
-                  const std::vector<std::size_t> &reset_points,
-                  std::vector<double> &scores) {
+                  const std::vector<std::size_t> &reset_points)
+  -> std::vector<double> {
   std::size_t reset_idx = 1;
   bool in_domain = false;
   double score = 0;
-  for (std::size_t i = 0; i < state_ids.size(); ++i) {
+  std::vector<double> domain_scores;
+  for (std::size_t i = 0; i < std::size(state_ids); ++i) {
     if (reset_points[reset_idx] == i) {
       if (in_domain) {
         in_domain = false;
-        scores.push_back(score);
+        domain_scores.push_back(score);
         score = 0;
       }
       ++reset_idx;
@@ -122,13 +123,13 @@ get_domain_scores(const std::vector<bool> &state_ids,
     }
     else if (in_domain) {
       in_domain = false;
-      scores.push_back(score);
+      domain_scores.push_back(score);
       score = 0;
     }
   }
-
   if (in_domain)
-    scores.push_back(score);
+    domain_scores.push_back(score);
+  return domain_scores;
 }
 
 static void
@@ -138,7 +139,7 @@ build_domains(const std::vector<MSite> &cpgs,
               std::vector<GenomicRegion> &domains) {
   std::size_t n_cpgs = 0, reset_idx = 1, prev_end = 0;
   bool in_domain = false;
-  for (std::size_t i = 0; i < state_ids.size(); ++i) {
+  for (std::size_t i = 0; i < std::size(state_ids); ++i) {
     if (reset_points[reset_idx] == i) {
       if (in_domain) {
         in_domain = false;
@@ -152,7 +153,7 @@ build_domains(const std::vector<MSite> &cpgs,
       if (!in_domain) {
         in_domain = true;
         domains.push_back(as_gen_rgn(cpgs[i]));
-        domains.back().set_name("HYPO" + std::to_string(domains.size()));
+        domains.back().set_name("HYPO" + std::to_string(std::size(domains)));
       }
       ++n_cpgs;
     }
@@ -177,10 +178,10 @@ separate_regions(const bool verbose, const std::size_t desert_size,
                  std::vector<U> &reads,
                  std::vector<std::size_t> &reset_points) {
   if (verbose)
-    std::cerr << "[separating by cpg desert]" << '\n';
+    std::cerr << "[separating by cpg desert]\n";
   // eliminate the zero-read cpgs
   std::size_t j = 0;
-  for (std::size_t i = 0; i < cpgs.size(); ++i)
+  for (std::size_t i = 0; i < std::size(cpgs); ++i)
     if (reads[i] > 0) {
       cpgs[j] = cpgs[i];
       meth[j] = meth[i];
@@ -195,7 +196,7 @@ separate_regions(const bool verbose, const std::size_t desert_size,
   double bases_in_deserts = 0;
   // segregate cpgs
   std::size_t prev_pos = 0;
-  for (std::size_t i = 0; i < cpgs.size(); ++i) {
+  for (std::size_t i = 0; i < std::size(cpgs); ++i) {
     const std::size_t dist = (i > 0 && cpgs[i].chrom == cpgs[i - 1].chrom)
                                ? cpgs[i].pos - prev_pos
                                : std::numeric_limits<std::size_t>::max();
@@ -209,13 +210,13 @@ separate_regions(const bool verbose, const std::size_t desert_size,
 
     prev_pos = cpgs[i].pos;
   }
-  reset_points.push_back(cpgs.size());
+  reset_points.push_back(std::size(cpgs));
 
   if (verbose)
-    std::cerr << "[cpgs retained: " << cpgs.size() << "]" << '\n'
-              << "[deserts removed: " << reset_points.size() - 2 << "]" << '\n'
+    std::cerr << "[cpgs retained: " << std::size(cpgs) << "]" << '\n'
+              << "[deserts removed: " << std::size(reset_points) - 2 << "]\n"
               << "[genome fraction covered: "
-              << 1.0 - (bases_in_deserts / total_bases) << "]" << '\n';
+              << 1.0 - (bases_in_deserts / total_bases) << "]\n";
 }
 
 /* function to "fold" the methylation profile so that the middle
@@ -225,43 +226,45 @@ separate_regions(const bool verbose, const std::size_t desert_size,
 static void
 make_partial_meth(const std::vector<std::uint32_t> &reads,
                   std::vector<std::pair<double, double>> &meth) {
-  for (std::size_t i = 0; i < reads.size(); ++i) {
+  static constexpr auto half = 0.5;
+  for (std::size_t i = 0; i < std::size(reads); ++i) {
     double m = meth[i].first / reads[i];
-    m = (m <= 0.5) ? (1.0 - 2 * m) : (1.0 - 2 * (1.0 - m));
+    m = (m <= half) ? (1.0 - 2 * m) : (1.0 - 2 * (1.0 - m));
     meth[i].first = reads[i] * m;
     meth[i].second = (reads[i] - meth[i].first);
   }
 }
 
-static void
+[[nodiscard]] static auto
 shuffle_cpgs(const std::size_t rng_seed, const TwoStateHMM &hmm,
              std::vector<std::pair<double, double>> meth,
              const std::vector<std::size_t> &reset_points, const double p_fb,
              const double p_bf, const double fg_alpha, const double fg_beta,
-             const double bg_alpha, const double bg_beta,
-             std::vector<double> &domain_scores) {
+             const double bg_alpha,
+             const double bg_beta) -> std::vector<double> {
   auto eng = std::default_random_engine(rng_seed);
   std::shuffle(std::begin(meth), std::end(meth), eng);
-
   std::vector<bool> state_ids;
   std::vector<double> scores;
   hmm.PosteriorDecoding(meth, reset_points, p_fb, p_bf, fg_alpha, fg_beta,
                         bg_alpha, bg_beta, state_ids, scores);
-  get_domain_scores(state_ids, meth, reset_points, domain_scores);
+  auto domain_scores = get_domain_scores(state_ids, meth, reset_points);
   std::sort(std::begin(domain_scores), std::end(domain_scores));
+  return domain_scores;
 }
 
-static void
-assign_p_values(const std::vector<double> &random_scores,
-                const std::vector<double> &observed_scores,
-                std::vector<double> &p_values) {
-  const double n_randoms = random_scores.empty() ? 1 : random_scores.size();
-  for (std::size_t i = 0; i < observed_scores.size(); ++i)
-    p_values.push_back(
-      (std::end(random_scores) - upper_bound(std::begin(random_scores),
-                                             std::end(random_scores),
-                                             observed_scores[i])) /
-      n_randoms);
+[[nodiscard]] static auto
+assign_p_values(const std::vector<double> &random,
+                const std::vector<double> &observed) -> std::vector<double> {
+  const double n_randoms = random.empty() ? 1 : std::size(random);
+  const auto n_scores = std::size(observed);
+  std::vector<double> p_values(n_scores);
+  for (auto i = 0u; i < n_scores; ++i) {
+    const auto ub =
+      std::upper_bound(std::cbegin(random), std::cend(random), observed[i]);
+    p_values[i] = std::distance(ub, std::end(random)) / n_randoms;
+  }
+  return p_values;
 }
 
 static void
@@ -290,12 +293,13 @@ write_params_file(const std::string &outfile, const double fg_alpha,
                   const double fg_beta, const double bg_alpha,
                   const double bg_beta, const double p_fb, const double p_bf,
                   const double domain_score_cutoff) {
+  static constexpr auto precision_value = 30;
   std::ofstream of;
   if (!outfile.empty())
     of.open(outfile.c_str());
   std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
 
-  out.precision(30);
+  out.precision(precision_value);
   out << "FG_ALPHA\t" << fg_alpha << '\n'
       << "FG_BETA\t" << fg_beta << '\n'
       << "BG_ALPHA\t" << bg_alpha << '\n'
@@ -382,23 +386,27 @@ check_sorted_within_chroms(T first, const T last) {
 int
 main_hmr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-    constexpr double min_coverage = 1.0;
+    static constexpr auto min_coverage = 1.0;
+    static constexpr auto tolerance = 1e-10;  // corrections for small values
+    static constexpr auto p_value_cutoff = 0.01;
+    static constexpr auto alpha_frac = 0.33;
 
     std::string outfile;
     std::string hypo_post_outfile;
     std::string meth_post_outfile;
 
-    std::size_t desert_size = 1000;
-    std::size_t max_iterations = 10;
-    std::size_t rng_seed = 408;
+    // NOLINTBEGIN(*-avoid-magic-numbers)
+    std::size_t desert_size{1000};
+    std::size_t max_iterations{10};
+    std::size_t rng_seed{408};
+    double p_fb{0.25};
+    double p_bf{0.25};
+    // NOLINTEND(*-avoid-magic-numbers)
 
     // run mode flags
     bool verbose = false;
     bool PARTIAL_METH = false;
     bool allow_extra_fields = false;
-
-    // corrections for small values
-    const double tolerance = 1e-10;
 
     std::string summary_file;
 
@@ -416,8 +424,7 @@ main_hmr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            description, "<methylation-file>");
-    opt_parse.add_opt("out", 'o', "output file (default: stdout)", false,
-                      outfile);
+    opt_parse.add_opt("out", 'o', "output file", true, outfile);
     opt_parse.add_opt("desert", 'd', "max dist btwn covered cpgs in HMR", false,
                       desert_size);
     opt_parse.add_opt("itr", 'i', "max iterations", false, max_iterations);
@@ -474,6 +481,10 @@ main_hmr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     if (!is_msite_file(cpgs_file))
       throw std::runtime_error("malformed counts file: " + cpgs_file);
 
+    std::ofstream out(outfile);
+    if (!out)
+      throw std::runtime_error("failed to open output file: " + outfile);
+
     // separate the regions by chrom and by desert
     std::vector<MSite> cpgs;
     std::vector<std::pair<double, double>> meth;
@@ -491,8 +502,8 @@ main_hmr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     const auto mean_coverage = get_mean(std::cbegin(reads), std::cend(reads));
 
     if (verbose)
-      std::cerr << "[total_cpgs=" << size(cpgs) << "]" << '\n'
-                << "[mean_coverage=" << mean_coverage << "]" << '\n';
+      std::cerr << "[total_cpgs=" << std::size(cpgs) << "]\n"
+                << "[mean_coverage=" << mean_coverage << "]\n";
 
     // check for sufficient data
     if (mean_coverage < static_cast<double>(min_coverage)) {
@@ -516,11 +527,8 @@ main_hmr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
 
     const TwoStateHMM hmm(tolerance, max_iterations, verbose);
 
-    double p_fb = 0.25;
-    double p_bf = 0.25;
-
-    double fg_alpha = 0, fg_beta = 0;
-    double bg_alpha = 0, bg_beta = 0;
+    double fg_alpha{}, fg_beta{};
+    double bg_alpha{}, bg_beta{};
     double domain_score_cutoff = std::numeric_limits<double>::max();
 
     if (!params_in_file.empty()) {  // read parameters file
@@ -530,10 +538,10 @@ main_hmr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     }
     else {
       const double n_reads = get_mean(std::cbegin(reads), std::cend(reads));
-      fg_alpha = 0.33 * n_reads;
-      fg_beta = 0.67 * n_reads;
-      bg_alpha = 0.67 * n_reads;
-      bg_beta = 0.33 * n_reads;
+      fg_alpha = alpha_frac * n_reads;
+      fg_beta = (1.0 - alpha_frac) * n_reads;
+      bg_alpha = (1.0 - alpha_frac) * n_reads;
+      bg_beta = alpha_frac * n_reads;
     }
 
     if (max_iterations > 0)
@@ -545,19 +553,15 @@ main_hmr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     hmm.PosteriorDecoding(meth, reset_points, p_fb, p_bf, fg_alpha, fg_beta,
                           bg_alpha, bg_beta, state_ids, posteriors);
 
-    std::vector<double> domain_scores;
-    get_domain_scores(state_ids, meth, reset_points, domain_scores);
-
-    std::vector<double> random_scores;
-    shuffle_cpgs(rng_seed, hmm, meth, reset_points, p_fb, p_bf, fg_alpha,
-                 fg_beta, bg_alpha, bg_beta, random_scores);
-
-    std::vector<double> p_values;
-    assign_p_values(random_scores, domain_scores, p_values);
+    const auto domain_scores = get_domain_scores(state_ids, meth, reset_points);
+    const auto random_scores =
+      shuffle_cpgs(rng_seed, hmm, meth, reset_points, p_fb, p_bf, fg_alpha,
+                   fg_beta, bg_alpha, bg_beta);
+    const auto p_values = assign_p_values(random_scores, domain_scores);
 
     if (domain_score_cutoff == std::numeric_limits<double>::max() &&
         !domain_scores.empty())
-      domain_score_cutoff = get_stepup_cutoff(p_values, 0.01);
+      domain_score_cutoff = get_stepup_cutoff(p_values, p_value_cutoff);
 
     // write parameters if requested
     if (!params_out_file.empty())
@@ -569,13 +573,8 @@ main_hmr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
       build_domains(cpgs, reset_points, state_ids, domains);
 
     {
-      std::ofstream of;
-      if (!outfile.empty())
-        of.open(outfile);
-      std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
-
       std::size_t good_hmr_count = 0;
-      for (auto i = 0u; i < size(domains); ++i)
+      for (auto i = 0u; i < std::size(domains); ++i)
         if (p_values[i] < domain_score_cutoff) {
           domains[good_hmr_count] = domains[i];
           domains[good_hmr_count].set_name("HYPO" +
@@ -591,24 +590,30 @@ main_hmr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     if (!hypo_post_outfile.empty()) {
       if (verbose)
         std::cerr << "[writing=" << hypo_post_outfile << "]\n";
-      std::ofstream out(hypo_post_outfile);
-      for (std::size_t i = 0; i < cpgs.size(); ++i) {
+      std::ofstream out_hypo_post(hypo_post_outfile);
+      if (!out_hypo_post)
+        throw std::runtime_error("failed to open output hypo post file: " +
+                                 hypo_post_outfile);
+      for (std::size_t i = 0; i < std::size(cpgs); ++i) {
         GenomicRegion cpg(as_gen_rgn(cpgs[i]));
         cpg.set_name(format_cpg_meth_tag(meth[i]));
         cpg.set_score(posteriors[i]);
-        out << cpg << '\n';
+        out_hypo_post << cpg << '\n';
       }
     }
 
     if (!meth_post_outfile.empty()) {
-      std::ofstream out(meth_post_outfile);
+      std::ofstream out_meth_post(meth_post_outfile);
+      if (!out_meth_post)
+        throw std::runtime_error("failed to open meth post output file: " +
+                                 meth_post_outfile);
       if (verbose)
         std::cerr << "[writing=" << meth_post_outfile << "]\n";
-      for (std::size_t i = 0; i < cpgs.size(); ++i) {
+      for (std::size_t i = 0; i < std::size(cpgs); ++i) {
         GenomicRegion cpg(as_gen_rgn(cpgs[i]));
         cpg.set_name(format_cpg_meth_tag(meth[i]));
         cpg.set_score(1.0 - posteriors[i]);
-        out << cpg << '\n';
+        out_meth_post << cpg << '\n';
       }
     }
     if (!summary_file.empty()) {
@@ -625,4 +630,4 @@ main_hmr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   return EXIT_SUCCESS;
 }
 
-// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions,*-prefer-member-initializer)
+// NOLINTEND(*-narrowing-conversions)

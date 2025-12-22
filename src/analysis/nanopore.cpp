@@ -313,6 +313,11 @@ struct mod_prob_buffer {
     bam_parse_basemod(aln.b, m.get());
     // ADS: or bam_parse_basemod2(aln.b, m, HTS_MOD_REPORT_UNCHECKED)
 
+    int n_types{};
+    const auto types = bam_mods_recorded(m.get(), &n_types);
+    if (n_types < 2 || (types[h_idx] != 'h' && types[m_idx] != 'm'))
+      return false;
+
     int pos{};
     int n{};
     while ((n = bam_next_basemod(aln.b, m.get(), d, max_mods, &pos)) > 0) {
@@ -502,7 +507,7 @@ struct mod_prob_stats {
 
   mod_prob_stats() : m{hts_base_mod_state_alloc(), &hts_base_mod_state_free} {};
 
-  [[nodiscard]] auto
+  auto
   operator()(const bamxx::bam_rec &aln) {
     static constexpr auto h_idx = 0;
     static constexpr auto m_idx = 1;
@@ -513,6 +518,11 @@ struct mod_prob_stats {
 
     bam_parse_basemod(aln.b, m.get());
     // ADS: or bam_parse_basemod2(aln.b, m, HTS_MOD_REPORT_UNCHECKED)
+
+    int n_types{};
+    const auto types = bam_mods_recorded(m.get(), &n_types);
+    if (n_types < 2 || (types[h_idx] != 'h' && types[m_idx] != 'm'))
+      return;
 
     int pos{};
     int n{};
@@ -907,7 +917,8 @@ struct read_processor {
 
 [[nodiscard]] static auto
 valid_modification_types(const std::string &infile,
-                         const std::uint32_t n_reads_to_check) -> bool {
+                         const std::uint32_t n_reads_to_check)
+  -> std::pair<bool, std::string> {
   using mstate = hts_base_mod_state;
   std::unique_ptr<mstate, void (*)(mstate *)> m(hts_base_mod_state_alloc(),
                                                 &hts_base_mod_state_free);
@@ -917,6 +928,8 @@ valid_modification_types(const std::string &infile,
   bamxx::bam_header hdr(hts);
   if (!hdr)
     throw std::runtime_error("failed to read header");
+
+  std::string message;
 
   std::uint32_t read_count{};
   bool valid_types{true};
@@ -929,9 +942,17 @@ valid_modification_types(const std::string &infile,
     // ADS: or bam_parse_basemod2(aln.b, m, HTS_MOD_REPORT_UNCHECKED)
     int n_types{};
     const auto types = bam_mods_recorded(m.get(), &n_types);
-    valid_types = n_types >= 2 && types[0] == 'h' && types[1] == 'm';
+    valid_types = (n_types == 1 && types[0] == 'C') ||
+                  (n_types >= 2 && types[0] == 'h' && types[1] == 'm');
+    if (!valid_types) {
+      message = "n_types: " + std::to_string(n_types) + "\n";
+      for (auto i = 0; i < n_types; ++i) {
+        message += "type[" + std::to_string(i) +
+                   "]=" + std::to_string(static_cast<char>(types[i])) + "\n";
+      }
+    }
   }
-  return valid_types;
+  return std::make_pair(valid_types, message);
 }
 
 [[nodiscard]] static auto
@@ -1053,9 +1074,11 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     std::ostringstream cmd;
     std::copy(argv, argv + argc, std::ostream_iterator<const char *>(cmd, " "));
 
-    if (!valid_modification_types(mapped_reads_file, n_reads_to_check)) {
-      std::cerr << "modification types are not valid\n"
-                << "expected h=0 and m=1\n";
+    const auto [is_valid, message] =
+      valid_modification_types(mapped_reads_file, n_reads_to_check);
+    if (!is_valid) {
+      std::cerr << "modification types are not valid. Violation:\n"
+                << message << '\n';
       return EXIT_FAILURE;
     }
 

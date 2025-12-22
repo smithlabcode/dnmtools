@@ -16,7 +16,7 @@
 #include "bsutils.hpp"
 #include "dnmtools_gaussinv.hpp"
 
-#include <GenomicRegion.hpp>
+#include "Interval6.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -47,31 +47,30 @@ wilson_ci_for_binomial(const double alpha, const double n, const double p_hat,
 }
 
 void
-adjust_region_ends(const std::vector<std::vector<GenomicRegion>> &clusters,
-                   std::vector<GenomicRegion> &regions) {
+adjust_region_ends(const std::vector<std::vector<Interval6>> &clusters,
+                   std::vector<Interval6> &regions) {
   assert(std::size(clusters) == std::size(regions));
   for (std::size_t i = 0; i < std::size(regions); ++i) {
-    std::size_t max_pos = regions[i].get_end();
-    std::size_t min_pos = regions[i].get_start();
+    auto max_pos = regions[i].stop;
+    auto min_pos = regions[i].start;
     for (std::size_t j = 0; j < std::size(clusters[i]); ++j) {
-      max_pos = std::max(clusters[i][j].get_end(), max_pos);
-      min_pos = std::min(clusters[i][j].get_start(), min_pos);
+      max_pos = std::max(clusters[i][j].stop, max_pos);
+      min_pos = std::min(clusters[i][j].start, min_pos);
     }
-    regions[i].set_end(max_pos);
-    regions[i].set_start(min_pos);
+    regions[i].stop = max_pos;
+    regions[i].start = min_pos;
   }
 }
 
 void
-relative_sort(const std::vector<GenomicRegion> &mapped_locations,
+relative_sort(const std::vector<Interval6> &mapped_locations,
               const std::vector<std::string> &names,
               std::vector<std::size_t> &lookup) {
   std::unordered_map<std::string, std::size_t> names_map;
   for (std::size_t i = 0; i < std::size(names); ++i)
     names_map[names[i]] = i;
-
   for (std::size_t i = 0; i < std::size(mapped_locations); ++i) {
-    const auto j = names_map.find(mapped_locations[i].get_name());
+    const auto j = names_map.find(mapped_locations[i].name);
     if (j == std::cend(names_map))
       throw std::runtime_error("read sequence not found for: " + names[i]);
     lookup.push_back(j->second);

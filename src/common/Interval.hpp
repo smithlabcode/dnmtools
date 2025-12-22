@@ -20,6 +20,7 @@
 
 #include <cstdint>
 //  #include <format> // ADS: needs c++20
+#include <fstream>
 #include <iterator>  // std::size
 #include <stdexcept>
 #include <string>
@@ -32,9 +33,7 @@ struct Interval {
 
   Interval() = default;
   Interval(const std::string &chrom, const std::uint32_t start,
-           const std::uint32_t stop) :
-    chrom{chrom},
-    start{start}, stop{stop} {}
+           const std::uint32_t stop) : chrom{chrom}, start{start}, stop{stop} {}
 
   explicit Interval(const std::string &line) {
     if (!initialize(line.data(), line.data() + std::size(line)))
@@ -43,16 +42,26 @@ struct Interval {
   auto
   initialize(const char *, const char *) -> bool;
 
-  auto
+  [[nodiscard]] auto
   operator<(const Interval &rhs) const {
     return (chrom < rhs.chrom ||
             (chrom == rhs.chrom &&
              (start < rhs.start || (start == rhs.start && stop < rhs.stop))));
   }
 
+  [[nodiscard]] auto
+  operator==(const Interval &rhs) const {
+    return chrom == rhs.chrom && start == rhs.start && stop < rhs.stop;
+  }
+
   // auto
   // operator<=>(const Interval &) const = default;
 };
+
+inline auto
+operator<<(std::ostream &os, const Interval &x) -> std::ostream & {
+  return os << x.chrom << "\t" << x.start << "\t" << x.stop;
+}
 
 [[nodiscard]] inline auto
 to_string(const Interval &x) -> std::string {

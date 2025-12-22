@@ -1,6 +1,4 @@
-/* allelicmeth:
- *
- * Copyright (C) 2014-2022 University of Southern California,
+/* Copyright (C) 2014-2022 University of Southern California,
  *                         Andrew D. Smith, and Benjamin E. Decato
  *
  * Authors: Andrew D. Smith and Benjamin E. Decato
@@ -19,7 +17,6 @@
 #include "Epiread.hpp"
 #include "MSite.hpp"
 
-#include "GenomicRegion.hpp"
 #include "OptionParser.hpp"
 #include "smithlab_os.hpp"
 #include "smithlab_utils.hpp"
@@ -42,27 +39,16 @@
 #include <utility>
 #include <vector>
 
-using std::cerr;
-using std::cout;
-using std::max;
-using std::min;
-using std::runtime_error;
-using std::string;
-using std::unordered_map;
-using std::unordered_set;
-using std::vector;
-
-// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions,*-prefer-member-initializer)
+// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions)
 
 static inline double
 log_sum_log(const double p, const double q) {
-  if (p == 0) {
+  if (p == 0)
     return q;
-  }
-  else if (q == 0) {
+  if (q == 0)
     return p;
-  }
-  return p > q ? p + log1p(exp(q - p)) : q + log1p(exp(p - q));
+  return p > q ? p + std::log1p(std::exp(q - p))
+               : q + std::log1p(std::exp(p - q));
 }
 
 static inline double
@@ -77,28 +63,29 @@ lnchoose(const unsigned int n, unsigned int m) {
 
 // p(k) =  C(n1, k) C(n2, t - k) / C(n1 + n2, t)
 static double
-log_hyper_g(const size_t k, const size_t n1, const size_t n2, const size_t t) {
+log_hyper_g(const std::size_t k, const std::size_t n1, const std::size_t n2,
+            const std::size_t t) {
   return lnchoose(n1, k) + lnchoose(n2, t - k) - lnchoose(n1 + n2, t);
 }
 
 static double
-fishers_exact(size_t a, size_t b, size_t c, size_t d) {
-  const size_t m = a + c;  // sum of first column
-  const size_t n = b + d;  // sum of second column
-  const size_t k = a + b;  // sum of first row
+fishers_exact(std::size_t a, std::size_t b, std::size_t c, std::size_t d) {
+  const std::size_t m = a + c;  // sum of first column
+  const std::size_t n = b + d;  // sum of second column
+  const std::size_t k = a + b;  // sum of first row
   // ADS: want more extreme than "observed"
   const double observed = log_hyper_g(a, m, n, k);
   double p = 0.0;
-  for (size_t i = (n > k ? 0ul : k - n); i <= std::min(k, m); ++i) {
+  for (std::size_t i = (n > k ? 0ul : k - n); i <= std::min(k, m); ++i) {
     const double curr = log_hyper_g(i, m, n, k);
     if (curr <= observed)
       p = log_sum_log(p, curr);
   }
-  return exp(p);
+  return std::exp(p);
 }
 
-static size_t
-state_pair_to_index(const string &s, const size_t idx) {
+static std::size_t
+state_pair_to_index(const std::string &s, const std::size_t idx) {
   assert(idx < s.length() - 1);
   const char a = s[idx];
   if (a == 'C') {
@@ -136,13 +123,13 @@ template <class T> struct PairStateCounter {
     return CC + CT + TC + TT;
   }
 
-  string
+  std::string
   tostring() const {
     return toa(CC) + '\t' + toa(CT) + '\t' + toa(TC) + '\t' + toa(TT);
   }
 
   void
-  increment(const size_t state) {
+  increment(const std::size_t state) {
     if (state == 0)
       ++CC;
     else if (state == 1)
@@ -156,19 +143,20 @@ template <class T> struct PairStateCounter {
 
 template <typename T>
 void
-fit_states(const epiread &er, vector<PairStateCounter<T>> &counts) {
-  for (size_t i = 0; i < er.length() - 1; ++i) {
-    const size_t pos = er.pos + i;
+fit_states(const epiread &er, std::vector<PairStateCounter<T>> &counts) {
+  for (std::size_t i = 0; i < er.length() - 1; ++i) {
+    const std::size_t pos = er.pos + i;
     assert(pos < counts.size());
-    const size_t curr_state = state_pair_to_index(er.seq, i);
+    const std::size_t curr_state = state_pair_to_index(er.seq, i);
     counts[pos].increment(curr_state);
   }
 }
 
 static void
-collect_cpgs(const string &s, unordered_map<size_t, size_t> &cpgs) {
-  size_t cpg_idx = 0;
-  size_t nuc_idx = 0;
+collect_cpgs(const std::string &s,
+             std::unordered_map<std::size_t, std::size_t> &cpgs) {
+  std::size_t cpg_idx = 0;
+  std::size_t nuc_idx = 0;
   const auto lim = end(s) - (s.size() == 0 ? 0 : 1);
   for (auto itr = begin(s); itr != lim; ++itr, ++nuc_idx)
     if (*itr == 'C' && *(itr + 1) == 'G')
@@ -179,53 +167,58 @@ collect_cpgs(const string &s, unordered_map<size_t, size_t> &cpgs) {
    consecutive CpG sites. So there would be one fewer of them than the
    total CpGs in a chromosome. */
 static void
-convert_coordinates(const string &chrom, vector<MSite> &sites) {
-  unordered_map<size_t, size_t> cpgs;
+convert_coordinates(const std::string &chrom, std::vector<MSite> &sites) {
+  std::unordered_map<std::size_t, std::size_t> cpgs;
   collect_cpgs(chrom, cpgs);
-  for (size_t i = 0; i < sites.size(); ++i) {
+  for (std::size_t i = 0; i < sites.size(); ++i) {
     const auto pos_itr = cpgs.find(sites[i].pos);
     if (pos_itr == end(cpgs))
-      throw runtime_error("failed converting site:\n" + sites[i].tostring());
+      throw std::runtime_error("failed converting site:\n" +
+                               sites[i].tostring());
     sites[i].pos = pos_itr->second;
   }
 }
 
 template <typename T>
 void
-add_cytosine(const string &chrom_name, const size_t start_cpg,
-             vector<PairStateCounter<T>> &counts, vector<MSite> &cytosines) {
+add_cytosine(const std::string &chrom_name, const std::size_t start_cpg,
+             std::vector<PairStateCounter<T>> &counts,
+             std::vector<MSite> &cytosines) {
   std::ostringstream s;
   s << counts[start_cpg].score() << "\t" << counts[start_cpg].total() << "\t"
     << counts[start_cpg].tostring();
-  const string name(s.str());
+  const std::string name(s.str());
   cytosines.push_back(MSite(chrom_name, start_cpg, '+', name, 0, 0));
 }
 
 template <typename T>
 void
-process_chrom(const string &chrom_name, const vector<epiread> &epireads,
-              vector<MSite> &cytosines, vector<PairStateCounter<T>> &counts) {
-  for (size_t i = 0; i < epireads.size(); ++i)
+process_chrom(const std::string &chrom_name,
+              const std::vector<epiread> &epireads,
+              std::vector<MSite> &cytosines,
+              std::vector<PairStateCounter<T>> &counts) {
+  for (std::size_t i = 0; i < epireads.size(); ++i)
     fit_states(epireads[i], counts);
-  for (size_t i = 0; i < counts.size(); ++i)
+  for (std::size_t i = 0; i < counts.size(); ++i)
     add_cytosine(chrom_name, i, counts, cytosines);
 }
 
 static void
-update_chroms_seen(const string &chrom_name,
-                   unordered_set<string> &chroms_seen) {
+update_chroms_seen(const std::string &chrom_name,
+                   std::unordered_set<std::string> &chroms_seen) {
   const auto chr_itr = chroms_seen.find(chrom_name);
   if (chr_itr != end(chroms_seen))
-    throw runtime_error("chroms out of order: " + chrom_name);
+    throw std::runtime_error("chroms out of order: " + chrom_name);
   chroms_seen.insert(chrom_name);
 }
 
 static void
-verify_chroms_available(const string &chrom_name,
-                        unordered_map<string, size_t> &chrom_lookup) {
+verify_chroms_available(
+  const std::string &chrom_name,
+  std::unordered_map<std::string, std::size_t> &chrom_lookup) {
   const auto chr_itr = chrom_lookup.find(chrom_name);
   if (chr_itr == end(chrom_lookup))
-    throw runtime_error("chrom not found: " + chrom_name);
+    throw std::runtime_error("chrom not found: " + chrom_name);
 }
 
 int
@@ -236,8 +229,8 @@ computes probability of allele-specific methylation at each tuple of CpGs
 )";
     bool VERBOSE = false;
 
-    string outfile;
-    string chroms_dir;
+    std::string outfile;
+    std::string chroms_dir;
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            description, "<epireads>");
@@ -246,79 +239,79 @@ computes probability of allele-specific methylation at each tuple of CpGs
     opt_parse.add_opt("chrom", 'c', "genome sequence file/directory", true,
                       chroms_dir);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << '\n'
-           << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << '\n';
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << '\n';
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
-    const string epi_file(leftover_args.front());
+    const std::string epi_file(leftover_args.front());
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    vector<string> chrom_names;
-    vector<string> chroms;
+    std::vector<std::string> chrom_names;
+    std::vector<std::string> chroms;
     read_fasta_file_short_names(chroms_dir, chrom_names, chroms);
     for (auto &&i : chroms)
       transform(begin(i), end(i), begin(i),
                 [](const char c) { return std::toupper(c); });
 
     // lookup to map chrom names to chrom sequences
-    unordered_map<string, size_t> chrom_lookup;
-    for (size_t i = 0; i < chrom_names.size(); ++i)
+    std::unordered_map<std::string, std::size_t> chrom_lookup;
+    for (std::size_t i = 0; i < chrom_names.size(); ++i)
       chrom_lookup.insert(make_pair(chrom_names[i], i));
 
-    unordered_map<string, size_t> chrom_sizes;
-    for (size_t i = 0; i < chrom_names.size(); ++i) {
-      size_t cpg_count = 0;
-      for (size_t j = 0; j < chroms[i].size() - 1; ++j)
+    std::unordered_map<std::string, std::size_t> chrom_sizes;
+    for (std::size_t i = 0; i < chrom_names.size(); ++i) {
+      std::size_t cpg_count = 0;
+      for (std::size_t j = 0; j < chroms[i].size() - 1; ++j)
         cpg_count += (chroms[i][j] == 'C' && chroms[i][j + 1] == 'G');
       chrom_sizes.insert(make_pair(chrom_names[i], cpg_count));
     }
 
     if (VERBOSE)
-      cerr << "number of chromosomes: " << chrom_sizes.size() << '\n';
+      std::cerr << "number of chromosomes: " << chrom_sizes.size() << '\n';
 
     std::ifstream in(epi_file);
     if (!in)
-      throw runtime_error("cannot open input file: " + epi_file);
+      throw std::runtime_error("cannot open input file: " + epi_file);
 
-    std::ofstream of;
-    if (!outfile.empty())
-      of.open(outfile);
-    std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
+    std::ofstream out(outfile);
+    if (!out)
+      throw std::runtime_error("failed to open output file: " + outfile);
 
-    unordered_set<string> chroms_seen;
-    string chrom;
+    std::unordered_set<std::string> chroms_seen;
+    std::string chrom;
     epiread er;
-    vector<epiread> epireads;
+    std::vector<epiread> epireads;
     while (in >> er) {
       if (er.chr != chrom) {
         update_chroms_seen(er.chr, chroms_seen);
         verify_chroms_available(er.chr, chrom_lookup);
 
         if (VERBOSE)
-          cerr << "[processing " << er.chr << "]" << '\n';
+          std::cerr << "[processing " << er.chr << "]" << '\n';
 
         if (!chrom.empty()) {
-          vector<PairStateCounter<uint32_t>> counts(chrom_sizes[chrom] - 1);
-          vector<MSite> cytosines;
+          std::vector<PairStateCounter<std::uint32_t>> counts(
+            chrom_sizes[chrom] - 1);
+          std::vector<MSite> cytosines;
           process_chrom(chrom, epireads, cytosines, counts);
-          const size_t chrom_idx = chrom_lookup[chrom];
+          const std::size_t chrom_idx = chrom_lookup[chrom];
           convert_coordinates(chroms[chrom_idx], cytosines);
-          for (size_t i = 0; i < cytosines.size() - 1; ++i) {
+          for (std::size_t i = 0; i < cytosines.size() - 1; ++i) {
             out << cytosines[i].chrom << "\t" << cytosines[i].pos
                 << "\t+\tCpG\t" << cytosines[i].context << '\n';
           }
@@ -329,22 +322,23 @@ computes probability of allele-specific methylation at each tuple of CpGs
       chrom.swap(er.chr);
     }
     if (!chrom.empty()) {
-      vector<PairStateCounter<uint32_t>> counts(chrom_sizes[chrom] - 1);
-      vector<MSite> cytosines;
+      std::vector<PairStateCounter<std::uint32_t>> counts(chrom_sizes[chrom] -
+                                                          1);
+      std::vector<MSite> cytosines;
       process_chrom(chrom, epireads, cytosines, counts);
-      const size_t chrom_idx = chrom_lookup[chrom];
+      const std::size_t chrom_idx = chrom_lookup[chrom];
       convert_coordinates(chroms[chrom_idx], cytosines);
-      for (size_t i = 0; i < cytosines.size() - 1; ++i) {
+      for (std::size_t i = 0; i < cytosines.size() - 1; ++i) {
         out << cytosines[i].chrom << "\t" << cytosines[i].pos << "\t+\tCpG\t"
             << cytosines[i].context << '\n';
       }
     }
   }
   catch (const std::exception &e) {
-    cerr << e.what() << '\n';
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
 
-// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions,*-prefer-member-initializer)
+// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions)

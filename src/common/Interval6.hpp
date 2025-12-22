@@ -21,6 +21,7 @@
 #include <cstdint>
 //  #include <format> // ADS: needs c++20
 #include <iterator>  // std::size
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -37,8 +38,8 @@ struct Interval6 {
   Interval6(const std::string &chrom, const std::uint32_t start,
             const std::uint32_t stop, const std::string &name,
             const double score, const char strand) :
-    chrom{chrom},
-    start{start}, stop{stop}, name{name}, score{score}, strand{strand} {}
+    chrom{chrom}, start{start}, stop{stop}, name{name}, score{score},
+    strand{strand} {}
 
   explicit Interval6(const std::string &line) {
     if (!initialize(line.data(), line.data() + std::size(line)))
@@ -58,11 +59,20 @@ struct Interval6 {
   // operator<=>(const Interval6 &) const = default;
 };
 
+inline auto
+operator<<(std::ostream &os, const Interval6 &x) -> std::ostream & {
+  return os << x.chrom << "\t" << x.start << "\t" << x.stop << "\t" << x.name
+            << "\t" << x.score << "\t" << x.strand;
+}
+
 [[nodiscard]] inline auto
 to_string(const Interval6 &x) -> std::string {
-  return x.chrom + "\t" + std::to_string(x.start) + "\t" +
-         std::to_string(x.stop) + "\t" + x.name + "\t" +
-         std::to_string(x.score) + "\t" + std::string(1, x.strand);
+  std::ostringstream oss;
+  oss << x;
+  return oss.str();
+  // return x.chrom + "\t" + std::to_string(x.start) + "\t" +
+  //        std::to_string(x.stop) + "\t" + x.name + "\t" +
+  //        std::to_string(x.score) + "\t" + std::string(1, x.strand);
 }
 
 // ADS: need to bump to c++20 for this

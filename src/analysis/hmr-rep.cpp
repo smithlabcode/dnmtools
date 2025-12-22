@@ -1,22 +1,21 @@
-/* Copyright (C) 2019-2022 University of Southern California
- *                    Andrew D Smith
- * Author: Andrew D. Smith, Song Qiang, Jenny Qu
+/* Copyright (C) 2019-2025 Andrew D. Smith, Song Qiang, Jenny Qu
  *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This is free software; you can redistribute it and/or modify it under the
+ * terms of the GNU General Public License as published by the Free Software
+ * Foundation; either version 2 of the License, or (at your option) any later
+ * version.
  *
- * This is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * This is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
  */
 
-#include "GenomicRegion.hpp"
+#include "Interval6.hpp"
 #include "MSite.hpp"
-#include "OptionParser.hpp"
 #include "TwoStateHMM.hpp"
+
+#include "OptionParser.hpp"
 
 #include <bamxx.hpp>
 
@@ -40,9 +39,9 @@
 
 // NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions)
 
-static GenomicRegion
+static Interval6
 as_gen_rgn(const MSite &s) {
-  return GenomicRegion(s.chrom, s.pos, s.pos + 1);
+  return Interval6(s.chrom, s.pos, s.pos + 1, std::string{}, 0.0, '+');
 }
 
 static double
@@ -102,15 +101,15 @@ static void
 build_domains(const std::vector<MSite> &cpgs,
               const std::vector<size_t> &reset_points,
               const std::vector<bool> &state_ids,
-              std::vector<GenomicRegion> &domains) {
+              std::vector<Interval6> &domains) {
   size_t n_cpgs = 0, n_domains = 0, reset_idx = 1, prev_end = 0;
   bool in_domain = false;
   for (size_t i = 0; i < state_ids.size(); ++i) {
     if (reset_points[reset_idx] == i) {
       if (in_domain) {
         in_domain = false;
-        domains.back().set_end(prev_end);
-        domains.back().set_score(n_cpgs);
+        domains.back().stop = prev_end;
+        domains.back().score = n_cpgs;
         n_cpgs = 0;
       }
       ++reset_idx;
@@ -119,14 +118,14 @@ build_domains(const std::vector<MSite> &cpgs,
       if (!in_domain) {
         in_domain = true;
         domains.push_back(as_gen_rgn(cpgs[i]));
-        domains.back().set_name("HYPO" + std::to_string(n_domains++));
+        domains.back().name = "HYPO" + std::to_string(n_domains++);
       }
       ++n_cpgs;
     }
     else if (in_domain) {
       in_domain = false;
-      domains.back().set_end(prev_end);
-      domains.back().set_score(n_cpgs);
+      domains.back().stop = prev_end;
+      domains.back().score = n_cpgs;
       n_cpgs = 0;
     }
     prev_end = cpgs[i].pos + 1;
@@ -487,7 +486,7 @@ main_hmr_rep(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     if (fdr_cutoff == std::numeric_limits<double>::max())
       fdr_cutoff = get_stepup_cutoff(p_values, 0.01);
 
-    std::vector<GenomicRegion> domains;
+    std::vector<Interval6> domains;
     build_domains(cpgs, reset_points, state_ids, domains);
 
     std::ofstream of;
@@ -498,7 +497,7 @@ main_hmr_rep(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     size_t good_hmr_count = 0;
     for (size_t i = 0; i < domains.size(); ++i)
       if (p_values[i] < fdr_cutoff) {
-        domains[i].set_name("HYPO" + std::to_string(good_hmr_count++));
+        domains[i].name = "HYPO" + std::to_string(good_hmr_count++);
         out << domains[i] << '\n';
       }
 
@@ -517,10 +516,10 @@ main_hmr_rep(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
           m_reads += meth[j][i].first;
           u_reads += meth[j][i].second;
         }
-        GenomicRegion cpg(as_gen_rgn(cpgs[i]));
-        cpg.set_name("CpG:" + std::to_string(m_reads) + ":" +
-                     std::to_string(u_reads));
-        cpg.set_score(posteriors[i]);
+        Interval6 cpg(as_gen_rgn(cpgs[i]));
+        cpg.name =
+          "CpG:" + std::to_string(m_reads) + ":" + std::to_string(u_reads);
+        cpg.score = posteriors[i];
         out_post << cpg << '\n';
       }
     }
@@ -535,10 +534,10 @@ main_hmr_rep(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
           m_reads += meth[j][i].first;
           u_reads += meth[j][i].second;
         }
-        GenomicRegion cpg(as_gen_rgn(cpgs[i]));
-        cpg.set_name("CpG:" + std::to_string(m_reads) + ":" +
-                     std::to_string(u_reads));
-        cpg.set_score(1.0 - posteriors[i]);
+        Interval6 cpg(as_gen_rgn(cpgs[i]));
+        cpg.name =
+          "CpG:" + std::to_string(m_reads) + ":" + std::to_string(u_reads);
+        cpg.score = 1.0 - posteriors[i];
         out_post << cpg << '\n';
       }
     }

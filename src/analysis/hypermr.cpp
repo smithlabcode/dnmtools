@@ -1,30 +1,33 @@
-/* Copyright (C) 2009-2023 University of Southern California
- *                         Song Qiang and Andrew D Smith
- * Author: Song Qiang, Andrew D. Smith
+/* Copyright (C) 2009-2025 Song Qiang and Andrew D Smith
  *
- * This file is part of dnmtools.
+ * This is free software; you can redistribute it and/or modify it under the
+ * terms of the GNU General Public License as published by the Free Software
+ * Foundation; either version 2 of the License, or (at your option) any later
+ * version.
  *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
  *
- * This is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this software; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
+ * You should have received a copy of the GNU General Public License along
+ * with this software; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+[[maybe_unused]] static constexpr auto about = R"(
+Identify regions of elevated methylation. Designed for methylomes of plants,
+especially A. thaliana, and other organisms with a low background methylation
+level, but with increased methylation associated with biological activity at a
+specific regions of the genome.
+)";
+
 #include "BetaBin.hpp"
-#include "GenomicRegion.hpp"
+#include "Interval6.hpp"
 #include "MSite.hpp"
-#include "OptionParser.hpp"
 #include "ThreeStateHMM.hpp"
+
+#include "OptionParser.hpp"
 
 #include <bamxx.hpp>
 
@@ -41,170 +44,151 @@
 #include <utility>
 #include <vector>
 
-using std::begin;
-using std::cerr;
-using std::cout;
-using std::end;
-using std::endl;
-using std::istream_iterator;
-using std::make_pair;
-using std::max;
-using std::min;
-using std::numeric_limits;
-using std::pair;
-using std::runtime_error;
-using std::string;
-using std::to_string;
-using std::vector;
+// NOLINTBEGIN(*-narrowing-conversions)
 
-using std::ofstream;
-using std::ostream_iterator;
-
-// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions)
-
-static GenomicRegion
+static Interval6
 as_gen_rgn(const MSite &s) {
-  return GenomicRegion(s.chrom, s.pos, s.pos + 1);
+  return Interval6(s.chrom, s.pos, s.pos + 1, std::string{}, 0.0, '+');
 }
 
 static void
-load_cpgs(const string &cpgs_file, vector<MSite> &cpgs,
-          vector<pair<double, double>> &meth) {
+load_cpgs(const std::string &cpgs_file, std::vector<MSite> &cpgs,
+          std::vector<std::pair<double, double>> &meth) {
   bamxx::bgzf_file in(cpgs_file, "r");
   if (!in)
-    throw runtime_error("failed opening file: " + cpgs_file);
+    throw std::runtime_error("failed opening file: " + cpgs_file);
 
   MSite the_site;
-  string line;
+  std::string line;
   while (getline(in, line))
     cpgs.push_back(MSite(line));
 
-  meth.resize(cpgs.size());
-  for (size_t i = 0; i < cpgs.size(); ++i)
-    meth[i] = make_pair(cpgs[i].n_meth(), cpgs[i].n_unmeth());
+  meth.resize(std::size(cpgs));
+  for (std::size_t i = 0; i < std::size(cpgs); ++i)
+    meth[i] = std::make_pair(cpgs[i].n_meth(), cpgs[i].n_unmeth());
 }
 
 template <class T>
 static void
-separate_regions(const size_t desert_size, vector<MSite> &cpgs, vector<T> &meth,
-                 vector<size_t> &reset_points, size_t &total_bases,
-                 size_t &bases_in_deserts) {
+separate_regions(const std::size_t desert_size, std::vector<MSite> &cpgs,
+                 std::vector<T> &meth, std::vector<std::size_t> &reset_points,
+                 std::size_t &total_bases, std::size_t &bases_in_deserts) {
   // eliminate the zero-read cpgs
-  size_t j = 0;
-  for (size_t i = 0; i < cpgs.size(); ++i)
+  std::size_t j = 0;
+  for (std::size_t i = 0; i < std::size(cpgs); ++i)
     if (cpgs[i].n_reads > 0) {
       cpgs[j] = cpgs[i];
       meth[j] = meth[i];
       ++j;
     }
-  cpgs.erase(begin(cpgs) + j, end(cpgs));
-  meth.erase(begin(meth) + j, end(meth));
+  cpgs.erase(std::begin(cpgs) + j, std::end(cpgs));
+  meth.erase(std::begin(meth) + j, std::end(meth));
 
   total_bases = 0;
   bases_in_deserts = 0;
-  size_t prev_pos = 0;
-  for (size_t i = 0; i < cpgs.size(); ++i) {
-    const size_t dist = (i > 0 && cpgs[i].chrom == cpgs[i - 1].chrom)
-                          ? cpgs[i].pos - prev_pos
-                          : numeric_limits<size_t>::max();
+  std::size_t prev_pos = 0;
+  for (std::size_t i = 0; i < std::size(cpgs); ++i) {
+    const std::size_t dist = (i > 0 && cpgs[i].chrom == cpgs[i - 1].chrom)
+                               ? cpgs[i].pos - prev_pos
+                               : std::numeric_limits<std::size_t>::max();
     if (dist > desert_size) {
       reset_points.push_back(i);
-      if (dist < numeric_limits<size_t>::max())
+      if (dist < std::numeric_limits<std::size_t>::max())
         bases_in_deserts += dist;
     }
-    if (dist < numeric_limits<size_t>::max())
+    if (dist < std::numeric_limits<std::size_t>::max())
       total_bases += dist;
 
     prev_pos = cpgs[i].pos;
   }
-  reset_points.push_back(cpgs.size());
+  reset_points.push_back(std::size(cpgs));
 }
 
 // ADS (!!!) this function seems to not be working at all right now
 static void
-read_params_file(const string &params_file,
+read_params_file(const std::string &params_file,
                  // betabin &hypo_emission,
                  // betabin &HYPER_emission,
                  // betabin &HYPO_emission,
-                 vector<vector<double>> &trans) {
+                 std::vector<std::vector<double>> &trans) {
   std::ifstream in(params_file);
   if (!in)
-    throw runtime_error("failed to read param file: " + params_file);
+    throw std::runtime_error("failed to read param file: " + params_file);
 
-  string hypo_emission_str;
+  std::string hypo_emission_str;
   getline(in, hypo_emission_str);
 
-  string HYPER_emission_str;
+  std::string HYPER_emission_str;
   getline(in, HYPER_emission_str);
 
-  string HYPO_emission_str;
+  std::string HYPO_emission_str;
   getline(in, HYPO_emission_str);
 
-  trans.resize(3, vector<double>(3, 0.0));
-  for (size_t i = 0; i < trans.size(); ++i)
-    for (size_t j = 0; j < trans[i].size(); ++j)
+  trans.resize(3, std::vector<double>(3, 0.0));
+  for (std::size_t i = 0; i < std::size(trans); ++i)
+    for (std::size_t j = 0; j < std::size(trans[i]); ++j)
       in >> trans[i][j];
 }
 
 static void
-write_params_file(const string &params_file, const betabin &hypo_emission,
+write_params_file(const std::string &params_file, const betabin &hypo_emission,
                   const betabin &HYPER_emission, const betabin &HYPO_emission,
-                  const vector<vector<double>> &trans) {
-  ofstream out(params_file);
+                  const std::vector<std::vector<double>> &trans) {
+  std::ofstream out(params_file);
   out << hypo_emission.tostring() << '\n'
       << HYPER_emission.tostring() << '\n'
       << HYPO_emission.tostring() << '\n';
   for (const auto &i : trans) {
     std::copy(std::cbegin(i), std::cend(i),
-              ostream_iterator<double>(out, "\t"));
+              std::ostream_iterator<double>(out, "\t"));
     out << '\n';
   }
 }
 
 static void
-build_domains(const vector<MSite> &cpgs,
-              const vector<pair<double, double>> &meth,
-              const vector<size_t> &reset_points,
-              const vector<STATE_LABELS> &classes,
-              vector<GenomicRegion> &domains) {
+build_domains(const std::vector<MSite> &cpgs,
+              const std::vector<std::pair<double, double>> &meth,
+              const std::vector<std::size_t> &reset_points,
+              const std::vector<STATE_LABELS> &classes,
+              std::vector<Interval6> &domains) {
   domains.clear();
 
-  for (size_t i = 0; i < reset_points.size() - 1; ++i) {
-    const size_t start = reset_points[i];
-    const size_t end = reset_points[i + 1];
+  for (std::size_t i = 0; i + 1 < std::size(reset_points); ++i) {
+    const std::size_t start = reset_points[i];
+    const std::size_t end = reset_points[i + 1];
 
-    GenomicRegion domain(as_gen_rgn(cpgs[start]));
+    Interval6 domain(as_gen_rgn(cpgs[start]));
     STATE_LABELS prev_state = classes[start];
-    size_t n = 1;
+    std::size_t n = 1;
     double meth_sum =
       meth[start].first / (meth[start].first + meth[start].second);
 
-    for (size_t j = start + 1; j < end; ++j) {
+    for (std::size_t j = start + 1; j < end; ++j) {
       if ((prev_state == hypo && classes[j] == hypo) ||
           (prev_state != hypo && classes[j] != hypo)) {
         ++n;
         meth_sum += meth[j].first / (meth[j].first + meth[j].second);
       }
       else {
-        domain.set_end(cpgs[j - 1].pos + 1);
-        const string label = (prev_state == hypo ? "hypo" : "hyper");
-        domain.set_name(label + ":" + std::to_string(n));
-        domain.set_score(meth_sum);
-        domain.set_strand('+');
+        domain.stop = cpgs[j - 1].pos + 1;
+        const std::string label = (prev_state == hypo ? "hypo" : "hyper");
+        domain.name = label + ":" + std::to_string(n);
+        domain.score = meth_sum;
+        domain.strand = '+';
         if (prev_state == HYPER || prev_state == HYPO)
           domains.push_back(domain);
 
-        domain = GenomicRegion(as_gen_rgn(cpgs[j]));
+        domain = Interval6(as_gen_rgn(cpgs[j]));
         n = 1;
         prev_state = classes[j];
         meth_sum = meth[j].first / (meth[j].first + meth[j].second);
       }
     }
-    domain.set_end(cpgs[end - 1].pos + 1);
-    const string label = (prev_state == hypo ? "hypo" : "hyper");
-    domain.set_name(label + ":" + std::to_string(n));
-    domain.set_score(meth_sum);
-    domain.set_strand('+');
+    domain.stop = cpgs[end - 1].pos + 1;
+    const std::string label = (prev_state == hypo ? "hypo" : "hyper");
+    domain.name = label + ":" + std::to_string(n);
+    domain.score = meth_sum;
+    domain.strand = '+';
     if (prev_state == HYPER || prev_state == HYPO)
       domains.push_back(domain);
   }
@@ -212,53 +196,53 @@ build_domains(const vector<MSite> &cpgs,
 
 static void
 filter_domains(const double min_cumulative_meth,
-               vector<GenomicRegion> &domains) {
-  size_t j = 0;
-  for (size_t i = 0; i < domains.size(); ++i)
-    if (domains[i].get_score() >= min_cumulative_meth)
+               std::vector<Interval6> &domains) {
+  std::size_t j = 0;
+  for (std::size_t i = 0; i < std::size(domains); ++i)
+    if (domains[i].score >= min_cumulative_meth)
       domains[j++] = domains[i];
-  domains.erase(begin(domains) + j, end(domains));
+  domains.erase(std::begin(domains) + j, std::end(domains));
 }
 
 static void
-initialize_transitions(vector<vector<double>> &trans) {
+initialize_transitions(std::vector<std::vector<double>> &trans) {
   // "hypo" -> "hypo" is high, and goes only to "HYPER";
   // "HYPER" -> "HYPER" or "HYPO" equally;
   // "HYPO" -> "HYPER" usually; never to "hypo"
-  trans = {{0.990, 0.010, 0.000}, {0.050, 0.475, 0.475}, {0.000, 0.666, 0.334}};
+
+  // NOLINTBEGIN(*-avoid-magic-numbers)
+  trans = {
+    {0.990, 0.010, 0.000},
+    {0.050, 0.475, 0.475},
+    {0.000, 0.666, 0.334},
+  };
+  // NOLINTEND(*-avoid-magic-numbers)
 }
 
 int
 main_hypermr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-    static const string description =
-      "Identify regions of elevated methylation. Designed for "
-      "methylomes of plants, especially A. thaliana, and other "
-      "organisms with a low background methylation level, but "
-      "with increased methylation associated with biological "
-      "activity at a specific regions of the genome.";
+    // NOLINTBEGIN(*-avoid-magic-numbers)
+    std::size_t desert_size = 1000;
+    std::size_t max_iterations = 10;
+    // corrections for small values (not parameters):
+    double tolerance = 1e-10;
+    double min_cumulative_meth = 4.0;
 
-    string outfile;
-    string scores_file;
-
-    size_t desert_size = 1000;
-    size_t max_iterations = 10;
+    // NOLINTEND(*-avoid-magic-numbers)
 
     // run mode flags
     bool VERBOSE = false;
-
-    // corrections for small values (not parameters):
-    double tolerance = 1e-10;
-
-    double min_cumulative_meth = 4.0;
     bool USE_VITERBI_DECODING = false;
 
-    string params_in_file;
-    string params_out_file;
+    std::string outfile;
+    std::string scores_file;
+    std::string params_in_file;
+    std::string params_out_file;
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
-                           description, "<counts-file>");
+                           about, "<counts-file>");
     opt_parse.add_opt("out", 'o', "output file (BED format)", false, outfile);
     opt_parse.add_opt("scores", 's', "output file for posterior scores", false,
                       scores_file);
@@ -277,62 +261,63 @@ main_hypermr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     opt_parse.add_opt("params-out", 'p', "parameters ouptut file", false,
                       params_out_file);
     opt_parse.set_show_defaults();
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << '\n'
-           << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << '\n';
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
-    if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << '\n';
+    if (std::size(leftover_args) != 1) {
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
-    const string cpgs_file = leftover_args.front();
+    const std::string cpgs_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
     if (!is_msite_file(cpgs_file))
-      throw runtime_error("malformed counts file: " + cpgs_file);
+      throw std::runtime_error("malformed counts file: " + cpgs_file);
 
     if (VERBOSE)
-      cerr << "[loading_data]" << '\n';
-    vector<MSite> cpgs;
-    vector<pair<double, double>> meth;
+      std::cerr << "[loading_data]" << '\n';
+    std::vector<MSite> cpgs;
+    std::vector<std::pair<double, double>> meth;
     load_cpgs(cpgs_file, cpgs, meth);
-    const size_t n_sites = cpgs.size();
+    const std::size_t n_sites = std::size(cpgs);
     const double mean_cov =
       std::accumulate(
         std::cbegin(cpgs), std::cend(cpgs), 0.0,
         [](const auto a, const auto &c) { return a + c.n_reads; }) /
       static_cast<double>(n_sites);
-    cerr << "[n_sites=" << n_sites << "]" << '\n'
-         << "[mean_coverage=" << mean_cov << "]" << '\n';
+    std::cerr << "[n_sites=" << n_sites << "]" << '\n'
+              << "[mean_coverage=" << mean_cov << "]" << '\n';
 
     // separate the regions by chrom and by desert, and eliminate
     // those isolated CpGs
-    vector<size_t> reset_points;
-    size_t total_bases = 0, bases_in_deserts = 0;
+    std::vector<std::size_t> reset_points;
+    std::size_t total_bases = 0, bases_in_deserts = 0;
     separate_regions(desert_size, cpgs, meth, reset_points, total_bases,
                      bases_in_deserts);
 
     if (VERBOSE) {
       const auto des_frac = static_cast<double>(bases_in_deserts) / total_bases;
-      cerr << "[n_sites_retained=" << cpgs.size() << "]" << '\n'
-           << "[deserts_removed=" << reset_points.size() - 2 << "]" << '\n'
-           << "[remaining_genome_fraction=" << 1.0 - des_frac << "]" << '\n';
+      std::cerr << "[n_sites_retained=" << std::size(cpgs) << "]" << '\n'
+                << "[deserts_removed=" << std::size(reset_points) - 2 << "]\n"
+                << "[remaining_genome_fraction=" << 1.0 - des_frac << "]"
+                << '\n';
     }
 
     ThreeStateHMM hmm(meth, reset_points, tolerance, max_iterations, VERBOSE);
 
-    vector<vector<double>> trans;
+    std::vector<std::vector<double>> trans;
     initialize_transitions(trans);
 
     betabin hypo_emission, HYPER_emission, HYPO_emission;
@@ -344,12 +329,13 @@ main_hypermr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
                        // HYPO_emission,
                        trans);
     else {
+      // NOLINTBEGIN(*-avoid-magic-numbers)
       const double n_reads = mean_cov;
       const double fg_alpha = 0.33 * n_reads;
       const double fg_beta = 0.67 * n_reads;
       const double bg_alpha = 0.67 * n_reads;
       const double bg_beta = 0.33 * n_reads;
-
+      // NOLINTEND(*-avoid-magic-numbers)
       hypo_emission = betabin(fg_alpha, fg_beta);
       HYPER_emission = betabin(bg_alpha, bg_beta);
       HYPO_emission = hypo_emission;
@@ -365,7 +351,7 @@ main_hypermr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
                         HYPO_emission, trans);
 
     // decode the states
-    vector<STATE_LABELS> classes;
+    std::vector<STATE_LABELS> classes;
     if (USE_VITERBI_DECODING)
       hmm.ViterbiDecoding();
     else
@@ -373,26 +359,25 @@ main_hypermr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     hmm.get_classes(classes);
 
     // identify the domains of hypermethylation
-    vector<GenomicRegion> domains;
+    std::vector<Interval6> domains;
     build_domains(cpgs, hmm.observations, reset_points, classes, domains);
     filter_domains(min_cumulative_meth, domains);
 
     // write the results
-    ofstream of;
-    if (!outfile.empty())
-      of.open(outfile);
-    std::ostream out(outfile.empty() ? std::cout.rdbuf() : of.rdbuf());
-    copy(begin(domains), end(domains),
-         ostream_iterator<GenomicRegion>(out, "\n"));
+    std::ofstream out(outfile);
+    if (!out)
+      throw std::runtime_error("failed to open outfile: " + outfile);
+    std::copy(std::cbegin(domains), std::cend(domains),
+              std::ostream_iterator<Interval6>(out, "\n"));
 
     // if requested, write the posterior scores
     if (!scores_file.empty()) {
       if (USE_VITERBI_DECODING)
         hmm.PosteriorDecoding();
-      vector<Triplet> scores;
+      std::vector<Triplet> scores;
       hmm.get_state_posteriors(scores);
-      ofstream score_out(scores_file);
-      for (size_t i = 0; i < cpgs.size(); ++i) {
+      std::ofstream score_out(scores_file);
+      for (std::size_t i = 0; i < std::size(cpgs); ++i) {
         score_out << cpgs[i] << "\t";
         if (classes[i] == hypo)
           score_out << "hypo\n" << scores[i].hypo << '\n';
@@ -404,10 +389,10 @@ main_hypermr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     }
   }
   catch (const std::exception &e) {
-    cerr << "ERROR:\t" << e.what() << '\n';
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
 
-// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions)
+// NOLINTEND(*-narrowing-conversions)

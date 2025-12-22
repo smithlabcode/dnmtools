@@ -15,13 +15,14 @@
  * General Public License for more details.
  */
 
-#include "GenomicRegion.hpp"
+#include "Interval6.hpp"
 #include "LevelsCounter.hpp"
 #include "OptionParser.hpp"
 #include "bsutils.hpp"
 #include "xcounts_utils.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -36,41 +37,13 @@
 #include <utility>
 #include <vector>
 
-// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions)
-
-static std::string
-format_levels_counter(const LevelsCounter &lc) {
-  // ...
-  // (7) weighted mean methylation
-  // (8) unweighted mean methylation
-  // (9) fractional methylation
-  // (10) number of sites in the region
-  // (11) number of sites covered at least once
-  // (12) number of observations in reads indicating methylation
-  // (13) total number of observations from reads in the region
-  std::ostringstream oss;
-  // clang-format off
-  oss << lc.mean_meth_weighted() << '\t'
-      << lc.mean_meth() << '\t'
-      << lc.fractional_meth() << '\t'
-      << lc.total_sites << '\t'
-      << lc.sites_covered << '\t'
-      << lc.total_c << '\t'
-      << (lc.total_c + lc.total_t) << '\t'
-      << lc.total_meth << '\t'
-      << lc.sites_covered;
-  // clang-format on
-  return oss.str();
-}
-
 static std::unordered_map<std::string, std::uint64_t>
 get_chrom_sizes(const std::string &chrom_sizes_file) {
-  // NOLINTBEGIN(performance-inefficient-string-concatenation)
-  std::unordered_map<std::string, std::uint64_t> chrom_sizes;
-
   std::ifstream in(chrom_sizes_file);
   if (!in)
     throw std::runtime_error("failed to open file: " + chrom_sizes_file);
+
+  std::unordered_map<std::string, std::uint64_t> chrom_sizes;
 
   std::string line;
   while (getline(in, line)) {
@@ -78,25 +51,21 @@ get_chrom_sizes(const std::string &chrom_sizes_file) {
     std::string chrom_name{};
     std::uint64_t chrom_size{};
     if (!(iss >> chrom_name >> chrom_size))
-      throw std::runtime_error("bad line in " + chrom_sizes_file + ":\n" +
-                               line);
+      throw std::runtime_error("bad chromosome sizes line:\n" + line);
     std::string dummy;
     if (iss >> dummy)
       throw std::runtime_error("too many columns: " + line);
 
     if (chrom_sizes.find(chrom_name) != std::cend(chrom_sizes))
-      throw std::runtime_error("repeated entry " + chrom_name + " in " +
-                               chrom_sizes_file);
+      throw std::runtime_error("repeated entry in chromosome sizes: " + line);
 
     chrom_sizes[chrom_name] = chrom_size;
   }
   return chrom_sizes;
-  // NOLINTEND(performance-inefficient-string-concatenation)
 }
 
 static std::vector<std::string>
 get_chrom_names(const std::string &chrom_sizes_file) {
-  // NOLINTBEGIN(performance-inefficient-string-concatenation)
   std::ifstream in(chrom_sizes_file);
   if (!in)
     throw std::runtime_error("failed to open file: " + chrom_sizes_file);
@@ -108,17 +77,15 @@ get_chrom_names(const std::string &chrom_sizes_file) {
     std::istringstream iss(line);
     std::string chrom_name{};
     if (!(iss >> chrom_name))
-      throw std::runtime_error("bad line in " + chrom_sizes_file + ":\n" +
-                               line);
-
+      throw std::runtime_error("bad line in chromosome sizes file: " + line);
     chrom_names.push_back(chrom_name);
   }
   return chrom_names;
-  // NOLINTEND(performance-inefficient-string-concatenation)
 }
 
 static void
 update(LevelsCounter &lc, const xcounts_entry &xce) {
+  static constexpr auto one_half = 0.5;
   const std::uint64_t n_reads = xce.n_reads();
   if (n_reads > 0) {
     ++lc.sites_covered;
@@ -127,10 +94,11 @@ update(LevelsCounter &lc, const xcounts_entry &xce) {
     lc.total_t += xce.n_unmeth;
     const auto meth = xce.frac();
     lc.total_meth += meth;
-    double lower = 0.0, upper = 0.0;
-    wilson_ci_for_binomial(lc.alpha, n_reads, meth, lower, upper);
-    lc.called_meth += (lower > 0.5);
-    lc.called_unmeth += (upper < 0.5);
+    double lower{}, upper{};
+    wilson_ci_for_binomial(lc.alpha, static_cast<double>(n_reads), meth, lower,
+                           upper);
+    lc.called_meth += (lower > one_half);
+    lc.called_unmeth += (upper < one_half);
   }
   ++lc.total_sites;
 }
@@ -141,11 +109,11 @@ get_name(const bool report_more_info, const char level_code,
   static const std::string tag = "CpG";
   return tag + (report_more_info
                   ? ""
-                  : "_" + std::to_string(
-                            (level_code == 'w'
-                               ? lc.coverage()
-                               : (level_code == 'u' ? lc.sites_covered
-                                                    : lc.total_called()))));
+                  : "_" + std::to_string(level_code == 'w'
+                                           ? lc.coverage()
+                                           : (level_code == 'u'
+                                                ? lc.sites_covered
+                                                : lc.total_called())));
 }
 
 static void
@@ -153,9 +121,8 @@ process_chrom(const bool report_more_info, const char level_code,
               const std::string &chrom_name, const std::uint64_t chrom_size,
               const std::uint64_t bin_size,
               const std::vector<xcounts_entry> &sites, std::ostream &out) {
-  GenomicRegion r(chrom_name, 0, 0, "CpG", 0.0, '+');
-
-  std::uint64_t j = 0;
+  Interval6 r(chrom_name, 0, 0, "CpG", 0.0, '+');
+  std::uint64_t j{};
   for (auto i = 0ul; i < chrom_size; i += bin_size) {
     while (j < std::size(sites) && sites[j].pos < i)
       ++j;
@@ -164,13 +131,13 @@ process_chrom(const bool report_more_info, const char level_code,
     while (j < std::size(sites) && sites[j].pos < i + bin_size)
       update(lc, sites[j++]);
 
-    r.set_start(i);
-    r.set_end(std::min(i + bin_size, chrom_size));
-    r.set_score(level_code == 'w' ? lc.mean_meth_weighted()
-                                  : (level_code == 'u' ? lc.mean_meth()
-                                                       : lc.fractional_meth()));
+    r.start = i;
+    r.stop = std::min(i + bin_size, chrom_size);
+    r.score = level_code == 'w'
+                ? lc.mean_meth_weighted()
+                : (level_code == 'u' ? lc.mean_meth() : lc.fractional_meth());
 
-    r.set_name(get_name(report_more_info, level_code, lc));
+    r.name = get_name(report_more_info, level_code, lc);
 
     out << r;
     if (report_more_info)
@@ -183,12 +150,12 @@ static void
 process_chrom(const bool report_more_info, const std::string &chrom_name,
               const std::uint64_t chrom_size, const std::uint64_t bin_size,
               std::ostream &out) {
-  GenomicRegion r(chrom_name, 0, 0, "CpG_0", 0.0, '+');
+  Interval6 r(chrom_name, 0, 0, "CpG_0", 0.0, '+');
   LevelsCounter lc;
   const std::string lc_formatted = format_levels_counter(lc);
   for (auto i = 0ul; i < chrom_size; i += bin_size) {
-    r.set_start(i);
-    r.set_end(std::min(i + bin_size, chrom_size));
+    r.start = i;
+    r.stop = std::min(i + bin_size, chrom_size);
     out << r;
     if (report_more_info)
       out << '\t' << lc_formatted;
@@ -216,9 +183,11 @@ Columns (beyond the first 6) in the BED format output:
 
     bool verbose = false;
     bool report_more_info = false;
-    std::uint32_t n_threads = 1;
+    std::int32_t n_threads = 1;
     // std::uint64_t bin_size = 1000;
-    size_t bin_size = 1000;  // ADS: for macOS gcc-14.2.0
+
+    // ADS: for macOS gcc-14.2.0
+    std::size_t bin_size = 1000;  // NOLINT(*-avoid-magic-numbers)
     std::string level_code = "w";
     std::string outfile;
 
@@ -261,6 +230,11 @@ Columns (beyond the first 6) in the BED format output:
     const std::string xcounts_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
 
+    if (n_threads <= 0) {
+      std::cerr << "number of threads must be at least 1\n";
+      return EXIT_FAILURE;
+    }
+
     if (!std::filesystem::is_regular_file(chrom_sizes_file))
       throw std::runtime_error("chromosome sizes file not a regular file: " +
                                chrom_sizes_file);
@@ -295,5 +269,3 @@ Columns (beyond the first 6) in the BED format output:
   }
   return EXIT_SUCCESS;
 }
-
-// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions)

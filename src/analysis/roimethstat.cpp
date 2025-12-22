@@ -15,7 +15,9 @@
  * more details.
  */
 
+#include "Interval.hpp"
 #include "Interval6.hpp"
+
 #include "LevelsCounter.hpp"
 #include "MSite.hpp"
 #include "OptionParser.hpp"
@@ -40,6 +42,29 @@
 #include <vector>
 
 // NOLINTBEGIN(*-narrowing-conversions)
+
+[[nodiscard]] static std::string
+format_levels_counter_for_roi(const LevelsCounter &lc) {
+  // ...
+  // (7) weighted mean methylation
+  // (8) unweighted mean methylation
+  // (9) fractional methylation
+  // (10) number of sites in the region
+  // (11) number of sites covered at least once
+  // (12) number of observations in reads indicating methylation
+  // (13) total number of observations from reads in the region
+  std::ostringstream oss;
+  // clang-format off
+  oss << lc.mean_meth_weighted() << '\t'
+      << lc.mean_meth() << '\t'
+      << lc.fractional_meth() << '\t'
+      << lc.total_sites << '\t'
+      << lc.sites_covered << '\t'
+      << lc.total_c << '\t'
+      << lc.coverage();
+  // clang-format on
+  return oss.str();
+}
 
 static void
 update(LevelsCounter &lc, const xcounts_entry &xse) {
@@ -85,7 +110,7 @@ process_chrom(const bool report_more_info, const char level_code,
                 : (level_code == 'u' ? lc.sites_covered : lc.total_called()));
     out << to_string(interval);
     if (report_more_info)
-      out << '\t' << format_levels_counter(lc);
+      out << '\t' << format_levels_counter_for_roi(lc);
     out << '\n';
   }
 }
@@ -94,7 +119,7 @@ static void
 process_chrom(const bool report_more_info,
               const std::vector<Interval6> &intervals, std::ostream &out) {
   LevelsCounter lc;
-  const std::string lc_formatted = format_levels_counter(lc);
+  const std::string lc_formatted = format_levels_counter_for_roi(lc);
   for (const auto &r : intervals) {
     out << to_string(r);
     if (report_more_info)
@@ -109,8 +134,6 @@ process_from_xcounts(const std::uint32_t n_threads, const bool report_more_info,
                      const std::vector<Interval6> &intervals_in,
                      std::ostream &out) {
   const auto sites_by_chrom = read_xcounts_by_chrom(n_threads, xsym_file);
-  // const auto intervals = get_Interval6s(intervals_file);
-
   std::vector<std::vector<Interval6>> intervals_by_chrom;
   std::string prev_chrom;
   for (auto i = 0u; i < std::size(intervals_in); ++i) {
@@ -293,7 +316,7 @@ process_preloaded(
     r_scored.score = score;
     out << to_string(r_scored);
     if (report_more_info)
-      out << '\t' << format_levels_counter(lc);
+      out << '\t' << format_levels_counter_for_roi(lc);
     out << '\n';
   }
 }
@@ -362,7 +385,7 @@ process_on_disk(
     r.score = score;
     out << to_string(r);
     if (report_more_info)
-      out << '\t' << format_levels_counter(lc);
+      out << '\t' << format_levels_counter_for_roi(lc);
     out << '\n';
   }
 }
@@ -380,6 +403,30 @@ get_bed_columns(const std::string &regions_file) {
   while (iss >> token)
     ++n_columns;
   return n_columns;
+}
+
+static auto
+get_intervals(const std::string &filename) -> std::vector<Interval6> {
+  const auto field_count = [&] {
+    bamxx::bgzf_file in(filename, "r");
+    if (!in)
+      throw std::runtime_error("cannot open file: " + filename);
+    std::string line;
+    while (getline(in, line) && line[0] == '#')
+      ;
+    std::istringstream iss(line);
+    std::vector<std::string> v(std::istream_iterator<std::string>(iss),
+                               (std::istream_iterator<std::string>()));
+    return std::size(v);
+  }();
+  if (field_count >= 6)
+    return read_intervals6(filename);
+
+  auto without_names = read_intervals(filename);
+  std::vector<Interval6> intervals;
+  for (const auto &w : without_names)
+    intervals.emplace_back(w.chrom, w.start, w.stop, std::string{}, 0, '+');
+  return intervals;
 }
 
 int
@@ -495,7 +542,7 @@ Columns (beyond the first 6) in the BED format output:
       throw std::runtime_error("seems to be a counts file: " + regions_file +
                                "\ncheck order of input arguments");
 
-    auto regions = read_intervals6(regions_file);
+    auto regions = get_intervals(regions_file);
     if (!std::is_sorted(std::begin(regions), std::end(regions))) {
       if (sort_data_if_needed) {
         if (verbose)

@@ -56,7 +56,6 @@ Interval::initialize(const char *c, const char *c_end) -> bool {
   // stop
   field_s = std::find_if(field_e + 1, c_end, not_sep);
   field_e = std::find_if(field_s + 1, c_end, is_sep);
-  failed = failed || (field_e == c_end);
   {
     const auto [ptr, ec] = std::from_chars(field_s, field_e, stop);
     failed = failed || ec != std::errc{};

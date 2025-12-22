@@ -195,8 +195,7 @@ Columns (beyond the first 6) in the BED format output:
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            description, "<chrom-sizes> <xsym-file>");
     opt_parse.set_show_defaults();
-    opt_parse.add_opt("output", 'o', "name of output file (default: stdout)",
-                      true, outfile);
+    opt_parse.add_opt("output", 'o', "name of output file", true, outfile);
     opt_parse.add_opt("bin", 'b', "bin size in base pairs", false, bin_size);
     opt_parse.add_opt("threads", 't', "number of threads", false, n_threads);
     opt_parse.add_opt("level", 'l',

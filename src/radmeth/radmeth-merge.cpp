@@ -143,8 +143,7 @@ main_radmeth_merge(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
                            " methylated CpGs into DMRs",
                            "<bed-file-in-radmeth-format>");
     opt_parse.set_show_defaults();
-    opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
-                      outfile);
+    opt_parse.add_opt("output", 'o', "output file", true, outfile);
     opt_parse.add_opt("cutoff", 'p', "p-value cutoff", false, cutoff);
     std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);

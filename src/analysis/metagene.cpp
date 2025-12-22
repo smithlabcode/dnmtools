@@ -112,8 +112,7 @@ correctly.
     /****************** GET COMMAND LINE ARGUMENTS ***************************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            description, "<features-bed> <counts>");
-    opt_parse.add_opt("output", 'o', "output file (default: terminal)", false,
-                      outfile);
+    opt_parse.add_opt("output", 'o', "output file", true, outfile);
     opt_parse.add_opt("size", 's', "analyze this size in both directions",
                       false, region_size);
     opt_parse.add_opt("bin", 'b', "bin size", false, bin_size);

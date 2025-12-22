@@ -1135,8 +1135,7 @@ main_pmd(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            description, "<methcount-files>");
-    opt_parse.add_opt("out", 'o', "output file (default: stdout)", false,
-                      outfile);
+    opt_parse.add_opt("out", 'o', "output file", true, outfile);
     opt_parse.add_opt("desert", 'd', "max dist between bins with data in PMD",
                       false, desert_size);
     opt_parse.add_opt("fixedbin", 'f', "Fixed bin size", false, fixed_bin_size);

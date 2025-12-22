@@ -348,8 +348,7 @@ main_hmr_rep(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            description,
                            "<methcount-file-1> <methcount-file-2> ...");
-    opt_parse.add_opt("out", 'o', "output file (default: stdout)", false,
-                      outfile);
+    opt_parse.add_opt("out", 'o', "output file", true, outfile);
     opt_parse.add_opt("desert", 'd', "max dist btwn cpgs with reads in HMR",
                       false, desert_size);
     opt_parse.add_opt("itr", 'i', "max iterations", false, max_iterations);

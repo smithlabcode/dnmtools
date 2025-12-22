@@ -234,8 +234,7 @@ computes probability of allele-specific methylation at each tuple of CpGs
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            description, "<epireads>");
-    opt_parse.add_opt("output", 'o', "output file name (default: stdout)",
-                      false, outfile);
+    opt_parse.add_opt("output", 'o', "output file name", true, outfile);
     opt_parse.add_opt("chrom", 'c', "genome sequence file/directory", true,
                       chroms_dir);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);

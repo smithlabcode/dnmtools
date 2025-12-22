@@ -243,7 +243,7 @@ main_hypermr(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            about, "<counts-file>");
-    opt_parse.add_opt("out", 'o', "output file (BED format)", false, outfile);
+    opt_parse.add_opt("out", 'o', "output file", true, outfile);
     opt_parse.add_opt("scores", 's', "output file for posterior scores", false,
                       scores_file);
     opt_parse.add_opt("tolerance", 't', "numerical tolerance", false,

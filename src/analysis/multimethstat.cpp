@@ -510,8 +510,7 @@ main_multimethstat(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
                            "methylation in each of a set of genomic intervals",
                            "<intervals-bed> <methylation-file>");
     opt_parse.set_show_defaults();
-    opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
-                      false, outfile);
+    opt_parse.add_opt("output", 'o', "output file", true, outfile);
     opt_parse.add_opt("numeric", 'N', "print numeric values only (not NAs)",
                       false, print_numeric_only);
     opt_parse.add_opt("preload", 'L', "Load all CpG sites", false,

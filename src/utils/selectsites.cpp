@@ -264,8 +264,7 @@ main_selectsites(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            description, "<intervals-bed> <sites-file>", 2);
-    opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
-                      outfile);
+    opt_parse.add_opt("output", 'o', "output file", true, outfile);
     opt_parse.add_opt("disk", 'd',
                       "process sites on disk "
                       "(fast if target intervals are few)",

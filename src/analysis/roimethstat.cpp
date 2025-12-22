@@ -421,7 +421,7 @@ Columns (beyond the first 6) in the BED format output:
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            description, "<intervals-bed> <methylation-file>");
     opt_parse.set_show_defaults();
-    opt_parse.add_opt("output", 'o', "Name of output file", true, outfile);
+    opt_parse.add_opt("output", 'o', "output file", true, outfile);
     opt_parse.add_opt("numeric", 'N', "print numeric values only (not NAs)",
                       false, print_numeric_only);
     opt_parse.add_opt("preload", 'L', "load all site sites", false, preload);

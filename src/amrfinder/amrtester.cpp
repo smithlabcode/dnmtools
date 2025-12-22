@@ -193,7 +193,7 @@ main_amrtester(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
                            "resolve epi-alleles",
                            "<bed-regions> <mapped-reads>");
-    opt_parse.add_opt("output", 'o', "output file", false, outfile);
+    opt_parse.add_opt("output", 'o', "output file", true, outfile);
     opt_parse.add_opt("chrom", 'c', "reference genome fasta file", true,
                       chrom_file);
     opt_parse.add_opt("itr", 'i', "max iterations", false, max_itr);

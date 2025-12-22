@@ -16,7 +16,7 @@ selectsites: Select sites, specified in a methcounts format file, that are
 contained in given (bed format) intervals.
 )";
 
-#include "Interval6.hpp"
+#include "Interval.hpp"
 #include "MSite.hpp"
 #include "OptionParser.hpp"
 
@@ -111,7 +111,7 @@ write_stats_output(const selectsites_summary &summary,
 }
 
 static void
-collapsebed(std::vector<Interval6> &regions) {
+collapsebed(std::vector<Interval> &regions) {
   std::ptrdiff_t j = 0;
   for (const auto &r : regions) {
     if (regions[j].chrom == r.chrom && r.start <= regions[j].stop)
@@ -123,19 +123,19 @@ collapsebed(std::vector<Interval6> &regions) {
 }
 
 static inline bool
-precedes(const Interval6 &r, const MSite &s) {
+precedes(const Interval &r, const MSite &s) {
   return (r.chrom < s.chrom || (r.chrom == s.chrom && r.stop <= s.pos));
 }
 
 static inline bool
-contains(const Interval6 &r, const MSite &s) {
+contains(const Interval &r, const MSite &s) {
   return (r.chrom == s.chrom && (r.start <= s.pos && s.pos < r.stop));
 }
 
 static auto
 process_all_sites(
   const bool verbose, const std::string &sites_file,
-  const std::unordered_map<std::string, std::vector<Interval6>> &regions,
+  const std::unordered_map<std::string, std::vector<Interval>> &regions,
   bamxx::bgzf_file &out) -> std::tuple<std::uint64_t, std::uint64_t> {
   bamxx::bgzf_file in(sites_file, "r");
   if (!in)
@@ -145,7 +145,7 @@ process_all_sites(
   std::uint64_t n_sites_selected = 0u;
 
   MSite the_site, prev_site;
-  std::vector<Interval6>::const_iterator i, i_lim;
+  std::vector<Interval>::const_iterator i, i_lim;
   bool chrom_is_relevant = false;
   while (read_site(in, the_site)) {
     ++n_sites_total;
@@ -173,7 +173,7 @@ process_all_sites(
 }
 
 [[nodiscard]] static auto
-get_sites_in_region(std::ifstream &site_in, const Interval6 &region,
+get_sites_in_region(std::ifstream &site_in, const Interval &region,
                     bamxx::bgzf_file &out) -> std::uint64_t {
   const std::string chrom{region.chrom};
   const std::size_t start_pos = region.start;
@@ -200,7 +200,7 @@ get_sites_in_region(std::ifstream &site_in, const Interval6 &region,
 
 static auto
 process_with_sites_on_disk(const std::string &sites_file,
-                           const std::vector<Interval6> &regions,
+                           const std::vector<Interval> &regions,
                            bamxx::bgzf_file &out) -> std::uint64_t {
   std::ifstream in(sites_file);
   if (!in)
@@ -213,8 +213,8 @@ process_with_sites_on_disk(const std::string &sites_file,
 
 static void
 regions_by_chrom(
-  std::vector<Interval6> &regions,
-  std::unordered_map<std::string, std::vector<Interval6>> &lookup) {
+  std::vector<Interval> &regions,
+  std::unordered_map<std::string, std::vector<Interval>> &lookup) {
   for (auto &&r : regions)
     lookup[r.chrom].push_back(r);
   regions.clear();
@@ -313,7 +313,7 @@ main_selectsites(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
         std::cerr << "input file is so must be loaded\n";
     }
 
-    auto regions = read_intervals6(regions_file);
+    auto regions = read_intervals(regions_file);
     if (!std::is_sorted(std::cbegin(regions), std::cend(regions)))
       throw std::runtime_error("regions not sorted in file: " + regions_file);
     std::tie(summary.n_target_regions, summary.target_region_size) =
@@ -329,7 +329,7 @@ main_selectsites(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
              summary.target_region_collapsed_size) =
       selectsites_summary::measure_target_regions(regions);
 
-    std::unordered_map<std::string, std::vector<Interval6>> regions_lookup;
+    std::unordered_map<std::string, std::vector<Interval>> regions_lookup;
     if (!keep_file_on_disk)
       regions_by_chrom(regions, regions_lookup);
 

@@ -1083,9 +1083,9 @@ main_pmd(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
     static constexpr auto min_observations_for_inference{100ul};
     static constexpr auto default_self_transition{0.99};
+    static constexpr auto default_transition{0.01};
     static constexpr auto default_start_transition{0.5};
     static constexpr auto default_end_transition{1e-10};
-    static constexpr auto default_transition{0.01};
 
     // magic numbers from paper: highest jaccard index to wgbs
     static constexpr auto bin_size_for_array{1000ul};
@@ -1100,17 +1100,11 @@ main_pmd(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     static constexpr auto default_bg_alpha{0.95};
     static constexpr auto default_bg_beta{0.05};
     const auto init_trans = [&] {
-      return std::vector{
-        std::vector<double>(default_self_transition, default_transition),
-        std::vector<double>(default_transition, default_self_transition),
+      return std::vector<std::vector<double>>{
+        {default_self_transition, default_transition},
+        {default_transition, default_self_transition},
       };
     };
-    // <std::vector<double>>
-    //   std::vector<std::vector<double>> t(
-    //     2, std::vector<double>(2, default_transition));
-    //   t[0][0] = t[1][1] = default_self_transition;
-    //   return t;
-    // };
 
     // NOLINTBEGIN(*-avoid-magic-numbers)
     std::size_t resolution = 500;

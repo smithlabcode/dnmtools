@@ -942,14 +942,16 @@ valid_modification_types(const std::string &infile,
     // ADS: or bam_parse_basemod2(aln.b, m, HTS_MOD_REPORT_UNCHECKED)
     int n_types{};
     const auto types = bam_mods_recorded(m.get(), &n_types);
-    valid_types = (n_types == 1 && types[0] == 'C') ||
-                  (n_types >= 2 && types[0] == 'h' && types[1] == 'm');
+    // clang-format off
+    valid_types = ((n_types == 0) ||
+                   (n_types == 1 && types[0] == 'C') ||
+                   (n_types >= 2 && types[0] == 'h' && types[1] == 'm'));
+    // clang-format on
     if (!valid_types) {
       message = "n_types: " + std::to_string(n_types) + "\n";
-      for (auto i = 0; i < n_types; ++i) {
+      for (auto i = 0; i < n_types; ++i)
         message += "type[" + std::to_string(i) +
                    "]=" + std::to_string(static_cast<char>(types[i])) + "\n";
-      }
     }
   }
   return std::make_pair(valid_types, message);

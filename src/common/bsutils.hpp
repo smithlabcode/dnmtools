@@ -21,7 +21,7 @@
 #include <cstddef>
 #include <string>
 #include <vector>
-class GenomicRegion;
+class Interval6;
 
 inline bool
 is_cytosine(char c) {
@@ -54,11 +54,11 @@ is_cpg(const std::string &s, size_t i) {
 }
 
 void
-adjust_region_ends(const std::vector<std::vector<GenomicRegion>> &clusters,
-                   std::vector<GenomicRegion> &regions);
+adjust_region_ends(const std::vector<std::vector<Interval6>> &clusters,
+                   std::vector<Interval6> &regions);
 
 void
-relative_sort(const std::vector<GenomicRegion> &mapped_locations,
+relative_sort(const std::vector<Interval6> &mapped_locations,
               const std::vector<std::string> &names,
               std::vector<size_t> &lookup);
 

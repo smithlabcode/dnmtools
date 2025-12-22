@@ -15,7 +15,7 @@
  * General Public License for more details.
  */
 
-#include "GenomicRegion.hpp"
+#include "Interval6.hpp"
 #include "OptionParser.hpp"
 
 #include <cstdlib>
@@ -27,49 +27,36 @@
 #include <string>
 #include <vector>
 
-using std::cerr;
-using std::cout;
-using std::endl;
-using std::ifstream;
-using std::istream;
-using std::istringstream;
-using std::ofstream;
-using std::ostream;
-using std::runtime_error;
-using std::string;
-using std::vector;
-
 // NOLINTBEGIN(*-narrowing-conversions)
 
 // Attemps to find the next significant CpG site. Returns true if one was found
 // and flase otherwise.
 static bool
-read_next_significant_cpg(istream &cpg_stream, GenomicRegion &cpg,
-                          double cutoff, bool &skipped_any, bool &n_sig_sites,
-                          size_t &test_cov, size_t &test_meth, size_t &rest_cov,
-                          size_t &rest_meth) {
-  GenomicRegion region;
+read_next_significant_cpg(std::istream &cpg_stream, Interval6 &cpg,
+                          double cutoff, bool &skipped_any, bool &has_sig_sites,
+                          std::size_t &test_cov, std::size_t &test_meth,
+                          std::size_t &rest_cov, std::size_t &rest_meth) {
+  Interval6 region;
   skipped_any = false;
-  n_sig_sites = false;
-  string cpg_encoding;
+  has_sig_sites = false;
+  std::string line;
 
-  while (getline(cpg_stream, cpg_encoding)) {
-    string chrom, name, sign;
-    size_t position{};
+  while (std::getline(cpg_stream, line)) {
+    std::string chrom, name, sign;
+    std::size_t position{};
     double raw_pval{};
     double adjusted_pval{};
     double corrected_pval{};
-
-    istringstream iss(cpg_encoding);
-    iss.exceptions(std::ios::failbit);
-    iss >> chrom >> position >> sign >> name >> raw_pval >> adjusted_pval >>
-      corrected_pval >> test_cov >> test_meth >> rest_cov >> rest_meth;
-
+    std::istringstream iss(line);
+    if (!(iss >> chrom >> position >> sign >> name >> raw_pval >>
+          adjusted_pval >> corrected_pval >> test_cov >> test_meth >>
+          rest_cov >> rest_meth))
+      throw std::runtime_error("failed to parse line:\n" + line);
     if (corrected_pval >= 0.0 && corrected_pval < cutoff) {
-      cpg.set_chrom(chrom);
-      cpg.set_start(position);
-      cpg.set_end(position + 1);
-      n_sig_sites = (0 <= raw_pval && raw_pval < cutoff);
+      cpg.chrom = chrom;
+      cpg.start = position;
+      cpg.stop = position + 1;
+      has_sig_sites = (0.0 <= raw_pval && raw_pval < cutoff);
       return true;
     }
     skipped_any = true;
@@ -79,77 +66,75 @@ read_next_significant_cpg(istream &cpg_stream, GenomicRegion &cpg,
 }
 
 static void
-merge(istream &cpg_stream, ostream &dmr_stream, double cutoff) {
-  GenomicRegion dmr;
-  dmr.set_name("dmr");
+merge(std::istream &cpg_stream, std::ostream &dmr_stream, double cutoff) {
+  Interval6 dmr;
+  dmr.name = "dmr";
 
-  size_t dmr_test_cov = 0;
-  size_t dmr_test_meth = 0;
-  size_t dmr_rest_cov = 0;
-  size_t dmr_rest_meth = 0;
+  std::size_t dmr_test_cov{};
+  std::size_t dmr_test_meth{};
+  std::size_t dmr_rest_cov{};
+  std::size_t dmr_rest_meth{};
 
-  size_t test_cov = 0;
-  size_t test_meth = 0;
-  size_t rest_cov = 0;
-  size_t rest_meth = 0;
+  std::size_t test_cov{};
+  std::size_t test_meth{};
+  std::size_t rest_cov{};
+  std::size_t rest_meth{};
 
   // Find the first significant CpG, or terminate the function if none exist.
   bool skipped_last_cpg{};
-  bool n_sig_sites{};
+  bool has_sig_sites{};
   if (!read_next_significant_cpg(cpg_stream, dmr, cutoff, skipped_last_cpg,
-                                 n_sig_sites, test_cov, test_meth, rest_cov,
+                                 has_sig_sites, test_cov, test_meth, rest_cov,
                                  rest_meth))
     return;
 
-  dmr.set_score(n_sig_sites);
+  dmr.score = has_sig_sites ? 1.0 : 0.0;
   dmr_test_cov += test_cov;
   dmr_test_meth += test_meth;
   dmr_rest_cov += rest_cov;
   dmr_rest_meth += rest_meth;
 
-  GenomicRegion cpg;
-  cpg.set_name("dmr");
+  Interval6 cpg;
+  cpg.name = "dmr";
 
   while (read_next_significant_cpg(cpg_stream, cpg, cutoff, skipped_last_cpg,
-                                   n_sig_sites, test_cov, test_meth, rest_cov,
+                                   has_sig_sites, test_cov, test_meth, rest_cov,
                                    rest_meth)) {
-    if (skipped_last_cpg || cpg.get_chrom() != dmr.get_chrom()) {
-      if (dmr.get_score() != 0)
-        dmr_stream << dmr.get_chrom() << '\t' << dmr.get_start() << '\t'
-                   << dmr.get_end() << '\t' << dmr.get_name() << '\t'
-                   << dmr.get_score() << '\t'
+    if (skipped_last_cpg || cpg.chrom != dmr.chrom) {
+      if (dmr.score != 0)
+        dmr_stream << dmr.chrom << '\t' << dmr.start << '\t' << dmr.stop << '\t'
+                   << dmr.name << '\t' << dmr.score << '\t'
                    << static_cast<double>(dmr_test_meth) / dmr_test_cov -
                         static_cast<double>(dmr_rest_meth) / dmr_rest_cov
                    << '\n';
       dmr = cpg;
-      dmr.set_score(n_sig_sites);
+      dmr.score += has_sig_sites ? 1.0 : 0.0;
       dmr_test_cov = test_cov;
       dmr_test_meth = test_meth;
       dmr_rest_cov = rest_cov;
       dmr_rest_meth = rest_meth;
     }
     else {
-      dmr.set_end(cpg.get_end());
-      dmr.set_score(dmr.get_score() + n_sig_sites);
+      dmr.stop = cpg.stop;
+      dmr.score += has_sig_sites ? 1.0 : 0.0;
       dmr_test_cov += test_cov;
       dmr_test_meth += test_meth;
       dmr_rest_cov += rest_cov;
       dmr_rest_meth += rest_meth;
     }
   }
-  if (dmr.get_score() != 0) {
+  if (dmr.score != 0) {
     const double diff = static_cast<double>(dmr_test_meth) / dmr_test_cov -
                         static_cast<double>(dmr_rest_meth) / dmr_rest_cov;
-    dmr_stream << dmr.get_chrom() << '\t' << dmr.get_start() << '\t'
-               << dmr.get_end() << '\t' << dmr.get_name() << '\t'
-               << dmr.get_score() << '\t' << diff << '\n';
+    dmr_stream << dmr.chrom << '\t' << dmr.start << '\t' << dmr.stop << '\t'
+               << dmr.name << '\t' << dmr.score << '\t' << diff << '\n';
   }
 }
 
 int
 main_radmeth_merge(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-    string outfile;
+    std::string outfile;
     double cutoff = 0.01;  // NOLINT(*-avoid-magic-numbers)
 
     /**************** GET COMMAND LINE ARGUMENTS *************************/
@@ -161,41 +146,39 @@ main_radmeth_merge(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     opt_parse.add_opt("output", 'o', "output file (default: stdout)", false,
                       outfile);
     opt_parse.add_opt("cutoff", 'p', "p-value cutoff", false, cutoff);
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << '\n';
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << '\n';
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << '\n';
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
-    const string bed_filename = leftover_args.front();
+    const std::string bed_filename = leftover_args.front();
     /************************************************************************/
 
-    ofstream of;
-    if (!outfile.empty())
-      of.open(outfile);
-    ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
-
-    ifstream in(bed_filename);
+    std::ofstream out(outfile);
+    if (!out)
+      throw std::runtime_error("failed to open: " + outfile);
+    std::ifstream in(bed_filename);
     if (!in)
-      throw runtime_error("could not open file: " + bed_filename);
+      throw std::runtime_error("failed to open: " + bed_filename);
 
     merge(in, out, cutoff);
   }
   catch (const std::exception &e) {
-    cerr << "ERROR: " << e.what() << '\n';
-    exit(EXIT_FAILURE);
+    std::cerr << e.what() << '\n';
+    return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }

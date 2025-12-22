@@ -1,30 +1,29 @@
-/* metagene (tsscpgplot): get data to plot methylation level around a TSS
+/* Copyright (C) 2010-2025 Andrew D. Smith
  *
- * Copyright (C) 2010-2023 Andrew D. Smith
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * Authors: Andrew D. Smith
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU General Public License along
+ * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "GenomicRegion.hpp"
+[[maybe_unused]] static constexpr auto about = R"(
+metagene (tsscpgplot): get data to plot methylation level around a TSS
+)";
+
+#include "Interval6.hpp"
 #include "LevelsCounter.hpp"
 #include "MSite.hpp"
 #include "OptionParser.hpp"
 
-#include "bamxx.hpp"
+#include <bamxx.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -40,33 +39,23 @@
 #include <utility>
 #include <vector>
 
-using std::cerr;
-using std::cout;
-using std::ostream;
-using std::pair;
-using std::runtime_error;
-using std::sort;
-using std::string;
-using std::to_string;
-using std::unordered_map;
-using std::vector;
-
 static MSite
-tss_from_gene(const GenomicRegion &r) {
+tss_from_gene(const Interval6 &r) {
   MSite s;
-  s.chrom = r.get_chrom();
-  s.pos = (r.pos_strand() ? r.get_start() : r.get_end());
-  s.strand = r.get_strand();
+  s.chrom = r.chrom;
+  s.pos = r.strand == '+' ? r.start : r.stop;
+  s.strand = r.strand;
   return s;
 }
 
 static void
-process_chrom(const uint32_t region_size, const vector<GenomicRegion> &genes,
-              const pair<uint32_t, uint32_t> &bounds,
-              const vector<MSite> &sites, vector<LevelsCounter> &levels) {
-  const uint32_t twice_rs = 2 * region_size;
-
-  auto comp = [](const MSite &a, const MSite &b) { return a.pos < b.pos; };
+process_chrom(const std::uint32_t region_size,
+              const std::vector<Interval6> &genes,
+              const std::pair<std::uint32_t, std::uint32_t> &bounds,
+              const std::vector<MSite> &sites,
+              std::vector<LevelsCounter> &levels) {
+  const auto cmp = [](const MSite &a, const MSite &b) { return a.pos < b.pos; };
+  const std::uint32_t twice_rs = 2 * region_size;
 
   for (auto i = bounds.first; i < bounds.second; ++i) {
     const MSite tss = tss_from_gene(genes[i]);
@@ -76,8 +65,10 @@ process_chrom(const uint32_t region_size, const vector<GenomicRegion> &genes,
     MSite right = tss;
     right.pos += region_size;
 
-    const auto lim = upper_bound(cbegin(sites), cend(sites), right, comp);
-    auto itr = lower_bound(cbegin(sites), cend(sites), left, comp);
+    const auto lim =
+      std::upper_bound(std::cbegin(sites), std::cend(sites), right, cmp);
+    auto itr =
+      std::lower_bound(std::cbegin(sites), std::cend(sites), left, cmp);
     for (; itr != lim; ++itr) {
       const auto dist = itr->pos - left.pos;
       const auto base_idx = tss.strand == '+' ? dist : twice_rs - dist;
@@ -88,10 +79,11 @@ process_chrom(const uint32_t region_size, const vector<GenomicRegion> &genes,
 
 template <typename T>
 static void
-collapse_bins(const uint32_t bin_size, vector<T> &v) {
-  const uint32_t n_bins = std::ceil(static_cast<double>(v.size()) / bin_size);
-  vector<T> vv(n_bins);
-  for (auto i = 0u; i < v.size(); ++i)
+collapse_bins(const std::uint32_t bin_size, std::vector<T> &v) {
+  const std::uint32_t n_bins =
+    std::ceil(static_cast<double>(std::size(v)) / bin_size);
+  std::vector<T> vv(n_bins);
+  for (auto i = 0u; i < std::size(v); ++i)
     vv[i / bin_size] += v[i];
   v.swap(vv);
 }
@@ -111,11 +103,11 @@ genes, and the promoters are of interest, the strand will be used
 correctly.
 )";
   try {
-    string outfile;
-    uint32_t region_size = 5000;  // NOLINT(*-avoid-magic-numbers)
+    std::string outfile;
+    std::uint32_t region_size = 5000;  // NOLINT(*-avoid-magic-numbers)
     bool verbose = false;
     bool show_progress = false;
-    uint32_t bin_size = 50;  // NOLINT(*-avoid-magic-numbers)
+    std::uint32_t bin_size = 50;  // NOLINT(*-avoid-magic-numbers)
 
     /****************** GET COMMAND LINE ARGUMENTS ***************************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
@@ -127,111 +119,110 @@ correctly.
     opt_parse.add_opt("bin", 'b', "bin size", false, bin_size);
     opt_parse.add_opt("progress", '\0', "show progress", false, show_progress);
     opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << '\n';
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << '\n';
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
-    if (leftover_args.size() != 2) {
-      cerr << opt_parse.help_message() << '\n';
+    if (std::size(leftover_args) != 2) {
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
-    const string features_file_name = leftover_args.front();
-    const string cpg_file_name = leftover_args.back();
+    const std::string features_file_name = leftover_args.front();
+    const std::string cpg_file_name = leftover_args.back();
     /**********************************************************************/
 
     if (verbose)
-      cerr << "[loading feature annotations data]" << '\n';
-    vector<GenomicRegion> features;
-    ReadBEDFile(features_file_name, features);
-    sort(begin(features), end(features));
+      std::cerr << "[loading feature annotations data]\n";
+    auto features = read_intervals6(features_file_name);
+    std::sort(std::begin(features), std::end(features));
     if (verbose)
-      cerr << "[number of features: " << features.size() << "]" << '\n';
+      std::cerr << "[number of features: " << std::size(features) << "]\n";
 
     // identify the start and end of ranges for each chromosome
-    unordered_map<string, pair<uint32_t, uint32_t>> lookup;
-    typedef decltype(lookup)::iterator lookup_itr;
+    using pos_pair = std::pair<std::uint32_t, std::uint32_t>;
+    std::unordered_map<std::string, pos_pair> lookup;
 
-    string chrom_name;
+    std::string chrom_name;
     auto prev_idx = 0u;
-    for (auto i = 0u; i < features.size(); ++i)
-      if (features[i].get_chrom() != chrom_name) {
+    for (auto i = 0u; i < std::size(features); ++i)
+      if (features[i].chrom != chrom_name) {
         if (!chrom_name.empty())
           lookup.insert({chrom_name, {prev_idx, i}});
         prev_idx = i;
-        chrom_name = features[i].get_chrom();
+        chrom_name = features[i].chrom;
       }
-    lookup.insert({chrom_name, {prev_idx, features.size()}});
+    lookup.insert({chrom_name, {prev_idx, std::size(features)}});
     if (verbose)
-      cerr << "[number of chroms with features: " << lookup.size() << "]\n";
+      std::cerr << "[number of chroms with features: " << std::size(lookup)
+                << "]\n";
 
-    auto pair_diff = [&lookup](const lookup_itr x) {
-      return (x != end(lookup)) ? x->second.second - x->second.first : 0u;
+    const auto pair_diff = [&lookup](const auto x) {
+      return (x != std::cend(lookup)) ? x->second.second - x->second.first : 0u;
     };
 
-    vector<LevelsCounter> levels(2 * region_size);
+    std::vector<LevelsCounter> levels(2 * region_size);
 
     bamxx::bgzf_file cpgin(cpg_file_name, "r");
     if (!cpgin)
-      throw runtime_error("failed to open file: " + cpg_file_name);
+      throw std::runtime_error("failed to open file: " + cpg_file_name);
 
-    vector<MSite> sites;
-    string line;
+    std::vector<MSite> sites;
+    std::string line;
     chrom_name.clear();
     while (getline(cpgin, line)) {
-      auto the_site = MSite(line);
+      const auto the_site = MSite(line);
       if (the_site.chrom != chrom_name) {
         if (!sites.empty()) {
           const auto bounds = lookup.find(chrom_name);
-          if (bounds != end(lookup))
+          if (bounds != std::cend(lookup))
             process_chrom(region_size, features, bounds->second, sites, levels);
           const auto n_features = pair_diff(bounds);
           if (show_progress)
-            cerr << "[sites=" << sites.size() << " features=" << n_features
-                 << "]" << '\n';
+            std::cerr << "[sites=" << std::size(sites)
+                      << " features=" << n_features << "]" << '\n';
           sites.clear();
         }
         if (show_progress)
-          cerr << "[processing: " << the_site.chrom << "]";
+          std::cerr << "[processing: " << the_site.chrom << "]";
         chrom_name = the_site.chrom;
       }
-      sites.push_back(std::move(the_site));
+      sites.push_back(the_site);
     }
 
     if (!sites.empty()) {
       const auto bounds = lookup.find(chrom_name);
-      if (bounds != end(lookup))
+      if (bounds != std::cend(lookup))
         process_chrom(region_size, features, bounds->second, sites, levels);
       const auto n_features = pair_diff(bounds);
       if (show_progress)
-        cerr << "[sites=" << sites.size() << " features=" << n_features << "]"
-             << '\n';
+        std::cerr << "[sites=" << std::size(sites) << " features=" << n_features
+                  << "]\n";
     }
 
     collapse_bins(bin_size, levels);
 
     if (verbose)
-      cerr << "output columns:\n" << LevelsCounter::format_header() << '\n';
+      std::cerr << "output columns:\n"
+                << LevelsCounter::format_header() << '\n';
 
-    std::ofstream of;
-    if (!outfile.empty())
-      of.open(outfile);
-    std::ostream out(of.is_open() ? of.rdbuf() : std::cout.rdbuf());
-
-    for (auto i = 0u; i < levels.size(); ++i)
+    std::ofstream out(outfile);
+    if (!out)
+      throw std::runtime_error("failed to open file: " + outfile);
+    for (auto i = 0u; i < std::size(levels); ++i)
       out << i * bin_size << '\t' << levels[i].format_row() << '\n';
   }
-  catch (std::exception &e) {
-    cerr << e.what() << '\n';
+  catch (const std::exception &e) {
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

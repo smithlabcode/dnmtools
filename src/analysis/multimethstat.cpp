@@ -1,24 +1,25 @@
-/* roimethstat: average methylation in each of a set of regions
+/* Copyright (C) 2014-2022 Andrew D. Smith
  *
- * Copyright (C) 2014-2022 Andrew D. Smith
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * Authors: Andrew D. Smith
- *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
 
-#include "GenomicRegion.hpp"
+[[maybe_unused]] static constexpr auto about = R"(
+multistat: average methylation in each of a set of regions for each methylome
+)";
+
+#include "Interval6.hpp"
 #include "MSite.hpp"
-#include "OptionParser.hpp"
 #include "bsutils.hpp"
+
+#include "OptionParser.hpp"
 
 #include <bamxx.hpp>
 
@@ -35,93 +36,75 @@
 #include <utility>
 #include <vector>
 
-using std::cerr;
-using std::cout;
-using std::endl;
-using std::ifstream;
-using std::ios_base;
-using std::is_sorted;
-using std::isfinite;
-using std::make_pair;
-using std::pair;
-using std::runtime_error;
-using std::string;
-using std::vector;
+// NOLINTBEGIN(*-narrowing-conversions)
 
-using bamxx::bgzf_file;
-
-// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions)
-
-static pair<bool, bool>
-meth_unmeth_calls(const size_t n_meth, const size_t n_unmeth) {
-  static const double alpha = 0.95;
-  // get info for binomial test
-  double lower = 0.0, upper = 0.0;
-  const size_t total = n_meth + n_unmeth;
+static std::pair<bool, bool>
+meth_unmeth_calls(const std::size_t n_meth, const std::size_t n_unmeth) {
+  static constexpr double alpha = 0.95;
+  static constexpr double one_half = 0.5;
+  double lower{}, upper{};
+  const auto total = n_meth + n_unmeth;
   wilson_ci_for_binomial(alpha, total, static_cast<double>(n_meth) / total,
                          lower, upper);
-  return make_pair(lower > 0.5, upper < 0.5);
+  return std::make_pair(lower > one_half, upper < one_half);
 }
 
-static std::pair<size_t, size_t>
-region_bounds(const vector<MSite> &sites, const GenomicRegion &region) {
-  const string chrom(region.get_chrom());
-  const char strand(region.get_strand());
-
-  const MSite a(chrom, region.get_start(), strand, "", 0, 0);
-  vector<MSite>::const_iterator a_ins(lower_bound(begin(sites), end(sites), a));
-
-  const MSite b(chrom, region.get_end(), strand, "", 0, 0);
-  vector<MSite>::const_iterator b_ins(lower_bound(begin(sites), end(sites), b));
-
-  return make_pair(a_ins - begin(sites), b_ins - begin(sites));
+static std::pair<std::size_t, std::size_t>
+region_bounds(const std::vector<MSite> &sites, const Interval6 &region) {
+  const MSite a(region.chrom, region.start, region.strand, "", 0, 0);
+  const auto a_ins = std::lower_bound(std::cbegin(sites), std::cend(sites), a);
+  const MSite b(region.chrom, region.stop, region.strand, "", 0, 0);
+  const auto b_ins = std::lower_bound(std::cbegin(sites), std::cend(sites), b);
+  return std::make_pair(std::distance(std::cbegin(sites), a_ins),
+                        std::distance(std::cbegin(sites), b_ins));
 }
 
 /*
-   This function is used to make sure the output is done the same way
-   in the different places it might be generated. One issue is that
-   there is a lot of string and stream manipulation here, which might
-   not be desirable if there are lots of regions, as when the genome
-   is binned.
+   This function is used to make sure the output is done the same way in the
+   different places it might be generated. One issue is that there is a lot of
+   string and stream manipulation here, which might not be desirable if there
+   are lots of regions, as when the genome is binned.
 */
-static string
-format_output_line(
-  const bool report_more_information, const GenomicRegion &r,
-  const vector<double> &score, const vector<double> &weighted_mean_meth,
-  const vector<double> &mean_meth, const vector<double> &fractional_meth,
-  const size_t total_cpgs, const vector<size_t> &cpgs_with_reads,
-  const vector<size_t> &total_meth, const vector<size_t> &total_reads) {
+static std::string
+format_output_line(const bool report_more_information, const Interval6 &r,
+                   const std::vector<double> &score,
+                   const std::vector<double> &weighted_mean_meth,
+                   const std::vector<double> &mean_meth,
+                   const std::vector<double> &fractional_meth,
+                   const std::size_t total_cpgs,
+                   const std::vector<std::size_t> &cpgs_with_reads,
+                   const std::vector<std::size_t> &total_meth,
+                   const std::vector<std::size_t> &total_reads) {
   std::ostringstream oss;
-  oss << r.get_chrom() << '\t' << r.get_start() << '\t' << r.get_end() << '\t'
-      << r.get_name() << '\t';
+  oss << r.chrom << '\t' << r.start << '\t' << r.stop << '\t' << r.name << '\t';
 
-  const size_t n_samples = score.size();
+  const std::size_t n_samples = std::size(score);
 
-  for (size_t i = 0; i < n_samples; ++i) {
-    if (isfinite(score[i]))
+  for (std::size_t i = 0; i < n_samples; ++i) {
+    if (std::isfinite(score[i]))
       oss << score[i];
     else
       oss << "NA";
 
     // GS: commenting this out because we shouldn't be reporting
     // strand several times
-    // oss << '\t' << r.get_strand();
+    // oss << '\t' << r.strand;
 
     if (report_more_information) {
       oss << '\t';
-      if (isfinite(weighted_mean_meth[i]))
+      if (std::isfinite(weighted_mean_meth[i]))
         oss << weighted_mean_meth[i];
       else
         oss << "NA";
 
       oss << '\t';
-      if (isfinite(mean_meth[i]))
+      if (std::isfinite(mean_meth[i]))
         oss << mean_meth[i];
       else
         oss << "NA";
 
       oss << '\t';
-      if (isfinite(fractional_meth[i]))
+      if (std::isfinite(fractional_meth[i]))
         oss << fractional_meth[i];
       else
         oss << "NA";
@@ -136,12 +119,12 @@ format_output_line(
 }
 
 static void
-get_site_and_values(string &line, MSite &site, vector<double> &values) {
+get_site_and_values(std::string &line, MSite &site,
+                    std::vector<double> &values) {
   // in tabular, chrom/pos/strand is separated by colons
-  replace(begin(line), end(line), ':', '\t');
+  std::replace(std::begin(line), std::end(line), ':', '\t');
   std::istringstream iss(line);
   iss >> site.chrom >> site.pos >> site.strand >> site.context;
-
   values.clear();
   double v = 0.0;
   while (iss >> v)
@@ -149,102 +132,101 @@ get_site_and_values(string &line, MSite &site, vector<double> &values) {
 }
 
 static bool
-all_is_finite(const vector<double> &scores) {
-  for (auto it(begin(scores)); it != end(scores); ++it)
-    if (!isfinite(*it))
-      return false;
-
-  return true;
+all_finite(const std::vector<double> &scores) {
+  return std::all_of(std::cbegin(scores), std::cend(scores),
+                     [](const auto x) { return std::isfinite(x); });
 }
 
 static void
-process_with_cpgs_loaded(const bool VERBOSE,
+process_with_cpgs_loaded(const bool verbose,
                          // const bool sort_data_if_needed,
-                         const bool PRINT_NUMERIC_ONLY,
+                         const bool print_numeric_only,
                          const bool report_more_information,
-                         const char level_code, const string &cpgs_file,
-                         vector<GenomicRegion> &regions, std::ostream &out) {
-  bgzf_file in(cpgs_file, "r");
+                         const char level_code, const std::string &cpgs_file,
+                         const std::vector<Interval6> &regions,
+                         std::ostream &out) {
+  bamxx::bgzf_file in(cpgs_file, "r");
   if (!in)
-    throw runtime_error("cannot open file: " + cpgs_file);
+    throw std::runtime_error("cannot open file: " + cpgs_file);
 
-  string header;
+  std::string header;
   getline(in, header);
 
   std::istringstream iss(header);
-  string col_name;
-  vector<string> col_names;
+  std::string col_name;
+  std::vector<std::string> col_names;
   while (iss >> col_name)
     col_names.push_back(col_name);
 
-  auto end_uniq = std::unique(begin(col_names), end(col_names));
+  const auto end_uniq = std::unique(std::begin(col_names), std::end(col_names));
+  const auto n_uniq = std::distance(std::begin(col_names), end_uniq);
   // make sure all columns come in pairs of counts
-  if (2 * static_cast<size_t>(distance(begin(col_names), end_uniq)) !=
-      col_names.size())
-    throw runtime_error("wrong header format:\n" + header);
+  if (2 * static_cast<std::size_t>(n_uniq) != std::size(col_names))
+    throw std::runtime_error("wrong header format:\n" + header);
 
-  col_names.resize(distance(begin(col_names), end_uniq));
-  const size_t n_samples = col_names.size();
-  if (VERBOSE)
-    cerr << "[n_samples=" << n_samples << "]\n";
+  col_names.resize(std::distance(std::begin(col_names), end_uniq));
+  const std::size_t n_samples = std::size(col_names);
+  if (verbose)
+    std::cerr << "[n_samples=" << n_samples << "]\n";
 
-  vector<MSite> cpgs;
-  vector<vector<double>> values;
+  std::vector<MSite> cpgs;
+  std::vector<std::vector<double>> values;
   MSite the_cpg;
-  string line;
+  std::string line;
   while (getline(in, line)) {
-    values.push_back(vector<double>());
+    values.push_back(std::vector<double>());
     get_site_and_values(line, the_cpg, values.back());
     cpgs.push_back(the_cpg);
 
-    if (values.back().size() != 2 * n_samples)
-      throw runtime_error("wrong row length. Expected " +
-                          std::to_string(2 * n_samples) + ", got " +
-                          std::to_string(values.back().size()) + "\n" + line);
+    if (std::size(values.back()) != 2 * n_samples)
+      throw std::runtime_error(
+        "wrong row length. Expected " + std::to_string(2 * n_samples) +
+        ", got " + std::to_string(std::size(values.back())) + "\n" + line);
   }
 
-  if (VERBOSE)
-    cerr << "[n_cpgs=" << cpgs.size() << "]\n";
+  if (verbose)
+    std::cerr << "[n_cpgs=" << std::size(cpgs) << "]\n";
 
-  if (!is_sorted(begin(cpgs), end(cpgs))) {
+  if (!std::is_sorted(std::cbegin(cpgs), std::cend(cpgs))) {
     /* GS: need a way to sort cpgs and values to preserve the order.
      * Commenting this for now until I know the best way to do this
     if (sort_data_if_needed)
-      sort(begin(cpgs), end(cpgs));
+      std::sort(begin(cpgs), end(cpgs));
     else*/
-    throw runtime_error("data not sorted: " + cpgs_file);
+    throw std::runtime_error("data not sorted: " + cpgs_file);
   }
 
-  if (VERBOSE)
-    cerr << "[n_cpgs=" << cpgs.size() << "]\n";
+  if (verbose)
+    std::cerr << "[n_cpgs=" << std::size(cpgs) << "]\n";
 
   // write header as first column
-  for (size_t i = 0; i < n_samples; ++i)
+  for (std::size_t i = 0; i < n_samples; ++i)
     out << '\t' << col_names[i];
   out << '\n';
 
   // preallocate entire space for a single row
-  vector<size_t> total_meth(n_samples, 0);
-  vector<size_t> total_reads(n_samples, 0);
-  vector<size_t> cpgs_with_reads(n_samples, 0);
-  vector<size_t> called_total(n_samples, 0);
-  vector<size_t> called_meth(n_samples, 0);
-  vector<double> weighted_mean_meth(n_samples, 0);
-  vector<double> fractional_meth(n_samples, 0);
-  vector<double> unweighted_mean_meth(n_samples, 0);
-  vector<double> score(n_samples, 0);
+  std::vector<std::size_t> total_meth(n_samples, 0);
+  std::vector<std::size_t> total_reads(n_samples, 0);
+  std::vector<std::size_t> cpgs_with_reads(n_samples, 0);
+  std::vector<std::size_t> called_total(n_samples, 0);
+  std::vector<std::size_t> called_meth(n_samples, 0);
+  std::vector<double> weighted_mean_meth(n_samples, 0);
+  std::vector<double> fractional_meth(n_samples, 0);
+  std::vector<double> unweighted_mean_meth(n_samples, 0);
+  std::vector<double> score(n_samples, 0);
 
-  for (size_t i = 0; i < regions.size(); ++i) {
-    const pair<size_t, size_t> bounds(region_bounds(cpgs, regions[i]));
+  for (std::size_t i = 0; i < std::size(regions); ++i) {
+    const std::pair<std::size_t, std::size_t> bounds(
+      region_bounds(cpgs, regions[i]));
 
-    for (size_t j = 0; j < n_samples; ++j) {
+    for (std::size_t j = 0; j < n_samples; ++j) {
       total_meth[j] = total_reads[j] = cpgs_with_reads[j] = called_total[j] =
         called_meth[j] = 0;
       double mean_meth = 0.0;
 
-      for (size_t k = bounds.first; k < bounds.second; ++k) {
-        const size_t meth = values[k][2 * j + 1];
-        const size_t tot = values[k][2 * j];
+      for (std::size_t k = bounds.first; k < bounds.second; ++k) {
+        const std::size_t meth = values[k][2 * j + 1];
+        const std::size_t tot = values[k][2 * j];
         if (tot > 0) {
           total_reads[j] += tot;
           total_meth[j] += meth;
@@ -270,8 +252,8 @@ process_with_cpgs_loaded(const bool VERBOSE,
                                                 : fractional_meth[j]));
     }
 
-    const size_t total_cpgs = bounds.second - bounds.first;
-    if (!PRINT_NUMERIC_ONLY || all_is_finite(score))
+    const std::size_t total_cpgs = bounds.second - bounds.first;
+    if (!print_numeric_only || all_finite(score))
       out << format_output_line(report_more_information, regions[i], score,
                                 weighted_mean_meth, unweighted_mean_meth,
                                 fractional_meth, total_cpgs, cpgs_with_reads,
@@ -286,7 +268,7 @@ process_with_cpgs_loaded(const bool VERBOSE,
 ///
 
 static void
-move_to_start_of_line(ifstream &in) {
+move_to_start_of_line(std::ifstream &in) {
   char next{};
   while (in.good() && in.get(next) && next != '\n') {
     in.unget();
@@ -298,45 +280,46 @@ move_to_start_of_line(ifstream &in) {
 }
 
 static void
-get_chr_and_idx(ifstream &in, string &chrom, size_t &pos) {
-  string tmp;
+get_chr_and_idx(std::ifstream &in, std::string &chrom, std::size_t &pos) {
+  std::string tmp;
   in >> tmp;
-  replace(begin(tmp), end(tmp), ':', ' ');
+  std::replace(std::begin(tmp), std::end(tmp), ':', ' ');
   std::istringstream iss(tmp);
   iss >> chrom >> pos;
 }
 
 static void
-find_start_line(const string &chr, const size_t idx, ifstream &cpg_in) {
-  cpg_in.seekg(0, ios_base::beg);
-  const size_t begin_pos = cpg_in.tellg();
-  cpg_in.seekg(0, ios_base::end);
-  const size_t end_pos = cpg_in.tellg();
+find_start_line(const std::string &chr, const std::size_t idx,
+                std::ifstream &cpg_in) {
+  cpg_in.seekg(0, std::ios_base::beg);
+  const std::size_t begin_pos = cpg_in.tellg();
+  cpg_in.seekg(0, std::ios_base::end);
+  const std::size_t end_pos = cpg_in.tellg();
 
   if (end_pos - begin_pos < 2)
-    throw runtime_error("empty meth file");
+    throw std::runtime_error("empty meth file");
 
-  size_t step_size = (end_pos - begin_pos) / 2;
+  std::size_t step_size = (end_pos - begin_pos) / 2;
 
-  cpg_in.seekg(0, ios_base::beg);
-  string low_chr;
-  size_t low_idx = 0;
+  cpg_in.seekg(0, std::ios_base::beg);
+  std::string low_chr;
+  std::size_t low_idx = 0;
   get_chr_and_idx(cpg_in, low_chr, low_idx);
 
   // MAGIC: need the -2 here to get past the EOF and possibly a '\n'
-  cpg_in.seekg(-2, ios_base::end);
+  cpg_in.seekg(-2, std::ios_base::end);
   move_to_start_of_line(cpg_in);
-  string high_chr;
-  size_t high_idx{};
+  std::string high_chr;
+  std::size_t high_idx{};
   get_chr_and_idx(cpg_in, high_chr, high_idx);
 
-  size_t pos = step_size;
-  cpg_in.seekg(pos, ios_base::beg);
+  std::size_t pos = step_size;
+  cpg_in.seekg(pos, std::ios_base::beg);
   move_to_start_of_line(cpg_in);
 
   while (step_size > 0) {
-    string mid_chr;
-    size_t mid_idx = 0;
+    std::string mid_chr;
+    std::size_t mid_idx = 0;
     // ADS: possible here to check that the chroms are in the right
     // order, at least the ones we have seen.
     get_chr_and_idx(cpg_in, mid_chr, mid_idx);
@@ -351,49 +334,51 @@ find_start_line(const string &chr, const size_t idx, ifstream &cpg_in) {
       std::swap(mid_idx, low_idx);
       pos += step_size;
     }
-    cpg_in.seekg(pos, ios_base::beg);
+    cpg_in.seekg(pos, std::ios_base::beg);
     move_to_start_of_line(cpg_in);
   }
 }
 
 static bool
-cpg_not_past_region(const GenomicRegion &region, const size_t end_pos,
+cpg_not_past_region(const Interval6 &region, const std::size_t end_pos,
                     const MSite &cpg) {
-  return (cpg.chrom == region.get_chrom() && cpg.pos < end_pos) ||
-         cpg.chrom < region.get_chrom();
+  return (cpg.chrom == region.chrom && cpg.pos < end_pos) ||
+         cpg.chrom < region.chrom;
 }
 
 static void
-get_cpg_stats(ifstream &cpg_in, const GenomicRegion &region,
-              vector<size_t> &total_meth, vector<size_t> &total_reads,
-              size_t &total_cpgs, vector<size_t> &cpgs_with_reads,
-              vector<size_t> &called_total, vector<size_t> &called_meth,
-              vector<double> &mean_meth) {
-  const string chrom(region.get_chrom());
-  const size_t start_pos = region.get_start();
-  const size_t end_pos = region.get_end();
+get_cpg_stats(std::ifstream &cpg_in, const Interval6 &region,
+              std::vector<std::size_t> &total_meth,
+              std::vector<std::size_t> &total_reads, std::size_t &total_cpgs,
+              std::vector<std::size_t> &cpgs_with_reads,
+              std::vector<std::size_t> &called_total,
+              std::vector<std::size_t> &called_meth,
+              std::vector<double> &mean_meth) {
+  const std::string chrom(region.chrom);
+  const std::size_t start_pos = region.start;
+  const std::size_t end_pos = region.stop;
   find_start_line(chrom, start_pos, cpg_in);
 
-  const size_t n_samples = total_meth.size();
+  const std::size_t n_samples = std::size(total_meth);
 
   MSite cpg;
-  vector<double> values;
+  std::vector<double> values;
   values.reserve(2 * n_samples);
-  string line;
+  std::string line;
   while (getline(cpg_in, line)) {
     values.clear();
     get_site_and_values(line, cpg, values);
-    if (values.size() != 2 * n_samples)
-      throw runtime_error("wrong row length. Expected " +
-                          std::to_string(2 * n_samples) + ", got " +
-                          std::to_string(values.size()) + "\n" + line);
+    if (std::size(values) != 2 * n_samples)
+      throw std::runtime_error("wrong row length. Expected " +
+                               std::to_string(2 * n_samples) + ", got " +
+                               std::to_string(std::size(values)) + "\n" + line);
 
     if (cpg_not_past_region(region, end_pos, cpg)) {
       if (start_pos <= cpg.pos && cpg.chrom == chrom) {
         ++total_cpgs;
-        for (size_t j = 0; j < n_samples; ++j) {
-          const size_t meth = values[2 * j + 1];
-          const size_t tot = values[2 * j];
+        for (std::size_t j = 0; j < n_samples; ++j) {
+          const std::size_t meth = values[2 * j + 1];
+          const std::size_t tot = values[2 * j];
           if (values[2 * j] > 0) {
             total_meth[j] += meth;
             total_reads[j] += tot;
@@ -413,51 +398,51 @@ get_cpg_stats(ifstream &cpg_in, const GenomicRegion &region,
 }
 
 static void
-process_with_cpgs_on_disk(const bool PRINT_NUMERIC_ONLY,
+process_with_cpgs_on_disk(const bool print_numeric_only,
                           const bool report_more_information,
-                          const char level_code, const string &cpgs_file,
-                          vector<GenomicRegion> &regions, std::ostream &out) {
-  ifstream in(cpgs_file);
-  string header;
+                          const char level_code, const std::string &cpgs_file,
+                          const std::vector<Interval6> &regions,
+                          std::ostream &out) {
+  std::ifstream in(cpgs_file);
+  std::string header;
   getline(in, header);
 
   std::istringstream iss(header);
-  string col_name;
-  vector<string> col_names;
+  std::string col_name;
+  std::vector<std::string> col_names;
   while (iss >> col_name)
     col_names.push_back(col_name);
 
-  auto end_uniq = std::unique(begin(col_names), end(col_names));
+  const auto end_uniq = std::unique(std::begin(col_names), std::end(col_names));
+  const auto n_uniq = std::distance(std::begin(col_names), end_uniq);
   // make sure all columns come in pairs of counts
-  if (2 * static_cast<size_t>(distance(begin(col_names), end_uniq)) !=
-      col_names.size())
-    throw runtime_error("wrong header format:\n" + header);
+  if (2 * static_cast<std::size_t>(n_uniq) != std::size(col_names))
+    throw std::runtime_error("wrong header format:\n" + header);
 
-  col_names.resize(distance(begin(col_names), end_uniq));
-  const size_t n_samples = col_names.size();
+  col_names.resize(std::distance(std::begin(col_names), end_uniq));
+  const std::size_t n_samples = std::size(col_names);
 
   // write header as first column
-  for (size_t i = 0; i < n_samples; ++i)
+  for (std::size_t i = 0; i < n_samples; ++i)
     out << '\t' << col_names[i];
   out << '\n';
 
   // preallocate entire space for a single row
-  vector<size_t> total_meth(n_samples, 0);
-  vector<size_t> total_reads(n_samples, 0);
-  vector<size_t> cpgs_with_reads(n_samples, 0);
-  vector<size_t> called_total(n_samples, 0);
-  vector<size_t> called_meth(n_samples, 0);
-  vector<double> weighted_mean_meth(n_samples, 0);
-  vector<double> fractional_meth(n_samples, 0);
-  vector<double> unweighted_mean_meth(n_samples, 0);
-  vector<double> score(n_samples, 0.0);
-  vector<double> mean_meth(n_samples, 0.0);
+  std::vector<std::size_t> total_meth(n_samples, 0);
+  std::vector<std::size_t> total_reads(n_samples, 0);
+  std::vector<std::size_t> cpgs_with_reads(n_samples, 0);
+  std::vector<std::size_t> called_total(n_samples, 0);
+  std::vector<std::size_t> called_meth(n_samples, 0);
+  std::vector<double> weighted_mean_meth(n_samples, 0);
+  std::vector<double> fractional_meth(n_samples, 0);
+  std::vector<double> unweighted_mean_meth(n_samples, 0);
+  std::vector<double> score(n_samples, 0.0);
 
-  vector<double> values(2 * n_samples, 0.0);
-  for (size_t i = 0; i < regions.size() && in; ++i) {
-    size_t total_cpgs = 0;
-    mean_meth = vector<double>(n_samples, 0.0);
-    for (size_t j = 0; j < n_samples; ++j) {
+  for (std::size_t i = 0; i < std::size(regions) && in; ++i) {
+    std::size_t total_cpgs = 0;
+    auto mean_meth = std::vector<double>(n_samples, 0.0);
+
+    for (std::size_t j = 0; j < n_samples; ++j) {
       total_meth[j] = total_reads[j] = cpgs_with_reads[j] = called_total[j] =
         called_meth[j] = 0;
     }
@@ -465,20 +450,19 @@ process_with_cpgs_on_disk(const bool PRINT_NUMERIC_ONLY,
     get_cpg_stats(in, regions[i], total_meth, total_reads, total_cpgs,
                   cpgs_with_reads, called_total, called_meth, mean_meth);
 
-    for (size_t j = 0; j < n_samples; ++j) {
+    for (std::size_t j = 0; j < n_samples; ++j) {
       fractional_meth[j] =
         static_cast<double>(called_meth[j]) / called_total[j];
       weighted_mean_meth[j] =
         static_cast<double>(total_meth[j]) / total_reads[j];
       unweighted_mean_meth[j] = mean_meth[j] / cpgs_with_reads[j];
-
       score[j] =
         (level_code == 'w' ? weighted_mean_meth[j]
                            : (level_code == 'u' ? unweighted_mean_meth[j]
                                                 : fractional_meth[j]));
     }
 
-    if (!PRINT_NUMERIC_ONLY || all_is_finite(score))
+    if (!print_numeric_only || all_finite(score))
       out << format_output_line(report_more_information, regions[i], score,
                                 weighted_mean_meth, unweighted_mean_meth,
                                 fractional_meth, total_cpgs, cpgs_with_reads,
@@ -489,38 +473,36 @@ process_with_cpgs_on_disk(const bool PRINT_NUMERIC_ONLY,
 
 // end of code for searching on disk
 
-[[nodiscard]] static size_t
-check_bed_format(const string &regions_file) {
-  ifstream in(regions_file);
+[[nodiscard]] static std::size_t
+get_bed_columns(const std::string &regions_file) {
+  std::ifstream in(regions_file);
   if (!in)
-    throw runtime_error("cannot open file: " + regions_file);
-
-  string line;
+    throw std::runtime_error("cannot open file: " + regions_file);
+  std::string line;
   getline(in, line);
-
   std::istringstream iss(line);
-  string token;
-  size_t n_columns = 0;
+  std::string token;
+  std::size_t n_columns = 0;
   while (iss >> token)
     ++n_columns;
-
   return n_columns;
 }
 
 int
 main_multimethstat(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
-    static const string default_name_prefix = "X";
+    static constexpr auto default_name_prefix = "X";
+    constexpr auto valid_n_cols = [](const auto n_cols) {
+      return n_cols != 3 && n_cols < 6;  // NOLINT(*-avoid-magic-numbers)
+    };
 
-    bool VERBOSE = false;
-    bool PRINT_NUMERIC_ONLY = false;
-    bool load_entire_file = false;
-    bool report_more_information = false;
-    bool sort_data_if_needed = false;
-
-    string level_code = "w";
-
-    string outfile;
+    bool verbose{false};
+    bool print_numeric_only{false};
+    bool load_entire_file{false};
+    bool report_more_information{false};
+    bool sort_data_if_needed{false};
+    std::string level_code = "w";
+    std::string outfile;
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
@@ -531,7 +513,7 @@ main_multimethstat(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     opt_parse.add_opt("output", 'o', "Name of output file (default: stdout)",
                       false, outfile);
     opt_parse.add_opt("numeric", 'N', "print numeric values only (not NAs)",
-                      false, PRINT_NUMERIC_ONLY);
+                      false, print_numeric_only);
     opt_parse.add_opt("preload", 'L', "Load all CpG sites", false,
                       load_entire_file);
     opt_parse.add_opt("sort", 's', "sort data if needed", false,
@@ -542,84 +524,79 @@ main_multimethstat(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
                       false, level_code);
     opt_parse.add_opt("more-levels", 'M', "report more methylation information",
                       false, report_more_information);
-    opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
-    vector<string> leftover_args;
+    opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << '\n'
-           << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << '\n';
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
-    if (leftover_args.size() != 2) {
-      cerr << opt_parse.help_message() << '\n';
+    if (std::size(leftover_args) != 2) {
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (sort_data_if_needed && !load_entire_file) {
-      cerr << "cannot sort data unless all data is loaded\n";
+      std::cerr << "cannot sort data unless all data is loaded\n";
       return EXIT_SUCCESS;
     }
     if (level_code != "w" && level_code != "u" && level_code != "f") {
-      cerr << "selected level must be in {w, u, f}\n";
+      std::cerr << "selected level must be in {w, u, f}\n";
       return EXIT_SUCCESS;
     }
-    const string regions_file = leftover_args.front();
-    const string cpgs_file = leftover_args.back();
+    const std::string regions_file = leftover_args.front();
+    const std::string cpgs_file = leftover_args.back();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (VERBOSE)
-      cerr << "loading regions\n";
+    if (verbose)
+      std::cerr << "loading regions\n";
 
-    const size_t n_columns = check_bed_format(regions_file);
-    // MAGIC: this allows for exactly 3 or at least 6 columns in the
-    // bed format
-    if (n_columns != 3 && n_columns < 6)
-      throw runtime_error("format must be 3 or 6+ column bed: " + regions_file);
-
-    vector<GenomicRegion> regions;
-    ReadBEDFile(regions_file, regions);
-    if (!is_sorted(begin(regions), end(regions))) {
+    const auto n_columns = get_bed_columns(regions_file);
+    if (valid_n_cols(n_columns))
+      throw std::runtime_error("format must be 3 or 6+ column bed: " +
+                               regions_file);
+    auto regions = read_intervals6(regions_file);
+    if (!std::is_sorted(std::cbegin(regions), std::cend(regions))) {
       if (sort_data_if_needed) {
-        if (VERBOSE)
-          cerr << "sorting regions\n";
-        sort(begin(regions), end(regions));
+        if (verbose)
+          std::cerr << "sorting regions\n";
+        std::sort(std::begin(regions), std::end(regions));
       }
       else
-        throw runtime_error("regions not sorted in file: " + regions_file);
+        throw std::runtime_error("regions not sorted in file: " + regions_file);
     }
 
     if (n_columns == 3)  // then we should name the regions
-      for (size_t i = 0; i < regions.size(); ++i)
-        regions[i].set_name(default_name_prefix + std::to_string(i));
+      for (std::size_t i = 0; i < std::size(regions); ++i)
+        regions[i].name = default_name_prefix + std::to_string(i);
 
-    if (VERBOSE)
-      cerr << "[n_regions=" << regions.size() << "]\n";
+    if (verbose)
+      std::cerr << "[n_regions=" << std::size(regions) << "]\n";
 
-    std::ofstream of;
-    if (!outfile.empty())
-      of.open(outfile);
-    std::ostream out(outfile.empty() ? cout.rdbuf() : of.rdbuf());
-
+    std::ofstream out(outfile);
+    if (!out)
+      throw std::runtime_error("failed to open output file: " + outfile);
     if (load_entire_file)
-      process_with_cpgs_loaded(VERBOSE,  // sort_data_if_needed,
-                               PRINT_NUMERIC_ONLY, report_more_information,
+      process_with_cpgs_loaded(verbose,  // sort_data_if_needed,
+                               print_numeric_only, report_more_information,
                                level_code[0], cpgs_file, regions, out);
     else
-      process_with_cpgs_on_disk(PRINT_NUMERIC_ONLY, report_more_information,
+      process_with_cpgs_on_disk(print_numeric_only, report_more_information,
                                 level_code[0], cpgs_file, regions, out);
   }
   catch (const std::exception &e) {
-    cerr << e.what() << '\n';
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
 
-// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions)
+// NOLINTEND(*-narrowing-conversions)

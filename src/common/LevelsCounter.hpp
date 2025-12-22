@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <utility>
 struct MSite;
 
 struct LevelsCounter {
@@ -72,51 +73,51 @@ struct LevelsCounter {
 
   // coverage is equal to total_c plus total_t. These are the counts that
   // contribute towards estimates of the various methylation levels.
-  [[nodiscard]] std::uint64_t
-  coverage() const {
+  [[nodiscard]] auto
+  coverage() const -> std::uint64_t {
     return total_c + total_t;
   }
 
   // mean_depth is the average number of reads contributing to methylation
   // calls over all sites.
-  [[nodiscard]] double
-  mean_depth() const {
+  [[nodiscard]] auto
+  mean_depth() const -> double {
     return static_cast<double>(coverage()) / total_sites;
   }
 
   // mean_depth_covered is the average number of reads contributing to
   // methylation calls over all sites that are covered at least once.
-  [[nodiscard]] double
-  mean_depth_covered() const {
+  [[nodiscard]] auto
+  mean_depth_covered() const -> double {
     return static_cast<double>(coverage()) / sites_covered;
   }
 
   // sites_covered_frac is the fraction of all sites that are covered at least
   // once.
-  [[nodiscard]] double
-  sites_covered_frac() const {
+  [[nodiscard]] auto
+  sites_covered_frac() const -> double {
     return static_cast<double>(sites_covered) / total_sites;
   }
 
   // total_called is equal to called_meth plus called_unmeth
-  [[nodiscard]] std::uint64_t
-  total_called() const {
+  [[nodiscard]] auto
+  total_called() const -> std::uint64_t {
     return called_meth + called_unmeth;
   }
 
   // mean_meth_weighted is the unweighted mean methylation level. This
   // is the ratio of total_c divided by coverage. This value is always
   // between 0 and 1.
-  [[nodiscard]] double
-  mean_meth_weighted() const {
+  [[nodiscard]] auto
+  mean_meth_weighted() const -> double {
     return static_cast<double>(total_c) /
            std::max(coverage(), static_cast<std::uint64_t>(1));
   }
 
   // mean_meth is the unweighted mean methylation level. This is the ratio of
   // total_meth divided by sites_covered. Value is always between 0 and 1.
-  [[nodiscard]] double
-  mean_meth() const {
+  [[nodiscard]] auto
+  mean_meth() const -> double {
     return static_cast<double>(total_meth) /
            std::max(sites_covered, static_cast<std::uint64_t>(1));
   }
@@ -124,36 +125,39 @@ struct LevelsCounter {
   // fractional_meth is the fraction of "called" sites that are called
   // methylated. It is the ratio of called_meth divided by total_called. This
   // value is always between 0 and 1.
-  [[nodiscard]] double
-  fractional_meth() const {
+  [[nodiscard]] auto
+  fractional_meth() const -> double {
     return static_cast<double>(called_meth) /
            std::max(total_called(), static_cast<std::uint64_t>(1));
   }
 
-  explicit LevelsCounter(const std::string &c) : context{c} {}
+  explicit LevelsCounter(std::string c) : context{std::move(c)} {}
 
   LevelsCounter() = default;
 
-  LevelsCounter &
-  operator+=(const LevelsCounter &rhs);
+  auto
+  operator+=(const LevelsCounter &rhs) -> LevelsCounter &;
 
   void
   update(const MSite &s);
 
-  [[nodiscard]] std::string
-  tostring() const;
-  [[nodiscard]] std::string
-  format_row() const;
-  [[nodiscard]] static std::string
-  format_header();
+  [[nodiscard]] auto
+  tostring() const -> std::string;
+  [[nodiscard]] auto
+  format_row() const -> std::string;
+  [[nodiscard]] static auto
+  format_header() -> std::string;
 
   static double alpha;
 };
 
-std::ostream &
-operator<<(std::ostream &out, const LevelsCounter &cs);
+auto
+format_levels_counter(const LevelsCounter &lc) -> std::string;
 
-std::istream &
-operator>>(std::istream &in, LevelsCounter &cs);
+auto
+operator<<(std::ostream &out, const LevelsCounter &cs) -> std::ostream &;
+
+auto
+operator>>(std::istream &in, LevelsCounter &cs) -> std::istream &;
 
 #endif

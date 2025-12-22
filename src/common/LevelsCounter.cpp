@@ -21,6 +21,23 @@
 #include <stdexcept>
 #include <string>
 
+auto
+format_levels_counter(const LevelsCounter &lc) -> std::string {
+  std::ostringstream oss;
+  // clang-format off
+  oss << lc.mean_meth_weighted() << '\t'
+      << lc.mean_meth() << '\t'
+      << lc.fractional_meth() << '\t'
+      << lc.total_sites << '\t'
+      << lc.sites_covered << '\t'
+      << lc.total_c << '\t'
+      << (lc.total_c + lc.total_t) << '\t'
+      << lc.total_meth << '\t'
+      << lc.sites_covered;
+  // clang-format on
+  return oss.str();
+}
+
 void
 LevelsCounter::update(const MSite &s) {
   static constexpr auto half = 0.5;
@@ -43,8 +60,8 @@ LevelsCounter::update(const MSite &s) {
   ++total_sites;
 }
 
-std::string
-LevelsCounter::tostring() const {
+auto
+LevelsCounter::tostring() const -> std::string {
   static const std::string indent = std::string(2, ' ');
   const bool good = (sites_covered != 0);
   std::ostringstream oss;
@@ -74,8 +91,8 @@ LevelsCounter::tostring() const {
   return oss.str();
 }
 
-std::string
-LevelsCounter::format_row() const {
+auto
+LevelsCounter::format_row() const -> std::string {
   const bool good = (sites_covered > 0);
   std::ostringstream oss;
   // directly counted values
@@ -101,8 +118,8 @@ LevelsCounter::format_row() const {
   return oss.str();
 }
 
-std::string
-LevelsCounter::format_header() {
+auto
+LevelsCounter::format_header() -> std::string {
   std::ostringstream oss;
   // directly counted values
   oss << "01. total_sites" << '\n'
@@ -127,8 +144,8 @@ LevelsCounter::format_header() {
 
 double LevelsCounter::alpha = 0.05;  // NOLINT(*-avoid-magic-numbers)
 
-std::ostream &
-operator<<(std::ostream &out, const LevelsCounter &cs) {
+auto
+operator<<(std::ostream &out, const LevelsCounter &cs) -> std::ostream & {
   return out << cs.tostring();
 }
 
@@ -139,8 +156,8 @@ check_label(const std::string &observed, const std::string &expected) {
                              "]");
 }
 
-std::istream &
-operator>>(std::istream &in, LevelsCounter &cs) {
+auto
+operator>>(std::istream &in, LevelsCounter &cs) -> std::istream & {
   in >> cs.context;  // get the context
   cs.context = cs.context.substr(0, cs.context.find_first_of(':'));
 
@@ -175,8 +192,8 @@ operator>>(std::istream &in, LevelsCounter &cs) {
   return in;
 }
 
-LevelsCounter &
-LevelsCounter::operator+=(const LevelsCounter &rhs) {
+auto
+LevelsCounter::operator+=(const LevelsCounter &rhs) -> LevelsCounter & {
   total_sites += rhs.total_sites;
   sites_covered += rhs.sites_covered;
   max_depth += rhs.max_depth;

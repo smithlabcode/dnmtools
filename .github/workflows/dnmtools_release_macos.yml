@@ -54,7 +54,7 @@ jobs:
         run: |
           ./autogen.sh
           mkdir build && cd build
-          ../configure --with-libdeflate \
+          ../configure --with-libdeflate --with-htsmods \
             CXX=g++-14 \
             LDFLAGS="-L/opt/dnmtools/lib -static-libgcc -static-libstdc++ -Wl,-dead_strip" \
             CPPFLAGS="-I/opt/dnmtools/include"

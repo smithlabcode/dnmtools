@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  CONTAINER: andrewdavidsmith/transferase-build
+  CONTAINER: andrewdavidsmith/builder
 
 jobs:
   linux-releases:
@@ -29,7 +29,7 @@ jobs:
         env:
           SCRIPT: |
             export DEBIAN_FRONTEND=noninteractive && \
-            apt-get update && apt-get install --no-install-recommends -y automake libgsl-dev && \
+            apt-get update && apt-get install --no-install-recommends -y libgsl-dev && \
             find /usr -name libz.so -exec rm {} \; && \
             find /usr -name libgsl\*.so -exec rm {} \; && \
             git clone https://github.com/ebiggers/libdeflate.git && \

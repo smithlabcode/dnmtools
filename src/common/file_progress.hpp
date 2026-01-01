@@ -16,14 +16,9 @@
 #ifndef SRC_COMMON_FILE_PROGRESS_HPP_
 #define SRC_COMMON_FILE_PROGRESS_HPP_
 
-#include <chrono>
 #include <cstddef>
-#include <cstdint>
 #include <fstream>
 #include <string>
-
-[[nodiscard]] std::string
-format_duration(const std::chrono::duration<double> elapsed);
 
 struct file_progress {
   static constexpr auto one_thousand{1000ul};

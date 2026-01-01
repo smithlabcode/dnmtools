@@ -25,7 +25,7 @@
 #include <sstream>
 #include <string>
 
-// NOLINTBEGIN(*-narrowing-conversions,*-avoid-magic-numbers)
+// NOLINTBEGIN(*-narrowing-conversions)
 
 [[nodiscard]] std::string
 format_duration(const std::chrono::duration<double> elapsed) {
@@ -39,30 +39,12 @@ format_duration(const std::chrono::duration<double> elapsed) {
   const double seconds = tot_s - (hours * s_per_h) - (minutes * s_per_m);
 
   std::ostringstream oss;
+  // NOLINTBEGIN(*-avoid-magic-numbers)
   oss << std::setfill('0') << std::setw(2) << hours << ":" << std::setfill('0')
       << std::setw(2) << minutes << ":" << std::fixed << std::setprecision(2)
       << std::setw(5) << seconds;
+  // NOLINTEND(*-avoid-magic-numbers)
   return oss.str();
-}
-
-file_progress::file_progress(const std::string &filename) :
-  one_thousand_over_filesize{1000.0 / std::filesystem::file_size(filename)} {}
-
-void
-file_progress::operator()(
-  std::ifstream &in) {  // cppcheck-suppress constParameterReference
-  const std::size_t curr_offset =
-    in.eof() ? 1000 : in.tellg() * one_thousand_over_filesize;
-  if (curr_offset <= prev_offset)
-    return;
-  std::ios old_state(nullptr);
-  old_state.copyfmt(std::cerr);
-  std::cerr << "\r[progress: " << std::setw(5) << std::fixed
-            << std::setprecision(1) << (curr_offset / 10.0)
-            << (curr_offset == 1000 ? "%]\n" : "%]");
-  std::cerr.copyfmt(old_state);
-  prev_offset = (curr_offset == 1000) ? std::numeric_limits<std::size_t>::max()
-                                      : curr_offset;
 }
 
 // Series representation for the lower incomplete gamma P(a,x)
@@ -113,19 +95,15 @@ gamma_q_contfrac(const double a, const double x) {
 // Regularized lower incomplete gamma P(a,x)
 [[nodiscard]] static double
 gamma_p(const double a, const double x) {
-  if (x < 0 || a <= 0)
-    return 0.0;
-  if (x == 0)
-    return 0.0;
-  if (x < a + 1.0)
-    return gamma_p_series(a, x);
-  return 1.0 - gamma_q_contfrac(a, x);
+  return x <= 0.0 || a <= 0 ? 0.0
+                            : (x < a + 1.0 ? gamma_p_series(a, x)
+                                           : 1.0 - gamma_q_contfrac(a, x));
 }
 
 // chi-square CDF: P(k/2, x/2)
 [[nodiscard]] static double
 chi_square_cdf(const double x, const double k) {
-  return gamma_p(k * 0.5, x * 0.5);
+  return gamma_p(k / 2, x / 2);
 }
 
 // Given the maximum likelihood estimates of the full and reduced models, the
@@ -148,4 +126,4 @@ llr_test(const double null_loglik, const double full_loglik) {
   return p_value;
 }
 
-// NOLINTEND(*-narrowing-conversions,*-avoid-magic-numbers)
+// NOLINTEND(*-narrowing-conversions)

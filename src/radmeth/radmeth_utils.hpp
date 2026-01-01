@@ -25,14 +25,6 @@
 [[nodiscard]] std::string
 format_duration(const std::chrono::duration<double> elapsed);
 
-struct file_progress {
-  double one_thousand_over_filesize{};
-  std::size_t prev_offset{};
-  explicit file_progress(const std::string &filename);
-  void
-  operator()(std::ifstream &in);  // cppcheck-suppress constParameterReference
-};
-
 [[nodiscard]] double
 llr_test(const double null_loglik, const double full_loglik);
 

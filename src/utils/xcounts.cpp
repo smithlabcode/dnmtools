@@ -1,9 +1,4 @@
-/* xcounts: reformat counts so they only give the m and u counts in a dynamic
- * step wig format
- *
- * Copyright (C) 2023 Andrew D. Smith
- *
- * Authors: Andrew D. Smith
+/* Copyright (C) 2023 Andrew D. Smith
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -15,6 +10,11 @@
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
  */
+
+[[maybe_unused]] static constexpr auto about = R"(
+xcounts: reformat counts so they only give the m and u counts in a dynamic
+step wig format
+)";
 
 #include "MSite.hpp"
 #include "OptionParser.hpp"
@@ -40,7 +40,7 @@
 #include <utility>
 #include <vector>
 
-// NOLINTBEGIN(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-constant-array-index,*-pointer-arithmetic)
+// NOLINTBEGIN(*-narrowing-conversions)
 
 enum class xcounts_err : std::uint8_t {
   // clang-format off
@@ -61,6 +61,7 @@ struct xcounts_err_cat : std::error_category {
     return "xcounts error";
   }
   auto message(const int condition) const -> std::string override {
+    // NOLINTBEGIN(*-avoid-magic-numbers)
     using std::string_literals::operator""s;
     switch (condition) {
     case 0: return "ok"s;
@@ -73,6 +74,7 @@ struct xcounts_err_cat : std::error_category {
     case 7: return "failed to parse site"s;
     }
     std::abort();  // unreacheable
+    // NOLINTEND(*-avoid-magic-numbers)
   }
 };
 // clang-format on
@@ -90,6 +92,7 @@ make_error_code(xcounts_err e) {
 template <typename T>
 static inline std::uint32_t
 fill_output_buffer(const std::uint32_t offset, const MSite &s, T &buf) {
+  // NOLINTBEGIN(*-pointer-arithmetic)
   auto buf_end = buf.data() + buf.size();
   auto res = std::to_chars(buf.data(), buf_end, s.pos - offset);
   *res.ptr++ = '\t';
@@ -98,11 +101,15 @@ fill_output_buffer(const std::uint32_t offset, const MSite &s, T &buf) {
   res = std::to_chars(res.ptr, buf_end, s.n_unmeth());
   *res.ptr++ = '\n';
   return std::distance(buf.data(), res.ptr);
+  // NOLINTEND(*-pointer-arithmetic)
 }
 
 int
 main_xcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
+    static constexpr auto output_buffer_size = 128;
+    static constexpr auto input_buffer_size = 1024;
+
     // ADS: It might happen that a "chromosome" has no CpG sites (like
     // Scaffold113377 in strPur2). Therefore, we can't assume each chrom will
     // appear in the input when attempting to check consistency.
@@ -197,11 +204,11 @@ main_xcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
 
     // use the kstring_t type to more directly use the BGZF file
     kstring_t line{0, 0, nullptr};
-    const int ret = ks_resize(&line, 1024);
+    const int ret = ks_resize(&line, input_buffer_size);
     if (ret)
       throw dnmt_error("failed to acquire buffer");
 
-    std::vector<char> buf(128);
+    std::vector<char> buf(output_buffer_size);
 
     std::uint32_t offset = 0;
     std::string prev_chrom;
@@ -222,6 +229,7 @@ main_xcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
         continue;
       }
 
+      // NOLINTNEXTLINE(*-pointer-arithmetic)
       if (!site.initialize(line.s, line.s + line.l)) {
         ec = xcounts_err::failed_to_parse_site;
         break;
@@ -284,4 +292,4 @@ main_xcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   return EXIT_SUCCESS;
 }
 
-// NOLINTEND(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-constant-array-index,*-pointer-arithmetic)
+// NOLINTEND(*-narrowing-conversions)

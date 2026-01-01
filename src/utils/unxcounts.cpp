@@ -1,20 +1,20 @@
-/* unxcounts: reverse the process of xcounts and generate the counts
- * file, including sites not covered.
+/* Copyright (C) 2023 Andrew D. Smith
  *
- * Copyright (C) 2023 Andrew D. Smith
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * Authors: Andrew D. Smith
- *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
+
+[[maybe_unused]] static constexpr auto about = R"(
+unxcounts: reverse the process of xcounts and generate the counts file,
+including sites not covered.
+)";
 
 #include "OptionParser.hpp"
 #include "bsutils.hpp"
@@ -28,6 +28,7 @@
 #include <htslib/sam.h>
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cctype>
 #include <charconv>
@@ -45,7 +46,7 @@
 #include <utility>
 #include <vector>
 
-// NOLINTBEGIN(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-constant-array-index,*-pointer-arithmetic)
+// NOLINTBEGIN(*-narrowing-conversions)
 
 static void
 read_fasta_file_short_names_uppercase(const std::string &chroms_file,
@@ -55,8 +56,8 @@ read_fasta_file_short_names_uppercase(const std::string &chroms_file,
   names.clear();
   read_fasta_file_short_names(chroms_file, names, chroms);
   for (auto &i : chroms)
-    transform(std::cbegin(i), std::cend(i), begin(i),
-              [](const char c) { return std::toupper(c); });
+    std::transform(std::cbegin(i), std::cend(i), begin(i),
+                   [](const char c) { return std::toupper(c); });
 }
 
 static void
@@ -83,7 +84,7 @@ verify_chrom_orders(
     throw std::runtime_error("failed to acquire buffer");
 
   while (bamxx::getline(in, line)) {
-    if (std::isdigit(line.s[0]))
+    if (std::isdigit(line.s[0]))  // NOLINT(*-pointer-arithmetic)
       continue;
     if (is_counts_header_line(line.s))
       continue;
@@ -110,7 +111,7 @@ verify_chrom_orders(
     std::cerr << "chrom orders are consistent" << "\n";
 }
 
-static const char *tag_values[] = {
+static constexpr auto tag_values = std::array<const char *, 5>{
   "CpG",  // 0
   "CHH",  // 1
   "CXG",  // 2
@@ -118,12 +119,14 @@ static const char *tag_values[] = {
   "N"     // 4
 };
 
-static const int tag_sizes[] = {3, 3, 3, 3, 1};
+static constexpr auto tag_sizes = std::array<int, 5>{
+  3, 3, 3, 3, 1,
+};
 
-// ADS: the values below allow for things like CHH where the is a N in
-// the triplet; I'm allowing that for consistency with the weird logic
-// from earlier versions.
-const std::uint32_t context_codes[] = {
+// ADS: the values below allow for things like CHH where the is a N in the
+// triplet; I'm allowing that for consistency with the weird logic from
+// earlier versions.
+static constexpr auto context_codes = std::array<std::uint32_t, 25>{
   /*CAA CHH*/ 1,
   /*CAC CHH*/ 1,
   /*CAG CXG*/ 2,
@@ -154,14 +157,14 @@ const std::uint32_t context_codes[] = {
 static inline std::uint32_t
 get_tag_from_genome_c(const std::string &s, const size_t pos) {
   const auto val = base2int(s[pos + 1]) * 5 + base2int(s[pos + 2]);
-  return context_codes[val];
+  return context_codes[val];  // NOLINT(*-constant-array-index)
 }
 
 static inline std::uint32_t
 get_tag_from_genome_g(const std::string &s, const size_t pos) {
   const auto val =
     base2int(complement(s[pos - 1])) * 5 + base2int(complement(s[pos - 2]));
-  return context_codes[val];
+  return context_codes[val];  // NOLINT(*-constant-array-index)
 }
 
 static bool
@@ -169,11 +172,13 @@ write_missing(const std::uint32_t name_size, const std::string &chrom,
               const std::uint64_t start_pos, const std::uint64_t end_pos,
               std::vector<char> &buf, bamxx::bgzf_file &out) {
   static constexpr auto zeros = "\t0\t0\n";
+  static constexpr auto zeros_sz = 5;
   static constexpr auto pos_strand = "\t+\t";
   static constexpr auto neg_strand = "\t-\t";
-  const auto buf_end = buf.data() + size(buf);
+  const auto buf_end =
+    buf.data() + std::size(buf);  // NOLINT(*-pointer-arithmetic)
   // chrom name is already in the buffer so move past it
-  auto cursor = buf.data() + name_size + 1;
+  auto cursor = buf.data() + name_size + 1;  // NOLINT(*-pointer-arithmetic)
   for (auto pos = start_pos; pos < end_pos; ++pos) {
     const char base = chrom[pos];
     if (is_cytosine(base) || is_guanine(base)) {
@@ -182,10 +187,12 @@ write_missing(const std::uint32_t name_size, const std::string &chrom,
                                          : get_tag_from_genome_g(chrom, pos);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wstringop-overflow=0"
+      // NOLINTBEGIN(*-constant-array-index)
       auto [ptr, ec] = std::to_chars(cursor, buf_end, pos);
       ptr = std::copy_n(is_c ? pos_strand : neg_strand, 3, ptr);
       ptr = std::copy_n(tag_values[the_tag], tag_sizes[the_tag], ptr);
-      ptr = std::copy_n(zeros, 5, ptr);
+      ptr = std::copy_n(zeros, zeros_sz, ptr);
+      // NOLINTEND(*-constant-array-index)
       const auto sz = std::distance(buf.data(), ptr);
 #pragma GCC diagnostic push
 
@@ -201,21 +208,26 @@ write_missing_cpg(const std::uint32_t &name_size, const std::string &chrom,
                   const std::uint64_t start_pos, const std::uint64_t end_pos,
                   std::vector<char> &buf, bamxx::bgzf_file &out) {
   static constexpr auto zeros = "\t0\t0\n";
+  static constexpr auto zeros_sz = 5;
   static constexpr auto pos_strand = "\t+\t";
-  const auto buf_end = buf.data() + size(buf);
+  static constexpr auto pos_strand_sz = 3;
+  const auto buf_end =
+    buf.data() + std::size(buf);  // NOLINT(*-pointer-arithmetic)
   // chrom name is already in the buffer so move past it
-  auto cursor = buf.data() + name_size + 1;
+  auto cursor = buf.data() + name_size + 1;  // NOLINT(*-pointer-arithmetic)
   for (auto pos = start_pos; pos < end_pos - 1; ++pos) {
-    // When this function is called, the "end_pos" is either the chrom
-    // size or the position of a base known to be a C. So we never
-    // have to allow pos+1 to equal end_pos.
+    // When this function is called, the "end_pos" is either the chrom size or
+    // the position of a base known to be a C. So we never have to allow pos+1
+    // to equal end_pos.
     if (is_cytosine(chrom[pos]) && is_guanine(chrom[pos + 1])) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wstringop-overflow=0"
+      // NOLINTBEGIN(*-constant-array-index)
       auto [ptr, ec] = std::to_chars(cursor, buf_end, pos);
-      ptr = std::copy_n(pos_strand, 3, ptr);
+      ptr = std::copy_n(pos_strand, pos_strand_sz, ptr);
       ptr = std::copy_n("CpG", 3, ptr);
-      ptr = std::copy_n(zeros, 5, ptr);
+      ptr = std::copy_n(zeros, zeros_sz, ptr);
+      // NOLINTEND(*-constant-array-index)
       const auto sz = std::distance(buf.data(), ptr);
 #pragma GCC diagnostic push
       if (bgzf_write(out.f, buf.data(), sz) != sz)
@@ -233,8 +245,11 @@ write_site(const std::uint32_t name_size, const std::string &chrom,
   static constexpr auto pos_strand = "\t+\t";
   static constexpr auto neg_strand = "\t-\t";
   static constexpr auto fmt = std::chars_format::general;
+  // use default precision, 6, same as std::cout default
+  static constexpr auto precision = 6;
 
-  const auto buf_end = buf.data() + size(buf);
+  const auto buf_end =
+    buf.data() + std::size(buf);  // NOLINT(*-pointer-arithmetic)
   const char base = chrom[pos];
   assert(is_cytosine(base) || is_guanine(base));
   const bool is_c = is_cytosine(base);
@@ -246,17 +261,17 @@ write_site(const std::uint32_t name_size, const std::string &chrom,
 #pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wstringop-overflow=0"
   // chrom name is already in the buffer so move past it
-  auto cursor = buf.data() + name_size + 1;
+  auto cursor = buf.data() + name_size + 1;  // NOLINT(*-pointer-arithmetic)
   {
     auto [ptr, ec] = std::to_chars(cursor, buf_end, pos);
     cursor = ptr;
   }
   cursor = std::copy_n(is_c ? pos_strand : neg_strand, 3, cursor);
+  // NOLINTNEXTLINE(*-constant-array-index)
   cursor = std::copy_n(tag_values[the_tag], tag_sizes[the_tag], cursor);
   *cursor++ = '\t';
   {
-    // use default precision, 6, same as std::cout default
-    auto [ptr, ec] = std::to_chars(cursor, buf_end, meth, fmt, 6);
+    auto [ptr, ec] = std::to_chars(cursor, buf_end, meth, fmt, precision);
     cursor = ptr;
   }
   *cursor++ = '\t';
@@ -318,11 +333,11 @@ get_lookups(const std::vector<std::string> &names,
             std::vector<std::uint64_t> &chrom_sizes) {
   chrom_lookup.clear();
   name_to_id.clear();
-  chrom_sizes = std::vector<std::uint64_t>(size(chroms), 0);
-  for (size_t i = 0; i < size(chroms); ++i) {
+  chrom_sizes = std::vector<std::uint64_t>(std::size(chroms), 0);
+  for (size_t i = 0; i < std::size(chroms); ++i) {
     chrom_lookup[names[i]] = std::cbegin(chroms) + i;
     name_to_id[names[i]] = i;
-    chrom_sizes[i] = size(chroms[i]);
+    chrom_sizes[i] = std::size(chroms[i]);
   }
 }
 
@@ -332,7 +347,8 @@ process_header_line(
   const std::vector<std::uint64_t> &chrom_sizes, const kstring_t &line,
   bamxx::bgzf_file &out) {
   std::string hdr_line{line.s};
-  if (size(hdr_line) > 1 && !verify_chrom(hdr_line, name_to_id, chrom_sizes))
+  if (std::size(hdr_line) > 1 &&
+      !verify_chrom(hdr_line, name_to_id, chrom_sizes))
     throw std::runtime_error{"failed to verify header for: " + hdr_line};
   if (!write_counts_header_line(hdr_line, out))
     throw std::runtime_error{"failed to write header line: " + hdr_line};
@@ -351,7 +367,8 @@ write_all_sites(const bool verbose, const std::uint32_t prev_chr_id,
     auto res =
       std::copy(std::cbegin(names[i]), std::cend(names[i]), buf.data());
     *res = '\t';
-    write_missing(size(names[i]), chroms[i], 0u, size(chroms[i]), buf, out);
+    write_missing(std::size(names[i]), chroms[i], 0u, std::size(chroms[i]), buf,
+                  out);
   }
 }
 
@@ -364,11 +381,11 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   std::vector<std::string> chroms, names;
   read_fasta_file_short_names_uppercase(chroms_file, names, chroms);
   if (verbose)
-    std::cerr << "[n chroms in reference: " << chroms.size() << "]" << "\n";
+    std::cerr << "[n chroms in reference: " << std::size(chroms) << "]" << "\n";
 
   std::unordered_map<std::string, chrom_itr_t> chrom_lookup;
   std::unordered_map<std::string, std::int32_t> name_to_id;
-  std::vector<std::uint64_t> chrom_sizes(size(chroms), 0);
+  std::vector<std::uint64_t> chrom_sizes(std::size(chroms), 0);
   get_lookups(names, chroms, chrom_lookup, name_to_id, chrom_sizes);
 
   if (add_missing_chroms)
@@ -412,15 +429,16 @@ process_sites(const bool verbose, const bool add_missing_chroms,
   while (getline(in, line)) {
     if (is_counts_header_line(line.s)) {
       process_header_line(name_to_id, chrom_sizes, line, out);
-      continue;  // ADS: early loop exit
+      continue;  // ADS: just skip headers
     }
 
-    if (!std::isdigit(line.s[0])) {  // check if we have a chrom line
+    // check if we have a chrom line
+    if (!std::isdigit(line.s[0])) {  // NOLINT(*-pointer-arithmetic)
       if (!require_covered && pos != std::numeric_limits<std::uint64_t>::max())
-        write_missing(nm_sz, *ch_itr, pos + 1, size(*ch_itr), buf, out);
+        write_missing(nm_sz, *ch_itr, pos + 1, std::size(*ch_itr), buf, out);
 
       chrom_name = std::string{line.s};
-      nm_sz = size(chrom_name);
+      nm_sz = std::size(chrom_name);
       const std::int32_t chr_id = get_chrom_id(name_to_id, chrom_name);
 
       if (add_missing_chroms)
@@ -438,10 +456,12 @@ process_sites(const bool verbose, const bool add_missing_chroms,
     }
     else {
       std::uint32_t pos_step = 0, n_meth = 0, n_unmeth = 0;
+      // NOLINTBEGIN(*-pointer-arithmetic)
       const auto end_line = line.s + line.l;
       auto res = std::from_chars(line.s, end_line, pos_step);
       res = std::from_chars(res.ptr + 1, end_line, n_meth);
       res = std::from_chars(res.ptr + 1, end_line, n_unmeth);
+      // NOLINTEND(*-pointer-arithmetic)
 
       const auto curr_pos = pos + pos_step;
       if (!require_covered && pos + 1 < curr_pos)
@@ -452,9 +472,9 @@ process_sites(const bool verbose, const bool add_missing_chroms,
     }
   }
   if (!require_covered)
-    write_missing(nm_sz, *ch_itr, pos + 1, size(*ch_itr), buf, out);
+    write_missing(nm_sz, *ch_itr, pos + 1, std::size(*ch_itr), buf, out);
   if (add_missing_chroms)
-    write_all_sites(verbose, prev_chr_id, size(chroms), names, chroms, buf,
+    write_all_sites(verbose, prev_chr_id, std::size(chroms), names, chroms, buf,
                     out);
 }
 
@@ -471,7 +491,8 @@ write_all_cpgs(const bool verbose, const std::uint32_t prev_chr_id,
     auto res =
       std::copy(std::cbegin(names[i]), std::cend(names[i]), buf.data());
     *res = '\t';
-    write_missing_cpg(size(names[i]), chroms[i], 0u, size(chroms[i]), buf, out);
+    write_missing_cpg(std::size(names[i]), chroms[i], 0u, std::size(chroms[i]),
+                      buf, out);
   }
 }
 
@@ -484,11 +505,11 @@ process_cpg_sites(const bool verbose, const bool add_missing_chroms,
   std::vector<std::string> chroms, names;
   read_fasta_file_short_names_uppercase(chroms_file, names, chroms);
   if (verbose)
-    std::cerr << "[n chroms in reference: " << chroms.size() << "]" << "\n";
+    std::cerr << "[n chroms in reference: " << std::size(chroms) << "]" << "\n";
 
   std::unordered_map<std::string, chrom_itr_t> chrom_lookup;
   std::unordered_map<std::string, std::int32_t> name_to_id;
-  std::vector<std::uint64_t> chrom_sizes(size(chroms), 0);
+  std::vector<std::uint64_t> chrom_sizes(std::size(chroms), 0);
   get_lookups(names, chroms, chrom_lookup, name_to_id, chrom_sizes);
 
   if (add_missing_chroms)
@@ -535,12 +556,14 @@ process_cpg_sites(const bool verbose, const bool add_missing_chroms,
       continue;  // ADS: early loop exit
     }
 
-    if (!std::isdigit(line.s[0])) {  // check if we have a chrom line
+    // check if we have a chrom line
+    if (!std::isdigit(line.s[0])) {  // NOLINT(*-pointer-arithmetic)
       if (!require_covered && pos != std::numeric_limits<std::uint64_t>::max())
-        write_missing_cpg(nm_sz, *ch_itr, pos + 1, size(*ch_itr), buf, out);
+        write_missing_cpg(nm_sz, *ch_itr, pos + 1, std::size(*ch_itr), buf,
+                          out);
 
       chrom_name = std::string{line.s};
-      nm_sz = size(chrom_name);
+      nm_sz = std::size(chrom_name);
       const std::int32_t chr_id = get_chrom_id(name_to_id, chrom_name);
 
       if (add_missing_chroms)
@@ -558,10 +581,12 @@ process_cpg_sites(const bool verbose, const bool add_missing_chroms,
     }
     else {
       std::uint32_t pos_step = 0, n_meth = 0, n_unmeth = 0;
+      // NOLINTBEGIN(*-pointer-arithmetic)
       const auto end_line = line.s + line.l;
       auto res = std::from_chars(line.s, end_line, pos_step);
       res = std::from_chars(res.ptr + 1, end_line, n_meth);
       res = std::from_chars(res.ptr + 1, end_line, n_unmeth);
+      // NOLINTEND(*-pointer-arithmetic)
 
       const auto curr_pos = pos + pos_step;
       if (!require_covered && pos + 1 < curr_pos)
@@ -572,9 +597,10 @@ process_cpg_sites(const bool verbose, const bool add_missing_chroms,
     }
   }
   if (!require_covered)
-    write_missing_cpg(nm_sz, *ch_itr, pos + 1, size(*ch_itr), buf, out);
+    write_missing_cpg(nm_sz, *ch_itr, pos + 1, std::size(*ch_itr), buf, out);
   if (add_missing_chroms)
-    write_all_cpgs(verbose, prev_chr_id, size(chroms), names, chroms, buf, out);
+    write_all_cpgs(verbose, prev_chr_id, std::size(chroms), names, chroms, buf,
+                   out);
 }
 
 int
@@ -622,7 +648,7 @@ main_unxcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
       std::cerr << opt_parse.option_missing_message() << "\n";
       return EXIT_SUCCESS;
     }
-    if (leftover_args.size() != 1) {
+    if (std::size(leftover_args) != 1) {
       std::cerr << opt_parse.help_message() << "\n";
       return EXIT_SUCCESS;
     }
@@ -653,4 +679,4 @@ main_unxcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   return EXIT_SUCCESS;
 }
 
-// NOLINTEND(*-avoid-c-arrays,*-avoid-magic-numbers,*-avoid-non-const-global-variables,*-narrowing-conversions,*-constant-array-index,*-pointer-arithmetic)
+// NOLINTEND(*-narrowing-conversions)

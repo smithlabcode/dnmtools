@@ -405,8 +405,9 @@ get_bed_columns(const std::string &regions_file) {
   return n_columns;
 }
 
-static auto
+[[nodiscard]] static auto
 get_intervals(const std::string &filename) -> std::vector<Interval6> {
+  static constexpr auto n_bed6_cols = 6;
   const auto field_count = [&] {
     bamxx::bgzf_file in(filename, "r");
     if (!in)
@@ -419,13 +420,16 @@ get_intervals(const std::string &filename) -> std::vector<Interval6> {
                                (std::istream_iterator<std::string>()));
     return std::size(v);
   }();
-  if (field_count >= 6)
+  if (field_count >= n_bed6_cols)
     return read_intervals6(filename);
 
-  auto without_names = read_intervals(filename);
-  std::vector<Interval6> intervals;
-  for (const auto &w : without_names)
-    intervals.emplace_back(w.chrom, w.start, w.stop, std::string{}, 0, '+');
+  const auto without_names = read_intervals(filename);
+  std::vector<Interval6> intervals(std::size(without_names));
+  std::transform(std::cbegin(without_names), std::cend(without_names),
+                 std::begin(intervals), [&](const auto &w) {
+                   return Interval6(w.chrom, w.start, w.stop, std::string{}, 0,
+                                    '+');
+                 });
   return intervals;
 }
 

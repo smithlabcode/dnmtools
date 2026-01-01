@@ -150,7 +150,8 @@ process_with_cpgs_loaded(const bool verbose,
     throw std::runtime_error("cannot open file: " + cpgs_file);
 
   std::string header;
-  getline(in, header);
+  if (!getline(in, header))
+    throw std::runtime_error("failed to read header");
 
   std::istringstream iss(header);
   std::string col_name;

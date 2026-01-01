@@ -712,11 +712,13 @@ check_if_array_data(const std::string &infile) {
     skip_counts_header(in);
 
   std::string line;
-  getline(in, line);
+  if (!getline(in, line))
+    throw std::runtime_error("failed to read line from file: " + infile);
+
   std::istringstream iss(line);
   std::string chrom, pos, strand, seq, meth, cov;
   iss >> chrom >> pos >> strand >> seq >> meth;
-  return (!(iss >> cov));
+  return !(iss >> cov);
 }
 
 static void
@@ -1205,8 +1207,7 @@ main_pmd(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
       double confidence_interval = default_confidence_interval;
       double prop_accept = default_prop_accept;
       for (std::size_t i = 0; i < n_replicates && !insufficient_data; ++i) {
-        const bool arrayData = check_if_array_data(cpgs_file[i]);
-        if (!arrayData) {
+        if (!check_if_array_data(cpgs_file[i])) {
           bin_size =
             binsize_selection(resolution, min_bin_size, max_bin_size,
                               confidence_interval, prop_accept, cpgs_file[i]);

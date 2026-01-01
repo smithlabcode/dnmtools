@@ -1,7 +1,4 @@
-/* Copyright (C) 2013-2025 Andrew D Smith
- *
- * Author: Andrew D. Smith
- * Contributors: Egor Dolzhenko and Guilherme Sena
+/* Copyright (C) 2013-2025 Andrew D Smith, Egor Dolzhenko and Guilherme Sena
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -14,6 +11,7 @@
  * more details.
  */
 
+#include "file_progress.hpp"
 #include "radmeth_design.hpp"
 #include "radmeth_model.hpp"
 #include "radmeth_optimize_params.hpp"

@@ -153,6 +153,7 @@ test_scripts/test_unxcounts.log: test_scripts/test_xcounts.log
 
 noinst_LIBRARIES = libdnmtools.a
 libdnmtools_a_SOURCES = \
+        src/common/file_progress.cpp \
         src/common/Interval.cpp \
         src/common/Interval6.cpp \
         src/common/dnmtools_gaussinv.cpp \
@@ -175,6 +176,7 @@ libdnmtools_a_SOURCES = \
 
 libdnmtools_a_SOURCES += \
         src/common/dnmtools_lgamma.hpp \
+        src/common/file_progress.hpp \
         src/common/Interval.hpp \
         src/common/Interval6.hpp \
         src/common/dnmtools_gaussinv.hpp \

@@ -51,7 +51,7 @@
 #include <utility>
 #include <vector>
 
-// NOLINTBEGIN(*-narrowing-conversions,*-pointer-arithmetic)
+// NOLINTBEGIN(*-narrowing-conversions)
 
 // clang-format off
 static constexpr std::array<std::uint8_t, 256> encoding = {
@@ -315,6 +315,7 @@ struct mod_prob_buffer {
 
     int n_types{};
     const auto types = bam_mods_recorded(m.get(), &n_types);
+    // NOLINTNEXTLINE(*-pointer-arithmetic)
     if (n_types < 2 || (types[h_idx] != 'h' && types[m_idx] != 'm'))
       return false;
 
@@ -337,7 +338,8 @@ count_states_fwd(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
   /* Move through cigar, reference and read positions without
      inflating cigar or read sequence */
   const auto beg_cig = bam_get_cigar(aln);
-  const auto end_cig = beg_cig + get_n_cigar(aln);
+  const auto end_cig =
+    beg_cig + get_n_cigar(aln);  // NOLINT(*-pointer-arithmetic)
 
   auto rpos = get_pos(aln);
   auto ref_itr = std::cbegin(chrom) + rpos;
@@ -386,7 +388,8 @@ count_states_rev(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
   /* Move through cigar, reference and (*backward*) through read
      positions without inflating cigar or read sequence */
   const auto beg_cig = bam_get_cigar(aln);
-  const auto end_cig = beg_cig + get_n_cigar(aln);
+  const auto end_cig =
+    beg_cig + get_n_cigar(aln);  // NOLINT(*-pointer-arithmetic)
 
   auto rpos = get_pos(aln);
   auto ref_itr = std::cbegin(chrom) + rpos;
@@ -440,6 +443,7 @@ get_tid_to_idx(
   for (std::int32_t i = 0; i < get_n_targets(hdr); ++i) {
     // "curr_name" gives a "tid_to_name" mapping allowing to jump
     // through "name_to_idx" and get "tid_to_idx"
+    // NOLINTNEXTLINE(*-pointer-arithmetic)
     const std::string curr_name(hdr.h->target_name[i]);
     const auto name_itr(name_to_idx.find(curr_name));
     if (name_itr == std::cend(name_to_idx))
@@ -521,6 +525,7 @@ struct mod_prob_stats {
 
     int n_types{};
     const auto types = bam_mods_recorded(m.get(), &n_types);
+    // NOLINTNEXTLINE(*-pointer-arithmetic)
     if (n_types < 2 || (types[h_idx] != 'h' && types[m_idx] != 'm'))
       return;
 
@@ -943,6 +948,7 @@ valid_modification_types(const std::string &infile,
     int n_types{};
     const auto types = bam_mods_recorded(m.get(), &n_types);
     // clang-format off
+    // NOLINTBEGIN(*-pointer-arithmetic)
     valid_types = ((n_types == 0) ||
                    (n_types == 1 && types[0] == 'C') ||
                    (n_types >= 2 && types[0] == 'h' && types[1] == 'm'));
@@ -953,6 +959,7 @@ valid_modification_types(const std::string &infile,
         message += "type[" + std::to_string(i) +
                    "]=" + std::to_string(static_cast<char>(types[i])) + "\n";
     }
+    // NOLINTEND(*-pointer-arithmetic)
   }
   return std::make_pair(valid_types, message);
 }
@@ -1111,6 +1118,6 @@ main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   return EXIT_SUCCESS;
 }
 
-// NOLINTEND(*-narrowing-conversions,*-pointer-arithmetic)
+// NOLINTEND(*-narrowing-conversions)
 
 #endif

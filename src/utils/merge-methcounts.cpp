@@ -1,20 +1,38 @@
-/* merge-methcounts: a program for merging methcounts files
+/* Copyright (C) 2011-2025 Andrew D. Smith
  *
- * Copyright (C) 2011-2025 University of Southern California and
- *                         Andrew D. Smith
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
  *
- * Authors: Andrew D Smith
- *
- * This program is free software: you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
  */
+
+[[maybe_unused]] static constexpr auto about = R"(
+merge multiple counts format files into a table or single methylome.
+)";
+
+[[maybe_unused]] static constexpr auto description = R"(
+This utility does two things, and they are grouped together here because of
+how they are done, not because the uses are related. (1) merge-methcounts can
+take a set of methcounts output files and combine them into one. There are
+several reasons a user might want to do this. An example is when technical
+replicates are performed, and analyzed separately to understand technical
+variance (e.g., between sequencing runs or library preps). After examining the
+technical variation, subsequent analyses might be best conducted on all the
+data together. So all the methcounts files can be combined into one using
+merge-methcounts. In this case, the coverage at any site is the sum of the
+coverages in the original methcounts files, and the methylation level at any
+site is the weighted mean. (2) merge-methcounts can take a set of methcounts
+output files, and create a table that contains all the same information. The
+table format is helpful if subsequent analyses are best done using a data
+table, for example in R. When producing a tabular format, merge-methcounts
+allows the user to select whether the desired output is in counts or
+fractions.
+)";
 
 #include "MSite.hpp"
 #include "OptionParser.hpp"
@@ -27,6 +45,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -41,14 +60,14 @@
 #include <utility>
 #include <vector>
 
-// NOLINTBEGIN(*-owning-memory,*-avoid-magic-numbers,*-narrowing-conversions,*-pointer-arithmetic)
+// NOLINTBEGIN(*-narrowing-conversions)
 
 static void
 set_invalid(MSite &s) {
   s.pos = std::numeric_limits<std::size_t>::max();
 }
 
-static bool
+[[nodiscard]] static bool
 is_valid(const MSite &s) {
   return s.pos != std::numeric_limits<std::size_t>::max();
 }
@@ -66,7 +85,7 @@ any_sites_unprocessed(
       outdated[i] = false;
       MSite tmp_site;
       if (read_site(*infiles[i], tmp_site)) {
-        // ADS: chrom order within a file already tested
+        // ADS: assume chrom order within a file already tested
         if (tmp_site.pos <= sites[i].pos && tmp_site.chrom == sites[i].chrom)
           throw std::runtime_error("sites not sorted in " + filenames[i]);
         sites_remain = true;
@@ -111,7 +130,7 @@ find_minimum_site(
       ms_id = i;
 
   if (ms_id == std::numeric_limits<std::size_t>::max())
-    throw std::runtime_error("failed in a next site to print");
+    throw std::runtime_error("failed to find next site to print");
 
   // now find the earliest site to print among those that could be
   for (std::size_t i = 0; i < n_files; ++i)
@@ -122,7 +141,7 @@ find_minimum_site(
   return ms_id;
 }
 
-[[nodiscard]] static bool
+[[nodiscard]] static inline bool
 same_location(const MSite &a, const MSite &b) {
   return a.chrom == b.chrom && a.pos == b.pos;
 }
@@ -133,15 +152,11 @@ collect_sites_to_print(
   const std::unordered_map<std::string, std::size_t> &chroms_order,
   const std::vector<bool> &outdated, std::vector<bool> &to_print) {
   const std::size_t n_files = std::size(sites);
-
   const std::size_t min_site_idx =
     find_minimum_site(sites, chroms_order, outdated);
-
+  const auto &min_site = sites[min_site_idx];
   for (std::size_t i = 0; i < n_files; ++i)
-    // condition below covers "is_valid(sites[i])"
-    if (same_location(sites[min_site_idx], sites[i]))
-      to_print[i] = true;
-
+    to_print[i] = same_location(min_site, sites[i]);
   return min_site_idx;
 }
 
@@ -169,7 +184,7 @@ write_line_for_tabular(std::array<char, buffer_size> &buffer,
     min_site.set_mutated();
 
   // ADS: is this the format we want for the row names?
-  auto cursor = buffer.data();
+  auto cursor = std::begin(buffer);
   auto bytes_left = buffer_size;
   {
     const auto n_bytes =
@@ -177,7 +192,7 @@ write_line_for_tabular(std::array<char, buffer_size> &buffer,
                     min_site.pos, min_site.strand, min_site.context.data());
     if (n_bytes < 0 || n_bytes == static_cast<std::int32_t>(bytes_left))
       throw std::runtime_error("failed to write output line");
-    cursor += n_bytes;
+    cursor += n_bytes;  // NOLINT(*-pointer-arithmetic)
     bytes_left -= n_bytes;
   }
 
@@ -185,13 +200,13 @@ write_line_for_tabular(std::array<char, buffer_size> &buffer,
     for (std::size_t i = 0; i < n_files; ++i) {
       const std::size_t r = sites[i].n_reads;
       const auto n_bytes = [&] {
-        return (to_print[i] && r >= min_reads)
+        return to_print[i] && r >= min_reads
                  ? std::snprintf(cursor, bytes_left, "\t%.6g", sites[i].meth)
                  : std::snprintf(cursor, bytes_left, "\tNA");
       }();
       if (n_bytes < 0 || n_bytes == static_cast<std::int32_t>(bytes_left))
         throw std::runtime_error("failed to write output line");
-      cursor += n_bytes;
+      cursor += n_bytes;  // NOLINT(*-pointer-arithmetic)
       bytes_left -= n_bytes;
     }
   }
@@ -205,16 +220,16 @@ write_line_for_tabular(std::array<char, buffer_size> &buffer,
       }();
       if (n_bytes < 0 || n_bytes == static_cast<std::int32_t>(bytes_left))
         throw std::runtime_error("failed to write output line");
-      cursor += n_bytes;
+      cursor += n_bytes;  // NOLINT(*-pointer-arithmetic)
       bytes_left -= n_bytes;
     }
 
   if (static_cast<std::ptrdiff_t>(buffer_size) <=
-      std::distance(buffer.data(), cursor))
+      std::distance(std::begin(buffer), cursor))
     throw std::runtime_error("failed to write output line");
 
   *cursor++ = '\n';
-  out.write(buffer.data(), std::distance(buffer.data(), cursor));
+  out.write(std::cbegin(buffer), std::distance(std::begin(buffer), cursor));
 }
 
 static void
@@ -335,29 +350,12 @@ get_chroms_order(const std::vector<std::string> &filenames,
       throw std::runtime_error("inconsistent order of chroms between files");
 }
 
-/*
-  This utility does two things, and they are grouped together here because of
-  how they are done, not because the uses are related. (1) merge-methcounts
-  can take a set of methcounts output files and combine them into one. There
-  are several reasons a user might want to do this. An example is when
-  technical replicates are performed, and analyzed separately to understand
-  technical variance (e.g., between sequencing runs or library preps). After
-  examining the technical variation, subsequent analyses might be best
-  conducted on all the data together. So all the methcounts files can be
-  combined into one using merge-methcounts. In this case, the coverage at any
-  site is the sum of the coverages in the original methcounts files, and the
-  methylation level at any site is the weighted mean. (2) merge-methcounts can
-  take a set of methcounts output files, and create a table that contains all
-  the same information. The table format is helpful if subsequent analyses are
-  best done using a data table, for example in R. When producing a tabular
-  format, merge-methcounts allows the user to select whether the desired
-  output is in counts or fractions.
- */
 int
 main_merge_methcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   static constexpr auto buffer_size = 65536;
   try {
-    static const std::string description = "merge multiple methcounts files";
+    static const std::string brief_description =
+      "merge multiple methcounts files";
 
     std::string outfile;
     bool verbose = false;
@@ -376,7 +374,7 @@ main_merge_methcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
 
     /****************** COMMAND LINE OPTIONS ********************/
     OptionParser opt_parse(argv[0],  // NOLINT(*-pointer-arithmetic)
-                           description, "<methcounts-files>");
+                           brief_description, "<methcounts-files>");
     opt_parse.add_opt("output", 'o', "output file name (default: stdout)", true,
                       outfile);
     opt_parse.add_opt("header", 'H', "header to print (ignored for tabular)",
@@ -526,11 +524,11 @@ main_merge_methcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
       std::swap(outdated, sites_to_print);
     }
   }
-  catch (const std::runtime_error &e) {
+  catch (const std::exception &e) {
     std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
 
-// NOLINTEND(*-owning-memory,*-avoid-magic-numbers,*-narrowing-conversions,*-pointer-arithmetic)
+// NOLINTEND(*-narrowing-conversions)

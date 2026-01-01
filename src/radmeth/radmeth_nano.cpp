@@ -1,7 +1,5 @@
 /* Copyright (C) 2025 Andrew D Smith
  *
- * Author: Andrew D. Smith
- *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option)
@@ -13,6 +11,7 @@
  * more details.
  */
 
+#include "file_progress.hpp"
 #include "radmeth_design.hpp"
 #include "radmeth_model.hpp"
 #include "radmeth_optimize_gamma.hpp"
@@ -36,8 +35,9 @@
 #include <utility>
 #include <vector>
 
+template <typename RegressionType>
 [[nodiscard]] static bool
-has_low_coverage(const Regression<double> &reg, const std::size_t test_factor) {
+has_low_coverage(const RegressionType &reg, const std::size_t test_factor) {
   bool cvrd_in_test_fact_smpls = false;
   const auto &tcol = reg.design.tmatrix[test_factor];
   for (std::size_t i = 0; i < reg.n_samples() && !cvrd_in_test_fact_smpls; ++i)
@@ -50,8 +50,9 @@ has_low_coverage(const Regression<double> &reg, const std::size_t test_factor) {
   return !cvrd_in_test_fact_smpls || !cvrd_in_other_smpls;
 }
 
+template <typename RegressionType>
 [[nodiscard]] static bool
-has_extreme_counts(const Regression<double> &reg) {
+has_extreme_counts(const RegressionType &reg) {
   const auto &mc = reg.mc;
 
   bool full_meth = true;

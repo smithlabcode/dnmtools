@@ -79,21 +79,19 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
+#include <numeric>
 
-// ADS: they are all magic...
+// ADS: so much magic.
 
 template <std::size_t a_size, std::size_t b_size>
 [[nodiscard]] static inline double
 rat_eval(const std::array<double, a_size> &a,
          const std::array<double, b_size> &b, const double x) {
-  double u{};
-  for (const auto aa : a)
-    u = x * u + aa;
-  double v{};
-  for (const auto bb : b)
-    v = x * v + bb;
-  return u / v;
+  const auto acc = [&](const auto t, const auto y) { return x * t + y; };
+  return std::accumulate(std::cbegin(a), std::cend(a), 0.0, acc) /
+         std::accumulate(std::cbegin(b), std::cend(b), 0.0, acc);
 }
 
 [[nodiscard]] static double
@@ -188,14 +186,12 @@ tail(const double r) {
 dnmt_gsl_cdf_ugaussian_Pinv(const double P) {
   static constexpr auto cutoff_for_small = 0.425;
   const auto dP = P - 0.5;
-
   if (P == 1.0)
     return std::numeric_limits<double>::infinity();
   if (P == 0.0)
     return -std::numeric_limits<double>::infinity();
   if (std::abs(dP) <= cutoff_for_small)
     return small(dP);
-
   const double pp = P < 0.5 ? P : 1.0 - P;
   const double r = std::sqrt(-std::log(pp));
   const double x = (r <= 5.0) ? intermediate(r) : tail(r);
@@ -206,14 +202,12 @@ dnmt_gsl_cdf_ugaussian_Pinv(const double P) {
 dnmt_gsl_cdf_ugaussian_Qinv(const double Q) {
   static constexpr auto cutoff_for_small = 0.425;
   const double dQ = Q - 0.5;
-
   if (Q == 1.0)
     return -std::numeric_limits<double>::infinity();
   if (Q == 0.0)
     return std::numeric_limits<double>::infinity();
   if (std::abs(dQ) <= cutoff_for_small)
     return -small(dQ);
-
   const double pp = Q < 0.5 ? Q : 1.0 - Q;
   const double r = std::sqrt(-std::log(pp));
   const double x = (r <= 5.0) ? intermediate(r) : tail(r);

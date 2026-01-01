@@ -48,11 +48,11 @@ methylation
 static void
 backup_to_start_of_current_record(std::ifstream &in) {
   static constexpr std::size_t assumed_max_valid_line_width = 10000;
-  std::size_t count = 0;
+  std::size_t byte_count = 0;
   while (in.tellg() > 0 && in.peek() != '\n' && in.peek() != '\r' &&
-         count++ < assumed_max_valid_line_width)
+         byte_count++ < assumed_max_valid_line_width)
     in.seekg(-1, std::ios_base::cur);
-  if (count > assumed_max_valid_line_width)
+  if (byte_count > assumed_max_valid_line_width)
     throw std::runtime_error("file contains a line longer than " +
                              std::to_string(assumed_max_valid_line_width));
 }

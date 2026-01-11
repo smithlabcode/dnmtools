@@ -156,12 +156,11 @@ eats_query(const std::uint32_t c) {
   return bam_cigar_type(bam_cigar_op(c)) & 1;
 }
 
-/* The three functions below here should probably be moved into
-   bsutils.hpp. I am not sure if the DDG function is needed, but it
-   seems like if one considers strand, and the CHH is not symmetric,
-   then one needs this. Also, Qiang should be consulted on this
-   because he spent much time thinking about it in the context of
-   plants. */
+/* The three functions below here should probably be moved into bsutils.hpp. I
+   am not sure if the DDG function is needed, but it seems like if one
+   considers strand, and the CHH is not symmetric, then one needs this. Also,
+   Qiang should be consulted on this because he spent much time thinking about
+   it in the context of plants. */
 [[nodiscard]] static inline bool
 is_chh(const std::string &s, const std::size_t i) {
   return i + 2 < std::size(s) && is_cytosine(s[i]) && !is_guanine(s[i + 1]) &&
@@ -180,11 +179,10 @@ is_c_at_g(const std::string &s, const std::size_t i) {
          !is_guanine(s[i + 1]) && is_guanine(s[i + 2]);
 }
 
-/* Right now the CountSet objects below are much larger than they need
-   to be, for the things we are computing. However, it's not clear
-   that the minimum information would really put the memory
-   requirement of the program into a more reasonable range, so keeping
-   all the information seems reasonable. */
+/* Right now the CountSet objects below are much larger than they need to be,
+   for the things we are computing. However, it's not clear that the minimum
+   information would really put the memory requirement of the program into a
+   more reasonable range, so keeping all the information seems reasonable. */
 struct CountSet {
   static constexpr auto max_prob_repr = 255.0;
   // ADS: accepting int16_t because of using -1 for unknown prob vs. 0 prob.

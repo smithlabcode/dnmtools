@@ -1,7 +1,4 @@
-/* nanocount: methylation counts for nanopore data; see docs for 'counts'
- * command for details.
- *
- * Copyright (C) 2025 Andrew D. Smith
+/* Copyright (C) 2025 Andrew D. Smith
  *
  * Author: Andrew D. Smith
  *
@@ -18,12 +15,17 @@
 
 #ifdef BUILD_NANOPORE
 
+[[maybe_unused]] static constexpr auto about = R"(
+nanocount: methylation counts for nanopore data; see docs for 'counts' command
+for details.
+)";
+
+#include "bam_record_utils.hpp"
 #include "counts_header.hpp"
 
 #include "OptionParser.hpp"
-#include "bam_record_utils.hpp"
 
-#include "bamxx.hpp"
+#include <bamxx.hpp>
 
 #include "nlohmann/json.hpp"
 

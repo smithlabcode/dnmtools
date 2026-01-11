@@ -55,7 +55,6 @@ for details.
 
 // NOLINTBEGIN(*-narrowing-conversions)
 
-// clang-format off
 static constexpr std::array<std::uint8_t, 96> encoding = {
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 16
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 32
@@ -64,22 +63,21 @@ static constexpr std::array<std::uint8_t, 96> encoding = {
   4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,  // 80
   4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 96
 };
-// clang-format on
 
 static constexpr auto n_nucs = 4u;
 
-[[nodiscard]] inline bool
-is_cytosine(const char c) {
+[[nodiscard]] inline auto
+is_cytosine(const char c) -> bool {
   return c == 'c' || c == 'C';
 }
 
-[[nodiscard]] inline bool
-is_guanine(const char c) {
+[[nodiscard]] inline auto
+is_guanine(const char c) -> bool {
   return c == 'g' || c == 'G';
 }
 
-[[nodiscard]] inline bool
-is_cpg(const std::string &s, const std::size_t i) {
+[[nodiscard]] inline auto
+is_cpg(const std::string &s, const std::size_t i) -> bool {
   return i + 1 < std::size(s) && is_cytosine(s[i]) && is_guanine(s[i + 1]);
 }
 
@@ -108,8 +106,8 @@ read_fasta_file(const std::string &filename, std::vector<std::string> &names,
   }
 }
 
-[[nodiscard]] static std::string
-get_basecall_model(const bamxx::bam_header &hdr) {
+[[nodiscard]] static auto
+get_basecall_model(const bamxx::bam_header &hdr) -> std::string {
   kstring_t ks{};
 
   ks = {0, 0, nullptr};
@@ -144,15 +142,15 @@ get_basecall_model(const bamxx::bam_header &hdr) {
 
 // ADS: here the std::uint16_t allows for up to 256 reads, each contributing
 // up to 256 "counts" in the probability encoding.
-typedef std::uint16_t count_type;
+using count_type = std::uint16_t;
 
-[[nodiscard]] static inline bool
-eats_ref(const std::uint32_t c) {
+[[nodiscard]] static inline auto
+eats_ref(const std::uint32_t c) -> bool {
   return bam_cigar_type(bam_cigar_op(c)) & 2;
 }
 
-[[nodiscard]] static inline bool
-eats_query(const std::uint32_t c) {
+[[nodiscard]] static inline auto
+eats_query(const std::uint32_t c) -> bool {
   return bam_cigar_type(bam_cigar_op(c)) & 1;
 }
 
@@ -161,20 +159,20 @@ eats_query(const std::uint32_t c) {
    considers strand, and the CHH is not symmetric, then one needs this. Also,
    Qiang should be consulted on this because he spent much time thinking about
    it in the context of plants. */
-[[nodiscard]] static inline bool
-is_chh(const std::string &s, const std::size_t i) {
+[[nodiscard]] static inline auto
+is_chh(const std::string &s, const std::size_t i) -> bool {
   return i + 2 < std::size(s) && is_cytosine(s[i]) && !is_guanine(s[i + 1]) &&
          !is_guanine(s[i + 2]);
 }
 
-[[nodiscard]] static inline bool
-is_ddg(const std::string &s, const std::size_t i) {
+[[nodiscard]] static inline auto
+is_ddg(const std::string &s, const std::size_t i) -> bool {
   return i + 2 < std::size(s) && !is_cytosine(s[i]) && !is_cytosine(s[i + 1]) &&
          is_guanine(s[i + 2]);
 }
 
-[[nodiscard]] static inline bool
-is_c_at_g(const std::string &s, const std::size_t i) {
+[[nodiscard]] static inline auto
+is_c_at_g(const std::string &s, const std::size_t i) -> bool {
   return i + 2 < std::size(s) && is_cytosine(s[i]) && !is_cytosine(s[i + 1]) &&
          !is_guanine(s[i + 1]) && is_guanine(s[i + 2]);
 }
@@ -198,20 +196,20 @@ struct CountSet {
     methyl_rev += static_cast<std::uint8_t>(m);
     ++n_reads_rev;
   }
-  [[nodiscard]] double
-  get_hydroxy(const bool is_c) const {
+  [[nodiscard]] auto
+  get_hydroxy(const bool is_c) const -> double {
     return (is_c ? hydroxy_fwd : hydroxy_rev) / max_prob_repr;
   }
-  [[nodiscard]] double
-  get_methyl(const bool is_c) const {
+  [[nodiscard]] auto
+  get_methyl(const bool is_c) const -> double {
     return (is_c ? methyl_fwd : methyl_rev) / max_prob_repr;
   }
-  [[nodiscard]] double
-  get_mods(const bool is_c) const {
+  [[nodiscard]] auto
+  get_mods(const bool is_c) const -> double {
     return get_hydroxy(is_c) + get_methyl(is_c);
   }
-  [[nodiscard]] double
-  get_n_reads(const bool is_c) const {
+  [[nodiscard]] auto
+  get_n_reads(const bool is_c) const -> double {
     return is_c ? n_reads_fwd : n_reads_rev;
   }
   count_type hydroxy_fwd{0};
@@ -222,14 +220,14 @@ struct CountSet {
   count_type n_reads_rev{0};
 };
 
-/* The "tag" returned by this function should be exclusive, so that
- * the order of checking conditions doesn't matter. There is also a
- * bit of a hack in that the unsigned "pos" could wrap, but this still
- * works as long as the chromosome size is not the maximum size of a
- * std::size_t.
+/* The "tag" returned by this function should be exclusive, so that the order
+ * of checking conditions doesn't matter. There is also a bit of a hack in
+ * that the unsigned "pos" could wrap, but this still works as long as the
+ * chromosome size is not the maximum size of a std::size_t.
  */
-[[nodiscard]] static std::uint32_t
-get_tag_from_genome(const std::string &s, const std::size_t pos) {
+[[nodiscard]] static auto
+get_tag_from_genome(const std::string &s,
+                    const std::size_t pos) -> std::uint32_t {
   if (is_cytosine(s[pos])) {
     if (is_cpg(s, pos))
       return 0;
@@ -281,8 +279,8 @@ struct mod_prob_buffer {
     hydroxy_probs.reserve(init_capacity);
   }
 
-  [[nodiscard]] bool
-  set_probs(const bamxx::bam_rec &aln) {
+  [[nodiscard]] auto
+  set_probs(const bamxx::bam_rec &aln) -> bool {
     static constexpr auto h_idx = 0;
     static constexpr auto m_idx = 1;
     const auto qlen = get_l_qseq(aln);
@@ -323,8 +321,8 @@ struct mod_prob_buffer {
 static void
 count_states_fwd(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
                  mod_prob_buffer &mod_buf, const std::string &chrom) {
-  /* Move through cigar, reference and read positions without
-     inflating cigar or read sequence */
+  // Move through cigar, reference and read positions without inflating cigar
+  // or read sequence
   const auto beg_cig = bam_get_cigar(aln);
   const auto end_cig =
     beg_cig + get_n_cigar(aln);  // NOLINT(*-pointer-arithmetic)
@@ -363,10 +361,10 @@ count_states_fwd(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
       ref_itr += n;
     }
   }
-  // ADS: somehow previous code included a correction for rpos going
-  // past the end of the chromosome; this should result at least in a
-  // soft-clip by any mapper. I'm not checking it here as even if it
-  // happens I don't want to terminate.
+  // ADS: somehow previous code included a correction for rpos going past the
+  // end of the chromosome; this should result at least in a soft-clip by any
+  // mapper. I'm not checking it here as even if it happens I don't want to
+  // terminate.
   assert(qpos == get_l_qseq(aln));
 }
 
@@ -421,16 +419,15 @@ count_states_rev(const bamxx::bam_rec &aln, std::vector<CountSet> &counts,
   assert(qpos == 0);
 }
 
-[[nodiscard]] static std::tuple<std::map<std::int32_t, std::size_t>,
-                                std::set<std::int32_t>>
-get_tid_to_idx(
-  const bamxx::bam_header &hdr,
-  const std::unordered_map<std::string, std::size_t> &name_to_idx) {
+[[nodiscard]] static auto
+get_tid_to_idx(const bamxx::bam_header &hdr,
+               const std::unordered_map<std::string, std::size_t> &name_to_idx)
+  -> std::tuple<std::map<std::int32_t, std::size_t>, std::set<std::int32_t>> {
   std::set<std::int32_t> missing_tids;
   std::map<std::int32_t, std::size_t> tid_to_idx;
   for (std::int32_t i = 0; i < get_n_targets(hdr); ++i) {
-    // "curr_name" gives a "tid_to_name" mapping allowing to jump
-    // through "name_to_idx" and get "tid_to_idx"
+    // "curr_name" gives a "tid_to_name" mapping allowing to jump through
+    // "name_to_idx" and get "tid_to_idx"
     // NOLINTNEXTLINE(*-pointer-arithmetic)
     const std::string curr_name(hdr.h->target_name[i]);
     const auto name_itr(name_to_idx.find(curr_name));
@@ -443,11 +440,11 @@ get_tid_to_idx(
                     std::set<std::int32_t>>{tid_to_idx, missing_tids};
 }
 
-[[nodiscard]] static bool
+[[nodiscard]] static auto
 consistent_targets(const bamxx::bam_header &hdr,
                    const std::map<std::int32_t, std::size_t> &tid_to_idx,
                    const std::vector<std::string> &names,
-                   const std::vector<std::size_t> &sizes) {
+                   const std::vector<std::size_t> &sizes) -> bool {
   const std::size_t n_targets = get_n_targets(hdr);
   if (n_targets != std::size(names))
     return false;
@@ -465,12 +462,12 @@ consistent_targets(const bamxx::bam_header &hdr,
   return true;
 }
 
-[[nodiscard]] static bool
+[[nodiscard]] static auto
 consistent_existing_targets(
   const bamxx::bam_header &hdr,
   const std::map<std::int32_t, std::size_t> &tid_to_idx,
   const std::vector<std::string> &names,
-  const std::vector<std::size_t> &sizes) {
+  const std::vector<std::size_t> &sizes) -> bool {
   const std::size_t n_targets = get_n_targets(hdr);
   for (std::size_t tid = 0; tid < n_targets; ++tid) {
     const auto idx_itr = tid_to_idx.find(tid);
@@ -561,8 +558,8 @@ struct read_processor {
   int strand{};
   std::string expected_basecall_model{};
 
-  [[nodiscard]] std::string
-  tostring() const {
+  [[nodiscard]] auto
+  tostring() const -> std::string {
     const auto strand_str = strand == 0 ? "both" : strand == 1 ? "fwd" : "rev";
     std::ostringstream oss;
     oss << std::boolalpha << "[verbose: " << verbose << "]\n"
@@ -582,8 +579,8 @@ struct read_processor {
 
   read_processor() : expected_basecall_model{default_expected_basecall_model} {}
 
-  [[nodiscard]] std::string
-  expected_basecall_model_str() const {
+  [[nodiscard]] auto
+  expected_basecall_model_str() const -> std::string {
     return expected_basecall_model.empty() ? "NA" : expected_basecall_model;
   }
 
@@ -752,9 +749,9 @@ struct read_processor {
       write_output_all(hdr, out, tid, chrom, counts);
   }
 
-  [[nodiscard]] mod_prob_stats
+  [[nodiscard]] auto
   operator()(const std::string &infile, const std::string &outfile,
-             const std::string &chroms_file) const {
+             const std::string &chroms_file) const -> mod_prob_stats {
     // first get the chromosome names and sequences from the FASTA file
     std::vector<std::string> chroms, names;
     read_fasta_file(chroms_file, names, chroms);
@@ -1003,8 +1000,8 @@ check_modification_sites(const std::string &infile,
   return only_cpgs_counter == reads_processed;
 }
 
-int
-main_nanocount(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
+auto
+main_nanocount(int argc, char *argv[]) -> int {  // NOLINT(*-avoid-c-arrays)
   static constexpr auto n_reads_to_check = 1000;
   try {
     read_processor rp;

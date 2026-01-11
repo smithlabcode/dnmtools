@@ -18,6 +18,18 @@
 metagene (tsscpgplot): get data to plot methylation level around a TSS
 )";
 
+[[maybe_unused]] constexpr auto description = R"(
+Compute the information needed for metagene plots of DNA methylation
+levels. The columns in the output correspond to the fields calculated
+globally by the `levels` and per-region by the `roi` command. Input
+for features is in BED format, and when present the 6th column is used
+to indicate strand. For features of non-zero width (where the 2nd and
+3rd columns are not identical) the negative strand will indicate that
+3rd column should be used. This means, for example, if the features are
+genes, and the promoters are of interest, the strand will be used
+correctly.
+)";
+
 #include "Interval6.hpp"
 #include "LevelsCounter.hpp"
 #include "MSite.hpp"
@@ -39,8 +51,8 @@ metagene (tsscpgplot): get data to plot methylation level around a TSS
 #include <utility>
 #include <vector>
 
-static MSite
-tss_from_gene(const Interval6 &r) {
+static auto
+tss_from_gene(const Interval6 &r) -> MSite {
   MSite s;
   s.chrom = r.chrom;
   s.pos = r.strand == '+' ? r.start : r.stop;
@@ -54,7 +66,9 @@ process_chrom(const std::uint32_t region_size,
               const std::pair<std::uint32_t, std::uint32_t> &bounds,
               const std::vector<MSite> &sites,
               std::vector<LevelsCounter> &levels) {
-  const auto cmp = [](const MSite &a, const MSite &b) { return a.pos < b.pos; };
+  constexpr auto cmp = [](const MSite &a, const MSite &b) {
+    return a.pos < b.pos;
+  };
   const std::uint32_t twice_rs = 2 * region_size;
 
   for (auto i = bounds.first; i < bounds.second; ++i) {
@@ -88,20 +102,8 @@ collapse_bins(const std::uint32_t bin_size, std::vector<T> &v) {
   v.swap(vv);
 }
 
-int
-metagene(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
-  constexpr auto description =
-    R"(
-Compute the information needed for metagene plots of DNA methylation
-levels. The columns in the output correspond to the fields calculated
-globally by the `levels` and per-region by the `roi` command. Input
-for features is in BED format, and when present the 6th column is used
-to indicate strand. For features of non-zero width (where the 2nd and
-3rd columns are not identical) the negative strand will indicate that
-3rd column should be used. This means, for example, if the features are
-genes, and the promoters are of interest, the strand will be used
-correctly.
-)";
+auto
+metagene(int argc, char *argv[]) -> int {  // NOLINT(*-avoid-c-arrays)
   try {
     std::string outfile;
     std::uint32_t region_size = 5000;  // NOLINT(*-avoid-magic-numbers)
@@ -185,10 +187,9 @@ correctly.
           const auto bounds = lookup.find(chrom_name);
           if (bounds != std::cend(lookup))
             process_chrom(region_size, features, bounds->second, sites, levels);
-          const auto n_features = pair_diff(bounds);
           if (show_progress)
             std::cerr << "[sites=" << std::size(sites)
-                      << " features=" << n_features << "]" << '\n';
+                      << " features=" << pair_diff(bounds) << "]" << '\n';
           sites.clear();
         }
         if (show_progress)
@@ -202,10 +203,9 @@ correctly.
       const auto bounds = lookup.find(chrom_name);
       if (bounds != std::cend(lookup))
         process_chrom(region_size, features, bounds->second, sites, levels);
-      const auto n_features = pair_diff(bounds);
       if (show_progress)
-        std::cerr << "[sites=" << std::size(sites) << " features=" << n_features
-                  << "]\n";
+        std::cerr << "[sites=" << std::size(sites)
+                  << " features=" << pair_diff(bounds) << "]\n";
     }
 
     collapse_bins(bin_size, levels);

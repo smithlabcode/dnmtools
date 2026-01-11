@@ -54,23 +54,13 @@
 // NOLINTBEGIN(*-narrowing-conversions)
 
 // clang-format off
-static constexpr std::array<std::uint8_t, 256> encoding = {
+static constexpr std::array<std::uint8_t, 96> encoding = {
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 16
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 32
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 48
   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 64
   4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,  // 80
   4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 96
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 112
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 128
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 144
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 160
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 176
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 192
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 208
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 224
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,  // 240
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4   // 256
 };
 // clang-format on
 
@@ -150,8 +140,8 @@ get_basecall_model(const bamxx::bam_header &hdr) {
   return {};
 }
 
-// ADS: here the std::uint16_t allows for up to 256 reads, each contributing up
-// to 256 "counts" in the probability encoding.
+// ADS: here the std::uint16_t allows for up to 256 reads, each contributing
+// up to 256 "counts" in the probability encoding.
 typedef std::uint16_t count_type;
 
 [[nodiscard]] static inline bool
@@ -268,15 +258,13 @@ enum class missing_code : std::uint8_t {
   unknown = 1,
 };
 
-// NOLINTBEGIN(*-avoid-c-arrays)
-static const char *const tag_values[] = {
+static constexpr auto tag_values = std::array<const char *, 5>{
   "CpG",  // 0
   "CHH",  // 1
   "CXG",  // 2
   "CCG",  // 3
   "N",    // 4
 };
-// NOLINTEND(*-avoid-c-arrays)
 
 struct mod_prob_buffer {
   static constexpr auto init_capacity{128 * 1024};

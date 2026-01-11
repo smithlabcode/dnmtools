@@ -1087,7 +1087,6 @@ main_nanocount(int argc, char *argv[]) -> int {  // NOLINT(*-avoid-c-arrays)
                 << "[mods only at CpGs: " << mods_at_cpgs << "]\n"
                 << rp.tostring();
 
-    // const auto [mc, mps] = rp(mapped_reads_file, outfile, chroms_file);
     const auto mps = rp(mapped_reads_file, outfile, chroms_file);
     if (!stats_file.empty()) {
       std::ofstream stats_out(stats_file);

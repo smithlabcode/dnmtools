@@ -27,12 +27,13 @@
 #include <array>
 #include <cctype>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <iterator>
 #include <limits>
-#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -46,7 +47,7 @@ template <class BidirIt, class OutputIt>
 OutputIt
 revcomp_copy(BidirIt first, BidirIt last, OutputIt d_first) {
   for (; first != last; ++d_first)
-    *d_first = b2c[*(--last) - 'A'];  // NOLINT(*-constant-array-index)
+    *d_first = b2c[*(--last) - 'A'];  // NOLINT(*-pro-bounds-pointer-arithmetic)
   return d_first;
 }
 
@@ -170,11 +171,11 @@ get_chrom(const std::string &chrom_name,
 
 int
 main_methstates(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
-  static constexpr std::int64_t output_buffer_size{4096};
-  std::array<char, output_buffer_size> buf{};
-  static constexpr auto output_format = "%s\t%lu\t%s\n";
-
   try {
+    static constexpr auto output_format = "%s\t%lu\t%s\n";
+    static constexpr std::int64_t output_buffer_size{4096};
+    static std::array<char, output_buffer_size> buf{};
+
     // clang-format off
     const auto description =
 R"(Convert mapped reads in SAM format into a format that indicates binary

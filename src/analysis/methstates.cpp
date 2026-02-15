@@ -19,12 +19,12 @@
 
 #include "OptionParser.hpp"
 #include "bam_record_utils.hpp"
-#include "dnmt_error.hpp"
 #include "smithlab_os.hpp"
 
 #include <bamxx.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
@@ -39,34 +39,7 @@
 #include <utility>
 #include <vector>
 
-using std::cerr;
-using std::cout;
-using std::lower_bound;
-using std::string;
-using std::unordered_map;
-using std::unordered_set;
-using std::vector;
-
-using bamxx::bam_rec;
-
-static const char b2c[] = "TNGNNNCNNNNNNNNNNNNA";  // NOLINT(*-avoid-c-arrays)
-
-struct quick_buf : public std::ostringstream,
-                   public std::basic_stringbuf<char> {
-  // ADS: consider putting this class in a header somewhere
-  quick_buf() { static_cast<std::basic_ios<char> &>(*this).rdbuf(this); }
-
-  void
-  clear() {
-    setp(pbase(), pbase());
-  }
-
-  char const *
-  c_str() {
-    *pptr() = '\0';
-    return pbase();
-  }
-};
+static constexpr auto b2c = "TNGNNNCNNNNNNNNNNNNA";  // NOLINT(*-avoid-c-arrays)
 
 template <class BidirIt, class OutputIt>
 // constexpr // since C++20
@@ -78,60 +51,61 @@ revcomp_copy(BidirIt first, BidirIt last, OutputIt d_first) {
 }
 
 inline static bool
-is_cpg(const string &s, const uint64_t idx) {
+is_cpg(const std::string &s, const std::uint64_t idx) {
   return s[idx] == 'C' && s[idx + 1] == 'G';
 }
 
 static void
-collect_cpgs(const string &s, vector<uint64_t> &cpgs) {
+collect_cpgs(const std::string &s, std::vector<std::uint64_t> &cpgs) {
   cpgs.clear();
-  const uint64_t lim = std::size(s) - 1;
+  const std::uint64_t lim = std::size(s) - 1;
   for (auto i = 0u; i < lim; ++i)
     if (is_cpg(s, i))
       cpgs.push_back(i);
 }
 
 static bool
-convert_meth_states_pos(const vector<uint64_t> &cpgs,
-                        const bamxx::bam_header &hdr, const bam_rec &aln,
-                        uint64_t &first_cpg_index, string &states) {
+convert_meth_states_pos(const std::vector<std::uint64_t> &cpgs,
+                        const bamxx::bam_header &hdr, const bamxx::bam_rec &aln,
+                        std::uint64_t &first_cpg_index, std::string &states) {
   states.clear();
 
-  const uint64_t seq_start = get_pos(aln);
-  const uint64_t width = rlen_from_cigar(aln);
-  const uint64_t seq_end = seq_start + width;
+  const std::uint64_t seq_start = get_pos(aln);
+  const std::uint64_t width = rlen_from_cigar(aln);
+  const std::uint64_t seq_end = seq_start + width;
 
-  string seq_str;
+  std::string seq_str;
   get_seq_str(aln, seq_str);
   apply_cigar(aln, seq_str, 'N');
 
   if (std::size(seq_str) != width)
-    throw dnmt_error("bad sam record format: " + to_string(hdr, aln));
+    throw std::runtime_error("bad sam record format: " + to_string(hdr, aln));
 
   // get the first cpg site equal to or large than seq_start
-  auto cpg_itr = lower_bound(begin(cpgs), end(cpgs), seq_start);
-  auto first_cpg_itr = end(cpgs);
+  auto cpg_itr =
+    std::lower_bound(std::cbegin(cpgs), std::cend(cpgs), seq_start);
+  auto first_cpg_itr = std::cend(cpgs);
 
-  if (cpg_itr == end(cpgs))
+  if (cpg_itr == std::cend(cpgs))
     return false;
 
-  for (; cpg_itr != end(cpgs) && *cpg_itr < seq_end; cpg_itr++) {
+  for (; cpg_itr != std::cend(cpgs) && *cpg_itr < seq_end; ++cpg_itr) {
     const char x = seq_str[*cpg_itr - seq_start];
-    states += (x == 'T') ? 'T' : ((x == 'C') ? 'C' : 'N');
-    if (first_cpg_itr == end(cpgs))
+    states += x == 'T' ? 'T' : (x == 'C' ? 'C' : 'N');
+    if (first_cpg_itr == std::cend(cpgs))
       first_cpg_itr = cpg_itr;
   }
 
-  if (first_cpg_itr != end(cpgs))
-    first_cpg_index = distance(begin(cpgs), first_cpg_itr);
+  if (first_cpg_itr != std::cend(cpgs))
+    first_cpg_index = std::distance(std::cbegin(cpgs), first_cpg_itr);
 
-  return states.find_first_of("CT") != string::npos;
+  return states.find_first_of("CT") != std::string::npos;
 }
 
 static bool
-convert_meth_states_neg(const vector<uint64_t> &cpgs,
-                        const bamxx::bam_header &hdr, const bam_rec &aln,
-                        uint64_t &first_cpg_index, string &states) {
+convert_meth_states_neg(const std::vector<std::uint64_t> &cpgs,
+                        const bamxx::bam_header &hdr, const bamxx::bam_rec &aln,
+                        std::uint64_t &first_cpg_index, std::string &states) {
   /* ADS: the "revcomp" on the read sequence is needed for the cigar
      to be applied, since the cigar is relative to the genome
      coordinates and not the read's sequence. But the read sequence
@@ -142,76 +116,80 @@ convert_meth_states_neg(const vector<uint64_t> &cpgs,
 
   states.clear();
 
-  const uint64_t seq_start = get_pos(aln);
-  const uint64_t width = rlen_from_cigar(aln);
-  const uint64_t seq_end = seq_start + width;
+  const std::uint64_t seq_start = get_pos(aln);
+  const std::uint64_t width = rlen_from_cigar(aln);
+  const std::uint64_t seq_end = seq_start + width;
 
-  string orig_seq;
+  std::string orig_seq;
   get_seq_str(aln, orig_seq);
 
-  string seq_str;
-  seq_str.resize(orig_seq.size());
-  revcomp_copy(begin(orig_seq), end(orig_seq), begin(seq_str));
+  std::string seq_str;
+  seq_str.resize(std::size(orig_seq));
+  revcomp_copy(std::cbegin(orig_seq), std::cend(orig_seq), std::begin(seq_str));
   apply_cigar(aln, seq_str, 'N');
 
-  if (seq_str.size() != width)
-    throw dnmt_error("bad sam record format: " + to_string(hdr, aln));
+  if (std::size(seq_str) != width)
+    throw std::runtime_error("bad sam record format: " + to_string(hdr, aln));
 
   // get the first cpg site equal to or large than seq_start - 1
   // the -1 is because we look for G in the read corresponding to a
   // CpG in chromosome, which are indexed in cpgs based on the position of C
-  auto cpg_itr =
-    lower_bound(begin(cpgs), end(cpgs), seq_start > 0 ? seq_start - 1 : 0);
-  auto first_cpg_itr = end(cpgs);
+  auto cpg_itr = std::lower_bound(std::cbegin(cpgs), std::cend(cpgs),
+                                  seq_start > 0 ? seq_start - 1 : 0);
+  auto first_cpg_itr = std::cend(cpgs);
 
-  if (cpg_itr == end(cpgs)) {
+  if (cpg_itr == std::cend(cpgs))
     return false;
-  }
-  else {
-    for (; cpg_itr != end(cpgs) && *cpg_itr < seq_end - 1; cpg_itr++) {
-      const char x = seq_str[*cpg_itr - seq_start + 1];
-      states += (x == 'G') ? 'C' : ((x == 'A') ? 'T' : 'N');
-      if (first_cpg_itr == end(cpgs))
-        first_cpg_itr = cpg_itr;
-    }
+
+  for (; cpg_itr != std::cend(cpgs) && *cpg_itr < seq_end - 1; cpg_itr++) {
+    const char x = seq_str[*cpg_itr - seq_start + 1];
+    states += (x == 'G') ? 'C' : ((x == 'A') ? 'T' : 'N');
+    if (first_cpg_itr == std::cend(cpgs))
+      first_cpg_itr = cpg_itr;
   }
 
-  if (first_cpg_itr != end(cpgs)) {
-    first_cpg_index = distance(begin(cpgs), first_cpg_itr);
-  }
+  if (first_cpg_itr != std::cend(cpgs))
+    first_cpg_index = std::distance(std::cbegin(cpgs), first_cpg_itr);
 
-  return states.find_first_of("CT") != string::npos;
+  return states.find_first_of("CT") != std::string::npos;
 }
 
 static void
-get_chrom(const string &chrom_name, const vector<string> &all_chroms,
-          const unordered_map<string, uint64_t> &chrom_lookup, string &chrom) {
+get_chrom(const std::string &chrom_name,
+          const std::vector<std::string> &all_chroms,
+          const std::unordered_map<std::string, std::uint64_t> &chrom_lookup,
+          std::string &chrom) {
   auto the_chrom = chrom_lookup.find(chrom_name);
-  if (the_chrom == end(chrom_lookup))
-    throw dnmt_error("could not find chrom: " + chrom_name);
+  if (the_chrom == std::cend(chrom_lookup))
+    throw std::runtime_error("could not find chrom: " + chrom_name);
 
   chrom = all_chroms[the_chrom->second];
   if (chrom.empty())
-    throw dnmt_error("problem with chrom: " + chrom_name);
+    throw std::runtime_error("problem with chrom: " + chrom_name);
 }
 
 int
 main_methstates(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
+  static constexpr std::int64_t output_buffer_size{4096};
+  std::array<char, output_buffer_size> buf{};
+  static constexpr auto output_format = "%s\t%lu\t%s\n";
+
   try {
+    // clang-format off
     const auto description =
-      R"(Convert mapped reads in SAM format into a format that indicates binary
-      sequences of methylation states in each read, indexed by the identity
-      of the CpG they cover, along with the chromosome. Only reads that
-      cover a CpG site are included in the output. All output is relative to
-      the positive reference strand. This format is used as input to other
-      tools, and is not intended to be human-interpretable. All chromosome
-      sequences are loaded at once.)";
+R"(Convert mapped reads in SAM format into a format that indicates binary
+sequences of methylation states in each read, indexed by the identity of the
+CpG they cover, along with the chromosome. Only reads that cover a CpG site
+are included in the output. All output is relative to the positive reference
+strand. This format is used as input to other tools, and is not intended to be
+human-interpretable. All chromosome sequences are loaded at once.)";
+    // clang-format on
 
-    bool VERBOSE = false;
-    bool compress_output = false;
+    bool verbose{};
+    bool compress_output{};
 
-    string chrom_file;
-    string outfile("-");
+    std::string chrom_file;
+    std::string outfile("-");
     int n_threads = 1;
 
     /****************** COMMAND LINE OPTIONS ********************/
@@ -223,63 +201,62 @@ main_methstates(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     opt_parse.add_opt("threads", 't', "threads to use for reading input", false,
                       n_threads);
     opt_parse.add_opt("zip", 'z', "output gzip format", false, compress_output);
-    opt_parse.add_opt("verbose", 'v', "print more run info", false, VERBOSE);
+    opt_parse.add_opt("verbose", 'v', "print more run info", false, verbose);
 
-    vector<string> leftover_args;
+    std::vector<std::string> leftover_args;
     opt_parse.parse(argc, argv, leftover_args);
     if (argc == 1 || opt_parse.help_requested()) {
-      cerr << opt_parse.help_message() << '\n'
-           << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.help_message() << '\n'
+                << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.about_requested()) {
-      cerr << opt_parse.about_message() << '\n';
+      std::cerr << opt_parse.about_message() << '\n';
       return EXIT_SUCCESS;
     }
     if (opt_parse.option_missing()) {
-      cerr << opt_parse.option_missing_message() << '\n';
+      std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
-    if (leftover_args.size() != 1) {
-      cerr << opt_parse.help_message() << '\n';
+    if (std::size(leftover_args) != 1) {
+      std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
-    const string mapped_reads_file = leftover_args.front();
+    const std::string mapped_reads_file = leftover_args.front();
     /****************** END COMMAND LINE OPTIONS *****************/
 
-    if (n_threads < 0)
-      throw dnmt_error("thread count cannot be negative");
+    if (n_threads < 1)
+      throw std::runtime_error("thread count must be at least 1");
 
-    /* first load in all the chromosome sequences and names, and make
-       a map from chromosome name to the location of the chromosome
-       itself */
-    vector<string> all_chroms, chrom_names;
+    /* first load in all the chromosome sequences and names, and make a map
+       from chromosome name to the location of the chromosome itself */
+    std::vector<std::string> all_chroms, chrom_names;
     read_fasta_file_short_names(chrom_file, chrom_names, all_chroms);
-    for (auto &&i : all_chroms)
-      transform(begin(i), end(i), begin(i),
-                [](const char c) { return std::toupper(c); });
+    for (auto &i : all_chroms)
+      std::transform(std::cbegin(i), std::cend(i), std::begin(i),
+                     [](const char c) { return std::toupper(c); });
 
-    unordered_map<string, uint64_t> chrom_lookup;
-    for (uint64_t i = 0; i < chrom_names.size(); ++i)
+    std::unordered_map<std::string, std::uint64_t> chrom_lookup;
+    for (std::uint64_t i = 0; i < std::size(chrom_names); ++i)
       chrom_lookup[chrom_names[i]] = i;
 
-    if (VERBOSE)
-      cerr << "n_chroms: " << all_chroms.size() << '\n';
+    if (verbose)
+      std::cerr << "n_chroms: " << std::size(all_chroms) << '\n';
 
     bamxx::bam_tpool tp(n_threads);  // declared first; destroyed last
 
     bamxx::bam_in in(mapped_reads_file);
     if (!in)
-      throw dnmt_error("cannot open input file " + mapped_reads_file);
+      throw std::runtime_error("cannot open input file " + mapped_reads_file);
     bamxx::bam_header hdr(in);
     if (!hdr)
-      throw dnmt_error("cannot read heade" + mapped_reads_file);
+      throw std::runtime_error("cannot read heade" + mapped_reads_file);
 
     // open the output file
-    const string output_mode = compress_output ? "w" : "wu";
+    const std::string output_mode = compress_output ? "w" : "wu";
     bamxx::bgzf_file out(outfile, output_mode);
     if (!out)
-      throw dnmt_error("error opening output file: " + outfile);
+      throw std::runtime_error("error opening output file: " + outfile);
 
     /* set the threads for the input file decompression */
     if (n_threads > 1) {
@@ -287,35 +264,30 @@ main_methstates(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
       tp.set_io(out);
     }
 
-    vector<uint64_t> cpgs;
+    std::vector<std::uint64_t> cpgs;
+    std::unordered_set<std::int32_t> chroms_seen;
+    std::int32_t chrom_idx{-1};
 
-    unordered_set<string> chroms_seen;
-    string chrom_name;
-    string chrom;
-
-    quick_buf buf;
-
-    // iterate over records/reads in the SAM file, sequentially
-    // processing each before considering the next
-    bam_rec aln;
+    // iterate over records/reads in the SAM file, sequentially processing
+    // each before considering the next
+    bamxx::bam_rec aln;
     while (in.read(hdr, aln)) {
-      // get the correct chrom if it has changed
-      if (string(sam_hdr_tid2name(hdr, aln)) != chrom_name) {
-        chrom_name = sam_hdr_tid2name(hdr, aln);
-
+      if (get_tid(aln) != chrom_idx) {  // get correct chrom if it has changed
+        chrom_idx = get_tid(aln);
         // make sure all reads from same chrom are contiguous in the file
-        if (chroms_seen.find(chrom_name) != end(chroms_seen))
-          throw dnmt_error("chroms out of order (check SAM file sorted)");
+        if (chroms_seen.find(chrom_idx) != std::cend(chroms_seen))
+          throw std::runtime_error("wrong chrom order (check SAM/BAM sorting)");
+        const auto chrom_name = sam_hdr_tid2name(hdr, chrom_idx);
+        if (verbose)
+          std::cerr << "processing " << chrom_name << '\n';
 
-        if (VERBOSE)
-          cerr << "processing " << chrom_name << '\n';
-
+        std::string chrom;
         get_chrom(chrom_name, all_chroms, chrom_lookup, chrom);
         collect_cpgs(chrom, cpgs);
       }
 
-      uint64_t first_cpg_index = std::numeric_limits<uint64_t>::max();
-      string seq;
+      std::uint64_t first_cpg_index = std::numeric_limits<std::uint64_t>::max();
+      std::string seq;
 
       const bool has_cpgs =
         bam_is_rev(aln)
@@ -323,18 +295,17 @@ main_methstates(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
           : convert_meth_states_pos(cpgs, hdr, aln, first_cpg_index, seq);
 
       if (has_cpgs) {
-        buf.clear();
-        buf << sam_hdr_tid2name(hdr, aln) << '\t' << first_cpg_index << '\t'
-            << seq << '\n';
-        if (!out.write(buf.c_str(), buf.tellp())) {
-          cerr << "failure writing output" << '\n';
-          return EXIT_FAILURE;
-        }
+        const auto n =
+          std::snprintf(std::data(buf), output_buffer_size, output_format,
+                        sam_hdr_tid2name_ptr(hdr, chrom_idx), first_cpg_index,
+                        std::data(seq));
+        if (n < 0 || n >= output_buffer_size || !out.write(std::data(buf), n))
+          throw std::runtime_error("failure writing output");
       }
     }
   }
   catch (const std::exception &e) {
-    cerr << e.what() << '\n';
+    std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

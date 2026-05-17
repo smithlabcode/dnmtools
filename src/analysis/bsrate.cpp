@@ -47,7 +47,7 @@
 #include <utility>
 #include <vector>
 
-// NOLINTBEGIN(*-avoid-magic-numbers,*-narrowing-conversions,*-pointer-arithmetic)
+// NOLINTBEGIN(*-narrowing-conversions,*-pointer-arithmetic)
 
 struct bsrate_summary {
   // converted_count_positive is the number of nucleotides covering a
@@ -368,6 +368,7 @@ count_states_neg(const bool INCLUDE_CPGS, const std::string &chrom,
 static void
 write_output(const std::string &outfile,
              const std::vector<bsrate_summary> &summaries) {
+  static constexpr auto max_output_len = 1000ul;  // cap on frag len to report
   std::ofstream of;
   if (!outfile.empty())
     of.open(outfile.c_str());
@@ -403,8 +404,8 @@ write_output(const std::string &outfile,
       << "ERRRATE"  << '\n';
   // clang-format on
 
-  // figure out how many positions to print in the output, capped at 1000
-  auto output_len = std::min(std::size(summaries), 1000ul);
+  // figure out how many positions to print in the output
+  auto output_len = std::min(std::size(summaries), max_output_len);
   while (output_len > 0 && summaries[output_len - 1].total_count() == 0)
     --output_len;
 
@@ -415,6 +416,8 @@ write_output(const std::string &outfile,
 static void
 write_output_yaml(const std::string &outfile,
                   const std::vector<bsrate_summary> &summaries) {
+  static constexpr auto max_output_len = 1000ul;  // cap on frag len to report
+
   std::ofstream of;
   if (!outfile.empty())
     of.open(outfile.c_str());
@@ -434,8 +437,8 @@ write_output_yaml(const std::string &outfile,
       << overall_summary.bisulfite_conversion_rate_negative() << '\n'
       << "neg_count: " << overall_summary.total_count_negative << '\n';
 
-  // figure out how many positions to print in the output, capped at 1000
-  auto output_len = std::min(std::size(summaries), 1000ul);
+  // figure out how many positions to print in the output
+  auto output_len = std::min(std::size(summaries), max_output_len);
   while (output_len > 0 && summaries[output_len - 1].total_count() == 0)
     --output_len;
 
@@ -504,6 +507,10 @@ write_per_read_histogram(const std::vector<std::vector<T>> &tab,
 int
 main_bsrate(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   try {
+    // default number of bins in a histogram when writing per-read conversion
+    // histogram
+    static constexpr const std::size_t n_hist_bins_default = 20;
+
     // assumed maximum length of a fragment
     static constexpr const std::size_t output_size = 10000;
 
@@ -518,7 +525,7 @@ main_bsrate(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
     bool reads_are_a_rich = false;
     bool report_per_read = false;
     std::size_t n_threads = 1;
-    std::size_t n_hist_bins = 20;
+    std::size_t n_hist_bins = n_hist_bins_default;
 
     std::string chroms_file;
     std::string summary_file;
@@ -682,4 +689,4 @@ main_bsrate(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
   return EXIT_SUCCESS;
 }
 
-// NOLINTEND(*-avoid-magic-numbers,*-narrowing-conversions,*-pointer-arithmetic)
+// NOLINTEND(*-narrowing-conversions,*-pointer-arithmetic)

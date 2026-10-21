@@ -92,16 +92,19 @@ make_error_code(xcounts_err e) {
 template <typename T>
 static inline std::uint32_t
 fill_output_buffer(const std::uint32_t offset, const MSite &s, T &buf) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wstringop-overflow=0"
   // NOLINTBEGIN(*-pointer-arithmetic)
-  auto buf_end = buf.data() + buf.size();
-  auto res = std::to_chars(buf.data(), buf_end, s.pos - offset);
+  auto buf_end = std::data(buf) + std::size(buf);
+  auto res = std::to_chars(std::data(buf), buf_end, s.pos - offset);
   *res.ptr++ = '\t';
   res = std::to_chars(res.ptr, buf_end, s.n_meth());
   *res.ptr++ = '\t';
   res = std::to_chars(res.ptr, buf_end, s.n_unmeth());
   *res.ptr++ = '\n';
-  return std::distance(buf.data(), res.ptr);
+  return std::distance(std::data(buf), res.ptr);
   // NOLINTEND(*-pointer-arithmetic)
+#pragma GCC diagnostic push
 }
 
 int
@@ -161,7 +164,7 @@ main_xcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
       std::cerr << opt_parse.option_missing_message() << '\n';
       return EXIT_SUCCESS;
     }
-    if (leftover_args.size() != 1) {
+    if (std::size(leftover_args) != 1) {
       std::cerr << opt_parse.help_message() << '\n';
       return EXIT_SUCCESS;
     }
@@ -267,12 +270,12 @@ main_xcounts(int argc, char *argv[]) {  // NOLINT(*-avoid-c-arrays)
 
         site.chrom += '\n';
         const std::int64_t sz = size(site.chrom);
-        if (bgzf_write(out.f, site.chrom.data(), sz) != sz)
+        if (bgzf_write(out.f, std::data(site.chrom), sz) != sz)
           ec = xcounts_err::failed_to_write_file;
       }
       if (keep_all_sites || site.n_reads > 0) {
         const std::int64_t sz = fill_output_buffer(offset, site, buf);
-        if (bgzf_write(out.f, buf.data(), sz) != sz)
+        if (bgzf_write(out.f, std::data(buf), sz) != sz)
           ec = xcounts_err::failed_to_write_file;
         offset = site.pos;
       }
